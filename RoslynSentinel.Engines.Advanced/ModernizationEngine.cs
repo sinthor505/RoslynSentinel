@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using RoslynSentinel.Common;
 using Microsoft.CodeAnalysis.Formatting;
+using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Engines.Advanced;
 public class SyntaxModernizationEngine
@@ -40,7 +41,7 @@ public class SyntaxModernizationEngine
                 };
             }
 
-            throw new ToolNotFoundException($"Class '{className}' not found.", "class", className);
+            throw new ToolNotFoundException($"Class '{className}' not found. " + DeclarationNotFoundDetail.Build("class", "className", className, root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Select(c => c.Identifier.Text) ?? Enumerable.Empty<string>(), filePath.ToString()), MissingTargetKinds.Class, className);
         }
 
         // Extract properties
@@ -131,7 +132,7 @@ public class SyntaxModernizationEngine
                 var containing = recordMatches.Where(r => r.FullSpan.Contains(snippetMatch.Start)).ToList();
                 if (containing.Count == 0)
                 {
-                    throw new ToolNotFoundException($"contextSnippet is not inside any record named '{recordName}'.", "record", recordName);
+                    throw new ToolNotFoundException($"contextSnippet is not inside any record named '{recordName}'.", MissingTargetKinds.Record, recordName);
                 }
 
                 recordNode = NameTargetLookup.RequireSingle(containing, "Record", recordName);
@@ -150,7 +151,7 @@ public class SyntaxModernizationEngine
                 };
             }
 
-            throw new ToolNotFoundException($"Record '{recordName}' not found.", "record", recordName);
+            throw new ToolNotFoundException($"Record '{recordName}' not found. " + DeclarationNotFoundDetail.Build("record", "recordName", recordName, root?.DescendantNodes().OfType<RecordDeclarationSyntax>().Select(r => r.Identifier.Text) ?? Enumerable.Empty<string>(), filePath.ToString()), MissingTargetKinds.Record, recordName);
         }
 
         var classNode = SyntaxFactory.ClassDeclaration(recordNode.Identifier.WithoutTrivia()).WithModifiers(recordNode.Modifiers);
@@ -226,7 +227,7 @@ public class SyntaxModernizationEngine
             throw new ToolTargetIneligibleException($"Method '{methodName}' cannot be converted to an expression body.");
         }
 
-        throw new ToolNotFoundException($"Method '{methodName}' not found.", "method", methodName);
+        throw new ToolNotFoundException($"Method '{methodName}' not found. " + DeclarationNotFoundDetail.Build("method", "methodName", methodName, root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text) ?? Enumerable.Empty<string>(), filePath.ToString()), MissingTargetKinds.Method, methodName);
     }
 
     public async Task<DocumentEditResult> ConvertToPatternAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
@@ -605,7 +606,7 @@ public class SyntaxModernizationEngine
             var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName);
             if (method == null)
             {
-                throw new ToolNotFoundException($"Method '{methodName}' not found.", "method", methodName);
+                throw new ToolNotFoundException($"Method '{methodName}' not found. " + DeclarationNotFoundDetail.Build("method", "methodName", methodName, root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text) ?? Enumerable.Empty<string>(), filePath.ToString()), MissingTargetKinds.Method, methodName);
             }
 
             scope = method;
@@ -661,7 +662,7 @@ public class SyntaxModernizationEngine
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = DocumentLookup.RequireDocument(solution, filePath);
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", className) ?? throw new ToolNotFoundException("Class not found.");
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", className) ?? throw new ToolNotFoundException("Class not found. " + DeclarationNotFoundDetail.Build("class", "className", className, root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Select(c => c.Identifier.Text) ?? Enumerable.Empty<string>(), filePath.ToString()), MissingTargetKinds.Class, className);
         // Identify logging calls
         var invocations = classNode.DescendantNodes().OfType<InvocationExpressionSyntax>().Where(inv => inv.Expression is MemberAccessExpressionSyntax ma && ma.Name.Identifier.Text.StartsWith("Log") && (ma.Name.Identifier.Text == "LogInformation" || ma.Name.Identifier.Text == "LogError" || ma.Name.Identifier.Text == "LogWarning")).ToList();
         var noLogCallsMessage = $"No LogInformation, LogWarning or LogError calls found in class '{className}'. Searched: invocations in the class body only. Next: {ToolCallHint.Call("Search", ("mode", "text"), ("query", "LogInformation|LogWarning|LogError"))} to locate the logging calls, or {ToolCallHint.Call("GetFileOutline")} to confirm the class name.";
@@ -772,7 +773,7 @@ public class SyntaxModernizationEngine
         var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", className);
         if (classNode == null)
         {
-            throw new ToolNotFoundException("Class not found.", "class", className);
+            throw new ToolNotFoundException("Class not found. " + DeclarationNotFoundDetail.Build("class", "className", className, root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Select(c => c.Identifier.Text) ?? Enumerable.Empty<string>(), filePath.ToString()), MissingTargetKinds.Class, className);
         }
 
         var originalText = (await document.GetTextAsync(cancellationToken)).ToString();

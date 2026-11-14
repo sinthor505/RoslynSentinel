@@ -2838,7 +2838,7 @@ public class AntiPatternEngine
         var methodNode = SymbolNavigationEngine.ResolveCallGraphMethod(candidates, sourceText, filePath, methodName, "tree", contextSnippet, lineBefore, lineAfter);
         if (methodNode == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Searched: method declarations named '{actualMethodName}' with class filter '{className}'. Next: {ToolCallHint.Call("Search", ("mode", "method"), ("query", actualMethodName))} to locate it.", "method", actualMethodName);
+            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. " + DeclarationNotFoundDetail.Build("method", "methodName", actualMethodName, root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text) ?? Enumerable.Empty<string>(), filePath.ToString()), MissingTargetKinds.Method, actualMethodName);
         }
 
         if (semanticModel == null)
@@ -2849,7 +2849,7 @@ public class AntiPatternEngine
         var methodSymbol = semanticModel.GetDeclaredSymbol(methodNode, cancellationToken);
         if (methodSymbol == null)
         {
-            throw new ToolNotFoundException($"Symbol for method '{methodName}' could not be resolved in '{filePath}'. Searched: declared symbols for the method declaration. Next: {ToolCallHint.Call("Build")} to check the file for compile errors.", "method", actualMethodName);
+            throw new ToolNotFoundException($"Symbol for method '{methodName}' could not be resolved in '{filePath}'. Searched: declared symbols for the method declaration. Next: {ToolCallHint.Call("Build")} to check the file for compile errors.", MissingTargetKinds.Symbol, actualMethodName);
         }
 
         var sb = new StringBuilder();
@@ -2912,7 +2912,7 @@ public class AntiPatternEngine
 
         if (classNode == null)
         {
-            throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'. Searched: class declarations in the file. Next: {ToolCallHint.Call("Search", ("mode", "class"), ("query", className))} to confirm the name.", "class", className);
+            throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'. " + DeclarationNotFoundDetail.Build("class", "className", className, root.DescendantNodes().OfType<ClassDeclarationSyntax>().Select(c => c.Identifier.Text), filePath.ToString()), MissingTargetKinds.Class, className);
         }
 
         // Gather fields with their types (private instance fields only -> skip const, static, backing fields)
