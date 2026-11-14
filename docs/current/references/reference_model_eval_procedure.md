@@ -336,6 +336,25 @@ A bare pass/fail sends the analyst back into transcripts to learn what happened.
   `Name=RescoreScenarioRuns_WritesRescoredCsv`, scope project `RoslynSentinel.Tests.ModelEval`, with the variable
   passed in `environment`.
 
+## Stepped ShippingKind scenario (`-Test ShippingKindStep`)
+
+- Measures one small step at a time: a ContosoOrders fixture copy gets a "shipping kind" vocabulary
+  (find literals, add `ShippingKinds` constants, add helpers, migrate two files, migrate two more).
+  Each of the five steps is a fresh conversation (`ShippingKindSteppedAgentTests.Model_CompletesShippingKindStep(k)`)
+  that starts from a golden git tag `step-(k-1)`, never from the model's earlier output.
+  Outcome per step: `Pass`, `OutOfScopeEdit`, `CheckFailed`, `BuildBroken`, `Blocked`, `NotConverged`.
+- All five: `.\scripts\roslynsentinel-modeleval.ps1 -Test ShippingKindStep -Model <key>` (queue it on a
+  shared host). One step or a range: add `-Step 4` or `-Step 4,5`.
+- Per-step output in the archived run folder `ModelTestingResults/<host>/Model_CompletesShippingKindStep(<k>)/<timestamp>/`:
+  `step-<k>.golden.diff` (the model's tree against the golden tag, a report only, not graded) and
+  `step-<k>.outcome.txt` (class, turns, wall time, StopReason).
+- After changing a golden, a prompt or a check (`Fixtures/ShippingKindStepGoldens.cs`,
+  `ShippingKindStepChecks.cs`, `GoldenStepRepository.cs`), run the no-model self-test
+  `ShippingKindStepGoldenTests` (`[Explicit]`; RunTest scope project `RoslynSentinel.Tests.ModelEval`,
+  filter `FullyQualifiedName~ShippingKindStepGoldenTests`, suite full; needs git, about 1.5 min).
+  Each golden must pass its own check and the previous golden must fail it.
+- Design and first numbers: `docs/current/plans/closed/plan_modeleval_stepped_shipping_kind_scenario.md`.
+
 ## Output locations
 
 - Per-run transcripts + `agent.log`: `RoslynSentinel.Tests.ModelEval/bin/Debug/net10.0/model-eval/<TestName>/<timestamp>/`

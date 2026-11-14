@@ -1,6 +1,6 @@
 # Plan: Stepped ShippingKind ModelEval scenario on ContosoOrders with a golden commit per step
 
-**Status:** IN PROGRESS 2026-11-13. Steps 1-7b done (f0f03fbf, 5977fe75, d9bf2b51, ec7881b6, f1d68375, 59a0332a, 97a5a63f); Steps 8-9 left.
+**Status:** IMPLEMENTED 2026-11-13. f0f03fbf, 5977fe75, d9bf2b51, ec7881b6, f1d68375, 59a0332a, 97a5a63f, 1cd2b56e; first live run in Step 8; documented in reference_model_eval_procedure.md. Open follow-up: decision 4 (turn ideal after about 10 samples per step).
 
 ## Problem
 
@@ -325,6 +325,7 @@ Turns, wall time and `StopReason` are recorded per step. No turn ideal is set ye
 - Lane: dispatcher, with `modeleval-runner` for the model pass
 
 ### Step 9 - Document the scenario
+- Done: final commit (section "Stepped ShippingKind scenario" in the reference)
 - Files: `docs/current/references/reference_model_eval_procedure.md`
 - Depends on: Step 8
 - Effect: text-neutral
