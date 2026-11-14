@@ -256,7 +256,7 @@ public class OrderPricingRefactorChainAgentTests
     private const string FourStepUserPromptTemplate = """
         # Task: Four small refactors in FixtureHelpers/OrderPricingCalculator.cs
 
-        The solution is already loaded - go straight to ReadFile/Search/ListAll on the paths below.
+        The solution is already loaded - go straight to ReadFile, Search or ListSolutionItems on the paths below.
 
         You have flexibility in exactly how you implement each step below - use whichever MCP
         tool(s) you judge appropriate (a dedicated refactoring tool or a direct edit), as long as
@@ -358,7 +358,7 @@ public class OrderPricingRefactorChainAgentTests
     private const string FiveStepUserPromptTemplate = """
         # Task: Five small refactors in FixtureHelpers/OrderPricingCalculator.cs
 
-        The solution is already loaded - go straight to ReadFile/Search/ListAll on the paths below.
+        The solution is already loaded - go straight to ReadFile, Search or ListSolutionItems on the paths below.
 
         You have flexibility in exactly how you implement each step below - use whichever MCP
         tool(s) you judge appropriate (a dedicated refactoring tool or a direct edit), as long as
@@ -494,7 +494,7 @@ public class OrderPricingRefactorChainAgentTests
     private const string SixStepUserPromptTemplate = """
         # Task: Six small refactors in FixtureHelpers/OrderPricingCalculator.cs
 
-        The solution is already loaded - go straight to ReadFile/Search/ListAll on the paths below.
+        The solution is already loaded - go straight to ReadFile, Search or ListSolutionItems on the paths below.
 
         You have flexibility in exactly how you implement each step below - use whichever MCP
         tool(s) you judge appropriate (a dedicated refactoring tool or a direct edit), as long as
@@ -676,7 +676,7 @@ public class OrderPricingRefactorChainAgentTests
     private const string SevenStepUserPromptTemplate = """
         # Task: Seven small refactors in FixtureHelpers/OrderPricingCalculator.cs
 
-        The solution is already loaded - go straight to ReadFile/Search/ListAll on the paths below.
+        The solution is already loaded - go straight to ReadFile, Search or ListSolutionItems on the paths below.
 
         You have flexibility in exactly how you implement each step below - use whichever MCP
         tool(s) you judge appropriate (a dedicated refactoring tool or a direct edit), as long as
@@ -867,7 +867,7 @@ public class OrderPricingRefactorChainAgentTests
     private const string EightStepUserPromptTemplate = """
         # Task: Eight small refactors in FixtureHelpers/OrderPricingCalculator.cs
 
-        The solution is already loaded - go straight to ReadFile/Search/ListAll on the paths below.
+        The solution is already loaded - go straight to ReadFile, Search or ListSolutionItems on the paths below.
 
         You have flexibility in exactly how you implement each step below - use whichever MCP
         tool(s) you judge appropriate (a dedicated refactoring tool or a direct edit), as long as
@@ -1081,7 +1081,7 @@ public class OrderPricingRefactorChainAgentTests
     private const string NineStepUserPromptTemplate = """
         # Task: Nine small refactors in FixtureHelpers/OrderPricingCalculator.cs
 
-        The solution is already loaded - go straight to ReadFile/Search/ListAll on the paths below.
+        The solution is already loaded - go straight to ReadFile, Search or ListSolutionItems on the paths below.
 
         You have flexibility in exactly how you implement each step below - use whichever MCP
         tool(s) you judge appropriate (a dedicated refactoring tool or a direct edit), as long as
@@ -1445,7 +1445,7 @@ namespace ContosoOrders.Tests.ModelEvalGenerated
     private const string TenStepUserPromptTemplate = """
         # Task: Ten small refactors in FixtureHelpers/OrderPricingCalculator.cs
 
-        The solution is already loaded - go straight to ReadFile/Search/ListAll on the paths below.
+        The solution is already loaded - go straight to ReadFile, Search or ListSolutionItems on the paths below.
 
         You have flexibility in exactly how you implement each step below - use whichever MCP
         tool(s) you judge appropriate (a dedicated refactoring tool or a direct edit), as long as
