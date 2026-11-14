@@ -294,7 +294,7 @@ public class CodeStyleEngine
         }
         else if (!string.IsNullOrEmpty(projectName))
         {
-            var project = ProjectLookup.FindProject(solution, projectName, ignoreCase: true) ?? throw new ToolNotFoundException($"Project '{projectName}' not found in the loaded solution.", "project", projectName);
+            var project = ProjectLookup.RequireProject(solution, projectName);
             documents = project.Documents.Cast<Document?>();
         }
         else
