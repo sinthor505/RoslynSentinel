@@ -2787,6 +2787,7 @@ public class SymbolNavigationEngine
         var projects = solution.Projects.ToList();
 
         // TODO isCallable: SymbolNavigationEngine has no ActiveToolSurface, so hints name tools unconditionally (as the old text did)
+        // TODO isCallable is null and nextCall names FindReferences, which is not on the lean ModelEval surface (plan_modeleval_lean_tool_surface Step 2e): a lean-surface text needs Search(mode: references) with a query/filePath/contextSnippet mapping; design needed; the BuildFindReferencesNextCall sites in FindCallers and FindImplementations share it
         return await SymbolNotFoundDetail.BuildAsync(
             projects, symbolName, "any", $"{projects.Count} project(s)", null, isCallable: null,
             nextCall: candidate => string.IsNullOrEmpty(candidate.FilePath)

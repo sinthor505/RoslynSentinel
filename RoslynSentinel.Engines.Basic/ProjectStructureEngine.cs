@@ -76,6 +76,7 @@ public class SolutionStructureEngine
         var defaultNamespace = project.DefaultNamespace ?? project.Name;
         if (projectDir == null)
         {
+            // TODO names ListAll unconditionally: its only caller is the PreviewMoveFileToNamespaceFolder tool, which is not on the lean ModelEval surface (plan_modeleval_lean_tool_surface Step 2c); make it surface-aware if that changes
             // TODO not a lookup miss (the project resolved but has no directory on disk): reclassify as ToolTargetIneligibleException so the error code is not NotFound
             throw new ToolNotFoundException($"Project directory not found for '{filePath}'. Next: {ToolCallHint.Call("ListAll")} to confirm the owning project.", MissingTargetKinds.Project);
         }
