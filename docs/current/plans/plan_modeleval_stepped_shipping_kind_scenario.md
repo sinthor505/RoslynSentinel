@@ -48,6 +48,10 @@ commits moved callers from string literals to the constants) into a ContosoOrder
   `.roslynsentinel/largeresults/` under the solution root, `LargeResultHelper.cs:80`).
 - `DotnetTestRunner.RunAsync` throws `InvalidOperationException` when no test summary line appears
   (`DotnetTestRunner.cs:55-58`, build error or failed start); `CheckAsync` maps it to `BuildBroken`.
+- 2026-11-13, after the Step 8 run: steps 4-5 text checks also accept a
+  `using static ...ShippingKinds;` directive with bare names (and a bare `IsExpedited(` call), and the
+  step 4-5 prompts ask for the qualified `ShippingKinds.<Name>` form. Owner chose both. The Step 8
+  CheckFailed on step 4 was this check gap: the edit built green and left no literals.
 
 ### Seed (tag `step-0`)
 
@@ -296,6 +300,17 @@ Turns, wall time and `StopReason` are recorded per step. No turn ideal is set ye
 - Lane: dispatcher (a plain call)
 
 ### Step 8 - LIVE first run
+- Done: 2026-11-13, qwen3.5-9b-mtp on host 113, commit 0487eedb, default 18-tool surface
+  (`ROSLYNSENTINEL_MODELEVAL_TOOLSET` unset), queue job 20261114-061415-001, 4m41s total.
+  Self-test 9/9 green. Solution-relative prompt paths resolved in every tool; no load-ordering issue.
+
+  | Step | Outcome | Turns | Wall | StopReason |
+  | --- | --- | --- | --- | --- |
+  | 1 | Pass | 7 | 32 s | ModelFinished |
+  | 2 | Pass | 4 | 22 s | ModelFinished |
+  | 3 | Pass | 9 | 36 s | ModelFinished |
+  | 4 | CheckFailed (check gap: `using static` + bare names; fixed after the run) | 7 | 45 s | ModelFinished |
+  | 5 | Pass | 8 | 48 s | ModelFinished |
 - Files: none
 - Depends on: Steps 5, 6, 7, 7b
 - Effect: none on source

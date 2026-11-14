@@ -275,11 +275,11 @@ internal static class ShippingKindStepGoldens
         """;
 
     private const string PromptStep4 = """
-        In ShippingFeeCalculator.cs and ShipmentValidator.cs (ContosoOrders.Core/Shipping), replace every shipping kind string literal with the matching ShippingKinds constant. Behaviour must not change. Change no other file. Reply with the number of literals replaced per file.
+        In ShippingFeeCalculator.cs and ShipmentValidator.cs (ContosoOrders.Core/Shipping), replace every shipping kind string literal with the matching ShippingKinds constant, written qualified as ShippingKinds.<Name> (for example ShippingKinds.Express). Behaviour must not change. Change no other file. Reply with the number of literals replaced per file.
         """;
 
     private const string PromptStep5 = """
-        In DeliveryEstimator.cs and CarrierSelector.cs (ContosoOrders.Core/Shipping), replace every shipping kind string literal with the matching ShippingKinds constant, and replace each check for 'express or overnight' with a call to ShippingKinds.IsExpedited. Behaviour must not change. Change no other file. Reply with what you changed.
+        In DeliveryEstimator.cs and CarrierSelector.cs (ContosoOrders.Core/Shipping), replace every shipping kind string literal with the matching ShippingKinds constant, written qualified as ShippingKinds.<Name> (for example ShippingKinds.Express), and replace each check for 'express or overnight' with a call to ShippingKinds.IsExpedited. Behaviour must not change. Change no other file. Reply with what you changed.
         """;
 
     public static string PromptForStep(int step)

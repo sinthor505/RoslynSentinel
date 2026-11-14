@@ -63,12 +63,17 @@ internal static class ShippingKindStepChecks
                     }
                 }
 
-                if (!text.Contains("ShippingKinds.", StringComparison.Ordinal))
+                // A `using static ...ShippingKinds;` directive with bare names is as valid as the
+                // qualified form; the behaviour tests below prove the semantics either way.
+                var hasUsingStatic = System.Text.RegularExpressions.Regex.IsMatch(text, @"using\s+static\s+[\w.]*\bShippingKinds\s*;");
+                if (!hasUsingStatic && !text.Contains("ShippingKinds.", StringComparison.Ordinal))
                 {
-                    return (ShippingKindStepOutcome.CheckFailed, $"{relative} does not reference ShippingKinds.");
+                    return (ShippingKindStepOutcome.CheckFailed, $"{relative} does not reference ShippingKinds (neither ShippingKinds.<Name> nor a using static directive).");
                 }
 
-                if (step == 5 && !text.Contains("ShippingKinds.IsExpedited(", StringComparison.Ordinal))
+                var callsIsExpedited = text.Contains("ShippingKinds.IsExpedited(", StringComparison.Ordinal)
+                    || (hasUsingStatic && System.Text.RegularExpressions.Regex.IsMatch(text, @"(?<![\w.])IsExpedited\("));
+                if (step == 5 && !callsIsExpedited)
                 {
                     return (ShippingKindStepOutcome.CheckFailed, $"{relative} does not call ShippingKinds.IsExpedited(");
                 }
