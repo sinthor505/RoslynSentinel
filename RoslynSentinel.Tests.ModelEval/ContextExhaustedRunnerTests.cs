@@ -141,6 +141,27 @@ public class ContextExhaustedRunnerTests
     }
 
     [Test]
+    public async Task ContextSizeExceeded500_StopsWithContextExhausted_NotConverged_OneRequest()
+    {
+        // LM Studio answers the chat request with HTTP 500 "Context size has been exceeded": the run must stop as
+        // ContextExhausted on that single request (no retry), with no turn recorded and the transcript still written.
+        var handler = new ContextOverflowHandler(contextLength: 4096);
+        var runner = NewRunner(contextLength: 4096, totalTokens: 0, handler: handler);
+
+        var result = await runner.RunAsync("system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.StopReason, Is.EqualTo(AgentStopReason.ContextExhausted));
+            Assert.That(result.Converged, Is.False);
+            Assert.That(result.Transcript.StopReason, Is.EqualTo(AgentStopReason.ContextExhausted));
+            Assert.That(result.Transcript.Turns, Is.Empty);
+            Assert.That(handler.ResponsesRequests, Is.EqualTo(1));
+            Assert.That(File.Exists(result.TranscriptPath), Is.True);
+        });
+    }
+
+    [Test]
     public async Task RunWithStamp_TranscriptCarriesCommitAndDirtyFlag()
     {
         var runner = NewRunner(contextLength: 4096, totalTokens: 1000);
@@ -248,10 +269,10 @@ public class ContextExhaustedRunnerTests
         });
     }
 
-    private ModelAgentRunner NewRunner(int? contextLength, int totalTokens)
+    private ModelAgentRunner NewRunner(int? contextLength, int totalTokens, HttpMessageHandler? handler = null)
     {
         LlmOptions.Configure(["--llm-model", ModelId]);
-        var httpClient = new HttpClient(new RoutingHandler(contextLength, totalTokens))
+        var httpClient = new HttpClient(handler ?? new RoutingHandler(contextLength, totalTokens))
         {
             BaseAddress = new Uri("http://localhost/v1/"),
         };
@@ -313,6 +334,43 @@ public class ContextExhaustedRunnerTests
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent($"event: response.completed\ndata: {payload}\n\n", Encoding.UTF8, "text/event-stream"),
+            });
+        }
+    }
+
+    /// <summary>
+    /// Answers the models endpoint with the loaded context length, and every /responses POST with HTTP 500 carrying LM Studio's
+    /// context-overflow text. Counts the /responses POSTs so a test can assert the client did not retry.
+    /// </summary>
+    private sealed class ContextOverflowHandler(int contextLength) : HttpMessageHandler
+    {
+        public int ResponsesRequests
+        {
+            get; private set;
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.RequestUri!.AbsolutePath.EndsWith("/api/v0/models", StringComparison.Ordinal))
+            {
+                var modelsBody = JsonSerializer.Serialize(new
+                {
+                    data = new[] { new { id = ModelId, loaded_context_length = contextLength } },
+                });
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(modelsBody, Encoding.UTF8, "application/json"),
+                });
+            }
+
+            if (request.RequestUri.AbsolutePath.EndsWith("/responses", StringComparison.Ordinal))
+            {
+                ResponsesRequests++;
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError)
+            {
+                Content = new StringContent("{\"error\":\"Context size has been exceeded.\"}", Encoding.UTF8, "application/json"),
             });
         }
     }

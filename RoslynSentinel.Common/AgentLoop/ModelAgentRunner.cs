@@ -307,7 +307,21 @@ public sealed class ModelAgentRunner
             // rejected calls are collapsed in this replay copy only; `messages` and the transcript keep every turn.
             var turnAssists = new List<AgentAssist>();
             var replayMessages = assistTracker.CollapseForReplay(messages, turnAssists);
-            var modelMessage = await _llm.CompleteAsync(replayMessages, toolDefinitions, _maxTokensPerTurn, cancellationToken);
+            AgentChatMessage modelMessage;
+            try
+            {
+                modelMessage = await _llm.CompleteAsync(replayMessages, toolDefinitions, _maxTokensPerTurn, cancellationToken);
+            }
+            catch (ContextSizeExceededException ex)
+            {
+                // LM Studio rejected the request as over the context window (HTTP 500 "Context size has been exceeded"); no retry.
+                stopReason = AgentStopReason.ContextExhausted;
+                _logger.LogWarning(
+                    ex,
+                    "Turn {Turn}: LM Studio reported the context size exceeded with ~{Cumulative} of {ContextLength} context tokens counted so far - context window exhausted, not a genuine finish.",
+                    turnNumber, cumulativeTokens, contextLength);
+                break;
+            }
             turnStopwatch.Stop();
             var turnCompletedAt = DateTimeOffset.Now;
 
