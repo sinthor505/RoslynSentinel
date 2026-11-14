@@ -529,7 +529,7 @@ public class StructuralRefactoringEngine
         var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList() ?? new System.Collections.Generic.List<MethodDeclarationSyntax>(), "Method", methodName);
         if (method == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' not found in {Path.GetFileName(filePath)}.", "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' not found in {Path.GetFileName(filePath)}. " + DeclarationNotFoundDetail.Build("method", "methodName", methodName, root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text) ?? Enumerable.Empty<string>(), filePath.ToString()), MissingTargetKinds.Method, methodName);
         }
 
         if (semanticModel == null)
@@ -540,7 +540,7 @@ public class StructuralRefactoringEngine
         var parameter = method.ParameterList.Parameters.FirstOrDefault(p => p.Identifier.Text == parameterName);
         if (parameter == null)
         {
-            throw new ToolNotFoundException($"Parameter '{parameterName}' not found in method '{methodName}'.", "parameter", parameterName);
+            throw new ToolNotFoundException($"Parameter '{parameterName}' not found in method '{methodName}'. " + DeclarationNotFoundDetail.Build("parameter", "parameterName", parameterName, method.ParameterList.Parameters.Select(p => p.Identifier.Text), filePath.ToString()), MissingTargetKinds.Parameter, parameterName);
         }
 
         // TODO implement parameter inlining (bind the constant argument into the body and drop the parameter plus every call-site argument); until then refuse
@@ -556,7 +556,7 @@ public class StructuralRefactoringEngine
         var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList() ?? new System.Collections.Generic.List<MethodDeclarationSyntax>(), "Method", methodName);
         if (method == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' not found in {Path.GetFileName(filePath)}.", "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' not found in {Path.GetFileName(filePath)}. " + DeclarationNotFoundDetail.Build("method", "methodName", methodName, root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text) ?? Enumerable.Empty<string>(), filePath.ToString()), MissingTargetKinds.Method, methodName);
         }
 
         if (method.ParameterList.Parameters.Count != 1)
@@ -616,13 +616,13 @@ public class StructuralRefactoringEngine
         var expression = token.Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
         if (expression == null)
         {
-            throw new ToolNotFoundException(SnippetNodeKindError.Describe(sourceText, root, snippetMatch, "expression", "directly contains the whole expression to extract"), "expression");
+            throw new ToolNotFoundException(SnippetNodeKindError.Describe(sourceText, root, snippetMatch, "expression", "directly contains the whole expression to extract"), MissingTargetKinds.Expression);
         }
 
         var containingClass = expression.Ancestors().OfType<ClassDeclarationSyntax>().FirstOrDefault();
         if (containingClass == null)
         {
-            throw new ToolNotFoundException("Containing class not found.", "class");
+            throw new ToolNotFoundException("Containing class not found.", MissingTargetKinds.Class);
         }
 
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
@@ -703,20 +703,20 @@ public class StructuralRefactoringEngine
         var position = SnippetLookup.TryResolve(sourceText, contextSnippet, lineBefore, lineAfter, out var paramMatch, out var paramSnippetError) ? paramMatch.Start : -1;
         if (position < 0)
         {
-            throw new ToolNotFoundException($"{paramSnippetError}", "snippet");
+            throw new ToolNotFoundException($"{paramSnippetError}", MissingTargetKinds.Snippet);
         }
 
         var token = root.FindToken(position);
         var expression = token.Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
         if (expression == null)
         {
-            throw new ToolNotFoundException(SnippetNodeKindError.Describe(sourceText, root, paramMatch!, "expression", "directly contains the whole expression to extract"), "expression");
+            throw new ToolNotFoundException(SnippetNodeKindError.Describe(sourceText, root, paramMatch!, "expression", "directly contains the whole expression to extract"), MissingTargetKinds.Expression);
         }
 
         var containingMethod = expression.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
         if (containingMethod == null)
         {
-            throw new ToolNotFoundException("Containing method not found.", "method");
+            throw new ToolNotFoundException("Containing method not found.", MissingTargetKinds.Method);
         }
 
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
@@ -737,14 +737,14 @@ public class StructuralRefactoringEngine
         var currentExpression = trackedRoot.GetCurrentNode(expression);
         if (currentExpression == null)
         {
-            throw new ToolNotFoundException("Expression not found.", "expression");
+            throw new ToolNotFoundException("Expression not found.", MissingTargetKinds.Expression);
         }
 
         var newRoot = trackedRoot.ReplaceNode(currentExpression, paramRef);
         var currentMethod = newRoot.GetCurrentNode(containingMethod);
         if (currentMethod == null)
         {
-            throw new ToolNotFoundException("Containing method not found.", "method");
+            throw new ToolNotFoundException("Containing method not found.", MissingTargetKinds.Method);
         }
 
         var updatedMethod = currentMethod.WithParameterList(currentMethod.ParameterList.AddParameters(newParameter));
