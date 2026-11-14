@@ -129,7 +129,7 @@ public class LocateSymbolNotFoundCandidateTests
 
             var result = await _tools.SearchSolutionTool(reason: "test message", mode: SearchMode.symbol, query: "ApplyLoyaltyBonus", containingType: "OrderPricingCalculator", includeTests: true);
 
-            Assert.That(result.ErrorData?.Message, Does.EndWith(" Type `Fixture.OrderPricingCalculator` declares 3 members: CalcDisc, GetTotal, OrderCheckout"));
+            Assert.That(result.ErrorData?.Message, Does.EndWith(" Type `Fixture.OrderPricingCalculator` declares 3 members: CalcDisc, GetTotal, OrderCheckout."));
         }
         finally
         {
