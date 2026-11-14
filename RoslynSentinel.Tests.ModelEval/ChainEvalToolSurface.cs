@@ -1,4 +1,5 @@
 using System.IO.Pipelines;
+using System.Reflection;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -22,7 +23,25 @@ public static class ChainEvalToolSurface
     public static HashSet<string> NewModes() =>
         new(new[] { "Refactor", "Workspace", "WholeFileWrite" }, StringComparer.OrdinalIgnoreCase);
 
-    public static HashSet<string> NewHiddenTools() =>
+    /// <summary>Environment variable that selects the tool surface: "lean"; unset, empty, "full" or unknown means full.</summary>
+    public const string ToolsetEnvVar = "ROSLYNSENTINEL_MODELEVAL_TOOLSET";
+
+    /// <summary>The tools the lean ModelEval surface offers. Every other discovered tool is hidden.</summary>
+    public static readonly IReadOnlyList<string> LeanAllowList =
+    [
+        "ReadFile", "GetFileOutline", "Search", "ListSolutionItems", "GetLargeResult", "ReplaceSnippet", "Member",
+        "RenameSymbol", "CreateFile", "DeleteFile", "Build", "RunTest", "GetMethodSource", "UndoLastApply",
+        "ChangeSignature", "ChangeAccessibility", "ModifyModifier", "UsingDirective",
+    ];
+
+    public static bool IsLeanValue(string? value) =>
+        value?.Trim().Equals("lean", StringComparison.OrdinalIgnoreCase) == true;
+
+    /// <summary>
+    /// The legacy 11-name hide set, independent of the environment. Legacy whole-file fixtures that must
+    /// stay on the full surface use this.
+    /// </summary>
+    public static HashSet<string> NewFullSurfaceHiddenTools() =>
         new(
             new[]
             {
@@ -30,6 +49,67 @@ public static class ChainEvalToolSurface
                 "ListWorkspaceSolutions", "LoadSolution", "CreateProject", "SplitProjectByFolder",
             },
             StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Reads <see cref="ToolsetEnvVar"/> and returns the hide set for that arm.</summary>
+    public static HashSet<string> NewHiddenTools(IEnumerable<string>? extraAllowed = null)
+    {
+        var value = Environment.GetEnvironmentVariable(ToolsetEnvVar);
+        TestContext.Out.WriteLine(
+            IsLeanValue(value) ? $"Tool surface: lean ({LeanAllowList.Count} tools)" : "Tool surface: full (default)");
+        return NewHiddenTools(value, extraAllowed);
+    }
+
+    /// <summary>Hide set for an explicit toolset value (no environment read). Not lean: the full surface.</summary>
+    public static HashSet<string> NewHiddenTools(string? toolsetValue, IEnumerable<string>? extraAllowed)
+    {
+        if (!IsLeanValue(toolsetValue))
+        {
+            return NewFullSurfaceHiddenTools();
+        }
+
+        var allowed = new HashSet<string>(LeanAllowList, StringComparer.OrdinalIgnoreCase);
+        if (extraAllowed is not null)
+        {
+            allowed.UnionWith(extraAllowed);
+        }
+
+        LoadToolAssemblies();
+        var hidden = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var discovered = McpToolSchemaPatcher.DiscoverToolMethods(
+            AppDomain.CurrentDomain.GetAssemblies()
+                .Where(a => a.GetName().Name?.StartsWith("RoslynSentinel", StringComparison.Ordinal) == true));
+        foreach (var (toolName, _, _) in discovered)
+        {
+            if (!allowed.Contains(toolName))
+            {
+                hidden.Add(toolName);
+            }
+        }
+
+        foreach (var legacyName in NewFullSurfaceHiddenTools())
+        {
+            if (!allowed.Contains(legacyName))
+            {
+                hidden.Add(legacyName);
+            }
+        }
+
+        return hidden;
+    }
+
+    // ASSEMBLY TIMING HAZARD: DiscoverToolMethods only sees assemblies that are already loaded, and the hide
+    // list is built before tool registration. An unloaded Tools assembly would be missing from the hide list
+    // and would then register with no hide entry, so every referenced Tools assembly is loaded first.
+    private static void LoadToolAssemblies()
+    {
+        foreach (var reference in typeof(ToolClassRegistry).Assembly.GetReferencedAssemblies())
+        {
+            if (reference.Name?.StartsWith("RoslynSentinel.Tools.", StringComparison.Ordinal) == true)
+            {
+                Assembly.Load(reference);
+            }
+        }
+    }
 }
 
 /// <summary>
