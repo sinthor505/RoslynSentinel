@@ -1,6 +1,6 @@
 # Plan: give ModelEval an 18-tool lean surface behind an env switch, A/B it against the 55-tool surface, then make it the default
 
-**Status:** IN PROGRESS 2026-11-13. Steps 1a-1b done (be340c7e, 0a0b0ecc), 2a-2e done (e68197f8..a8dee25a), 3a-3c and 4 done (1b440767..ef132999). Next: Step 5 live A/B. 18-tool lean ModelEval surface behind an env switch, A/B against the 55-tool surface (hold point), then default switch; PlanStepRunner deferred to a TODO.md line.
+**Status:** IMPLEMENTED 2026-11-14. Steps 1a-1b (be340c7e, 0a0b0ecc), 2a-2e (e68197f8..a8dee25a), 3a-3c and 4 (1b440767..ef132999), Step 5 pilot A/B (aeda229b and 30ff9f3f fixed the eval SetUp stall; evidence in the eval doc) and Step 6 default flip (1e2b5498). The 18-tool lean surface is the ModelEval default; `ROSLYNSENTINEL_MODELEVAL_TOOLSET=full` opts out. Step 7 (PlanStepRunner allow-list) moved to a TODO.md line.
 
 ## Problem
 
@@ -10,7 +10,7 @@ the ~23k-token turn-2 prompt measured in `eval_error_variant_replay_validation.m
 never called in 1,702 samples (2026-11-10 to 11-13), and near-duplicate tools split the first call after a
 file miss between `ListAll`, `ListSolutionItems` and `Search`. Full evidence, the tool-by-tool table and the
 alternatives that lost are in
-[proposal_modeleval_lean_tool_surface.md](../proposals/proposal_modeleval_lean_tool_surface.md); this plan
+[proposal_modeleval_lean_tool_surface.md](../../proposals/proposal_modeleval_lean_tool_surface.md); this plan
 sequences that proposal and does not restate it.
 
 **Anchor status.** `file:line` anchors were checked by a reviewer against HEAD e5b0661c (2026-11-13). The
@@ -381,6 +381,13 @@ the owner confirms; report who was asked and the answer in the slice report. 3a 
 - Lane/tier: not an implementer slice; `modeleval-runner` (owner decision 2026-11-13). The owner is present during
   the run; ask mid-run decisions (host crash, infra re-run, a scenario failing for an environment reason) with a
   recommendation. About 30 x 6 x 2 = 360 samples; flag as high-token work before starting.
+- Done 2026-11-14 as a pilot, not the 30-sample run (owner chose 10 per cell, then 5 per ten-chain arm):
+  [eval_modeleval_lean_vs_full.md](../../evals/eval_modeleval_lean_vs_full.md). Lean is non-inferior in every cell
+  tested: 9b on 113 (5 scenarios x 10 per arm, floor/ceiling cells), 9b ten-chain 5/5 vs 5/5 (turns 20.2 vs 24.4,
+  schema chars 36,907 vs 104,130, no hidden-tool errors), 4b on 112 (5 scenarios x 10 per arm; MissingFile
+  Destructive 8 lean vs 4 full at 0/10 pass both, flagged). No cell can show lean is better. The 113 ten-chain
+  needed three fixes: the fixture restore pipe-EOF stall (aeda229b), a queue guard for a stuck SetUp
+  (30ff9f3f) and a collision with a peer's direct run in `_scratchbuild_113` (resolved by the peer).
 
 ### Step 6 - Switch the default to lean and re-baseline (behaviour-changing, hold-gated)
 - Files: `ChainEvalToolSurface.cs`; baseline/eval docs that cite 55-tool numbers (list produced during the step).
@@ -395,6 +402,13 @@ the owner confirms; report who was asked and the answer in the slice report. 3a 
   re-baseline numbers recorded; the Step 7 TODO.md line exists; this plan's Status updated and the closing commit
   carries `Closes: plan_modeleval_lean_tool_surface`.
 - Lane/tier: `implementer` depth tier 1 for the code; re-baseline via `modeleval-runner`.
+- Done 2026-11-14: 1e2b5498. Owner decision: flip now on the pilot evidence (the 30-sample ten-chain run was
+  offered and declined). Full opt-out is `ROSLYNSENTINEL_MODELEVAL_TOOLSET=full`. Tests: filtered ModelEval run
+  92/92; full suite on 1e2b5498 0 failures. The lean arms of the Step 5 A/B serve as the lean baselines; other
+  families were not re-run. Results recorded before 1e2b5498 are 55-tool results
+  (see `reference_model_eval_procedure.md`). Stub search over the edited files found none. Step 7 is now the
+  TODO.md line "PlanStepRunner lean tool allow-list"; a second line tracks the `SymbolNavigationEngine`
+  `FindReferences` hint text.
 
 ### Step 7 - PlanStepRunner allow-list (separate, deferrable)
 - Files: `PlanStepRunner/Program.cs` (:212, :266, :277 runner calls `LoadSolution`, `Build`, `RunTest`; :242 names

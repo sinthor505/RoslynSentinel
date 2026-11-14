@@ -1,6 +1,6 @@
 # Give ModelEval a from-scratch 15-tool surface instead of the 55-tool Refactor+Workspace+WholeFileWrite set
 
-**Status:** PROPOSED 2026-11-13. The owner asked for the ModelEval tool list to be rebuilt from scratch and implemented in a fresh session. This doc proposes the list from a prompt, assertion and usage review; nothing is built.
+**Status:** IMPLEMENTED 2026-11-14 as [plan_modeleval_lean_tool_surface.md](../plans/closed/plan_modeleval_lean_tool_surface.md) (18 tools: the 15 below plus ChangeAccessibility, ModifyModifier and UsingDirective; default since 1e2b5498; evidence in [eval_modeleval_lean_vs_full.md](../evals/eval_modeleval_lean_vs_full.md)). The text below is the original proposal, 2026-11-13.
 
 ## Starting in a fresh session
 

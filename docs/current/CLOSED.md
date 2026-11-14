@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## ModelEval lean tool surface - resolved (2026-11-13)
+
+ModelEval lean tool surface (2026-11-13) - 18-tool allow-list behind an env switch; Steps 1-4 done (be340c7e..d5efb82c), Step 5 live A/B pilot running (n=10, host 113), then Step 6 default flip and Step 7 PlanStepRunner allow-list; run n=30 on any close scenario before the flip - [plan](plans/plan_modeleval_lean_tool_surface.md)
+
+Evidence: be340c7e..1e2b5498; plan plans/closed/plan_modeleval_lean_tool_surface.md; eval evals/eval_modeleval_lean_vs_full.md (lean non-inferior on 9b and 4b; default flipped 1e2b5498; full suite 0 failures)
+
 ## Not-found member inventory: flip default to on - resolved (2026-11-13)
 
 Not-found member inventory: flip default to on (2026-11-13) - the n=30 A/B (35e2af4b) showed no harm (pass 22/30 vs 19/30, p 0.58); after the separator fix, set the `ROSLYNSENTINEL_NOTFOUND_INVENTORY` default on in `NotFoundInventoryOptions`, pin it in `NotFoundInventoryOptionsTests`, remove the TODOs at `NotFoundMemberInventory.cs:5` and `ModelEvalAssemblySetUp.cs:34`; Small - [doc](plans/closed/plan_error_policy_pointer.md)
