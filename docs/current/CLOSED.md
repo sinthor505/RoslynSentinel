@@ -8,6 +8,24 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## ModelEval LM Studio context-exceeded is non-retryable (ContextExhausted) - resolved (2026-11-13)
+
+ModelEval harness: LM Studio "Context size has been exceeded" (HTTP 500) is non-retryable and scored `ContextExhausted` (2026-11-13) - batch H6 R3/R5 died at ~44k of a 70144 load; `LmStudioAgentClient.CompleteOnceAsync` throws a dedicated exception type that the retry filter in `CompleteAsync` excludes; `ModelAgentRunner` (~310) catches it and finishes the run as `AgentStopReason.ContextExhausted` (transcript written, Converged false) and logs cumulative tokens plus context length; tests next to `ContextExhaustedRunnerTests`: a scripted 500 gives one request and ContextExhausted, any other 500 or IO error still retries once; Small-Medium - [doc](evals/eval_tenchain_reasoning_replay_2026_11_10.md)
+
+Evidence: d32bb411, ba585013, 95933269; LmStudioClientRetryTests + ContextExhaustedRunnerTests (22 pass, detached run)
+
+## Error-policy: warn when an Inline entry is long - resolved (2026-11-13)
+
+Error-policy: warn at load when an `Inline` entry is long (2026-11-13) - in `AddErrorPolicyFilter` after `ErrorPolicyDocument.Load` log the key and length of any entry over about 1000 characters (resolves the `// TODO` at `ServiceRegistrationExtensionsBasic.cs:162`); no failing bound on the shipped file and no offload change (the policy block is appended after `LargeResultOffload` so it is already exempt; `EchoReserveChars` is only the shared margin); also add the ErrorPolicy filter to `reference_tool_response_pipeline.md` (it says 14 filters and omits it); Small - [doc](plans/closed/plan_error_policy_pointer.md)
+
+Evidence: 9a714fe4; ErrorPolicyLongEntryWarningTests, ErrorPolicyFilterTests (27 pass); pipeline doc gained item 7a. The warning is logged on the first tool call because no logger exists at registration.
+
+## Reject numeric values for string-enum parameters - resolved (2026-11-13)
+
+Reject numeric values for string-enum parameters (2026-11-13) - `ToolArgumentValidator.Validate` (~1341/1378) returns a facts+options error ("parameter 'operation' expects one of addMember, ..., view; got number 4") instead of letting `JsonStringEnumConverter` accept an ordinal, which also made `ErrorPolicyIntentTable.Resolve` fall back to the tool default intent; test: Member `operation: 4` is rejected and the string still passes; Small - [doc](plans/closed/plan_error_policy_pointer.md)
+
+Evidence: e6600253; NumericEnumArgumentTests (4 pass, detached run)
+
 ## Test error-message wording by substituting the tool result in a saved transcript, not by editing production code - resolved (2026-11-13)
 
 Test error-message wording by substituting the tool result in a saved transcript, not by editing production code - [doc](proposals/closed/proposal_fake_tool_responses_for_error_text_testing.md)
