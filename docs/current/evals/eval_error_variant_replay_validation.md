@@ -3,7 +3,7 @@
 **Status:** OPEN 2026-11-13. The replay is a coarse screen only.
 - It reproduces large first-call effects.
 - It loses arm F's live effect; the cause is not traced.
-- It cannot see late stops: NoSuchMethod on 9b ends BLOCKED in 5 of 10 live runs, yet none stops at the turn the replay classifies.
+- It cannot see late stops: with Inline policy, NoSuchMethod on 9b stops without doing the task in 12 of 20 live runs, against 1 of 10 with policy Off (p 0.011). None of these stops happens at the turn the replay classifies.
 
 Wording decisions stay with live arms.
 
@@ -157,7 +157,7 @@ Step 13 (cross-history) and Step 14 (screening) are on hold pending an owner dec
 ### Step 14 coarse screen: arms H and I, and the guards (9b, regenerate, 2026-11-13 late)
 
 - **Guard histories, recorded live on 9b at HEAD with Inline policy.**
-  - NoSuchMethod (`ModelTestingResults\113\RunScenario_SamplesAndScores\20261113-231321-920`): **final BLOCKED in 5 of 10 samples, which are false stops**, and a pass in only 1 of 10. The stopping samples quote the inline policy rule in their reasoning.
+  - NoSuchMethod (`ModelTestingResults\113\RunScenario_SamplesAndScores\20261113-231321-920`): **5 of 10 samples stop without doing the task, which are false stops**. They stop with `FalseDoneClaim` ("does not exist" prose, no `BLOCKED:` marker; an earlier summary called these BLOCKED). 1 of 10 passes and 4 hit the turn cap.
   - Typo (`-231943-097`): 10 of 10 pass, 0 BLOCKED.
 - **Variants.**
   - `FileNotFound/armH`, `armI`, `NotFound/armH` and `preH` were harvested in cf95c8ff. Arm I's symbol text equals arm H's.
@@ -179,7 +179,7 @@ Step 13 (cross-history) and Step 14 (screening) are on hold pending an owner dec
 - **MissingMethod.** H stops more than pre-H in replay (0.19 against 0.05) and in live (0.27 against 0.20). The direction agrees; neither difference is significant.
   - **Regenerate drops many rows here.** Its `RegenMiss` rate is 23-33%, because the model must reproduce the turn-1 reads and the exact `Search` arguments.
   - **The surviving rows skew toward `Search`.** Replay H gives Search 7/21 against live 2/30, so the regenerate filter selects samples.
-- **NoSuchMethod guard: one-step replay cannot see the failure.** Live 9b ends BLOCKED in 5 of 10 samples, yet 0 of 10 stopped at the turn right after the first miss. The false stops come later in the run. A one-step screen therefore cannot act as the false-stop guard; the guard needs multi-turn live runs.
+- **NoSuchMethod guard: one-step replay cannot see the failure.** Live 9b stops without doing the task in 5 of 10 samples, yet 0 of 10 stopped at the turn right after the first miss. The false stops come later in the run. A one-step screen therefore cannot act as the false-stop guard; the guard needs multi-turn live runs.
 
 ## Conclusions for the harness
 
@@ -190,7 +190,24 @@ Step 13 (cross-history) and Step 14 (screening) are on hold pending an owner dec
    - It cannot see stops later than the turn after the error.
    - Regenerate mode drops 23-33% of rows when the first error comes after turn 1.
 3. **Not-found wording decisions** keep going through live arms of 20-30 samples. Replay serves only to reject texts that do not move the first call at all.
-4. **New finding for the TODO list.** Current production wording plus the Inline policy gives 5 of 10 false stops on NoSuchMethod (9b), consistent with arms H/I on 4b (6/30, 5/30). This is the live false-stop risk the guard was meant to catch.
+4. **New finding for the TODO list.** Current production wording plus the Inline policy causes false stops on NoSuchMethod (9b). This is the live false-stop risk the guard was meant to catch. The policy A/B below confirms it.
+
+### Policy Off against Inline on NoSuchMethod (9b, live, 2026-11-14)
+
+- **Runs.** Off: `ModelTestingResults\113\RunScenario_SamplesAndScores\20261114-004418-467` (d32bb411 with a peer's uncommitted `Server.Advanced` edits, which only add a log warning). Inline: `-005047-958` (0a0b0ecc, clean, hash 2c1da955f696). 10 samples each, turn cap 8, 55 tools in both arms.
+
+| | Off | Inline | Inline, pooled with the 2026-11-13 run (n=20) |
+| --- | --- | --- | --- |
+| Passed | 0 | 0 | 1 |
+| Final `BLOCKED:` (false stop) | 0 | 5 | 5 |
+| `FalseDoneClaim` | 1 | 2 | 7 |
+| Turn cap / BudgetOut | 9 | 3 | 7 |
+| Mean turns | 8.0 | 6.6 | |
+
+- **Stopped without doing the task** (BLOCKED or FalseDoneClaim): Inline 12/20 against Off 1/10, one-sided Fisher p = 0.011. Pass rates do not differ (1/20 against 0/10).
+- **The Inline stops follow the policy text.** The first `BLOCKED:` comes at turns 5-6. Four of the five stopping samples cite "the error handling rules" in their final reasoning, and four mention the real method `CalcDisc` before stopping anyway. The policy's "no similar name -> stop" rule, plus the tool error's "no similar name" wording, overrides a description that names the method only by what it does.
+- **Off does not recover either.** Nine of ten were still exploring at the turn cap of 8, so this cap cannot tell "would recover" from "would not". A fair recovery measure needs a higher cap.
+- **Reading.** The Inline policy converts exploration into false stops on a recover scenario without adding passes. This is a policy defect: its stop rule fires on "no similar name" even when the task describes the target rather than naming it. The fix belongs in the policy wording, not in tool text (CLAUDE.md: policy lives in prompts).
 
 ### Sibling-model replicate: qwen3.5-4b-mtp on host 112 (exploratory)
 
