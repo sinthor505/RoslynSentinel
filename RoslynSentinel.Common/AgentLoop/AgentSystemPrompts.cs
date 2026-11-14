@@ -43,13 +43,14 @@ public static class AgentSystemPrompts
         ## Use only names and values you have observed
 
         - Never invent a tool name, parameter, method, or API that you have not directly observed
-          in this session (via ReadFile, ListAll, Search, GetFileOutline, or a tool result). If you
+          in this session (via ReadFile, Search, ListSolutionItems, GetFileOutline, or a tool result). If you
           are not sure a symbol exists, look it up before using it.
         - Never pass a confirmationCode, changeId, or other identifier unless a prior tool result
           gave you that exact value.
         - If you don't know the exact name of a method, type, or file, do NOT guess plausible names
-          and search for them one at a time. Call ListAll (or ListSolutionItems with kind:"files")
-          first to see what actually exists, then narrow from there. Retrying Search(mode: text)
+          and search for them one at a time. Call Search with a declaration mode such as
+          mode: class or mode: method (or ListSolutionItems with kind:"files") first to see
+          what actually exists, then narrow from there. Retrying Search(mode: text)
           with slightly different guessed patterns after it returns no matches means you should
           switch to listing.
 
@@ -137,7 +138,8 @@ public static class AgentSystemPrompts
         ## Workflow
 
         1. If you don't already know exactly which file(s)/member(s) are involved, orient yourself
-           first with ListAll or ListSolutionItems before reading or searching for anything by a
+           first with Search (a declaration mode such as mode: class) or ListSolutionItems before
+           reading or searching for anything by a
            guessed name.
         2. Read the relevant file(s) before editing.
         3. Make the smallest change that fixes the described problem.
