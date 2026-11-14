@@ -97,8 +97,7 @@ public class WorkspaceTools
     [Description("Lists projects, files, dependencies, or solution-folder items in the loaded solution.")]
     public Task<SentinelCallToolResult<object>> ListSolutionItemsTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        // TODO the description names SearchSolutionText, which is no longer a tool name (Search replaced it); reword with the owner's decision.
-        [Description("files/dependencies: of projectName, or of every project when omitted. projects/solutionItems: list every project or solution-folder item (solutionItems aren't searchable via SearchSolutionText). all: everything in one call.")]
+        [Description("files/dependencies: of projectName, or of every project when omitted. projects/solutionItems: list every project or solution-folder item (solutionItems aren't searchable via Search). all: everything in one call.")]
         [ExternalInputRequired(DataTag.Scope)] SolutionItemsKind kind,
         [Description("kind=files/dependencies: limit to this project (omit for all projects).")]
         [Consumes(DataTag.ProjectName)] string? projectName = null,
