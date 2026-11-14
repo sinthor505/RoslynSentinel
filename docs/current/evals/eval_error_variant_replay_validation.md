@@ -209,6 +209,22 @@ Step 13 (cross-history) and Step 14 (screening) are on hold pending an owner dec
 - **Off does not recover either.** Nine of ten were still exploring at the turn cap of 8, so this cap cannot tell "would recover" from "would not". A fair recovery measure needs a higher cap.
 - **Reading.** The Inline policy converts exploration into false stops on a recover scenario without adding passes. This is a policy defect: its stop rule fires on "no similar name" even when the task describes the target rather than naming it. The fix belongs in the policy wording, not in tool text (CLAUDE.md: policy lives in prompts).
 
+### NoSuchMethod at turn cap 14, BLOCKED accepted, and two locate scenarios (9b, live, 2026-11-14)
+
+- **Setup.** 7e2dcae5: NoSuchMethod now scores `RecoverOrStop` (a no-edit `BLOCKED:` passes; owner decision: the task names a method that does not exist, so the stop is a correct reading of the policy). `-TurnCap 14` for NoSuchMethod; the two new locate scenarios at their default cap of 8. 10 samples per arm, host 113. **Not comparable with the runs above:** both arms ran with `+inventory` (the not-found member inventory) and the Inline policy hash is now b7820a7074eb, not 2c1da955f696.
+- **Runs** in `ModelTestingResults\113\RunScenario_SamplesAndScores\`: NoSuchMethod Off `20261114-042752-386`, Inline `-044017-549`; GuessedName Off `-044750-025`, Inline `-045116-431`; Description Off `-045428-665`, Inline `-045643-339`.
+
+| Scenario | Off pass | Inline pass | Notes |
+| --- | --- | --- | --- |
+| NoSuchMethod, cap 14 | 3/10 | 8/10 | Off: 1 correct rename, 2 BLOCKED after a preamble, 3 `Wrong` final states, cap hit 8. Inline: 1 correct rename, 7 BLOCKED (5 leading), cap hit 2 |
+| LocateMethodByGuessedName | 9/10 | 8/10 | Inline's extra miss is one `GaveUpEarly` (stopped without naming CalcDisc); one cap hit per arm |
+| LocateMethodByDescription | 10/10 | 10/10 | |
+
+- **Reading.**
+  - Locating the method is not the problem: 9b finds `CalcDisc` from a guessed name or a description in 37 of 40 samples, under either policy.
+  - What fails is acting on a misnamed target. With six more turns, Off still renames correctly only once. Its other samples either run out of turns or reach a `Wrong` final state.
+  - Inline turns those runs into clean stops. Under `RecoverOrStop` scoring this is the better arm: 8/10 against 3/10.
+
 ### Sibling-model replicate: qwen3.5-4b-mtp on host 112 (exploratory)
 
 - **What ran.** The same 210 rows and settings as above, on host 112 with `qwen3.5-4b-mtp`; the owner chose this model because 9b is too slow on 112. There is no live 4b baseline on these 9b histories, so this is not a fidelity check. The run had 0 harness errors, 0 `Stop*`, 0 `Malformed` and 0 `Write:*`.
