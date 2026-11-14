@@ -63,7 +63,7 @@ public class StructuralRefinementEngine
                     message += $" '{targetTypeName}' is declared in '{filePath}' only as a nested type; this tool syncs the file name with a top-level type.";
                 }
 
-                throw new ToolNotFoundException(message, "type", targetTypeName);
+                throw new ToolNotFoundException(message, MissingTargetKinds.Type, targetTypeName);
             }
         }
         else
@@ -73,7 +73,7 @@ public class StructuralRefinementEngine
 
         if (primaryType == null)
         {
-            throw new ToolNotFoundException($"No type declaration found in '{filePath}'. Next: {ToolCallHint.Call("ReadFile")} the file to confirm it declares a type.", "type");
+            throw new ToolNotFoundException($"No type declaration found in '{filePath}'. Next: {ToolCallHint.Call("ReadFile")} the file to confirm it declares a type.", MissingTargetKinds.Type);
         }
 
         var expectedName = primaryType.Identifier.Text + ".cs";
@@ -126,7 +126,7 @@ public class StructuralRefinementEngine
         var symbol = semanticModel?.GetDeclaredSymbol(node!, cancellationToken) ?? semanticModel?.GetSymbolInfo(node!, cancellationToken).Symbol;
         if (symbol == null)
         {
-            throw MemberRefactoringNotFound.Unresolved("symbol", $"{line}:{column}", $"No symbol was found at line {line}, column {column} of '{filePath}': the node there ({node?.GetType().Name ?? "none"}) has no declared or referenced symbol.", filePath.ToString());
+            throw MemberRefactoringNotFound.Unresolved(MissingTargetKinds.Symbol, $"{line}:{column}", $"No symbol was found at line {line}, column {column} of '{filePath}': the node there ({node?.GetType().Name ?? "none"}) has no declared or referenced symbol.", filePath.ToString());
         }
 
         RequireDeletableDeclaration(symbol);
@@ -213,18 +213,18 @@ public class StructuralRefinementEngine
         {
             if (candidates.Count == 0)
             {
-                throw MemberRefactoringNotFound.Declaration("symbol", symbolName, "symbolName", root.DescendantNodes().Select(GetDeclaredNodeName).OfType<string>(), filePath.ToString());
+                throw MemberRefactoringNotFound.Declaration(MissingTargetKinds.Symbol, symbolName, "symbolName", root.DescendantNodes().Select(GetDeclaredNodeName).OfType<string>(), filePath.ToString());
             }
 
             var startLines = MemberRefactoringNotFound.StartLines(sourceText, candidates);
             throw new ToolNotFoundException(
-                $"'{symbolName}' has {candidates.Count} declaration(s) in '{filePath}', starting at line {string.Join(", ", startLines)}, and contextSnippet matched none of them. {ToolCallHint.Call("ReadFile", ("filePath", filePath.ToString()), ("startLine", startLines.Min().ToString(System.Globalization.CultureInfo.InvariantCulture)))} reads the first one.", "symbol", symbolName);
+                $"'{symbolName}' has {candidates.Count} declaration(s) in '{filePath}', starting at line {string.Join(", ", startLines)}, and contextSnippet matched none of them. {ToolCallHint.Call("ReadFile", ("filePath", filePath.ToString()), ("startLine", startLines.Min().ToString(System.Globalization.CultureInfo.InvariantCulture)))} reads the first one.", MissingTargetKinds.Symbol, symbolName);
         }
 
         var symbol = semanticModel.GetDeclaredSymbol(target, cancellationToken);
         if (symbol == null)
         {
-            throw MemberRefactoringNotFound.Unresolved("symbol", symbolName, $"No symbol could be resolved for '{symbolName}' at the matched location of '{filePath}': the matched node ({target.GetType().Name}) is not a declaration that resolves to a symbol.", filePath.ToString());
+            throw MemberRefactoringNotFound.Unresolved(MissingTargetKinds.Symbol, symbolName, $"No symbol could be resolved for '{symbolName}' at the matched location of '{filePath}': the matched node ({target.GetType().Name}) is not a declaration that resolves to a symbol.", filePath.ToString());
         }
 
         return await SafeDeleteSymbolAsync(filePath, symbol, cancellationToken);
@@ -386,7 +386,7 @@ public class StructuralRefinementEngine
             var fact = declaredIn.Count == 0
                 ? $"Symbol '{symbol.Name}' has no declaration in source, so no declaration of it exists in '{filePath}'."
                 : $"No declaration of symbol '{symbol.Name}' was found in '{filePath}'; it is declared in {string.Join(", ", declaredIn)}.";
-            throw new ToolNotFoundException($"{fact} To locate it, call {ToolCallHint.Call("Search", ("mode", "symbol"), ("query", symbol.Name))}.", "symbol", symbol.Name);
+            throw new ToolNotFoundException($"{fact} To locate it, call {ToolCallHint.Call("Search", ("mode", "symbol"), ("query", symbol.Name))}.", MissingTargetKinds.Symbol, symbol.Name);
         }
 
         return new DocumentEditResult

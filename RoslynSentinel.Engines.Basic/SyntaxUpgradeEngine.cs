@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Common.SnippetMatching;
 
 namespace RoslynSentinel.Engines.Basic;
@@ -161,7 +162,7 @@ public class SyntaxUpgradeEngine
         {
             throw new ToolNotFoundException(
                 $"No switch statement is declared in method '{methodName}' of '{filePath}', so there is nothing to convert. {ToolCallHint.Call("GetMethodSource", ("filePath", filePath), ("methodName", methodName))} shows the method body.",
-                "switch statement", methodName);
+                MissingTargetKinds.SwitchStatement, methodName);
         }
 
         var arms = switchStmt.Sections.Select(s =>

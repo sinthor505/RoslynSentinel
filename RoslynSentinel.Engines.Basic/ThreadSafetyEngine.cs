@@ -45,7 +45,7 @@ public class ThreadSafetyEngine
         {
             throw new ToolNotFoundException(
                 $"Method '{methodName}' in '{filePath}' has no enclosing class, struct, interface or record declaration, so there is no type to add a lock field to. {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} shows where the method sits.",
-                "type", methodName);
+                MissingTargetKinds.Type, methodName);
         }
 
         // Check if a field with lockFieldName already exists
@@ -126,12 +126,12 @@ public class ThreadSafetyEngine
         {
             throw new ToolNotFoundException(
                 $"Method '{methodName}' in '{filePath}' has no block body (it is abstract, extern or expression-bodied), so it holds no lock statement to convert. {ToolCallHint.Call("GetMethodSource", ("filePath", filePath), ("methodName", methodName))} shows the method as declared.",
-                "method body", methodName);
+                MissingTargetKinds.MethodBody, methodName);
         }
 
         var typeNode = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault() ?? throw new ToolNotFoundException(
             $"Method '{methodName}' in '{filePath}' has no enclosing class, struct, interface or record declaration, so there is no type to add a semaphore field to. {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} shows where the method sits.",
-            "type", methodName);
+            MissingTargetKinds.Type, methodName);
 
         // Find the lock object being used in this method
         var lockStatements = method.Body.DescendantNodes().OfType<LockStatementSyntax>().ToList();
