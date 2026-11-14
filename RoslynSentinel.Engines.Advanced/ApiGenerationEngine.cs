@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 using RoslynSentinel.Common;
+using RoslynSentinel.Engines.Basic;
 namespace RoslynSentinel.Engines.Advanced;
 public class ApiGenerationEngine
 {
@@ -24,7 +25,7 @@ public class ApiGenerationEngine
         var controller = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == controllerName).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", controllerName);
         if (controller == null)
         {
-            throw new ToolNotFoundException($"Controller class '{controllerName}' not found in '{filePath}'. Searched: class declarations in the file. Next: {ToolCallHint.Call("Search", ("mode", "class"), ("query", controllerName))} to locate it, or {ToolCallHint.Call("GetFileOutline")} on the file.", "class", controllerName);
+            throw new ToolNotFoundException($"Controller class '{controllerName}' not found in '{filePath}'. " + DeclarationNotFoundDetail.Build("class", "controllerName", controllerName, root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Select(classDecl => classDecl.Identifier.Text) ?? Enumerable.Empty<string>(), filePath.ToString()), MissingTargetKinds.Class, controllerName);
         }
 
         var sb = new System.Text.StringBuilder();
@@ -118,7 +119,7 @@ public class ApiGenerationEngine
         var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className);
         if (classNode == null)
         {
-            throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'. Searched: class declarations in the file after adding the using directive. Next: {ToolCallHint.Call("Search", ("mode", "class"), ("query", className))} to confirm the name. Use {ToolCallHint.Call("GetFileOutline")} to verify the class name (case-sensitive).", "class", className);
+            throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'. " + DeclarationNotFoundDetail.Build("class", "className", className, root.DescendantNodes().OfType<ClassDeclarationSyntax>().Select(classDecl => classDecl.Identifier.Text), filePath.ToString()), MissingTargetKinds.Class, className);
         }
 
         // Helper: check whether a property already carries an attribute (avoids duplicates)

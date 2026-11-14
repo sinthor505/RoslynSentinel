@@ -78,7 +78,7 @@ public class MappingEngine
 
         if (fromSymbol == null || toSymbol == null)
         {
-            throw new ToolNotFoundException($"Could not resolve type '{fromType}' or '{toType}'. Searched: the loaded solution's compilation by fully-qualified metadata name, then by simple name. Next: pass the simple class name (e.g. 'CreateRecipeCommand') or the fully-qualified name (e.g. 'MyApp.Commands.CreateRecipeCommand'), and confirm both types are in the loaded solution.");
+            throw new ToolNotFoundException($"Could not resolve type '{fromType}' or '{toType}'. Searched: the loaded solution's compilation by fully-qualified metadata name, then by simple name. Next: pass the simple class name (e.g. 'CreateRecipeCommand') or the fully-qualified name (e.g. 'MyApp.Commands.CreateRecipeCommand'), and confirm both types are in the loaded solution.", MissingTargetKinds.Type, fromSymbol == null ? fromType : toType);
         }
 
         var fromProps = fromSymbol.GetMembers().OfType<IPropertySymbol>().ToList();
@@ -142,7 +142,7 @@ public class MappingEngine
         var toSymbol = ResolveType(compilation, toType, cancellationToken);
         if (document == null || fromSymbol == null || toSymbol == null)
         {
-            throw new ToolNotFoundException($"Could not find the document or the types '{fromType}' and '{toType}' for '{filePath}'. Searched: the document in the loaded solution and both type symbols. Next: {ToolCallHint.Call("Search", ("mode", "class"), ("query", fromType))} and {ToolCallHint.Call("Search", ("mode", "class"), ("query", toType))} to confirm the names, and confirm the file is in the loaded solution.");
+            throw new ToolNotFoundException($"Could not find the document or the types '{fromType}' and '{toType}' for '{filePath}'. Searched: the document in the loaded solution and both type symbols. Next: {ToolCallHint.Call("Search", ("mode", "class"), ("query", fromType))} and {ToolCallHint.Call("Search", ("mode", "class"), ("query", toType))} to confirm the names, and confirm the file is in the loaded solution.", document == null ? MissingTargetKinds.Document : MissingTargetKinds.Type, document == null ? (string)filePath : (fromSymbol == null ? fromType : toType));
         }
 
         var sourceTree = fromSymbol.DeclaringSyntaxReferences.FirstOrDefault()?.SyntaxTree;
@@ -212,7 +212,7 @@ public class MappingEngine
         var nodes = root?.DescendantNodes(span).OfType<AssignmentExpressionSyntax>().ToList();
         if (nodes == null || nodes.Count == 0)
         {
-            throw new ToolNotFoundException($"No assignment expressions found in the specified range: {startLine}-{endLine}");
+            throw new ToolNotFoundException($"No assignment expressions found in the specified range: {startLine}-{endLine}", MissingTargetKinds.Expression, $"{startLine}-{endLine}");
         }
 
         var annotation = Formatter.Annotation;
@@ -271,7 +271,7 @@ public class MappingEngine
 
         if (nodes.Count == 0)
         {
-            throw new ToolNotFoundException(SnippetNodeKindError.Describe(sourceText, root, snippetMatch, "assignment expression", "directly contains the assignment to invert"), "assignment expression");
+            throw new ToolNotFoundException(SnippetNodeKindError.Describe(sourceText, root, snippetMatch, "assignment expression", "directly contains the assignment to invert"), MissingTargetKinds.Expression);
         }
 
         var annotation = Formatter.Annotation;

@@ -5,6 +5,7 @@ using Microsoft.CodeAnalysis.Text;
 
 using RoslynSentinel.Common;
 
+using RoslynSentinel.Engines.Basic;
 namespace RoslynSentinel.Engines.Advanced;
 
 public class DocumentationEngine
@@ -19,8 +20,7 @@ public class DocumentationEngine
     public async Task<DocumentEditResult> GenerateXmlDocumentationStubsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var normalizedPath = Path.GetFullPath(filePath);
-        var document = DocumentLookup.FindDocumentOrNull(solution, filePath) ?? throw new ToolNotFoundException($"File not found in solution: {normalizedPath}");
+        var document = DocumentLookup.RequireDocument(solution, filePath);
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
@@ -103,7 +103,7 @@ public class DocumentationEngine
         var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className);
         if (classNode == null)
         {
-            throw new ToolNotFoundException("Class '" + className + "' not found in '" + filePath + "'.", "class", className);
+            throw new ToolNotFoundException("Class '" + className + "' not found in '" + filePath + "'. " + DeclarationNotFoundDetail.Build("class", "className", className, root.DescendantNodes().OfType<ClassDeclarationSyntax>().Select(classDecl => classDecl.Identifier.Text), filePath.ToString()), MissingTargetKinds.Class, className);
         }
 
         var originalText = (await document.GetTextAsync(cancellationToken)).ToString();
