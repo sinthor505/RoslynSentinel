@@ -392,3 +392,24 @@ Standing preferences (user, 2026-09-13):
   30-minute default while the model was still working correctly (clean build at turn 30, just before
   tests/commit). Complex refactoring steps legitimately need more real time, not just more turns. Use a
   different value only if the user asks for one for that run.
+
+### Tool surface of a PlanStepRunner run (lean allow-list)
+
+- The model sees and may call only `AgentToolAllowLists.PlanStepRunnerSurface` (`RoslynSentinel.Common/AgentLoop`):
+  the 18-tool lean surface (`AgentToolAllowLists.Lean`, also the source of `ChainEvalToolSurface.LeanAllowList`)
+  plus `GetDiagnostics`. `Program.cs` wraps the MCP client in `FilteringToolHost`, a model-side `IAgentToolHost`
+  filter: `ListToolsAsync` returns only allowed tools, and `CallToolAsync` for any other name returns a
+  `ToolNotAvailable` error that lists the callable tools (the inner host is not called).
+- A model that requests a tool absent from the list it was shown ends the run with `AgentStopReason.UnknownToolRequested`
+  (the `ModelAgentRunner` known-tool check fires before the host), so the filter's error result is a second line of
+  defence for other hosts and direct callers.
+- The runner's own `LoadSolution`, `Build` and `RunTest` calls use the raw MCP client and are not filtered. A computed
+  `--hide-tools` list cannot do this job: a hidden tool is not registered at all, so the runner's `LoadSolution` would fail.
+- The server registers the classes behind those tools through `--include-tools`; the default is
+  `RunnerOptions.DefaultIncludeTools` (`WorkspaceTools, WorkspaceReadNavigationTools, WholeFileWriteTools,
+  RefactoringStructuralTools, RefactoringSignatureTools, RefactoringExtractionDocsTools, CoreRefactoringTools`), mirrored
+  as the `-IncludeTools` default in `roslynsentinel-planstep.ps1`. `--mode=Workspace,Refactor,WholeFileWrite` is not
+  equivalent: it also registers Git, Documentation, SymbolNavigation and AdvancedRefactoring classes the model never sees.
+  Tests (`Tests.PlanStepRunner`) keep the script default, the options default and `docs/generated/architecture_tools.md` in step.
+- The step prompt is `StepPrompts.BuildUserPrompt`; it names no tool, and a test checks the user and system prompts
+  against every known tool name outside the list.
