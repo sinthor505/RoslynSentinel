@@ -7,6 +7,7 @@ using Microsoft.CodeAnalysis.Formatting;
 
 using RoslynSentinel.Common;
 using RoslynSentinel.Common.SnippetMatching;
+using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Engines.Advanced;
 
@@ -205,7 +206,7 @@ public class CodeGenerationEngine
         var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(classMatches, "Class", className);
         if (classNode == null)
         {
-            throw new ToolNotFoundException($"Class '{className}' not found.", "class", className);
+            throw new ToolNotFoundException($"Class '{className}' not found." + " " + DeclarationNotFoundDetail.Build("class", "className", className, root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Select(c => c.Identifier.Text) ?? Enumerable.Empty<string>(), filePath.ToString()), MissingTargetKinds.Class, className);
         }
 
         if (classNode.Members.OfType<ConstructorDeclarationSyntax>().Any())
@@ -379,6 +380,7 @@ public class CodeGenerationEngine
     public async Task<DocumentEditResult> GenerateDefaultConfigJsonAsync(string projectName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        // TODO not-found: throws InvalidOperationException and matches case-sensitively; move to ProjectLookup.RequireProject once its callers/tests tolerate ToolNotFoundException
         var project = ProjectLookup.FindProject(solution, projectName) ?? throw new InvalidOperationException("Project not found.");
         var collectedKeys = new SortedSet<string>(StringComparer.Ordinal);
 
@@ -512,7 +514,7 @@ public class CodeGenerationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         var classMatches = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>();
-        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(classMatches, "Class", className) ?? throw new ToolNotFoundException($"Class '{className}' not found.");
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(classMatches, "Class", className) ?? throw new ToolNotFoundException($"Class '{className}' not found." + " " + DeclarationNotFoundDetail.Build("class", "className", className, root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Select(c => c.Identifier.Text) ?? Enumerable.Empty<string>(), filePath.ToString()), MissingTargetKinds.Class, className);
 
         // Determine namespace
         var ns = root?.DescendantNodes()
@@ -769,7 +771,7 @@ public class CodeGenerationEngine
             var scope = projectName != null ? $"project '{projectName}'" : "all loaded projects";
             throw new ToolNotFoundException(
                 $"Interface '{interfaceName}' not found in {scope}. Searched: interface type declarations named '{interfaceName}' in {scope}. Ensure the interface name matches exactly (including leading 'I') and is part of the loaded solution. Next: {ToolCallHint.Call("Search", ("mode", "interface"), ("query", interfaceName))} to confirm the name.",
-                "interface",
+                MissingTargetKinds.Interface,
                 interfaceName);
         }
 
@@ -878,7 +880,7 @@ public class CodeGenerationEngine
         var classDecl = RoslynSentinel.Common.NameTargetLookup.RequireSingle(classMatches, "Class", className);
         if (classDecl == null)
         {
-            throw new ToolNotFoundException($"Class '{className}' not found in file.", "class", className);
+            throw new ToolNotFoundException($"Class '{className}' not found in file." + " " + DeclarationNotFoundDetail.Build("class", "className", className, root.DescendantNodes().OfType<ClassDeclarationSyntax>().Select(c => c.Identifier.Text), filePath.ToString()), MissingTargetKinds.Class, className);
         }
 
         var classSymbol = semanticModel.GetDeclaredSymbol(classDecl, cancellationToken: cancellationToken) as INamedTypeSymbol;
@@ -905,7 +907,7 @@ public class CodeGenerationEngine
         var ifaceSymbol = ifaceMatches.FirstOrDefault();
         if (ifaceSymbol == null)
         {
-            throw new ToolNotFoundException($"Interface '{interfaceName}' not found on class. Ensure the class already declares it implements '{interfaceName}'.", "interface", interfaceName);
+            throw new ToolNotFoundException($"Interface '{interfaceName}' is not in the base list of class '{className}'." + " " + DeclarationNotFoundDetail.Build("interface", "interfaceName", interfaceName, classDecl.BaseList?.Types.Select(bt => bt.Type.ToString()) ?? Enumerable.Empty<string>(), filePath.ToString()), MissingTargetKinds.Interface, interfaceName);
         }
 
         var unimplemented = ifaceSymbol.GetMembers()
@@ -1033,7 +1035,7 @@ public class CodeGenerationEngine
             var pos = SnippetLookup.TryResolve(srcText, contextSnippet, lineBefore, lineAfter, out var snippetMatch, out var snippetError) ? snippetMatch.Start : -1;
             if (pos < 0)
             {
-                throw new ToolNotFoundException($"{snippetError}", "property", propertyName);
+                throw new ToolNotFoundException($"{snippetError}", MissingTargetKinds.Snippet, propertyName);
             }
 
             propNode = candidates.FirstOrDefault(p => p.Span.Contains(pos));
@@ -1041,7 +1043,7 @@ public class CodeGenerationEngine
 
         if (propNode == null)
         {
-            throw new ToolNotFoundException($"Property '{propertyName}' not found.", "property", propertyName);
+            throw new ToolNotFoundException($"Property '{propertyName}' not found." + " " + DeclarationNotFoundDetail.Build("property", "propertyName", propertyName, root.DescendantNodes().OfType<PropertyDeclarationSyntax>().Select(p => p.Identifier.Text), filePath.ToString()), MissingTargetKinds.Property, propertyName);
         }
 
         SyntaxNode newRoot = direction switch
@@ -1222,7 +1224,7 @@ public class CodeGenerationEngine
         var pos = SnippetLookup.TryResolve(srcText, contextSnippet, lineBefore, lineAfter, out var snippetMatch, out var snippetError) ? snippetMatch.Start : -1;
         if (pos < 0)
         {
-            throw new ToolNotFoundException($"{snippetError}");
+            throw new ToolNotFoundException($"{snippetError}", MissingTargetKinds.Snippet);
         }
 
         var invocation = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0))
@@ -1232,12 +1234,13 @@ public class CodeGenerationEngine
 
         if (invocation == null)
         {
-            throw new ToolNotFoundException(SnippetNodeKindError.Describe(srcText, root, snippetMatch!, "string.Format call", "directly contains the string.Format(...) call"));
+            throw new ToolNotFoundException(SnippetNodeKindError.Describe(srcText, root, snippetMatch!, "string.Format call", "directly contains the string.Format(...) call"), MissingTargetKinds.Expression);
         }
 
         var args = invocation.ArgumentList.Arguments;
         if (args.Count < 1)
         {
+            // TODO not-found: precondition failure, not a miss; kind-less on purpose (consider a typed validation exception)
             throw new ToolNotFoundException("string.Format call has no arguments.");
         }
 
