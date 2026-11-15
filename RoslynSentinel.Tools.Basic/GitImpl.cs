@@ -211,6 +211,12 @@ public record GitCommitEntry
 public record GitLogResult : GitResult
 {
     public List<GitCommitEntry> Commits { get; set; } = [];
+
+    /// <summary>One "&lt;shortHash&gt; &lt;subject&gt;" line per commit, joined with "\n"; set only when log runs with nameOnly, and Commits is then empty.</summary>
+    public string? NameOnlyLines
+    {
+        get; set;
+    }
 }
 
 public record GitDiffResult : GitResult
@@ -2682,9 +2688,20 @@ public class GitImpl : IGitOperations
     }
 
     public async Task<GitLogResult> LogAsync(
-        string gitRoot, int count, string? refName, string? paths, string? pickaxe, bool pickaxeRegex, bool follow, CancellationToken cancellationToken)
+        string gitRoot, int count, string? refName, string? paths, string? pickaxe, bool pickaxeRegex, bool follow, CancellationToken cancellationToken, bool nameOnly = false)
     {
         count = Math.Clamp(count, 1, 100);
+
+        // nameOnly keeps only the one-line-per-commit text (NameOnlyLines) and drops the Commits list, so the output stays small.
+        GitLogResult Shape(GitLogResult result)
+        {
+            if (!nameOnly || result.IsError)
+                return result;
+            result.NameOnlyLines = string.Join("\n", result.Commits.Select(c => $"{c.ShortHash} {c.Message.Split('\n')[0].TrimEnd('\r')}"));
+            result.Commits = [];
+            return result;
+        }
+
         try
         {
             List<string>? pathList = null;
@@ -2707,7 +2724,7 @@ public class GitImpl : IGitOperations
             // reader would only make it decline, and a decline is recorded as a fallback (FirstFallbackReason), which is meant to flag a
             // broken libgit2, not an option that is known to be CLI-only.
             if (!string.IsNullOrWhiteSpace(pickaxe) || follow)
-                return await LogViaCliAsync(gitRoot, count, refName, pathList, pickaxe, pickaxeRegex, follow, cancellationToken);
+                return Shape(await LogViaCliAsync(gitRoot, count, refName, pathList, pickaxe, pickaxeRegex, follow, cancellationToken));
 
             // The typed seam answers in-process (libgit2) where it can reproduce git's output exactly and runs the git CLI otherwise
             // (ranges, merges under a path filter, ...). It blocks, so it runs off the caller's thread; the token only
@@ -2715,9 +2732,9 @@ public class GitImpl : IGitOperations
             var commits = await Task.Run(
                 () => _gitReader.GetLog(gitRoot, count, refName, pathList, pickaxe, pickaxeRegex, follow, GitProcessTimeout), cancellationToken);
             if (commits is null)
-                return await LogViaCliAsync(gitRoot, count, refName, pathList, pickaxe, pickaxeRegex, follow, cancellationToken);
+                return Shape(await LogViaCliAsync(gitRoot, count, refName, pathList, pickaxe, pickaxeRegex, follow, cancellationToken));
 
-            return new GitLogResult { IsError = false, Commits = [.. commits.Select(ToCommitEntry)] };
+            return Shape(new GitLogResult { IsError = false, Commits = [.. commits.Select(ToCommitEntry)] });
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
