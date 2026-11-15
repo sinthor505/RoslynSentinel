@@ -175,7 +175,7 @@ public class WriteToolAdviceHelperTests
     [Test]
     public void AdviseForOversizedEdit_MultipleMembersShape_SaysSeveralMembersNotWholeMember()
     {
-        // addMember takes several declarations in one call; replace takes one, so the advice names both.
+        // addMember takes several declarations in one call; replace takes one existing member plus any declarations after it, so the advice names both.
         var helper = new WriteToolAdviceHelper([WholeFileWriteClass, RefactoringClass]);
 
         var advice = helper.AdviseForOversizedEdit("ReplaceSnippet", RejectedContentShape.MultipleMembers);
@@ -185,6 +185,8 @@ public class WriteToolAdviceHelperTests
             Assert.That(advice.Sentence, Does.Contain("several members"));
             Assert.That(advice.Sentence, Does.Contain("Member call"));
             Assert.That(advice.Sentence, Does.Contain("addMember"));
+            Assert.That(advice.Sentence, Does.Contain("replace"));
+            Assert.That(advice.Sentence, Does.Contain("adds any further declarations after it"));
             Assert.That(advice.Sentence, Does.Not.Contain("one call per member"));
             Assert.That(advice.Sentence, Does.Not.Contain("whole method/property/constructor"));
         });
@@ -201,6 +203,7 @@ public class WriteToolAdviceHelperTests
         Assert.Multiple(() =>
         {
             Assert.That(advice.Sentence, Does.Contain("usings"));
+            Assert.That(advice.Sentence, Does.Contain("after it"));
             Assert.That(advice.Sentence, Does.Not.Contain("whole method/property/constructor"));
         });
     }

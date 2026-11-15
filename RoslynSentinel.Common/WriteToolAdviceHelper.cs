@@ -160,8 +160,8 @@ public sealed class WriteToolAdviceHelper
     /// </param>
     /// <param name="contentShape">
     /// The shape of the rejected content, from <see cref="RejectedContentShape"/>. Unspecified keeps
-    /// the generic advice. MultipleMembers and FileLevel steer away from a single Member(replace),
-    /// which takes exactly one member per call; addMember takes one or more.
+    /// the generic advice. MultipleMembers and FileLevel steer toward addMember for new declarations,
+    /// replace takes one existing member plus any declarations added after it.
     /// </param>
     public WriteAdvice AdviseForOversizedEdit(string rejectingToolName, RejectedContentShape contentShape = RejectedContentShape.Unspecified)
     {
@@ -170,7 +170,7 @@ public sealed class WriteToolAdviceHelper
         WriteEscapeRoute? primaryRoute = null;
 
         // 1. Structural, Member first and by name: the common oversize case is replacing a whole
-        // method/property/constructor body, which Member does with no size limit. addMember takes one or more declarations per call and replace takes exactly one,
+        // method/property/constructor body, which Member does with no size limit. addMember takes one or more declarations per call and replace takes one existing member plus any declarations added after it,
         // so the advice follows the rejected content's shape.
         if (IsExposed("Member"))
         {
@@ -179,10 +179,10 @@ public sealed class WriteToolAdviceHelper
             switch (contentShape)
             {
                 case RejectedContentShape.MultipleMembers:
-                    clauses.Add($"The new content holds several members. New declarations go in ONE {ToolCallHint.Call("Member", ("operation", "addMember"))} call (newMemberSource holds all of them); an existing member that you are replacing needs one {ToolCallHint.Call("Member", ("operation", "replace"))} call each, because replace takes exactly one declaration. None of the Member calls has a size limit.");
+                    clauses.Add($"The new content holds several members. Put them in ONE Member call: {ToolCallHint.Call("Member", ("operation", "addMember"))} adds all new declarations (newMemberSource holds all of them), and {ToolCallHint.Call("Member", ("operation", "replace"))} replaces the one member named by memberName and adds any further declarations after it; to replace several existing members, use one replace call per member. None of the Member calls has a size limit.");
                     break;
                 case RejectedContentShape.FileLevel:
-                    clauses.Add($"The new content holds usings or whole type declarations. Change the using lines with a small {rejectingToolName} call, then add all the new members in one {ToolCallHint.Call("Member", ("operation", "addMember"))} call (or use operation replace, one call per existing member) - Member has no size limit.");
+                    clauses.Add($"The new content holds usings or whole type declarations. Change the using lines with a small {rejectingToolName} call, then add all the new members in one {ToolCallHint.Call("Member", ("operation", "addMember"))} call (or use {ToolCallHint.Call("Member", ("operation", "replace"))} for an existing member, with any further new members after it in the same newMemberSource) - Member has no size limit.");
                     break;
                 case RejectedContentShape.Unspecified:
                 case RejectedContentShape.SingleMember:
