@@ -21,13 +21,63 @@ public static class SnippetTokenEquivalence
     public static SnippetMatchResult? Resolve(
         SourceText sourceText, SyntaxNode fileRoot, string snippet, SnippetSelectors? selectors, Func<int, string?>? memberNameAt)
     {
-        throw new NotImplementedException(); // TODO implement (Step 3)
+        var accepted = new List<SnippetMatch>();
+        var seen = new HashSet<(int Start, int Length)>();
+        foreach (var candidate in FindLooserCandidates(sourceText, snippet))
+        {
+            var match = TryAccept(sourceText, fileRoot, snippet, candidate);
+            if (match != null && seen.Add((match.Start, match.Length)))
+            {
+                accepted.Add(match);
+            }
+        }
+
+        if (accepted.Count == 0)
+        {
+            return null;
+        }
+
+        accepted.Sort((left, right) => left.Start.CompareTo(right.Start));
+        var count = accepted.Count;
+        var result = SnippetMatchResult.Create(
+            WhitespaceTolerance.IgnoreLineEndings, SnippetCaseMode.CaseSensitive,
+            count == 1 ? SnippetMatchOutcome.Matched : SnippetMatchOutcome.Ambiguous,
+            accepted, [], 0, [], count, count, count,
+            tiersProbed: [WhitespaceTolerance.IgnoreLineEndings, WhitespaceTolerance.IgnoreIndentation, WhitespaceTolerance.IgnoreAllWhitespace]);
+        if (selectors != null)
+        {
+            result = SnippetSelectorFilter.Apply(sourceText, snippet, result, selectors, memberNameAt);
+        }
+
+        if (result.Outcome is SnippetMatchOutcome.Ambiguous or SnippetMatchOutcome.StillAmbiguous)
+        {
+            var winners = result.Matches.Where(match => HasIdenticalLeadingWhitespace(sourceText, match, snippet)).ToList();
+            if (winners.Count == 1)
+            {
+                result = SnippetMatchResult.WithAmbiguity(result, SnippetMatchOutcome.Matched, [winners[0]]);
+            }
+        }
+
+        return result;
     }
 
     /// <summary>Looser-tier candidates for <paramref name="snippet"/> in <paramref name="sourceText"/>.</summary>
     internal static IReadOnlyList<SnippetMatch> FindLooserCandidates(SourceText sourceText, string snippet)
     {
-        throw new NotImplementedException(); // TODO implement (Step 3)
+        // Union of both looser matchers, all spans, uncapped; each candidate keeps its own matcher's Tier. A raw span
+        // reported by both matchers is kept once (the IgnoreIndentation one, which is probed first).
+        var candidates = new List<SnippetMatch>();
+        var seen = new HashSet<(int Start, int Length)>();
+        foreach (var found in new IndentationMatcher().FindAll(sourceText, snippet, SnippetCaseMode.CaseSensitive)
+                     .Concat(new CollapsedWhitespaceMatcher().FindAll(sourceText, snippet, SnippetCaseMode.CaseSensitive)))
+        {
+            if (seen.Add((found.Start, found.Length)))
+            {
+                candidates.Add(found);
+            }
+        }
+
+        return candidates;
     }
 
     /// <summary>
@@ -36,8 +86,71 @@ public static class SnippetTokenEquivalence
     /// </summary>
     internal static SnippetMatch? TryAccept(SourceText sourceText, SyntaxNode fileRoot, string snippet, SnippetMatch candidate)
     {
-        throw new NotImplementedException(); // TODO implement (Step 3)
+        // candidateText: the file text from the first to the last non-whitespace character inside the candidate span.
+        var first = Math.Max(candidate.Start, 0);
+        var spanEnd = Math.Min(candidate.Start + candidate.Length, sourceText.Length);
+        while (first < spanEnd && char.IsWhiteSpace(sourceText[first]))
+        {
+            first++;
+        }
+
+        var last = spanEnd;
+        while (last > first && char.IsWhiteSpace(sourceText[last - 1]))
+        {
+            last--;
+        }
+
+        if (first >= last)
+        {
+            return null;
+        }
+
+        var candidateText = sourceText.ToString(TextSpan.FromBounds(first, last));
+        var options = fileRoot.SyntaxTree.Options as CSharpParseOptions ?? CSharpParseOptions.Default;
+        if (!TokensAlignWithTree(fileRoot, first, candidateText, options) || !AreTokenEquivalent(snippet, candidateText, options))
+        {
+            return null;
+        }
+
+        // Owner span convention: a candidate that begins its line (first token or comment is the first non-whitespace
+        // text on the line) owns that line's indentation, so the span starts at the line start; a mid-line start keeps
+        // the file's text before it.
+        var firstLine = sourceText.Lines.GetLineFromPosition(first);
+        var start = IsWhitespaceOnly(sourceText, firstLine.Start, first) ? firstLine.Start : first;
+
+        var end = last;
+        if (EndsWithLineBreak(snippet))
+        {
+            // The snippet's final line break maps to the file line's own break. When other text follows the match on
+            // that line the line structure differs, so the candidate is not an edit target.
+            var lastLine = sourceText.Lines.GetLineFromPosition(last - 1);
+            if (!IsWhitespaceOnly(sourceText, last, lastLine.End))
+            {
+                return null;
+            }
+
+            end = lastLine.EndIncludingLineBreak;
+        }
+
+        var line = sourceText.Lines.GetLinePosition(start).Line + 1;
+        return new SnippetMatch(start, line, end - start, candidate.Tier, MatcherName);
     }
+
+    private static bool IsWhitespaceOnly(SourceText sourceText, int start, int end)
+    {
+        for (var position = start; position < end; position++)
+        {
+            if (!char.IsWhiteSpace(sourceText[position]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool EndsWithLineBreak(string snippet) =>
+    snippet.Length > 0 && (snippet[^1] == '\n' || snippet[^1] == '\r');
 
     /// <summary>
     /// True when <paramref name="candidateText"/> and <paramref name="snippet"/> lex to the same tokens: same kinds and
@@ -153,6 +266,37 @@ public static class SnippetTokenEquivalence
     /// </summary>
     internal static bool HasIdenticalLeadingWhitespace(SourceText sourceText, SnippetMatch accepted, string snippet)
     {
-        throw new NotImplementedException(); // TODO implement (Step 3)
+        var snippetLines = SnippetMatcherSupport.SplitSnippetIntoTrimmedContentLines(snippet);
+        var startLineIndex = sourceText.Lines.GetLinePosition(accepted.Start).Line;
+        var startsMidLine = !IsWhitespaceOnly(sourceText, sourceText.Lines[startLineIndex].Start, accepted.Start);
+        for (var i = 0; i < snippetLines.Length; i++)
+        {
+            // Line 1 of a mid-line span has no leading whitespace of its own to compare. A blank snippet line has no
+            // meaningful leading whitespace either (it differs from the file's blank line only as trailing whitespace).
+            if ((i == 0 && startsMidLine) || string.IsNullOrWhiteSpace(snippetLines[i]))
+            {
+                continue;
+            }
+
+            var fileLineIndex = startLineIndex + i;
+            if (fileLineIndex >= sourceText.Lines.Count
+                || LeadingWhitespace(snippetLines[i]) != LeadingWhitespace(sourceText.Lines[fileLineIndex].ToString()))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static string LeadingWhitespace(string line)
+    {
+        var length = 0;
+        while (length < line.Length && (line[length] == ' ' || line[length] == '\t'))
+        {
+            length++;
+        }
+
+        return line[..length];
     }
 }

@@ -10,8 +10,10 @@ namespace RoslynSentinel.Common.SnippetMatching;
 /// <para>Contract: <see cref="SnippetResolver.Resolve"/> returns matches at or stricter than the requested
 /// tier (a stricter match is acceptable: an <see cref="IgnoreIndentation"/> request against a file that
 /// matches verbatim succeeds). A snippet that matches only at a looser tier is reported as near-matches,
-/// which are never edit candidates. The dispatcher stops at the first tier that finds a match, so an
-/// <see cref="Exact"/> request never silently matches at a looser tier.</para>
+/// which are never edit candidates, with one exception: ReplaceSnippet re-checks looser-tier candidates with
+/// <see cref="SnippetTokenEquivalence"/> and edits one only when its C# tokens equal the snippet's (whitespace and
+/// end-of-line trivia are the only differences forgiven). The dispatcher stops at the first tier that finds a match,
+/// so an <see cref="Exact"/> request never silently matches at a looser tier.</para>
 /// </summary>
 public enum WhitespaceTolerance
 {
