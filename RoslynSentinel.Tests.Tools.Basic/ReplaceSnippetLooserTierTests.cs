@@ -47,6 +47,15 @@ public class ReplaceSnippetLooserTierTests
 
     private const string Replacement = "        Log(Compute());";
 
+    private const string VerbatimPath = "ContosoOrders.Core/VerbatimDemo.cs";
+
+    private const string VerbatimSource =
+        "class VerbatimDemo\n" +
+        "{\n" +
+        "    string Text() => @\"line one\n" +
+        "    line two\";\n" +
+        "}\n";
+
     private sealed record Harness(InMemoryWorkspace Workspace, WorkspaceTools Tools) : IDisposable
     {
         public string Path => Workspace.PathOf(RelativePath);
@@ -144,5 +153,72 @@ public class ReplaceSnippetLooserTierTests
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         Assert.That(h.Text, Is.EqualTo(Source.Replace(FileBlock, Replacement)));
+    }
+
+    [Test]
+    public async Task ReplaceSnippet_Single_OldContentWithTabsWhereFileHasSpaces_AppliesAsync()
+    {
+        using var h = CreateHarness();
+
+        var result = await h.Tools.ReplaceSnippetTool(
+            reason: "tabs in oldContent where the file has spaces",
+            ProposedChangeAction.apply,
+            filePath: h.Path,
+            oldContent: "\t\tvar total = Compute();\n\t\tLog(total);",
+            newContent: Replacement);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(h.Text, Is.EqualTo(Source.Replace(FileBlock, Replacement)));
+    }
+
+    [Test]
+    public async Task ReplaceSnippet_Single_LooserMatchStartingMidToken_StillFailsAsLooserTierAsync()
+    {
+        using var h = CreateHarness();
+
+        var result = await h.Tools.ReplaceSnippetTool(
+            reason: "looser match that starts mid-token",
+            ProposedChangeAction.apply,
+            filePath: h.Path,
+            oldContent: "otal = Compute();\nLog(total);",
+            newContent: Replacement);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.MatchedLooserThanRequested));
+        Assert.That(h.Text, Is.EqualTo(Source));
+    }
+
+    [Test]
+    public async Task ReplaceSnippet_Single_IndentDifferenceInsideVerbatimString_StillFailsAsLooserTierAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((RelativePath, Source), (VerbatimPath, VerbatimSource));
+        var tools = TestTools.WorkspaceTools(workspace.Manager);
+
+        var result = await tools.ReplaceSnippetTool(
+            reason: "indentation difference inside a verbatim string literal",
+            ProposedChangeAction.apply,
+            filePath: workspace.PathOf(VerbatimPath),
+            oldContent: "string Text() => @\"line one\nline two\";",
+            newContent: "string Text() => \"changed\";");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.MatchedLooserThanRequested));
+        Assert.That(workspace.ReadText(VerbatimPath), Is.EqualTo(VerbatimSource));
+    }
+
+    [Test]
+    public async Task ReplaceSnippet_Single_TokenMatchWithUnindentedNewContent_WritesFileIndentationAsync()
+    {
+        using var h = CreateHarness();
+
+        var result = await h.Tools.ReplaceSnippetTool(
+            reason: "unindented newContent re-indented to the file",
+            ProposedChangeAction.apply,
+            filePath: h.Path,
+            oldContent: WronglyIndentedBlock,
+            newContent: "Log(Compute());\nLog(0);");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(h.Text, Is.EqualTo(Source.Replace(FileBlock, "        Log(Compute());\n        Log(0);")));
     }
 }
