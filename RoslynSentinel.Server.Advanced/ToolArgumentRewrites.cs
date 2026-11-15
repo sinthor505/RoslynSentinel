@@ -518,7 +518,7 @@ public static class ToolArgumentRewrites
 
     /// <summary>
     /// ExternalFileDrift <c>filePath</c> or <c>filePaths</c> becomes <c>files</c>, only when <c>files</c> is
-    /// declared and not already supplied; the value is moved unchanged.
+    /// declared and not already supplied; a string value is moved unchanged and a JSON array becomes its raw JSON text.
     /// </summary>
     private static string? RewriteExternalFileDriftFiles(
         IDictionary<string, JsonElement> arguments,
@@ -531,6 +531,10 @@ public static class ToolArgumentRewrites
         {
             if (declared.Contains(source) || !Rename(arguments, source, "files"))
                 continue;
+
+            // files is a string parameter: a JSON array becomes its raw JSON text, which the list parser accepts.
+            if (arguments["files"].ValueKind == JsonValueKind.Array)
+                arguments["files"] = JsonSerializer.SerializeToElement(arguments["files"].GetRawText());
 
             return $"Note: '{source}' is not a parameter of ExternalFileDrift; it was treated as files. Use {ToolCallHint.Call("ExternalFileDrift", ("operation", "Acknowledge"), ("files", "<name>"))} in future calls.";
         }

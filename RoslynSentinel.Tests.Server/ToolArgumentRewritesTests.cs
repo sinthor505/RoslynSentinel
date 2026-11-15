@@ -271,6 +271,46 @@ public class ToolArgumentRewritesTests
     }
 
     [Test]
+    public void ExternalFileDrift_FilePath_BecomesFilesWithNote()
+    {
+        var arguments = Args(("filePath", "A.cs"));
+
+        var notes = Apply("ExternalFileDrift", arguments, "operation", "files");
+
+        Assert.That(arguments.ContainsKey("filePath"), Is.False);
+        Assert.That(arguments["files"].GetString(), Is.EqualTo("A.cs"));
+        Assert.That(notes, Has.Count.EqualTo(1));
+        Assert.That(notes![0], Does.StartWith("Note: 'filePath' is not a parameter of ExternalFileDrift; it was treated as files."));
+        Assert.That(notes[0], Does.EndWith(" in future calls."));
+    }
+
+    [Test]
+    public void ExternalFileDrift_FilePathsArray_BecomesFilesStringHoldingArrayJson()
+    {
+        var arguments = Args(("filePaths", new[] { "A.cs", "B.cs" }));
+
+        var notes = Apply("ExternalFileDrift", arguments, "operation", "files");
+
+        Assert.That(arguments.ContainsKey("filePaths"), Is.False);
+        Assert.That(arguments["files"].ValueKind, Is.EqualTo(JsonValueKind.String));
+        Assert.That(arguments["files"].GetString(), Is.EqualTo("[\"A.cs\",\"B.cs\"]"));
+        Assert.That(notes, Has.Count.EqualTo(1));
+        Assert.That(notes![0], Does.StartWith("Note: 'filePaths' is not a parameter of ExternalFileDrift; it was treated as files."));
+    }
+
+    [Test]
+    public void ExternalFileDrift_FilesAlreadySupplied_LeavesFilePathAndEmitsNoNote()
+    {
+        var arguments = Args(("files", "A.cs"), ("filePath", "B.cs"));
+
+        var notes = Apply("ExternalFileDrift", arguments, "operation", "files");
+
+        Assert.That(notes, Is.Null);
+        Assert.That(arguments.ContainsKey("filePath"), Is.True);
+        Assert.That(arguments["files"].GetString(), Is.EqualTo("A.cs"));
+    }
+
+    [Test]
     public void Build_FullBuildTrue_BecomesLevelFullBuild()
     {
         var arguments = Args(("fullBuild", true));
