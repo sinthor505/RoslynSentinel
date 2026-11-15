@@ -68,13 +68,24 @@ public static class LaunchBuildMarker
         // Only an explicit false is a failure; a missing pullOk (older launcher) stays unknown and says nothing.
         if (raw.PullOk == false)
         {
-            // Recovery grounded in scripts/roslynsentinel-instances-common.ps1 (Repair-RoslynSentinelSourceClone): the
-            // launcher removes an index.lock older than 10 minutes, runs git reset --hard HEAD and retries the pull once.
-            // TODO a clone with a local commit (ahead of origin, "Diverging branches") is not repaired by reset --hard HEAD
-            // and this hint does not name that case; 2026-11-15 the clone was 1 ahead/198 behind and needed reset --hard origin/master.
-            hints.Add("The launcher could not update its source clone, so this server may be OLDER than the dev repo"
-                + (pullError is null ? "." : $" (pull error: {pullError}).")
-                + $" Recover: wait until any <instances root>\\source\\.git\\index.lock is over 10 minutes old (or delete it), then {restart}; the next launch removes a stale lock, resets the clone and retries the pull.");
+            var diverged = pullError is not null
+                && (pullError.Contains("Diverging branches", StringComparison.OrdinalIgnoreCase)
+                    || pullError.Contains("cannot be fast-forwarded", StringComparison.OrdinalIgnoreCase));
+            if (diverged)
+            {
+                hints.Add("The launcher could not update its source clone, so this server may be OLDER than the dev repo"
+                    + $" (pull error: {pullError})."
+                    + $" The source clone has commits the remote lacks, so the launcher keeps serving servedSha {served} and cannot pull."
+                    + $" Options: fetch and reset the clone at <instances root>\\source to the remote branch, or delete that clone so the launcher re-clones; then {restart}.");
+            }
+            else
+            {
+                // Recovery grounded in scripts/roslynsentinel-instances-common.ps1 (Repair-RoslynSentinelSourceClone): the
+                // launcher removes an index.lock older than 10 minutes, runs git reset --hard HEAD and retries the pull once.
+                hints.Add("The launcher could not update its source clone, so this server may be OLDER than the dev repo"
+                    + (pullError is null ? "." : $" (pull error: {pullError}).")
+                    + $" Recover: wait until any <instances root>\\source\\.git\\index.lock is over 10 minutes old (or delete it), then {restart}; the next launch removes a stale lock, resets the clone and retries the pull.");
+            }
         }
 
         var hint = hints.Count == 0 ? null : string.Join(" ", hints);

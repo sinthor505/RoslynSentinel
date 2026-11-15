@@ -120,6 +120,28 @@ public class LaunchBuildMarkerTests
     }
 
     [Test]
+    public void Parse_PullOkFalseDiverged_HintNamesCommitsTheRemoteLacksAndServedSha()
+    {
+        var result = LaunchBuildMarker.Parse("{\"utc\":\"2026-10-24T20:39:51Z\",\"attemptedSha\":\"d17ad364\",\"servedSha\":\"d17ad364\",\"buildFailed\":false,\"firstErrors\":[],\"pullOk\":false,\"pullError\":\"Diverging branches can't be fast-forwarded.\"}");
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.PullOk, Is.False);
+        Assert.That(result.Hint, Does.Contain("commits the remote lacks").And.Contain("servedSha d17ad364").And.Contain("StopServer"));
+        Assert.That(result.Hint, Does.Not.Contain("index.lock"));
+    }
+
+    [Test]
+    public void Parse_PullOkFalseUnrelatedError_KeepsIndexLockHint()
+    {
+        var result = LaunchBuildMarker.Parse("{\"utc\":\"2026-10-24T20:39:51Z\",\"attemptedSha\":\"d17ad364\",\"servedSha\":\"d17ad364\",\"buildFailed\":false,\"firstErrors\":[],\"pullOk\":false,\"pullError\":\"fatal: unable to access remote\"}");
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.PullOk, Is.False);
+        Assert.That(result.Hint, Does.Contain("index.lock"));
+        Assert.That(result.Hint, Does.Not.Contain("commits the remote lacks"));
+    }
+
+    [Test]
     public void Parse_PullOkMissing_ReadsAsUnknownNotFailure()
     {
         // An old launch-outcome.json (written before pullOk existed) must not look like a failed pull.
