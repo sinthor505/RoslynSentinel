@@ -15,17 +15,19 @@ namespace RoslynSentinel.Common;
 public sealed class ServerInstancePaths
 {
     private const string WorkingDirFlag = "--working-dir";
+    public const string TabStateDirFlag = "--tab-state-dir";
     private const string StopMarkerFileName = "stopped-by-script.marker";
     private const string CrashLogFileName = "crash.log";
 
     private static readonly Lazy<ServerInstancePaths> CurrentLazy = new(
         () => Resolve(Environment.GetCommandLineArgs(), AppContext.BaseDirectory));
 
-    private ServerInstancePaths(string workingDir, bool isExplicit, string stopMarkerPath)
+    private ServerInstancePaths(string workingDir, bool isExplicit, string stopMarkerPath, string? tabStateDir)
     {
         WorkingDir = workingDir;
         IsExplicit = isExplicit;
         StopMarkerPath = stopMarkerPath;
+        TabStateDir = tabStateDir;
     }
 
     /// <summary>The process-wide instance, built on first use from the real command line and base directory.</summary>
@@ -36,6 +38,9 @@ public sealed class ServerInstancePaths
 
     /// <summary>True iff <c>--working-dir</c> was supplied with a non-empty value.</summary>
     public bool IsExplicit { get; }
+
+    /// <summary>Full path of the per-tab state directory from <c>--tab-state-dir</c>; null when absent or blank.</summary>
+    public string? TabStateDir { get; }
 
     /// <summary>Default log directory: <c>WorkingDir\logs</c> (the <c>--log-dir</c> arg still overrides it).</summary>
     public string LogsDir => Path.Combine(WorkingDir, "logs");
@@ -53,16 +58,18 @@ public sealed class ServerInstancePaths
     public static ServerInstancePaths Resolve(string[] args, string binaryDirectory)
     {
         var requested = GetArgValue(args, WorkingDirFlag);
+        var tabStateArg = GetArgValue(args, TabStateDirFlag);
+        var tabStateDir = string.IsNullOrWhiteSpace(tabStateArg) ? null : Path.GetFullPath(tabStateArg);
         if (!string.IsNullOrWhiteSpace(requested))
         {
             // GetFullPath resolves a relative value against the process CWD.
             var explicitDir = Path.GetFullPath(requested);
-            return new ServerInstancePaths(explicitDir, true, Path.Combine(explicitDir, StopMarkerFileName));
+            return new ServerInstancePaths(explicitDir, true, Path.Combine(explicitDir, StopMarkerFileName), tabStateDir);
         }
 
         var binaryDir = Path.TrimEndingDirectorySeparator(Path.GetFullPath(binaryDirectory));
         var legacyMarker = Path.GetFullPath(Path.Combine(binaryDir, "..", StopMarkerFileName));
-        return new ServerInstancePaths(binaryDir, false, legacyMarker);
+        return new ServerInstancePaths(binaryDir, false, legacyMarker, tabStateDir);
     }
 
     // Mirrors ServerStartupHelpers.GetArgValue (Common cannot reference Server.Advanced): accepts

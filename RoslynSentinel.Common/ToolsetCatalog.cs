@@ -102,6 +102,12 @@ public static class ToolsetCatalog
         return null;
     }
 
+    /// <summary>Parses a toolset name (for example "git") into its <see cref="ToolSetName"/>; false when it is not a set.</summary>
+    public static bool TryParseSetName(string name, out ToolSetName set)
+    {
+        throw new NotImplementedException(); // TODO implement (Step 3)
+    }
+
     /// <summary>
     /// One line per set: its enum value and tools, for the <c>McpToolsetControl</c> tool description.
     /// Kept short on purpose, since the description is paid for in every session.
