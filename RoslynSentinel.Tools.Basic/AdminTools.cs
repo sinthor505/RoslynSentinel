@@ -433,7 +433,7 @@ public class AdminTools
     /// can drive it without a tool-call round trip.
     /// </summary>
     public async Task<string> ControlTestInstancesAsync(
-        McpServerControlOperation operation, TestInstanceBuildMode? build, string? mode, string? includeTools, int? pid, CancellationToken cancellationToken)
+        McpServerControlOperation operation, TestInstanceBuildMode? build, string? mode, string? includeTools, int? pid, CancellationToken cancellationToken, string? toolsets = null)
     {
         try
         {
@@ -443,7 +443,7 @@ public class AdminTools
                     var effectiveMode = !string.IsNullOrWhiteSpace(mode)
                         ? mode.Trim()
                         : string.IsNullOrWhiteSpace(_activeToolSurface?.ModeArg) ? "claude-lean" : _activeToolSurface!.ModeArg;
-                    var launched = await _testInstances.LaunchAsync(build ?? TestInstanceBuildMode.Auto, effectiveMode, includeTools, cancellationToken);
+                    var launched = await _testInstances.LaunchAsync(build ?? TestInstanceBuildMode.Auto, effectiveMode, includeTools, toolsets, cancellationToken);
                     return System.Text.Json.JsonSerializer.Serialize(launched, TestInstanceJson);
 
                 case McpServerControlOperation.StopTestInstance:
@@ -540,14 +540,17 @@ public class AdminTools
      McpServerStopConfirmation? confirmServerStop = null,
      TestInstanceBuildMode? build = null,
      string? mode = null,
+     [Description("Tool CLASS names (e.g. GitTools), not tool names (Git).")]
      string? includeTools = null,
+     [Description("ToolSetName values, comma-separated, e.g. git,moveExtract.")]
+     string? toolsets = null,
      int? pid = null,
      RequestContext<CallToolRequestParams>? requestContext = null,
      CancellationToken cancellationToken = default)
     {
         if (operation is McpServerControlOperation.LaunchTestInstance or McpServerControlOperation.StopTestInstance or McpServerControlOperation.ListTestInstances)
         {
-            return FromTestInstanceText(await ControlTestInstancesAsync(operation, build, mode, includeTools, pid, cancellationToken));
+            return FromTestInstanceText(await ControlTestInstancesAsync(operation, build, mode, includeTools, pid, cancellationToken, toolsets: toolsets));
         }
 
         // Children are killed before the exit so a stopped server never leaves test instances behind. requestContext is

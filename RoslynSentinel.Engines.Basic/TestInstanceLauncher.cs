@@ -42,23 +42,31 @@ public sealed class TestInstanceLauncher
     private readonly IWorkspaceManager _workspaceManager;
     private readonly BuildEngine _buildEngine;
     private readonly ServerInstancePaths _paths;
+    private readonly IKnownToolClassNames? _knownToolClasses;
     private readonly ConcurrentDictionary<int, TestInstanceHandle> _instances = new();
     private readonly HttpClient _http = new() { Timeout = Timeout.InfiniteTimeSpan };
     private int _launchCounter;
     private int _exitHookRegistered;
 
-    public TestInstanceLauncher(IWorkspaceManager workspaceManager, BuildEngine buildEngine, ServerInstancePaths? paths = null)
+    public TestInstanceLauncher(IWorkspaceManager workspaceManager, BuildEngine buildEngine, ServerInstancePaths? paths = null, IKnownToolClassNames? knownToolClasses = null)
     {
         _workspaceManager = workspaceManager;
         _buildEngine = buildEngine;
         _paths = paths ?? ServerInstancePaths.Current;
+        _knownToolClasses = knownToolClasses;
     }
 
     // ---- launch ----
 
     /// <summary>Validates the loaded solution, builds when <paramref name="build"/> says so, then starts the server.</summary>
-    public async Task<LaunchedTestInstance> LaunchAsync(TestInstanceBuildMode build, string mode, string? includeTools, CancellationToken cancellationToken)
+    public async Task<LaunchedTestInstance> LaunchAsync(TestInstanceBuildMode build, string mode, string? includeTools, string? toolsets, CancellationToken cancellationToken)
     {
+        var selectionProblem = ValidateToolSelection(includeTools, toolsets, _knownToolClasses?.Names);
+        if (selectionProblem is not null)
+        {
+            throw new TestInstanceException(ToolErrorCode.InvalidArgument, selectionProblem);
+        }
+
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var solutionPath = solution?.FilePath ?? _workspaceManager.SolutionPath;
         ValidateLaunchTarget(solutionPath, solution?.Projects.Select(p => p.Name));
@@ -81,7 +89,7 @@ public sealed class TestInstanceLauncher
 
         var (sha, dirty) = ReadGitStamp(solutionDirectory);
         var source = new TestInstanceBuildSource(outputDirectory, File.GetLastWriteTimeUtc(serverDll), sha, dirty, rebuild);
-        return await LaunchFromOutputAsync(solutionPath!, outputDirectory, mode, includeTools, source, cancellationToken);
+        return await LaunchFromOutputAsync(solutionPath!, outputDirectory, mode, includeTools, source, cancellationToken, toolsets: toolsets);
     }
 
     /// <summary>Instance id for a test-instance child: <c>test-{parentPid}-{working dir leaf}</c>. Gives the child its own
@@ -118,7 +126,9 @@ public sealed class TestInstanceLauncher
     /// Public so an end-to-end test can launch from any built output without a loaded workspace.</summary>
     public async Task<LaunchedTestInstance> LaunchFromOutputAsync(
         string solutionPath, string serverOutputDirectory, string mode, string? includeTools,
-        TestInstanceBuildSource buildSource, CancellationToken cancellationToken)
+        TestInstanceBuildSource buildSource, CancellationToken cancellationToken,
+        // trailing and optional so the positional test caller keeps compiling
+        string? toolsets = null)
     {
         var solutionDirectory = Path.GetDirectoryName(solutionPath)!;
         var workingDirectory = CreateInstanceWorkingDirectory(solutionDirectory);
@@ -143,7 +153,7 @@ public sealed class TestInstanceLauncher
             startInfo.ArgumentList.Add(firstArgument);
         }
 
-        foreach (var argument in BuildServerArguments(mode, includeTools, solutionPath, workingDirectory))
+        foreach (var argument in BuildServerArguments(mode, includeTools, toolsets, solutionPath, workingDirectory))
         {
             startInfo.ArgumentList.Add(argument);
         }
@@ -348,7 +358,7 @@ public sealed class TestInstanceLauncher
             $"No {ServerDllName} or apphost in the build output '{outputDirectory}'.");
     }
 
-    private static IEnumerable<string> BuildServerArguments(string mode, string? includeTools, string solutionPath, string workingDirectory)
+    internal static IEnumerable<string> BuildServerArguments(string mode, string? includeTools, string? toolsets, string solutionPath, string workingDirectory)
     {
         yield return "--transport=http";
         yield return "--port=0";
@@ -358,6 +368,11 @@ public sealed class TestInstanceLauncher
         if (!string.IsNullOrWhiteSpace(includeTools))
         {
             yield return "--include-tools=" + includeTools.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(toolsets))
+        {
+            yield return "--toolsets=" + toolsets.Trim();
         }
 
         yield return "--solution=" + solutionPath;
@@ -522,6 +537,63 @@ public sealed class TestInstanceLauncher
                 + $"Load the RoslynSentinel solution ({ToolCallHint.Call("LoadSolution")}) to use it.",
                 suggestedTool: ToolCallHint.Call("LoadSolution"));
         }
+    }
+
+    /// <summary>
+    /// Checks the LaunchTestInstance tool selection before any solution work. Returns the message for the first problem,
+    /// or null. A null <paramref name="knownClasses"/> skips the class-name check.
+    /// </summary>
+    internal static string? ValidateToolSelection(string? includeTools, string? toolsets, IReadOnlySet<string>? knownClasses)
+    {
+        static IEnumerable<string> SplitList(string? list) =>
+            (list ?? string.Empty).Split(',').Select(name => name.Trim()).Where(name => name.Length > 0);
+
+        static string Quote(IEnumerable<string> names) => string.Join(", ", names.Select(name => $"'{name}'"));
+
+        if (knownClasses is not null && !string.IsNullOrWhiteSpace(includeTools))
+        {
+            const string prefix = "Sentinel";
+            var known = new HashSet<string>(knownClasses, StringComparer.OrdinalIgnoreCase);
+            bool IsKnown(string name) =>
+                known.Contains(name)
+                || known.Contains(prefix + name)
+                || (name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && known.Contains(name[prefix.Length..]));
+
+            var unknown = SplitList(includeTools).Where(name => !IsKnown(name)).ToList();
+            if (unknown.Count > 0)
+            {
+                var sorted = known.OrderBy(name => name, StringComparer.Ordinal).ToList();
+                var closest = unknown
+                    .SelectMany(name => NameCandidates.Rank(name, sorted, candidate => candidate, cap: 2)
+                        .Select(hit => $"'{hit.Item}' (for '{name}')"))
+                    .ToList();
+
+                var message = "includeTools takes tool class names (for example GitTools, WorkspaceTools), not tool names (Git). "
+                    + $"Unknown: {Quote(unknown)}. ";
+                if (closest.Count > 0)
+                {
+                    message += $"Closest known classes: {string.Join(", ", closest)}. ";
+                }
+
+                message += sorted.Count == 0
+                    ? "Known classes: none."
+                    : $"Known classes: {string.Join(", ", sorted.Take(15))}"
+                      + (sorted.Count > 15 ? $", and {sorted.Count - 15} more" : string.Empty) + ".";
+                return message;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(toolsets))
+        {
+            var valid = Enum.GetNames<ToolSetName>();
+            var unknownSets = SplitList(toolsets).Where(name => !valid.Contains(name, StringComparer.OrdinalIgnoreCase)).ToList();
+            if (unknownSets.Count > 0)
+            {
+                return $"toolsets takes ToolSetName values, comma-separated. Unknown: {Quote(unknownSets)}. Valid values: {string.Join(", ", valid)}.";
+            }
+        }
+
+        return null;
     }
 
     /// <summary>Whether a launch must build first: Always yes, Skip no (throws NotFound naming Build when there is no output),

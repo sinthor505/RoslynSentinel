@@ -369,6 +369,59 @@ public class TestInstanceLauncherTests
         Assert.That(parameters.Last(), Is.EqualTo("cancellationToken"), "CancellationToken stays last");
     }
 
+    [Test]
+    public void BuildServerArguments_Toolsets_EmittedOnlyWhenNonBlank()
+    {
+        var withToolsets = TestInstanceLauncher.BuildServerArguments("claude-lean", null, "git", "C:\\repo\\RoslynSentinel.slnx", "C:\\wd").ToList();
+        Assert.That(withToolsets, Does.Contain("--toolsets=git"));
+
+        foreach (var blank in new string?[] { null, "", "   " })
+        {
+            var args = TestInstanceLauncher.BuildServerArguments("claude-lean", null, blank, "C:\\repo\\RoslynSentinel.slnx", "C:\\wd").ToList();
+            Assert.That(args.Any(arg => arg.StartsWith("--toolsets=", StringComparison.Ordinal)), Is.False, $"blank toolsets '{blank}' emits no flag");
+        }
+    }
+
+    [Test]
+    public void ValidateToolSelection_UnknownNames_NameTheProblemAndTheCloseClass()
+    {
+        var known = new FakeKnownToolClasses().Names;
+
+        var typo = TestInstanceLauncher.ValidateToolSelection("GitTool", null, known);
+        Assert.That(typo, Does.Contain("'GitTool'").And.Contain("'GitTools'").And.Contain("not tool names"));
+
+        var toolName = TestInstanceLauncher.ValidateToolSelection("Git", null, known);
+        Assert.That(toolName, Does.Contain("'Git'").And.Contain("not tool names (Git)"));
+
+        var badToolset = TestInstanceLauncher.ValidateToolSelection(null, "git,gti", known);
+        Assert.That(badToolset, Does.Contain("'gti'").And.Contain("moveExtract"));
+    }
+
+    [Test]
+    public void ValidateToolSelection_KnownClassesAndToolsets_Pass()
+    {
+        var known = new FakeKnownToolClasses().Names;
+
+        Assert.That(TestInstanceLauncher.ValidateToolSelection("GitTools", "git,moveExtract", known), Is.Null);
+        Assert.That(TestInstanceLauncher.ValidateToolSelection("SentinelGitTools", null, known), Is.Null);
+        Assert.That(TestInstanceLauncher.ValidateToolSelection("symbolnavigationtools", null, known), Is.Null);
+        Assert.That(TestInstanceLauncher.ValidateToolSelection("GitTool", null, null), Is.Null, "a null registry skips the class-name check");
+    }
+
+    [Test]
+    public async Task LaunchAsync_UnknownIncludeTools_ThrowsInvalidArgumentBeforeReadingTheSolution()
+    {
+        var workspace = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var _ = workspace;
+        var launcher = new TestInstanceLauncher(workspace, TestEngines.BuildEngine(workspace), knownToolClasses: new FakeKnownToolClasses());
+
+        var ex = await Assert.ThrowsAsync<TestInstanceException>(async () =>
+            await launcher.LaunchAsync(TestInstanceBuildMode.Auto, "claude-lean", "GitTool", null, CancellationToken.None));
+
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(ex.Message, Does.Contain("'GitTool'").And.Contain("'GitTools'"));
+    }
+
     // ---- end to end (real server) ----
 
     /// <summary>Launches the real server from an existing built output (no build), calls tools/list over HTTP and through the
@@ -527,4 +580,13 @@ public class TestInstanceLauncherTests
             .OrderByDescending(d => File.GetLastWriteTimeUtc(Path.Combine(d, "RoslynSentinel.Server.Advanced.dll")))
             .FirstOrDefault();
     }
+}
+/// <summary>Stands in for the server's registry of tool-class names, so the launcher's class-name checks run without a server.</summary>
+internal sealed class FakeKnownToolClasses : IKnownToolClassNames
+{
+    public IReadOnlySet<string> Names
+    {
+        get;
+    } =
+        new HashSet<string>(new[] { "GitTools", "WorkspaceTools", "SymbolNavigationTools" }, StringComparer.OrdinalIgnoreCase);
 }
