@@ -52,6 +52,12 @@
     that completes for every project resets the main tree's .roslynsentinel/full-test-marker.json
     (the RunTest full-suite staleness marker).
 
+.PARAMETER WithRatchets
+    With -Filter, also runs every test marked [Category("Ratchet")] in each selected project (the
+    effective filter becomes "<Filter>|TestCategory=Ratchet"). Ratchets scan the source tree and
+    have caught regressions that class-filtered runs missed. Ignored when -Filter is empty, since
+    an unfiltered run already runs everything.
+
 .PARAMETER Parallel
     Run the projects concurrently. Faster, but CPU contention makes the build-timeout tests
     (BuildCascadeFixtureTests.FullBuild_* and similar) time out more often.
@@ -70,6 +76,9 @@
 
 .EXAMPLE
     pwsh -File scripts/Invoke-WorktreeTests.ps1 -WorktreeRoot c:\tmp\rs-testtrees -Ref 1b7879d7 -Projects RoslynSentinel.Tests.Tools.Basic -Filter "FullyQualifiedName~GitCommitSeamParityTests"
+
+.EXAMPLE
+    pwsh -File scripts/Invoke-WorktreeTests.ps1 -WorktreeRoot c:\tmp\rs-testtrees -Ref HEAD -Projects RoslynSentinel.Tests.Tools.Basic -Filter "FullyQualifiedName~GitCommitSeamParityTests" -WithRatchets
 #>
 [CmdletBinding()]
 param(
@@ -88,6 +97,8 @@ param(
 
     [string]$Filter,
 
+    [switch]$WithRatchets,
+
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Debug',
 
@@ -97,6 +108,9 @@ param(
 
     [switch]$SkipBuild
 )
+
+# -WithRatchets only widens a filtered run; an empty filter already runs every test.
+$effectiveFilter = if ($WithRatchets -and $Filter) { "$Filter|TestCategory=Ratchet" } else { $Filter }
 
 $ErrorActionPreference = 'Stop'
 $mainRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path.TrimEnd('\')
@@ -270,7 +284,7 @@ function Get-TestArgs([string]$project) {
     $leaf = Split-Path $project -LeafBase
     $testArgs = @('test', $project, '-c', $Configuration, '--no-build', '--nologo',
         '--results-directory', $resultsDir, '--logger', "trx;LogFileName=$leaf.trx")
-    if ($Filter) { $testArgs += @('--filter', $Filter) }
+    if ($effectiveFilter) { $testArgs += @('--filter', $effectiveFilter) }
     if ($HangTimeoutMinutes -gt 0) { $testArgs += @('--blame-hang', '--blame-hang-timeout', "$($HangTimeoutMinutes)m") }
     return $testArgs
 }
@@ -314,7 +328,7 @@ $summary = [ordered]@{
     commit   = $head
     subject  = $subject
     worktree = $RepoPath
-    filter   = $Filter
+    filter   = $effectiveFilter
     seconds  = [int]$sw.Elapsed.TotalSeconds
     projects = @()
 }

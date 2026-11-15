@@ -94,7 +94,10 @@ Implementers never run tests; dispatchers run them in the background so no slice
   added or touched (plus any tests the slice inverts). Write `Acceptance: clean Build` in the brief.
 - **Per slice, the dispatcher** (orchestrator, or the main session in Direct mode) commits the green
   slice, then starts a filtered run of the touched classes detached and dispatches the next slice at once:
-  `Start-Process pwsh -ArgumentList '-NoProfile','-File','<repo>\scripts\Invoke-WorktreeTests.ps1','-WorktreeRoot','c:\tmp\rs-testtrees','-Ref','<commit>','-Projects','<project>','-Filter','FullyQualifiedName~<ClassA>|FullyQualifiedName~<ClassB>' -WindowStyle Hidden`.
+  `Start-Process pwsh -ArgumentList '-NoProfile','-File','<repo>\scripts\Invoke-WorktreeTests.ps1','-WorktreeRoot','c:\tmp\rs-testtrees','-Ref','<commit>','-Filter','FullyQualifiedName~<ClassA>|FullyQualifiedName~<ClassB>','-WithRatchets' -WindowStyle Hidden`.
+  `-WithRatchets` appends `|TestCategory=Ratchet`: the ratchet tests (marked `[Category("Ratchet")]` in Tests.Basic,
+  Tests.Server and Tests.Tools.Basic) scan the source tree and caught regressions that class-filtered runs missed;
+  they add about 35 quick tests, so leave `-Projects` off to run them in every project (a measured run took 96 s including the build).
   Each run gets a fresh worktree (own bin/obj, removed afterwards); at most 2 run at once machine-wide,
   the rest queue. Results: `c:\tmp\rs-testtrees\_results\<commit8>-<timestamp>-<pid>\summary.json`.
   Keep the filter to the touched classes (a namespace-wide filter like `~.Git` ran 800 tests).
