@@ -12,6 +12,7 @@ unmeasured blast radius. Cutting the work down is the **dispatcher's** job. A `P
 **Limits live in `.claude/implementer-tiers.json`** (one tier ladder per lane; `tier` is the highest
 tier currently allowed). Read it before briefing and copy the chosen tier's numbers into the brief's
 `Limits:` line. Do not remember numbers from here or from an earlier session.
+A ToolSearch schema load does not count toward `toolcalls`.
 
 ## Pick a lane
 
@@ -44,6 +45,7 @@ Symbols: exact types/members to change
 Call sites: pre-measured list (file:line), or "none"
 Operation: (sweep only) the exact tool call or repeated edit pattern
 Acceptance: a clean Build (or one named diagnostic); never a test run - the dispatcher runs tests (below)
+  a slice that creates or rewrites a file also checks line endings with `ReadFile(showLineEndings: Summary)`, never a shell byte count
 DTOs: (only when the slice adds or reshapes a data type) "reuse <ExistingName>" or the full NEW-DTO:
   block from the dto-conventions skill; the agent copies it into the creating call's reason
 Out of scope: what not to touch (e.g. "do not commit", "items 5-7") - always include "edit nothing
@@ -54,6 +56,7 @@ Out of scope: what not to touch (e.g. "do not commit", "items 5-7") - always inc
 Each label starts a line and the colon must follow within 20 characters (`Files:`, not `Files - every path the slice touches, with its project:`).
 
 Dispatch with `model: "haiku"` pinned explicitly.
+Before spawning a subagent, enable in your own session the toolsets its slice needs (`McpToolsetControl`, see CLAUDE.md); a subagent inherits no toggles.
 
 **Measure first, then slice.** Get the call-site list from `InspectSymbol(aspect: blastRadius)` (or
 `Search(mode: references)`) and paste it into the brief. `blastRadius` takes one symbol per call (resolve it with
