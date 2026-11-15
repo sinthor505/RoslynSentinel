@@ -339,7 +339,7 @@ param(
     [ValidateRange(0.0, 1.0)]
     [double]$ReasoningPressure = 0,
 
-    [ValidateRange(1, 5)]
+    [ValidateRange(1, 6)]
     [int[]]$Step
 )
 
