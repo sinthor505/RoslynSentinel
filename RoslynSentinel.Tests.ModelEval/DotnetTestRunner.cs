@@ -32,10 +32,12 @@ internal static class DotnetTestRunner
     /// meaningful result here, not an infrastructure error. Only throws if the summary line
     /// can't be found at all (e.g. the project failed to build before any test ran) or the
     /// process fails to start.
+    /// filter is passed to dotnet test --filter when given.
     /// </summary>
-    public static async Task<DotnetTestResult> RunAsync(string testProjectPath, CancellationToken cancellationToken)
+    public static async Task<DotnetTestResult> RunAsync(string testProjectPath, CancellationToken cancellationToken, string? filter = null)
     {
-        var psi = new ProcessStartInfo("dotnet", $"test \"{testProjectPath}\" -c Debug --nologo")
+        var filterArg = string.IsNullOrEmpty(filter) ? string.Empty : $" --filter \"{filter}\"";
+        var psi = new ProcessStartInfo("dotnet", $"test \"{testProjectPath}\" -c Debug --nologo{filterArg}")
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,

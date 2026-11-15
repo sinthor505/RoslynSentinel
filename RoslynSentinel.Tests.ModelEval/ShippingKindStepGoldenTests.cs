@@ -141,6 +141,33 @@ public static class CarrierSelector
         }
     }
 
+    [Test]
+    public async Task Step5_VisibleBehaviourTestsFile_DoesNotFailTheContractCheck()
+    {
+        _repository!.CheckoutStep(5, "verify/visible-tests");
+        var visibleTests = ShippingKindStepGoldens.FilesForStep(0, withVisibleTests: true)
+            .Single(entry => entry.Key.EndsWith("ShippingBehaviourTests.cs", StringComparison.Ordinal));
+        var visibleTestsPath = Path.Combine(_fixture!.SolutionDirectory, visibleTests.Key.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(visibleTestsPath)!);
+        File.WriteAllText(visibleTestsPath, visibleTests.Value);
+        try
+        {
+            var (outcome, detail) = await ShippingKindStepChecks.CheckAsync(
+                5,
+                _fixture.SolutionDirectory,
+                null,
+                Array.Empty<string>(),
+                TestContext.CurrentContext.CancellationToken);
+
+            Assert.That(outcome, Is.EqualTo(ShippingKindStepOutcome.Pass), detail);
+        }
+        finally
+        {
+            File.Delete(visibleTestsPath);
+            RoslynSentinel.Tests.Battery.Basic.GitTestRepo.RunGit(_repository!.RepoDirectory, "checkout", "--", ".");
+        }
+    }
+
     private IReadOnlyList<string> PathsChangedFromPreviousStep(int step)
     {
         if (step == 1)

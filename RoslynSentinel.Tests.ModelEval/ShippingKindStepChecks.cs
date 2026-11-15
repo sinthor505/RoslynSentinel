@@ -481,7 +481,8 @@ public class ShippingKindContractStep5Tests
                 await File.WriteAllTextAsync(Path.Combine(testDirectory, fileName), NormalizeToCrlf(source), cancellationToken);
             }
 
-            result = await DotnetTestRunner.RunAsync(testProject, cancellationToken);
+            // Only the contract classes: the visible ShippingBehaviourTests.cs of variants V12/V13 hard-codes the old literal values and would fail under the rewritten constants.
+            result = await DotnetTestRunner.RunAsync(testProject, cancellationToken, "FullyQualifiedName~ShippingKindContractStep");
         }
         catch (InvalidOperationException ex)
         {
