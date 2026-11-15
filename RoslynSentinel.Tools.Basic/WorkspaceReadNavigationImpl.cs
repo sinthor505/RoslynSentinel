@@ -608,6 +608,7 @@ public class WorkspaceReadNavigationImpl
         bool exactMatch = true,
         int? maxItems = null,
         bool includeTests = true,
+        string? containingType = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -666,6 +667,13 @@ public class WorkspaceReadNavigationImpl
                             }
                         }
 
+                        if (!string.IsNullOrEmpty(containingType)
+                            && !string.Equals(item.Container, containingType, StringComparison.OrdinalIgnoreCase)
+                            && !(item.Container?.EndsWith("." + containingType, StringComparison.OrdinalIgnoreCase) ?? false))
+                        {
+                            continue;
+                        }
+
                         if (isHiddenTestProject)
                         {
                             hiddenByProject.TryGetValue(project.Name, out var hiddenSoFar);
@@ -703,6 +711,15 @@ public class WorkspaceReadNavigationImpl
                     ListSummary = summary,
                     StatusMessage = hiddenTestHint,
                     WarningDetails = $"Truncated: showing the first {entries.Count} of {totalMatches} matching declarations (cap {maxItems}), spread over {summary.FileCount} files and {summary.ByProject!.Count} projects - listSummary.byProject and listSummary.byFile (top {summary.ByFile.Count} files, {summary.TruncatedFileCount} more files not shown) count ALL matches, use them to pick where to look. Narrow with query (name filter) or projectName, or use mode: symbol.{(TruncationRecoveryAdvice(CallableCheck) is { Length: > 0 } advice ? " " + advice : "")}"
+                };
+            }
+
+            if (totalMatches == 0 && !string.IsNullOrEmpty(containingType))
+            {
+                return result with
+                {
+                    TotalRecords = 0,
+                    StatusMessage = $"No {(kindFilter ?? "declaration")} declaration found with container '{containingType}'. Container is the declaring type name as shown in the result (for example 'MyClass'); use mode: symbol with containingType to look up a member by name."
                 };
             }
 

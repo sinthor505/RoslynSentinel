@@ -478,6 +478,88 @@ public class SearchModeTests
     }
 
     [Test]
+    public async Task Search_MethodMode_WithContainingType_KeepsOnlyDeclarationsInThatContainer()
+    {
+        using var h = await CreateHarnessAsync();
+
+        var result = await h.Tools.SearchSolutionTool(
+            reason: "search method containingType container filter regression",
+            SearchMode.method,
+            query: "Target",
+            containingType: "SearchModeProbeImpl");
+
+        Assert.That(result.IsError, Is.Not.True, result.ErrorData?.Message);
+        Assert.That(Serialize(result.SuccessData), Does.Contain("SearchModeProbeImpl"),
+            "containingType must keep the method declared in the named container.");
+        Assert.That(Serialize(result.SuccessData), Does.Not.Contain("ISearchModeProbe"),
+            "containingType must drop the same-named method declared in a different container.");
+    }
+
+    [Test]
+    public async Task Search_DeclarationKindMode_WithContainingTypeMatchingNothing_ReportsNoDeclarationInContainer()
+    {
+        using var h = await CreateHarnessAsync();
+
+        var result = await h.Tools.SearchSolutionTool(
+            reason: "search declaration-kind containingType no-match status regression",
+            SearchMode.method,
+            query: "Target",
+            containingType: "NoSuchContainerType");
+
+        Assert.That(result.IsError, Is.Not.True, result.ErrorData?.Message);
+        Assert.That(result.StatusMessage, Does.Contain("No method declaration found with container 'NoSuchContainerType'"));
+    }
+
+    [Test]
+    public async Task Search_ReferencesMode_WithSymbolKind_IsAcceptedAndNoteIsAdded()
+    {
+        using var h = await CreateHarnessAsync();
+
+        var result = await h.Tools.SearchSolutionTool(
+            reason: "search references symbolKind ignored note regression",
+            SearchMode.references,
+            query: "Target",
+            containingType: "SearchModeProbeImpl",
+            symbolKind: SymbolKindFilter.method);
+
+        Assert.That(result.IsError, Is.Not.True, result.ErrorData?.Message);
+        Assert.That(result.StatusMessage, Does.Contain("symbolKind is ignored"));
+    }
+
+    [Test]
+    public async Task Search_TextMode_WithSymbolKind_IsInvalidArgumentError()
+    {
+        using var h = await CreateHarnessAsync();
+
+        var result = await h.Tools.SearchSolutionTool(
+            reason: "search text symbolKind rejection regression",
+            SearchMode.text,
+            query: "Target",
+            symbolKind: SymbolKindFilter.method);
+
+        Assert.That(result.IsError, Is.True, "A symbolKind filter passed to mode text must be rejected.");
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData?.Message, Does.Contain("symbolKind"));
+    }
+
+    [Test]
+    public async Task Search_TextMode_WithHasAttribute_IsInvalidArgumentError()
+    {
+        using var h = await CreateHarnessAsync();
+
+        var result = await h.Tools.SearchSolutionTool(
+            reason: "search text hasAttribute rejection regression",
+            SearchMode.text,
+            query: "Target",
+            hasAttribute: "CoBar");
+
+        Assert.That(result.IsError, Is.True, "An attribute-only parameter passed to mode text must be rejected.");
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData?.Message, Does.Contain("ignores"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("hasAttribute"));
+    }
+
+    [Test]
     public async Task Search_SymbolMode_WithContextSnippet_IsInvalidArgumentError()
     {
         using var h = await CreateHarnessAsync();

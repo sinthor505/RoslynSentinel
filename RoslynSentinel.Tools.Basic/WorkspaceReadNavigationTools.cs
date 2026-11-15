@@ -128,7 +128,7 @@ public class WorkspaceReadNavigationTools
         [ExternalInputRequired(DataTag.SourceFilepath)] string? fileGlob = null,
     [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxResults = 200,
     [ExternalInputRequired(DataTag.SymbolKind)] SymbolKindFilter symbolKind = SymbolKindFilter.any,
-    [Description("symbol, references, callers, implementations modes: the type that declares the name.")]
+    [Description("Type that declares the name: symbol, references, callers, implementations modes; declaration-kind modes filter by container.")]
         [ExternalInputRequired(DataTag.ContainingType)] string? containingType = null,
     [Description("symbol mode.")]
         [ExternalInputRequired(DataTag.ContainingNamespace)] string? containingNamespace = null,
@@ -190,7 +190,7 @@ public class WorkspaceReadNavigationTools
             case SearchMode.attribute:
                 return _symbolRelationship.QuerySymbolRelationships(reason, query ?? string.Empty, FindUsagesSearchKind.attributeUsages, projectName, filePath, includeTests: includeTests, hasAttribute: hasAttribute, cancellationToken: cancellationToken);
             default:
-                return _impl.ListAll(reason, SearchModeToListAllKind(mode), projectName, query, exactMatch, KindListingMaxItems, includeTests: includeTests, cancellationToken: cancellationToken);
+                return _impl.ListAll(reason, SearchModeToListAllKind(mode), projectName, query, exactMatch, KindListingMaxItems, containingType: containingType, includeTests: includeTests, cancellationToken: cancellationToken);
         }
     }
 
@@ -233,6 +233,12 @@ public class WorkspaceReadNavigationTools
         }
 
         var searchResult = await DispatchSearchCore(reason, mode, query, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, filePath, contextSnippet, lineBefore, lineAfter, includeTests, hasAttribute, contextLines, cancellationToken);
+        if (mode is SearchMode.references or SearchMode.callers or SearchMode.implementations && symbolKind != SymbolKindFilter.any)
+        {
+            const string symbolKindNote = "Note: symbolKind is ignored in modes references, callers and implementations (it only filters mode symbol).";
+            searchResult = searchResult with { StatusMessage = string.IsNullOrEmpty(searchResult.StatusMessage) ? symbolKindNote : searchResult.StatusMessage + " " + symbolKindNote };
+        }
+
         return _impl.AddZeroHitEvidence(mode, query, searchResult);
     }
 
@@ -258,8 +264,8 @@ public class WorkspaceReadNavigationTools
         Check("fileGlob", !string.IsNullOrWhiteSpace(fileGlob), mode == SearchMode.text, "mode text only");
         // maxResults is a cap, so ignoring it outside text mode is harmless; an error only costs a weak model a turn.
         Check("contextLines", contextLines != 0, mode == SearchMode.text, "mode text only");
-        Check("symbolKind", symbolKind != SymbolKindFilter.any, mode == SearchMode.symbol, "mode symbol only");
-        Check("containingType", !string.IsNullOrWhiteSpace(containingType), mode == SearchMode.symbol || isUsageMode, "modes symbol, references, callers, implementations only");
+        Check("symbolKind", symbolKind != SymbolKindFilter.any, mode == SearchMode.symbol || isUsageMode, "modes symbol, references, callers, implementations only");
+        Check("containingType", !string.IsNullOrWhiteSpace(containingType), mode == SearchMode.symbol || isUsageMode || isDeclarationKind, "modes symbol, references, callers, implementations and declaration-kind modes only");
         Check("containingNamespace", !string.IsNullOrWhiteSpace(containingNamespace), mode == SearchMode.symbol, "mode symbol only");
         Check("hasAttribute", !string.IsNullOrWhiteSpace(hasAttribute), mode == SearchMode.attribute, "mode attribute only");
         Check("contextSnippet", !string.IsNullOrWhiteSpace(contextSnippet), isUsageMode, "modes references, callers, implementations only");
