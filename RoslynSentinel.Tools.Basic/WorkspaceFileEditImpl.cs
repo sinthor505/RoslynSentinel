@@ -1003,19 +1003,44 @@ public class WorkspaceFileEditImpl
     /// CR/LF/CRLF-interchangeable stage, exactly what the removed legacy ReplaceSnippetTool matcher did, so the returned
     /// span is always the real removable span (see project_replacesnippet_silent_splice_corruption_adjacent_lines).
     /// Only <see cref="SnippetMatchOutcome.Matched"/> yields a match. Every other outcome, including a snippet that
-    /// matches only at a looser tier (its near-matches are never edit candidates), is thrown through
+    /// matches only at a looser tier (its near-matches are never edit candidates, except a looser-tier candidate
+    /// whose C# tokens equal oldContent's: only whitespace and end-of-line trivia differ; it is accepted and its
+    /// token note is reported), is thrown through
     /// <see cref="SnippetErrorFormatter.Build"/> so the message lists the file's own candidate lines.
     /// </summary>
     private static (SnippetMatch Match, string? Note) ResolveEditMatch(
-        SourceText sourceText, string oldContent, string? lineBefore, string? lineAfter,
+        SourceText sourceText, Microsoft.CodeAnalysis.SyntaxNode? fileRoot, string oldContent, string? lineBefore, string? lineAfter,
         Func<int, string?>? memberNameAt, string? withinMember, int? matchLine)
     {
-        var result = SnippetResolver.Resolve(
-            sourceText, oldContent, WhitespaceTolerance.IgnoreLineEndings, SnippetCaseMode.CaseSensitive,
-            new SnippetSelectors(withinMember, matchLine, lineBefore, lineAfter), memberNameAt);
+        SnippetMatchResult ResolveWithTokenStep(SnippetSelectors selectors)
+        {
+            var resolved = SnippetResolver.Resolve(
+                sourceText, oldContent, WhitespaceTolerance.IgnoreLineEndings, SnippetCaseMode.CaseSensitive,
+                selectors, memberNameAt);
+            if (resolved.Outcome == SnippetMatchOutcome.MatchedLooserThanRequested && fileRoot is not null)
+            {
+                var tokenResult = SnippetTokenEquivalence.Resolve(sourceText, fileRoot, oldContent, selectors, memberNameAt);
+                if (tokenResult is not null)
+                {
+                    return tokenResult;
+                }
+            }
+
+            return resolved;
+        }
+
+        string TokenNote(SnippetMatch found)
+        {
+            int first = sourceText.Lines.GetLinePosition(found.Start).Line + 1;
+            int last = sourceText.Lines.GetLinePosition(Math.Max(found.Start, found.Start + found.Length - 1)).Line + 1;
+            return $"oldContent matched line {first} by its C# tokens; its whitespace differs from the file's, and the file's lines {first}-{last} were replaced.";
+        }
+
+        var result = ResolveWithTokenStep(new SnippetSelectors(withinMember, matchLine, lineBefore, lineAfter));
         if (result.Outcome == SnippetMatchOutcome.Matched)
         {
-            return (result.Matches.Single(), null);
+            var single = result.Matches.Single();
+            return (single, single.MatcherName == SnippetTokenEquivalence.MatcherName ? TokenNote(single) : null);
         }
 
         // Batch V R8: oldContent that occurs once has a single candidate, so a wrong guessed matchLine only costs a
@@ -1023,9 +1048,7 @@ public class WorkspaceFileEditImpl
         // still apply. Any other retry outcome, or two or more matches, falls through to the original error below.
         if (result.Outcome == SnippetMatchOutcome.SelectorMismatch && matchLine > 0 && result.PreFilterMatches.Count == 1)
         {
-            var retry = SnippetResolver.Resolve(
-                sourceText, oldContent, WhitespaceTolerance.IgnoreLineEndings, SnippetCaseMode.CaseSensitive,
-                new SnippetSelectors(withinMember, null, lineBefore, lineAfter), memberNameAt);
+            var retry = ResolveWithTokenStep(new SnippetSelectors(withinMember, null, lineBefore, lineAfter));
             if (retry.Outcome == SnippetMatchOutcome.Matched)
             {
                 var only = retry.Matches.Single();
@@ -1036,7 +1059,9 @@ public class WorkspaceFileEditImpl
                 }
 
                 int actualLine = sourceText.Lines.GetLinePosition(pos).Line + 1;
-                return (only, $"matchLine {matchLine} ignored: oldContent occurs once, at line {actualLine}.");
+                var lineNote = $"matchLine {matchLine} ignored: oldContent occurs once, at line {actualLine}.";
+                var tokenNote = only.MatcherName == SnippetTokenEquivalence.MatcherName ? TokenNote(only) : null;
+                return (only, tokenNote is null ? lineNote : $"{lineNote} {tokenNote}");
             }
         }
 
@@ -1332,7 +1357,7 @@ public class WorkspaceFileEditImpl
                     try
                     {
                         (match, selectorNote) = ResolveEditMatch(
-                            oldText, oldContent, lineBefore, lineAfter, memberNameAt: MemberNameResolverFor(root),
+                            oldText, root, oldContent, lineBefore, lineAfter, memberNameAt: MemberNameResolverFor(root),
                             withinMember: withinMember, matchLine: matchLine);
                     }
                     // Batch H4 R1: an identical edit sent twice (e.g. action replace + apply in one turn) is a no-op success, not a not-found failure.
@@ -1635,7 +1660,8 @@ public class WorkspaceFileEditImpl
 
             var originalText = await document.GetTextAsync(cancellationToken);
             var originalString = originalText.ToString();
-            var memberNameAt = MemberNameResolverFor(await document.GetSyntaxRootAsync(cancellationToken));
+            var fileRoot = await document.GetSyntaxRootAsync(cancellationToken);
+            var memberNameAt = MemberNameResolverFor(fileRoot);
 
             // Resolve every edit's match against the file's ORIGINAL text -> never against a prior
             // edit's output within this same batch. This is what removes the sequencing hazard a
@@ -1655,7 +1681,7 @@ public class WorkspaceFileEditImpl
                 try
                 {
                     var (match, selectorNote) = ResolveEditMatch(
-                        originalText, edit.OldContent, edit.LineBefore, edit.LineAfter, memberNameAt: memberNameAt,
+                        originalText, fileRoot, edit.OldContent, edit.LineBefore, edit.LineAfter, memberNameAt: memberNameAt,
                         withinMember: edit.WithinMember, matchLine: edit.MatchLine);
                     if (selectorNote is not null)
                         selectorNotes.Add($"batchEdits[{index}]: {selectorNote}");

@@ -45,9 +45,10 @@ public class ReplaceSnippetErrorCodeTests
 
     private const string MemberDupRepeatedBlock = "        var total = Compute();\n        Log(total);";
 
-    // The file has "    int Compute() => 1;", a blank line, then "    void Log(int x) { }". This block drops the
-    // indentation on both lines, so it matches only at the looser (IgnoreIndentation) tier and is unique.
-    private const string MemberDupLooserBlock = "int Compute() => 1;\n\nvoid Log(int x) { }";
+    // The file has "    int Compute() => 1;", a blank line, then "    void Log(int x) { }". This block starts mid-token
+    // ("nt" of "int"), so it matches only at a looser tier and its C# tokens never equal a file window: the token
+    // step does not accept it. It stays a looser-tier-only candidate, unique and reported as Ambiguous or looser.
+    private const string MemberDupLooserBlock = "nt Compute() => 1;\n\nvoid Log(int x) { }";
 
     private const string MemberDupMissingBlock = "NotInTheFile();";
 

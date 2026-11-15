@@ -1,7 +1,8 @@
 // Slice 4a of the whitespace-tolerance proposal: ReplaceSnippetTool and its batch form resolve oldContent through
 // SnippetResolver (tier IgnoreLineEndings, case-sensitive) and report failures through SnippetErrorFormatter.
-// An oldContent that differs from the file only by indentation matches at a looser tier than the edit path
-// accepts: it must fail with MatchedLooserThanRequested, show the file's own lines, and write nothing.
+// An oldContent that differs from the file only in whitespace trivia (indentation, end-of-line) matches the file's
+// C# tokens: the token step accepts it and the apply notes it. A looser-tier near-match that is not token-equivalent
+// still fails with MatchedLooserThanRequested, shows the file's own lines, and writes nothing.
 // Runs on an InMemoryWorkspace (no temp directory, MSBuild load or disk write).
 
 using Microsoft.Extensions.Logging.Abstractions;
@@ -65,7 +66,7 @@ public class ReplaceSnippetLooserTierTests
     }
 
     [Test]
-    public async Task ReplaceSnippet_Single_OldContentDiffersOnlyByIndentation_FailsAsLooserTierShowsFileLinesAndWritesNothingAsync()
+    public async Task ReplaceSnippet_Single_OldContentDiffersOnlyByIndentation_AppliesAndNotesTokenMatchAsync()
     {
         using var h = CreateHarness();
 
@@ -76,12 +77,9 @@ public class ReplaceSnippetLooserTierTests
             oldContent: WronglyIndentedBlock,
             newContent: Replacement);
 
-        Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.MatchedLooserThanRequested));
-        Assert.That(result.ErrorData.Message, Does.Contain(FileLineOne).And.Contain(FileLineTwo),
-            "the message must carry the file's own lines so the caller can copy them");
-        Assert.That(result.ErrorData.Message, Does.Contain("NOT used").Or.Contain("nothing was applied"));
-        Assert.That(h.Text, Is.EqualTo(Source), "a looser-tier near-match must never be applied");
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(result.SuccessData!.ReplacementResult!.Summary, Does.Contain("by its C# tokens"));
+        Assert.That(h.Text, Is.EqualTo(Source.Replace(FileBlock, Replacement)));
     }
 
     [Test]
@@ -121,7 +119,7 @@ public class ReplaceSnippetLooserTierTests
     }
 
     [Test]
-    public async Task ReplaceSnippet_Batch_OldContentDiffersOnlyByIndentation_FailsAsLooserTierShowsFileLinesAndWritesNothingAsync()
+    public async Task ReplaceSnippet_Batch_OldContentDiffersOnlyByIndentation_AppliesAsync()
     {
         using var h = CreateHarness();
 
@@ -130,10 +128,8 @@ public class ReplaceSnippetLooserTierTests
             ProposedChangeAction.apply,
             batchEdits: [new SnippetEdit { FilePath = h.Path, OldContent = WronglyIndentedBlock, NewContent = Replacement }]);
 
-        Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.MatchedLooserThanRequested));
-        Assert.That(result.ErrorData.Message, Does.Contain(FileLineOne).And.Contain(FileLineTwo));
-        Assert.That(h.Text, Is.EqualTo(Source), "a rejected batch must not write anything");
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(h.Text, Is.EqualTo(Source.Replace(FileBlock, Replacement)));
     }
 
     [Test]
