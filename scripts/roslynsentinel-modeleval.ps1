@@ -130,7 +130,9 @@
     all five steps, V5 defined-behaviour wording, V6 = V5 plus a search-before-replying nudge) |
     ShippingKindStepV7 .. V11 (Model_RunsShippingKindStepPromptV7..V11: alternate STEP 5 wordings, steps 1-4 reuse V1;
     run with -Step 5), ShippingKindStepV12 / V13 (step 5 with a visible ShippingBehaviourTests file seeded in the
-    step-0 golden: V12 = V7 plus a run-the-tests sentence, V13 = V7 control; run with -Step 5). Required. Accepts multiple values (e.g.
+    step-0 golden: V12 = V7 plus a run-the-tests sentence, V13 = V7 control; run with -Step 5), ShippingKindStepFinal
+    (Model_RunsShippingKindStepPromptFinal: the chosen prompt set for all six steps, V1 for 1, 4, 6, V2 for 2, 3, V7
+    for 5; the baseline for later changes). Required. Accepts multiple values (e.g.
     -Test OrderPricingRefactor,OrderPricingRefactorChain4,OrderPricingRefactorChain5) to run
     each one in turn, in the order given, all under the same -HostAddress/-Model/-Repeats -
     this is the supported way to queue a multi-test overnight sequence: it reuses this script's
@@ -284,7 +286,7 @@ param(
     [string]$HostAddress,
 
     [Parameter(Position = 1, Mandatory)]
-    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'LargeResultPaging', 'LargeResultPagingReadFileOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor', 'OrderPricingRefactorChain4', 'OrderPricingRefactorChain5', 'OrderPricingRefactorChain6', 'OrderPricingRefactorChain7', 'OrderPricingRefactorChain8', 'OrderPricingRefactorChain9', 'OrderPricingRefactorChain10', 'ResumeTranscript', 'ScoreTranscript', 'Scenario', 'ShippingKindStep', 'ShippingKindStepV2', 'ShippingKindStepV3', 'ShippingKindStepV4', 'ShippingKindStepV5', 'ShippingKindStepV6', 'ShippingKindStepV7', 'ShippingKindStepV8', 'ShippingKindStepV9', 'ShippingKindStepV10', 'ShippingKindStepV11', 'ShippingKindStepV12', 'ShippingKindStepV13')]
+    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'LargeResultPaging', 'LargeResultPagingReadFileOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor', 'OrderPricingRefactorChain4', 'OrderPricingRefactorChain5', 'OrderPricingRefactorChain6', 'OrderPricingRefactorChain7', 'OrderPricingRefactorChain8', 'OrderPricingRefactorChain9', 'OrderPricingRefactorChain10', 'ResumeTranscript', 'ScoreTranscript', 'Scenario', 'ShippingKindStep', 'ShippingKindStepV2', 'ShippingKindStepV3', 'ShippingKindStepV4', 'ShippingKindStepV5', 'ShippingKindStepV6', 'ShippingKindStepV7', 'ShippingKindStepV8', 'ShippingKindStepV9', 'ShippingKindStepV10', 'ShippingKindStepV11', 'ShippingKindStepV12', 'ShippingKindStepV13', 'ShippingKindStepFinal')]
     [string[]]$Test,
 
     [Parameter(Position = 2)]
@@ -403,6 +405,8 @@ $testNames = @{
     # V12 (V7 + run-the-tests sentence) and V13 (V7 control) also seed a visible shipping test file; step 5 only, run with -Step 5.
     'ShippingKindStepV12'           = 'Model_RunsShippingKindStepPromptV12'
     'ShippingKindStepV13'           = 'Model_RunsShippingKindStepPromptV13'
+    # Final = the chosen prompt set for all six steps (V1 for 1, 4, 6; V2 for 2, 3; V7 for 5); the baseline for later changes.
+    'ShippingKindStepFinal'         = 'Model_RunsShippingKindStepPromptFinal'
 }
 
 if ($Step -and -not ($Test | Where-Object { $_ -like 'ShippingKindStep*' })) {

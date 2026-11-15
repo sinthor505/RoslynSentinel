@@ -667,6 +667,23 @@ internal static class ShippingKindStepGoldens
         };
     }
 
+    /// <summary>
+    /// Final = the prompt set chosen from the measured variants: V1 for steps 1 and 4 and 6, V2 for steps 2 and 3 (they close the namespace and normalize gaps), V7 for step 5 (helper first); the baseline to compare any later change against.
+    /// </summary>
+    public static string PromptForStepFinal(int step)
+    {
+        return step switch
+        {
+            1 => PromptStep1V1,
+            2 => PromptStep2V2,
+            3 => PromptStep3V2,
+            4 => PromptStep4V1,
+            5 => PromptStep5V7,
+            6 => PromptStep6V1,
+            _ => throw new ArgumentOutOfRangeException(nameof(step)),
+        };
+    }
+
     public static IReadOnlyList<string> AllowedPathsForStep(int step)
     {
         return step switch

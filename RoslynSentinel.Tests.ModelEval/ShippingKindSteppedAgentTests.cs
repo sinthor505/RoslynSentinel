@@ -332,4 +332,18 @@ public class ShippingKindSteppedAgentTests
         // V13 = control: the V7 prompt with the visible tests present but not mentioned.
         await RunStepAsync(step, ShippingKindStepGoldens.PromptForStepV7(step), withVisibleTests: true);
     }
+
+    // The name must not contain "Model_CompletesShippingKindStep" because the baseline script filter is Name~ on that string.
+    // Final prompt set, all six steps. The name must not contain Model_CompletesShippingKindStep (the V1 filter is Name~ on it).
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    [TestCase(5)]
+    [TestCase(6)]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
+    public async Task Model_RunsShippingKindStepPromptFinal(int step)
+    {
+        await RunStepAsync(step, ShippingKindStepGoldens.PromptForStepFinal(step));
+    }
 }

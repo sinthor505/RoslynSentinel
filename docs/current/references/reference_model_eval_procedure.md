@@ -364,7 +364,9 @@ A bare pass/fail sends the analyst back into transcripts to learn what happened.
   `ContosoOrders.Tests/ShippingBehaviourTests.cs` (the shipping table, unknown kind `teleport`) in the step-0 golden so
   `RunTest` has something to run: V12 is V7 plus "run the ContosoOrders tests with RunTest and confirm none fail",
   V13 is the V7 prompt with the file present but unmentioned (the control; compare V12 against V13, not against V7
-  runs made without the file). Results land
+  runs made without the file). `ShippingKindStepFinal` (`Model_RunsShippingKindStepPromptFinal`, steps 1-6) is the
+  chosen set: V1 for steps 1, 4 and 6, V2 for steps 2 and 3, V7 for step 5. Use it as the baseline for any later
+  change; `ShippingKindStep` (V1) stays as the historical control. Results land
   under the variant's own test name. A
   variant's test name must not contain `Model_CompletesShippingKindStep` (the V1 filter is `Name~` on it).
 - Per-step output in the archived run folder `ModelTestingResults/<host>/Model_CompletesShippingKindStep(<k>)/<timestamp>/`:
