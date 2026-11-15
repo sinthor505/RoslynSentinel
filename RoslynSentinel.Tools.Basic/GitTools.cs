@@ -72,7 +72,7 @@ public class GitTools
         string? repoPath = null,
         [Description("status: max entries listed before truncating to a 10-per-list sample plus full counts (1-5000). Untracked files are listed individually; pass any listed path as-is to stage/commit paths.")]
         int maxEntries = 50,
-        [Description("diff/show: true returns a name-status file list instead of the patch. Mutually exclusive with stat.")]
+        [Description("diff/show: true returns a name-status file list instead of the patch. log: one '<shortHash> subject' line per commit in nameOnlyLines. Mutually exclusive with stat.")]
         bool nameOnly = false,
         [Description("diff/show: true returns --stat text instead of the patch. Mutually exclusive with nameOnly.")]
         bool stat = false,
@@ -171,7 +171,7 @@ public class GitTools
         GitResult result = operation switch
         {
             GitOperation.status => await _gitImpl.StatusAsync(gitRoot, maxEntries, cancellationToken),
-            GitOperation.log => await _gitImpl.LogAsync(gitRoot, count, resolvedRef, paths, pickaxe, pickaxeRegex, follow, cancellationToken),
+            GitOperation.log => await _gitImpl.LogAsync(gitRoot, count, resolvedRef, paths, pickaxe, pickaxeRegex, follow, cancellationToken, nameOnly: nameOnly),
             GitOperation.diff => await _gitImpl.DiffAsync(gitRoot, resolvedRef ?? "working", paths, maxBytes, nameOnly, stat, cancellationToken),
             GitOperation.show => await _gitImpl.ShowAsync(gitRoot, resolvedRef ?? "HEAD", paths, maxBytes, nameOnly, stat, cancellationToken),
             GitOperation.stage or GitOperation.add when hasHunkParams => await _gitImpl.StageHunksAsync(gitRoot, paths, hunkIds, hunkFingerprint, lineRange, cancellationToken),

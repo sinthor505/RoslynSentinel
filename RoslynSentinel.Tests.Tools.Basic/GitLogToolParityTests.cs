@@ -61,8 +61,8 @@ public class GitLogToolParityTests
     private static GitImpl Impl(IGitReader reader) =>
         new(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitImpl>.Instance, reader);
 
-    private static Task<GitLogResult> LogWith(IGitReader reader, string gitRoot, int count, string? refName, string? paths, string? pickaxe = null, bool pickaxeRegex = false, bool follow = false) =>
-        Impl(reader).LogAsync(gitRoot, count, refName, paths, pickaxe, pickaxeRegex, follow, CancellationToken.None);
+    private static Task<GitLogResult> LogWith(IGitReader reader, string gitRoot, int count, string? refName, string? paths, string? pickaxe = null, bool pickaxeRegex = false, bool follow = false, bool nameOnly = false) =>
+        Impl(reader).LogAsync(gitRoot, count, refName, paths, pickaxe, pickaxeRegex, follow, CancellationToken.None, nameOnly);
 
     /// <summary>Runs log through the libgit2-only and the CLI-only reader, asserts identical DTOs and returns the CLI-backed one.</summary>
     private static async Task<GitLogResult> BothBackendsAsync(string gitRoot, int count = 20, string? refName = null, string? paths = null)
@@ -298,6 +298,48 @@ public class GitLogToolParityTests
             Assert.That(result.Commits[0].Hash, Has.Length.EqualTo(40));
             Assert.That(result.Commits[0].ShortHash, Has.Length.EqualTo(7));
             Assert.That(result.Commits[0].Message, Does.Contain("body of 5"));
+        });
+    }
+
+    [Test]
+    public async Task Log_NameOnly_ReturnsOneHashAndSubjectLinePerCommitAndNoCommitsAsync()
+    {
+        for (var i = 1; i <= 3; i++)
+        {
+            Write(_repo, "a.txt", $"{i}\n");
+            Commit(_repo, $"commit {i}\n\nbody of {i}\n");
+        }
+
+        var full = await LogWith(new CliGitReader(), _repo, 20, null, null);
+        var cliNameOnly = await LogWith(new CliGitReader(), _repo, 20, null, null, nameOnly: true);
+        var libNameOnly = await LogWith(new Libgit2GitReader(), _repo, 20, null, null, nameOnly: true);
+
+        var expected = full.Commits.Select(c => $"{c.ShortHash} {c.Message.Split('\n')[0].TrimEnd('\r')}").ToArray();
+        Assert.Multiple(() =>
+        {
+            Assert.That(cliNameOnly.IsError, Is.False);
+            Assert.That(cliNameOnly.Commits, Is.Empty);
+            Assert.That(cliNameOnly.NameOnlyLines, Is.Not.Null);
+            Assert.That(cliNameOnly.NameOnlyLines!.Split('\n'), Is.EqualTo(expected));
+            Assert.That(cliNameOnly.NameOnlyLines!.Split('\n'), Has.Length.EqualTo(3));
+            Assert.That(cliNameOnly.NameOnlyLines!.Split('\n')[0], Does.Match("^[0-9a-f]{7,} commit 3$"));
+            Assert.That(libNameOnly.Commits, Is.Empty);
+            Assert.That(libNameOnly.NameOnlyLines, Is.EqualTo(cliNameOnly.NameOnlyLines));
+        });
+    }
+
+    [Test]
+    public async Task Log_NameOnlyFalse_LeavesNameOnlyLinesNullAndCommitsPopulatedAsync()
+    {
+        Write(_repo, "a.txt", "1\n");
+        Commit(_repo, "commit 1\n\nbody of 1\n");
+
+        var result = await BothBackendsAsync(_repo);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.NameOnlyLines, Is.Null);
+            Assert.That(Subjects(result), Is.EqualTo(new[] { "commit 1" }));
         });
     }
 
