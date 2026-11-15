@@ -171,7 +171,7 @@ public static class SnippetTokenEquivalence
             var candidateToken = candidateTokens[i];
             // Line breaks inside a token (verbatim or raw string) are compared normalized: the edit path matches with
             // IgnoreLineEndings and normalizes the written file's line endings afterwards.
-            if (snippetToken.Kind() != candidateToken.Kind()
+            if (!snippetToken.IsKind(candidateToken.Kind())
                 || NormalizeLineBreaks(snippetToken.Text) != NormalizeLineBreaks(candidateToken.Text)
                 || !SignificantTriviaEquivalent(snippetToken, candidateToken))
             {
@@ -197,7 +197,7 @@ public static class SnippetTokenEquivalence
 
         for (var i = 0; i < snippetTrivia.Count; i++)
         {
-            if (snippetTrivia[i].Kind() != candidateTrivia[i].Kind()
+            if (!snippetTrivia[i].IsKind(candidateTrivia[i].Kind())
                 || !TrimmedLines(snippetTrivia[i].ToFullString()).SequenceEqual(TrimmedLines(candidateTrivia[i].ToFullString())))
             {
                 return false;
