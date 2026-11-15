@@ -218,7 +218,7 @@ fast-forwarded`), which also explains many post-fix journal reports.
 | R19 | RunTest zero-match hint's `suite: full` call drops filter and scope (copy runs whole solution) | `TestSuiteFilter.cs:~55` TODO | 2 call sites |
 | R20 | RunTest `timeoutSeconds` undocumented (per project); no `--blame-hang` so a hung test is unnamed; detached rows capped by maxDetails | `TestRunEngine.cs`, `WorkspaceBuildTestImpl.cs:~490` | 1-2 files (blame-hang: verify partial TRX) |
 | R21 | Launcher recovery hint describes only index.lock whatever the pull error (diverged clone unhandled) | `LaunchBuildMarker.cs:~70-76` | 1 file |
-| R22 | RenameSymbol `residualMentions` scans bin deps.json and untracked files | rename residual scan (engine) | 1 edit |
+| R22 | RenameSymbol `residualMentions` scans bin deps.json and untracked files. NOT REPRODUCED 2026-11-15 (closed): `ResidualMentionScannerTests` 9/9 green at 2e5a3601, and a live dry-run rename of `ResidualMentionScanner` listed only git-tracked .md files and one source comment (no bin/obj/deps.json, no untracked file); likely a stale-binary report. Only the non-git fallback walk still includes untracked files (documented). | rename residual scan (engine) | none |
 | R23 | ReadFile without a solution ignores `showLineEndings` | `WorkspaceFileEditImpl.cs:701` TODO | 1 file |
 | R24 | Docs: dispatcher enables toolsets before spawning; implementer/test-writer briefs verify EOL with `ReadFile(showLineEndings: summary)`; schema loads excluded from the tool-call cap | dispatch-implementer skill, agent docs | 3-4 doc edits |
 | R25 | Ratchet tests have no shared category; filtered runs miss them | 11+ ratchet classes, `ClaudeLeanSchemaBudgetTests` | ~14 attribute edits + skill/script filter |
