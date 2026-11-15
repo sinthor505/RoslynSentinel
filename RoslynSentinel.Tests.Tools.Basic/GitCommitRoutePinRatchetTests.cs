@@ -10,6 +10,7 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 // Known limit: this is a text heuristic. A file that calls InitRepo for one repo and `git init` for another passes.
 [TestFixture]
 [Category("GitCommitRoutePinRatchet")]
+[Category("Ratchet")]
 public class GitCommitRoutePinRatchetTests
 {
     private const string CommitMarkerA = ".CommitAsync(";

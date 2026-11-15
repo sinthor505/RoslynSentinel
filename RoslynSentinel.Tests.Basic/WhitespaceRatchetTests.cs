@@ -13,6 +13,7 @@ namespace RoslynSentinel.Tests.Basic;
 /// </summary>
 [TestFixture]
 [Category("WhitespaceRatchet")]
+[Category("Ratchet")]
 public class WhitespaceRatchetTests
 {
     // Test 1 allowlist. Keys are "<relative file>::<enclosing member>"; values are the exact number of raw calls
