@@ -175,8 +175,8 @@ public class WorkspaceTools
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("For .cs files: namespace to seed the file with; omit it for the global namespace.")] string? namespaceName = null,
-        [Description("Alternative to content. Required for .cs files: kind of top-level type to seed (class/interface/etc). Use staticClass for a static utility class.")] NewTypeKind? typeKind = null,
-        [Description("Alternative to content. Required for .cs files: name of the seeded top-level type.")] string? typeName = null,
+        [Description("Alternative to content: seeds an empty top-level type in a .cs file. Omit when you pass content. Use staticClass for a static utility class.")] NewTypeKind? typeKind = null,
+        [Description("Alternative to content: name of the seeded top-level type. Omit when you pass content.")] string? typeName = null,
         [Description("Full file body, written in one call (any file type; for .cs it is validated and rejected if it adds compiler errors). Use instead of typeKind/typeName/namespaceName, not with them.")] string? content = null,
         CancellationToken cancellationToken = default)
         => _fileEdit.CreateFile(reason, filePath, namespaceName, typeKind, typeName, content, cancellationToken);
