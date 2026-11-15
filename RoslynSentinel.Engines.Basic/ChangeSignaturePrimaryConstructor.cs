@@ -32,15 +32,34 @@ internal static class ChangeSignaturePrimaryConstructor
     }
 
     /// <summary>
-    /// The refusal for a record's primary constructor, or null when the change is allowed. A record's positional parameter is also a public property, a
-    /// Deconstruct position and a with-expression member, so changing it is a public API change.
+    /// The refusal for changing a record's primary constructor, or null when the change is allowed. A record's positional parameter is also a public property, a
+    /// Deconstruct position and a with-expression member. Adding a parameter (with a default) and reordering keep every existing property, so they are allowed;
+    /// removing a positional parameter or renaming one (a spec list cannot say rename, so it shows as an existing parameter left out) is refused.
+    /// Limit: positional deconstruction (<c>var (x, y) = r</c>) and <c>with</c> expressions are not rewritten by an allowed change; a reorder or an add shifts
+    /// the Deconstruct positions, which the call-binding gate does not see.
     /// </summary>
     internal static string? RecordPolicyRefusal(TypeDeclarationSyntax type, IReadOnlyList<SignatureParameterSpec> parameters)
     {
-        // TODO implement (Step 3) per the owner's record policy (O1); until then every record is refused with the text ChangeSignature always had.
-        return type is RecordDeclarationSyntax
-            ? $"'{type.Identifier.Text}' is a type with a primary constructor, and ChangeSignature does not edit primary constructors (there is no constructor declaration to rewrite or to put a wrapper beside). Nothing was changed. Edit the type's parameter list and its construction sites directly, or add an ordinary constructor and change that one." // hint-ok: names the tool in prose, not a call to make
-            : null;
+        if (type is not RecordDeclarationSyntax || type.ParameterList is null)
+        {
+            return null;
+        }
+
+        var kept = parameters.OfType<ExistingParameterSpec>().Select(spec => spec.OriginalIndex).ToHashSet();
+        var removed = type.ParameterList.Parameters
+            .Where((parameter, index) => !kept.Contains(index))
+            .Select(parameter => parameter.Identifier.Text)
+            .ToList();
+        if (removed.Count == 0)
+        {
+            return null;
+        }
+
+        var typeName = type.Identifier.Text;
+        var named = string.Join(", ", removed.Select(name => $"'{name}'"));
+        return $"'{typeName}' is a record, and its positional parameter(s) {named} would be removed or renamed. A positional parameter is also a public property, a Deconstruct position and a with-expression member, " +
+               "so ChangeSignature on a record adds parameters (with a default) and reorders existing ones, and does not remove or rename one. Nothing was changed. " +
+               "To rename, RenameSymbol on the parameter updates the property and its uses; to remove, Member(operation: remove) on the parameter after its uses are gone."; // hint-ok: names tools in prose, not a call to make
     }
 
     /// <summary>

@@ -10,7 +10,7 @@ namespace RoslynSentinel.Tests.Advanced;
 /// <summary>
 /// ChangeSignature on a class or struct with a primary constructor (target = the type name) rewrites the type's parameter list and every
 /// construction site (<c>new T(...)</c>, target-typed <c>new(...)</c>, a derived type's <c>: Base(...)</c>) instead of refusing. A record's
-/// primary constructor is still refused until the record policy lands.
+/// primary constructor allows add-with-default and reorder; removing or renaming a positional parameter is refused (owner policy O1).
 /// </summary>
 [TestFixture]
 public class ChangeSignaturePrimaryConstructorTests
@@ -242,15 +242,85 @@ public class ChangeSignaturePrimaryConstructorTests
     [Test]
     [Category("BasicRefactoringEngine")] // sentinel:auto-category
     [Category("ChangeSignatureResult")] // sentinel:auto-category
-    public async Task RecordPrimaryConstructor_StillRefused()
+    public async Task RecordPrimaryConstructor_AddParameterWithDefault_RewritesDeclarationAndSites_WithExpressionAndPropertyReadStillCompile()
+    {
+        const string point = """
+            record Point(int X, int Y);
+            """;
+        // With-expression and property read are untouched by the change (documented limit) and must still compile.
+        const string user = """
+            class User
+            {
+                public Point Make() => new Point(1, 2);
+                public Point Shift(Point p) => p with { X = p.X + 1 };
+                public int Sum(Point p) => p.X + p.Y;
+            }
+            """;
+        SetFiles(("Point.cs", point), ("User.cs", user));
+        var result = await Change("Point.cs", "Point", new ExistingParameterSpec(0), new ExistingParameterSpec(1), new NewParameterSpec("Z", "int", "0"));
+
+        Assert.That(result.Error, Is.Null, result.Error);
+        var pointAfter = TextOf(result, "Point.cs", point);
+        var userAfter = TextOf(result, "User.cs", user);
+        Assert.That(pointAfter, Does.Contain("record Point(int X, int Y, int Z = 0);"));
+        Assert.That(userAfter, Does.Contain("new Point(1, 2, 0)"));
+        Assert.That(userAfter, Does.Contain("p with { X = p.X + 1 }"), "The with-expression is untouched");
+        AssertCompiles(("Point.cs", pointAfter), ("User.cs", userAfter));
+    }
+
+    [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("ChangeSignatureResult")] // sentinel:auto-category
+    public async Task RecordPrimaryConstructor_Reorder_RewritesDeclarationAndSites()
+    {
+        const string point = """
+            record Point(int X, string Y);
+            """;
+        const string user = """
+            class User
+            {
+                public Point Make() => new Point(1, "a");
+            }
+            """;
+        SetFiles(("Point.cs", point), ("User.cs", user));
+        var result = await Change("Point.cs", "Point", new ExistingParameterSpec(1), new ExistingParameterSpec(0));
+
+        Assert.That(result.Error, Is.Null, result.Error);
+        var pointAfter = TextOf(result, "Point.cs", point);
+        var userAfter = TextOf(result, "User.cs", user);
+        Assert.That(pointAfter, Does.Contain("record Point(string Y, int X);"));
+        Assert.That(userAfter, Does.Contain("new Point(\"a\", 1)"));
+        AssertCompiles(("Point.cs", pointAfter), ("User.cs", userAfter));
+    }
+
+    [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("ChangeSignatureResult")] // sentinel:auto-category
+    public async Task RecordPrimaryConstructor_RemovePositionalParameter_RefusesNamingMemberRemove()
     {
         const string source = """
             record Point(int X, int Y);
             """;
         SetFiles(("Point.cs", source));
-        var result = await Change("Point.cs", "Point", new ExistingParameterSpec(1), new ExistingParameterSpec(0));
+        var result = await Change("Point.cs", "Point", new ExistingParameterSpec(0));
 
-        Assert.That(result.Error, Does.Contain("'Point' is a type with a primary constructor, and ChangeSignature does not edit primary constructors"));
+        Assert.That(result.Error, Does.Contain("Member(operation: remove)").And.Contain("'Y'"));
+        Assert.That(result.Changes, Is.Empty);
+    }
+
+    [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("ChangeSignatureResult")] // sentinel:auto-category
+    public async Task RecordPrimaryConstructor_RenamePositionalParameter_RefusesNamingRenameSymbol()
+    {
+        const string source = """
+            record Point(int X, int Y);
+            """;
+        SetFiles(("Point.cs", source));
+        // A rename shows as the old parameter left out and a new one in its place.
+        var result = await Change("Point.cs", "Point", new ExistingParameterSpec(0), new NewParameterSpec("Z", "int", "0"));
+
+        Assert.That(result.Error, Does.Contain("RenameSymbol").And.Contain("'Y'"));
         Assert.That(result.Changes, Is.Empty);
     }
 }
