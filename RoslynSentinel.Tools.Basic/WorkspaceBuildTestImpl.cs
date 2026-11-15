@@ -475,7 +475,7 @@ public class WorkspaceBuildTestImpl
 
             var failedRows = testRunResult.Results.Where(r => r.Outcome == TestOutcome.Failed).ToList();
             var statusMessage = SummarizeTestRun(testRunResult, filter);
-            if (TestSuiteFilter.ZeroMatchHint(suite, filter, testRunResult.TotalCount) is { } zeroMatchHint)
+            if (TestSuiteFilter.ZeroMatchHint(suite, filter, testRunResult.TotalCount, scope, scopeName) is { } zeroMatchHint)
             {
                 statusMessage += " " + zeroMatchHint;
             }
