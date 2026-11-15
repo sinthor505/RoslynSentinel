@@ -1,8 +1,11 @@
 using System.Diagnostics;
+using System.Threading;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+
+using ModelContextProtocol.Protocol;
 
 using RoslynSentinel.Common;
 using RoslynSentinel.Common.AgentLoop;
@@ -83,6 +86,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         });
 
         AddResponseGatedExitMessageFilter(mcpBuilder);
+        AddRestoredToolsetListChangedMessageFilter(mcpBuilder);
 
         return mcpBuilder;
     }
@@ -106,6 +110,41 @@ public static class RoslynSentinelServiceExtensionsBasic
             }
 
             await gate.ObserveOutgoingAsync(context.JsonRpcMessage, () => next(context, cancellationToken)).ConfigureAwait(false);
+        }));
+    }
+
+    /// <summary>
+    /// Registers the incoming-message filter that sends one <c>tools/list_changed</c> after the client's <c>initialized</c>
+    /// notification when toolsets were restored from tab state at startup (plan_tab_scoped_toolset_persistence Step 7), so the
+    /// client re-lists the tools it had before the restart. Pass-through for every other message, for a start that did not
+    /// restore, and after the first send. A failed send is logged as a warning and never breaks the message pipeline.
+    /// </summary>
+    private static void AddRestoredToolsetListChangedMessageFilter(IMcpServerBuilder mcpBuilder)
+    {
+        // One send per host: a local captured by the closure, not a static, so several hosts in one process each send once.
+        int sent = 0;
+        mcpBuilder.WithMessageFilters(filters => filters.AddIncomingFilter(next => async (context, cancellationToken) =>
+        {
+            await next(context, cancellationToken).ConfigureAwait(false);
+
+            if (context.JsonRpcMessage is not JsonRpcNotification notification
+                || notification.Method != NotificationMethods.InitializedNotification
+                || context.Services?.GetService<TabToolsetStateStore>()?.RestoredAtStartup != true
+                || Interlocked.CompareExchange(ref sent, 1, 0) != 0)
+            {
+                return;
+            }
+
+            var logger = context.Services?.GetService<ILoggerFactory>()?.CreateLogger("RoslynSentinel.RestoredToolsetListChanged");
+            try
+            {
+                await context.Server.SendNotificationAsync(NotificationMethods.ToolListChangedNotification, cancellationToken).ConfigureAwait(false);
+                logger?.LogInformation("Sent tools/list_changed after initialized: toolsets were restored from tab state.");
+            }
+            catch (Exception ex)
+            {
+                logger?.LogWarning(ex, "Failed to send tools/list_changed after initialized for restored toolsets.");
+            }
         }));
     }
 

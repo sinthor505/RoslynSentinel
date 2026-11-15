@@ -18,6 +18,7 @@ using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Server.Advanced;
 using RoslynSentinel.Tools.Advanced;
 using RoslynSentinel.Tools.Basic;
@@ -315,7 +316,7 @@ public class McpToolsetControlTests
 
     // ---- in-process host ----
 
-    private static IHost BuildHost(bool advanced, string mode, string? includeTools, Pipe? clientToServer = null, Pipe? serverToClient = null)
+    private static IHost BuildHost(bool advanced, string mode, string? includeTools, Pipe? clientToServer = null, Pipe? serverToClient = null, TabToolsetStateStore? tabState = null)
     {
         var activeModes = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { mode };
         var include = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -355,14 +356,39 @@ public class McpToolsetControlTests
             hostBuilder.Services.Add(descriptor);
         }
 
+        if (tabState is not null)
+        {
+            hostBuilder.Services.AddSingleton(tabState);
+        }
+
         return hostBuilder.Build();
+    }
+
+    /// <summary>
+    /// Counts the tools/list_changed notifications one client receives and wakes waiters. Created before the client so the
+    /// notifications sent during the handshake are not missed.
+    /// </summary>
+    private sealed class ListChangedProbe
+    {
+        private int _count;
+
+        public SemaphoreSlim Signal { get; } = new(0);
+
+        public int Count => Volatile.Read(ref _count);
+
+        public void Record()
+        {
+            Interlocked.Increment(ref _count);
+            Signal.Release();
+        }
     }
 
     private sealed class LiveServer : IAsyncDisposable
     {
-        private int _listChanged;
-        private readonly SemaphoreSlim _signal = new(0);
-        private IAsyncDisposable? _registration;
+        public required ListChangedProbe Probe
+        {
+            get; init;
+        }
 
         public required IHost Host
         {
@@ -372,7 +398,7 @@ public class McpToolsetControlTests
         {
             get; init;
         }
-        public int ListChangedCount => Volatile.Read(ref _listChanged);
+        public int ListChangedCount => Probe.Count;
 
         /// <summary>
         /// The initialize-handshake protocol revision. Clients on it get a session-wide list_changed broadcast;
@@ -381,11 +407,11 @@ public class McpToolsetControlTests
         /// </summary>
         public const string LegacyProtocol = "2025-11-25";
 
-        public static async Task<LiveServer> StartAsync(bool advanced, string mode, string? includeTools = null, string? protocolVersion = LegacyProtocol, string[]? startupArgs = null)
+        public static async Task<LiveServer> StartAsync(bool advanced, string mode, string? includeTools = null, string? protocolVersion = LegacyProtocol, string[]? startupArgs = null, TabToolsetStateStore? tabState = null)
         {
             var clientToServer = new Pipe();
             var serverToClient = new Pipe();
-            var host = BuildHost(advanced, mode, includeTools, clientToServer, serverToClient);
+            var host = BuildHost(advanced, mode, includeTools, clientToServer, serverToClient, tabState);
             if (startupArgs is not null)
             {
                 var warnings = ServerStartupHelpers.ApplyStartupToolsets(host.Services, startupArgs);
@@ -398,24 +424,35 @@ public class McpToolsetControlTests
                 serverInput: clientToServer.Writer.AsStream(),
                 serverOutput: serverToClient.Reader.AsStream(),
                 loggerFactory: NullLoggerFactory.Instance);
+            // Registered through the options, not after CreateAsync: the server sends list_changed right after the client's
+            // initialized notification, which can arrive before CreateAsync returns.
+            var probe = new ListChangedProbe();
+            var clientOptions = new McpClientOptions
+            {
+                ProtocolVersion = protocolVersion,
+                Handlers = new McpClientHandlers
+                {
+                    NotificationHandlers =
+                    [
+                        new KeyValuePair<string, Func<JsonRpcNotification, CancellationToken, ValueTask>>(
+                            NotificationMethods.ToolListChangedNotification,
+                            (_, _) =>
+                            {
+                                probe.Record();
+                                return default;
+                            }),
+                    ],
+                },
+            };
             var client = await McpClient.CreateAsync(
                 transport,
-                clientOptions: protocolVersion is null ? null : new McpClientOptions { ProtocolVersion = protocolVersion },
+                clientOptions: clientOptions,
                 cancellationToken: TestContext.CurrentContext.CancellationToken);
 
-            var live = new LiveServer { Host = host, Client = client };
-            live._registration = client.RegisterNotificationHandler(
-                NotificationMethods.ToolListChangedNotification,
-                (_, _) =>
-                {
-                    Interlocked.Increment(ref live._listChanged);
-                    live._signal.Release();
-                    return default;
-                });
-            return live;
+            return new LiveServer { Host = host, Client = client, Probe = probe };
         }
 
-        public Task<bool> WaitForListChangedAsync(TimeSpan timeout) => _signal.WaitAsync(timeout);
+        public Task<bool> WaitForListChangedAsync(TimeSpan timeout) => Probe.Signal.WaitAsync(timeout);
 
         public async Task<string[]> ToolNamesAsync()
         {
@@ -439,11 +476,6 @@ public class McpToolsetControlTests
 
         public async ValueTask DisposeAsync()
         {
-            if (_registration is not null)
-            {
-                await _registration.DisposeAsync();
-            }
-
             await Client.DisposeAsync();
             await Host.StopAsync();
             Host.Dispose();
@@ -478,6 +510,47 @@ public class McpToolsetControlTests
         await Task.Delay(300);
         Assert.That(LiveServer.Text(again), Does.Contain("already off"));
         Assert.That(live.ListChangedCount, Is.EqualTo(2), "a no-op must not notify");
+    }
+
+    [Test]
+    public async Task RestoredStart_SendsOneToolListChangedAfterInitialized()
+    {
+        var stateDir = Path.Combine(Path.GetTempPath(), "rs-tabstate-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new TabToolsetStateStore(stateDir, null) { RestoredAtStartup = true };
+            await using var live = await LiveServer.StartAsync(advanced: true, "claude-lean", tabState: store);
+            Assert.That(await live.WaitForListChangedAsync(TimeSpan.FromSeconds(10)), Is.True, "no tools/list_changed after initialized on a restored start");
+            await Task.Delay(500);
+            Assert.That(live.ListChangedCount, Is.EqualTo(1), "exactly one notification per host");
+        }
+        finally
+        {
+            if (Directory.Exists(stateDir))
+            {
+                Directory.Delete(stateDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
+    public async Task PlainStart_SendsNone()
+    {
+        var stateDir = Path.Combine(Path.GetTempPath(), "rs-tabstate-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new TabToolsetStateStore(stateDir, null) { RestoredAtStartup = false };
+            await using var live = await LiveServer.StartAsync(advanced: true, "claude-lean", tabState: store);
+            await Task.Delay(1000);
+            Assert.That(live.ListChangedCount, Is.EqualTo(0), "a start that did not restore toolsets must not send tools/list_changed");
+        }
+        finally
+        {
+            if (Directory.Exists(stateDir))
+            {
+                Directory.Delete(stateDir, recursive: true);
+            }
+        }
     }
 
     [Test]
