@@ -10,6 +10,7 @@ namespace RoslynSentinel.Tests.Server;
 // no longer offends fails too, so the baseline only ratchets down.
 // Refresh after a migration: set ROSLYNSENTINEL_UPDATE_TOOL_RETURN_BASELINE=1 and run Scan_MatchesBaseline.
 [TestFixture]
+[Category("Ratchet")]
 public class ToolReturnShapeRatchetTests
 {
     private const string BaselineRelativePath = "docs/known-untyped-tool-returns.txt";

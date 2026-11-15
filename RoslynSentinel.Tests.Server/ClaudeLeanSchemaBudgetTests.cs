@@ -19,6 +19,7 @@ namespace RoslynSentinel.Tests.Server;
 [TestFixture]
 [NonParallelizable]
 [Category("ToolClassRegistry")]
+[Category("Ratchet")]
 public class ClaudeLeanSchemaBudgetTests
 {
     // Measured on 2026-10-18 (core claude-lean surface, after the trim in proposal_trim_claude_lean_core_surface.md):

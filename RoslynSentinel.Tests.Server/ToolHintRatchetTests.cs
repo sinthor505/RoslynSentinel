@@ -9,6 +9,7 @@ namespace RoslynSentinel.Tests.Server;
 // syntax must be built with ToolCallHint.Call/Next, or carry a `// hint-ok: reason` comment.
 // The baseline file may only shrink.
 [TestFixture]
+[Category("Ratchet")]
 public class ToolHintRatchetTests
 {
     private const string BaselineRelativePath = "docs/known-handwritten-tool-hints.txt";
