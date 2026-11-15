@@ -1,6 +1,6 @@
 # Plan: tool-experience journal fixes (R1-R25 and owner decisions D1, D2, D4-D7)
 
-**Status:** IN PROGRESS 2026-11-15. Steps 1-23 done (Batch A 6bf9025b..9c450e88; Batches B-C 720d640a..9cbfdc86); Batches D-F remain.
+**Status:** IN PROGRESS 2026-11-15. Steps 1-27, 29-31, 33-38 done (6bf9025b..e197ca35); Step 28 awaits owner, Step 32 deferred, Batch F remains.
 
 ## Problem
 
@@ -563,6 +563,16 @@ in the repo). Observed live: fullBuild refused by two `dotnet test ...Tests.Mode
 - Tests: `CompilerErrorLookupHelperTests` - the CS0103 no-candidate invocation case contains both parameter names and the `addMember` call; the no-invocation case is unchanged.
 - Done when: `Build` 0 errors; dispatcher runs `CompilerErrorLookupHelperTests`.
 - Lane/tier: `implementer` D1 (2 files).
+
+Batches D-E done 2026-11-15: Step 24 14200ef1, 25 651ae8d3 + cdc5d4ad, 26 7a8825d7, 27 714f30c3 + 83b0e19f,
+29 45e34a2c, 30 c49123a4, 31 82aab4e0 + 8dbae9c4, 33 d50b5150, 34 d8b88556, 35 192716e9, 36 03c383b0 (inline
+budget is ~15K chars, not 12K), 37 bb21a5a2, 38 0682c103; lean budget 45000 -> 45200 in e197ca35.
+Not done: Step 28 (O14 check failed: a `--blame-hang` timeout leaves a TRX with zero results and a ~323 MB
+dump; stdout does name the hung test) - owner question. Step 32 deferred: the dead drift latch has 54 hits in
+19 files, far over the planned 2 files; needs a staged removal.
+Ratchet regressions found by the batch-end full runs (filtered runs missed them, the R25 problem):
+FirstMatchRatchetTests and PathComparisonRatchetTests (Steps 5 and 9) and ToolHintRatchetTests (Step 18);
+fix slice dispatched 2026-11-15.
 
 ### Batch F - hooks, scripts and docs (no server restart; text-neutral first)
 
