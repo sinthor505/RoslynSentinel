@@ -1,6 +1,6 @@
 # Plan: tool-experience journal fixes (R1-R25 and owner decisions D1, D2, D4-D7)
 
-**Status:** IN PROGRESS 2026-11-15. Steps 1-14 done (Batch A, 6bf9025b..9c450e88); Batches B-F remain.
+**Status:** IN PROGRESS 2026-11-15. Steps 1-23 done (Batch A 6bf9025b..9c450e88; Batches B-C 720d640a..9cbfdc86); Batches D-F remain.
 
 ## Problem
 
@@ -415,6 +415,17 @@ the shared `ChangeSignatureAsync` pipeline (5 files); Step 10 split for `IGitOpe
 - Change: dispatcher runs `ResidualMentionScannerTests`; if green and no reproduction, note R22 as not reproduced in the finding's R22 row and in `TODO.md` if tracked.
 - Done when: `ResidualMentionScannerTests` green and the note written; otherwise open a fix slice naming the reproduced file.
 - Lane/tier: dispatcher (no implementer). Pair with any step.
+
+Batches B-C done 2026-11-15: Step 15 720d640a, 16 66183759, 17 71bbeff2, 18 b6d80216, 19 23efb288,
+20 9b7ad049, 21 0fbb2348, 22 2e5a3601, 23 closed not reproduced (9cbfdc86). Deviations: Step 15 keeps
+`symbolKind` rejected in text/attribute/declaration modes per O5; Step 21 flipped four sites (the
+addTopLevelType and enum-add sites are `!autoStage` branches that skip the gate, so `false` is correct).
+
+Correction 2026-11-15 for Step 24 (R15): ModelEval runs use the CLI form `--artifacts-path <dir>`
+(`roslynsentinel-modeleval.ps1`), not `-p:ArtifactsPath=`; the probe skip must match both spellings, and
+only when the directory is outside the repo's own `bin/obj` (do not skip `-o/--output`, which leaves `obj`
+in the repo). Observed live: fullBuild refused by two `dotnet test ...Tests.ModelEval.csproj --artifacts-path
+...\_scratchbuild_112/113` processes.
 
 ### Batch D - build, test, git, attribution, drift
 
