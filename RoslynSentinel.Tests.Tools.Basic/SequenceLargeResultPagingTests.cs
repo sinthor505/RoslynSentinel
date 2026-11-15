@@ -92,6 +92,26 @@ public class SequenceLargeResultPagingTests
 
     private static List<string> Strings(JsonNode? array) => array is JsonArray a ? a.Select(n => n!.GetValue<string>()).ToList() : [];
 
+    // Marshals a stored list (declaring totalRecords) and pages it to the last page, returning that page's status message.
+    private async Task<string?> LastPageStatusAsync(TwoLists source, int? totalRecords)
+    {
+        var (resultId, first) = await MarshalAsync(new SentinelCallToolResult<TwoLists> { IsError = false, SuccessData = source, TotalRecords = totalRecords });
+        int nextOffset = first["largeResult"]!["nextOffset"]!.GetValue<int>();
+        for (int guard = 0; guard < 100; guard++)
+        {
+            var result = await PageAsync(resultId, nextOffset);
+            EnvelopePageResult page = PageOf(result);
+            if (!page.HasMoreData)
+            {
+                return result.StatusMessage;
+            }
+
+            nextOffset = page.NextOffset!.Value;
+        }
+
+        return null;
+    }
+
     [Test]
     public async Task TwoLists_ChainedToTheEnd_ReturnEveryRecordOnce_Interleaved_WithANextOffsetChain()
     {
@@ -148,6 +168,23 @@ public class SequenceLargeResultPagingTests
         Assert.That(pages, Is.GreaterThan(2), "the fixture must need several pages");
         Assert.That(alpha, Is.EqualTo(source.Alpha), "every alpha record exactly once, in order");
         Assert.That(beta, Is.EqualTo(source.Beta), "every beta record exactly once, in order");
+    }
+
+    [Test]
+    public async Task CappedList_LastPageSaysTheToolCappedItAndNamesTheTrueTotal()
+    {
+        string? status = await LastPageStatusAsync(BigTwoLists(), totalRecords: 19356);
+        Assert.That(status, Does.StartWith("COMPLETE:").And.Contain("That is the end of the sequence; there is nothing more to fetch."));
+        Assert.That(status, Does.Contain("The tool capped this list at 200 of 19356 records; narrow the query to see the rest."));
+    }
+
+    [Test]
+    public async Task UncappedList_LastPageDoesNotSayCapped()
+    {
+        TwoLists source = BigTwoLists();
+        string? status = await LastPageStatusAsync(source, totalRecords: source.Alpha.Count + source.Beta.Count);
+        Assert.That(status, Does.StartWith("COMPLETE:").And.Contain("nothing more to fetch"));
+        Assert.That(status, Does.Not.Contain("capped"));
     }
 
     [Test]

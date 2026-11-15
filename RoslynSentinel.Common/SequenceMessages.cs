@@ -22,7 +22,6 @@ public static class SequenceMessages
             return $"COMPLETE: the requested offset is at or past the end of the sequence ({page.Total} {units}); nothing is returned and there is nothing more to fetch.";
         }
 
-        // TODO "COMPLETE ... nothing more to fetch" describes the stored rows only: a capped Search(mode: text) with 19356 matches pages to "195-200 of 200" here with hasMoreData false and no warning. Carry the tool's own truncation signal onto the last page.
         string prefix = nextFetchCall is null ? "COMPLETE:" : "INCOMPLETE:";
         string suffix = nextFetchCall is null
             ? " That is the end of the sequence; there is nothing more to fetch."
@@ -35,7 +34,11 @@ public static class SequenceMessages
             string what = page.Offset == 0 && nextFetchCall is not null
                 ? $"{page.Returned} of {page.Total} records returned."
                 : $"records {first}-{last} of {page.Total} returned.";
-            return $"{prefix} {what}{suffix}";
+            // On the last page the tool's own totalRecords can exceed the stored rows when the tool capped the list.
+            string capped = nextFetchCall is null && full["totalRecords"] is JsonValue totalNode && totalNode.TryGetValue(out int totalRecords) && totalRecords > page.Total
+                ? $" The tool capped this list at {page.Total} of {totalRecords} records; narrow the query to see the rest."
+                : string.Empty;
+            return $"{prefix} {what}{suffix}{capped}";
         }
 
         string text = ResultPager.SelectNode(full, sequence.Paths[0]) is JsonValue value && value.TryGetValue(out string? s) ? s : string.Empty;
