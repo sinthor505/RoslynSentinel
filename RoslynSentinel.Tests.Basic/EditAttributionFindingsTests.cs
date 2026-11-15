@@ -88,6 +88,42 @@ public class EditAttributionFindingsTests
     }
 
     [Test]
+    public void ForPaths_ForeignSessionDiffersFromCaller_NamesWriterSession()
+    {
+        var ledger = new EditAttributionLedger();
+        ledger.Append(PathA, new ToolCallContext("agent-2", "coder", "WriteFile", null, 0) { SessionId = "abc12345-ffff" }, EditAttributionOp.Write, "h1");
+
+        var findings = EditAttributionFindings.ForPaths(ledger, "agent-1", new[] { PathA }, DateTime.UtcNow, "zzz");
+
+        Assert.That(findings, Has.Count.EqualTo(1));
+        Assert.That(findings[0].Message, Does.Contain("(session abc12345)"));
+    }
+
+    [Test]
+    public void ForPaths_ForeignSessionEqualsCaller_OmitsSessionLabel()
+    {
+        var ledger = new EditAttributionLedger();
+        ledger.Append(PathA, new ToolCallContext("agent-2", "coder", "WriteFile", null, 0) { SessionId = "abc12345-ffff" }, EditAttributionOp.Write, "h1");
+
+        var findings = EditAttributionFindings.ForPaths(ledger, "agent-1", new[] { PathA }, DateTime.UtcNow, "abc12345-ffff");
+
+        Assert.That(findings, Has.Count.EqualTo(1));
+        Assert.That(findings[0].Message, Does.Not.Contain("(session"));
+    }
+
+    [Test]
+    public void ForPaths_ForeignEntryWithoutSession_OmitsSessionLabel()
+    {
+        var ledger = new EditAttributionLedger();
+        ledger.Append(PathA, new ToolCallContext("agent-2", "coder", "WriteFile", null, 0), EditAttributionOp.Write, "h1");
+
+        var findings = EditAttributionFindings.ForPaths(ledger, "agent-1", new[] { PathA }, DateTime.UtcNow, "zzz");
+
+        Assert.That(findings, Has.Count.EqualTo(1));
+        Assert.That(findings[0].Message, Does.Not.Contain("(session"));
+    }
+
+    [Test]
     public void ForCurrentCaller_ManagerWithoutLedgerProvider_ReturnsEmpty()
     {
         ToolCallContext.Set(new ToolCallContext("agent-1", "coder", "WriteFile", null, 0));

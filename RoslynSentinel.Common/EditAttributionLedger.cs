@@ -4,9 +4,9 @@ namespace RoslynSentinel.Common;
 public enum EditAttributionOp { Write, Create, Delete }
 
 /// <summary>
-/// One recorded write. HashAfter is null for a delete. AgentId is null when the call carried no identity.
+/// One recorded write. HashAfter is null for a delete. AgentId is null when the call carried no identity. SessionId is the call's session, null when it carried none.
 /// </summary>
-public sealed record EditAttribution(long Seq, string? AgentId, string? AgentType, string? Tool, string? Reason, DateTime UtcTime, EditAttributionOp Op, string? HashAfter);
+public sealed record EditAttribution(long Seq, string? AgentId, string? AgentType, string? Tool, string? Reason, DateTime UtcTime, EditAttributionOp Op, string? HashAfter, string? SessionId = null);
 
 /// <summary>
 /// Bounded per-file history of writes, in memory only, not persisted, one instance per PersistentWorkspaceManager.
@@ -43,7 +43,8 @@ public class EditAttributionLedger
                 SanitizeReason(context?.Reason),
                 DateTime.UtcNow,
                 op,
-                hashAfter);
+                hashAfter,
+                context?.SessionId);
             if (!_byPath.TryGetValue(path, out var list))
             {
                 list = new List<EditAttribution>();

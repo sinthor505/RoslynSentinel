@@ -4,9 +4,9 @@ public static class EditAttributionFindings
 {
     /// <summary>
     /// Builds Info findings for distinct paths whose latest edit attribution ledger entry was written by an agent other than the caller.
-    /// Returns an empty list when the caller id is null or when reporting fails; reporting never fails a call.
+    /// Returns an empty list when the caller id is null or when reporting fails; reporting never fails a call. When the writer's session differs from callerSessionId, the message names that session (first 8 chars).
     /// </summary>
-    public static IReadOnlyList<Finding> ForPaths(EditAttributionLedger ledger, string? callerAgentId, IEnumerable<string> paths, DateTime utcNow)
+    public static IReadOnlyList<Finding> ForPaths(EditAttributionLedger ledger, string? callerAgentId, IEnumerable<string> paths, DateTime utcNow, string? callerSessionId = null)
     {
         if (callerAgentId is null)
         {
@@ -37,7 +37,10 @@ public static class EditAttributionFindings
                 foreignCount++;
                 if (findings.Count < maxFileFindings)
                 {
-                    var message = $"{path} was last changed by agent '{entry.AgentId}' (type {entry.AgentType ?? "unknown"}) via {entry.Tool ?? "unknown"}, {FormatAge(utcNow - entry.UtcTime)} ago: {entry.Reason ?? "no reason recorded"}";
+                    var sessionLabel = entry.SessionId is null || string.Equals(entry.SessionId, callerSessionId, StringComparison.Ordinal)
+                        ? string.Empty
+                        : $" (session {entry.SessionId[..Math.Min(8, entry.SessionId.Length)]})";
+                    var message = $"{path} was last changed by agent '{entry.AgentId}'{sessionLabel} (type {entry.AgentType ?? "unknown"}) via {entry.Tool ?? "unknown"}, {FormatAge(utcNow - entry.UtcTime)} ago: {entry.Reason ?? "no reason recorded"}";
                     findings.Add(new Finding("EditAttribution", message, FindingSeverity.Info));
                 }
             }
@@ -91,6 +94,6 @@ public static class EditAttributionFindings
             return Array.Empty<Finding>();
         }
 
-        return ForPaths(ledger, callerId, paths, DateTime.UtcNow);
+        return ForPaths(ledger, callerId, paths, DateTime.UtcNow, ToolCallContext.Current?.SessionId);
     }
 }
