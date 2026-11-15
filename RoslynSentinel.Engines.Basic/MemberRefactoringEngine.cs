@@ -2524,43 +2524,12 @@ public class MemberRefactoringEngine
 
     public async Task<DocumentEditResult> ReplaceMemberAsync(FilePathWrapper filePath, string memberName, string newSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containerName = null, CancellationToken cancellationToken = default)
     {
-        // excludeInterfaceMembers: false -- replace must be able to target an interface's own
-        // member declaration (e.g. ISolutionProvider.CurrentSolution), not just implementers.
-        // See docs/current/blockers/blocking_error_member_replace_interface_notfound.md.
-        // PreferNonInterfaceMember still runs unconditionally below: the old resolver's
-        // excludeInterfaceMembers only gated whether interface members entered the candidate pool
-        // at all, not whether the implementer-preference narrowing ran once both were present.
-        // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
-        var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = DocumentLookup.RequireDocument(solution, filePath);
-
-        var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var sourceText = await document.GetTextAsync(cancellationToken);
-        if (root == null || sourceText == null)
-        {
-            throw new ToolInvalidArgumentException($"Could not read '{filePath}' as a C# syntax tree, so Member cannot replace the member. It may not be a C# document in the loaded solution: check the path with {ToolCallHint.Call("ReadFile", ("filePath", filePath.ToString()))}, or reload with {ToolCallHint.Call("LoadSolution", ("forceReload", "true"))}.");
-        }
-
-        SyntaxNode? member;
-        string? snippetWarning;
-        var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.ResolveCandidates(root, sourceText, memberName, cancellationToken)
-            .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember))
-            .ToList());
-        memberCandidates = SyntaxTargetResolver.FilterByContainingType(memberCandidates, containerName);
-        var resolved = SyntaxTargetResolver.ResolveBySnippetWithWarning(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-            (candidates, matches, failureMode) => SyntaxTargetResolver.BuildOverloadHintForCandidates(candidates, matches, failureMode, sourceText, document.FilePath ?? string.Empty, "replace", memberName), trustSingleCandidate: true, filePath: document.FilePath ?? string.Empty);
-        member = resolved.Candidate?.Node;
-        snippetWarning = resolved.Warning;
-
-        if (member == null)
-        {
-            throw new ToolNotFoundException(await MemberNotFoundDetail.BuildAsync(document, root, memberName, containerName, includeHead: true, cancellationToken), MissingTargetKinds.Member, memberName);
-        }
+        var (_, document, root, member, snippetWarning) = await ResolveReplaceTargetAsync(filePath, memberName, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken);
 
         // Must run before the ContainsDiagnostics check below: a multi-member source always has
         // parse diagnostics (the 2nd declaration is skipped-token trivia on the 1st), so checking
         // diagnostics first misreported it as "not a valid member declaration".
-        // TODO replace still takes one declaration; allow N when exactly one declaration matches the target, once the addMember batching is measured
+        // TODO the tool layer (Step 6) still calls this single-declaration path; ReplaceMemberWithAdditionsAsync takes N declarations when exactly one matches the target by name and kind
         var multipleMembersIssue = DetectMultipleMemberDeclarations(newSource, "replace", memberName);
         if (multipleMembersIssue != null)
         {
@@ -2620,16 +2589,156 @@ public class MemberRefactoringEngine
         };
     }
 
-    // Stub: Member(replace) variant that also accepts additional declarations (Step 5 contract, not yet called).
-    public Task<DocumentEditResult> ReplaceMemberWithAdditionsAsync(FilePathWrapper filePath, string memberName, string newSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containerName = null, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Loads the committed solution and resolves the single member that Member(replace) targets (memberName, container filter and
+    /// contextSnippet/lineBefore/lineAfter), shared by <see cref="ReplaceMemberAsync"/> and <see cref="ReplaceMemberWithAdditionsAsync"/>.
+    /// The anchor is resolved against the file as it is now, so it can only ever name an existing member, never one being added.
+    /// </summary>
+    private async Task<(Solution Solution, Document Document, SyntaxNode Root, SyntaxNode Member, string? SnippetWarning)> ResolveReplaceTargetAsync(FilePathWrapper filePath, string memberName, string? contextSnippet, string? lineBefore, string? lineAfter, string? containerName, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException(); // TODO implement (Step 5)
+        // excludeInterfaceMembers: false -- replace must be able to target an interface's own
+        // member declaration (e.g. ISolutionProvider.CurrentSolution), not just implementers.
+        // See docs/current/blockers/blocking_error_member_replace_interface_notfound.md.
+        // PreferNonInterfaceMember still runs unconditionally below: the old resolver's
+        // excludeInterfaceMembers only gated whether interface members entered the candidate pool
+        // at all, not whether the implementer-preference narrowing ran once both were present.
+        // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
+        var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var document = DocumentLookup.RequireDocument(solution, filePath);
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+        {
+            throw new ToolInvalidArgumentException($"Could not read '{filePath}' as a C# syntax tree, so Member cannot replace the member. It may not be a C# document in the loaded solution: check the path with {ToolCallHint.Call("ReadFile", ("filePath", filePath.ToString()))}, or reload with {ToolCallHint.Call("LoadSolution", ("forceReload", "true"))}.");
+        }
+
+        var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.ResolveCandidates(root, sourceText, memberName, cancellationToken)
+            .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember))
+            .ToList());
+        memberCandidates = SyntaxTargetResolver.FilterByContainingType(memberCandidates, containerName);
+        var resolved = SyntaxTargetResolver.ResolveBySnippetWithWarning(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+            (candidates, matches, failureMode) => SyntaxTargetResolver.BuildOverloadHintForCandidates(candidates, matches, failureMode, sourceText, document.FilePath ?? string.Empty, "replace", memberName), trustSingleCandidate: true, filePath: document.FilePath ?? string.Empty);
+        var member = resolved.Candidate?.Node;
+        if (member == null)
+        {
+            throw new ToolNotFoundException(await MemberNotFoundDetail.BuildAsync(document, root, memberName, containerName, includeHead: true, cancellationToken), MissingTargetKinds.Member, memberName);
+        }
+
+        return (solution, document, root, member, resolved.Warning);
     }
 
-    // Stub: splits source into member declarations; wraps the probe-class parse in DetectMultipleMemberDeclarations (Step 5 contract, not yet called).
+    /// <summary>
+    /// Member(replace) for a newMemberSource that holds several declarations: exactly one declaration with the target's name AND member
+    /// kind replaces the target, and the others are added after it in source order, in one write (one <c>UpdatedText</c>, so one compile
+    /// gate and one changeId). Zero or two-plus same-name same-kind declarations are rejected with the multi-declaration message of
+    /// <see cref="DetectMultipleMemberDeclarations"/>. Each declaration keeps the silent-drop guard (a malformed declaration, a stray '}'
+    /// or an incomplete member rejects the whole call, nothing is written). A source with zero or one declaration takes the
+    /// <see cref="ReplaceMemberAsync"/> path unchanged, so its messages and outcomes are the same as before.
+    /// The anchor (contextSnippet/lineBefore/lineAfter) only resolves the target in the file as it is now, so it cannot name an added member.
+    /// </summary>
+    public async Task<DocumentEditResult> ReplaceMemberWithAdditionsAsync(FilePathWrapper filePath, string memberName, string newSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containerName = null, CancellationToken cancellationToken = default)
+    {
+        var multipleMembersIssue = DetectMultipleMemberDeclarations(newSource, "replace", memberName);
+        if (multipleMembersIssue == null)
+        {
+            // One declaration, a fragment or unparsable text: the single-declaration path owns the diagnosis and the messages.
+            return await ReplaceMemberAsync(filePath, memberName, newSource, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken);
+        }
+
+        var (solution, document, root, resolvedTarget, snippetWarning) = await ResolveReplaceTargetAsync(filePath, memberName, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken);
+
+        // Every declaration is parsed and guarded before anything is built, so a bad one rejects the whole call.
+        var declarations = SplitMemberDeclarations(newSource);
+
+        if (resolvedTarget is not MemberDeclarationSyntax target || target.Parent is not TypeDeclarationSyntax container)
+        {
+            throw new ToolTargetIneligibleException($"'{memberName}' is not a member of a class, struct, record or interface, so additional declarations cannot be added after it. Replace it with one declaration, or add the other declarations with {ToolCallHint.Call("Member", ("operation", "addMember"))}.");
+        }
+
+        var targetName = SyntaxTargetResolver.GetMemberName(target);
+        var matches = declarations
+            .Where(d => d.Kind() == target.Kind() && string.Equals(SyntaxTargetResolver.GetMemberName(d), targetName, StringComparison.Ordinal))
+            .ToList();
+        if (matches.Count != 1)
+        {
+            throw new ToolInvalidArgumentException($"{multipleMembersIssue} Matching: replace-with-additions needs exactly one declaration of kind {target.Kind().ToString().Replace("Declaration", string.Empty)} named '{targetName}' to replace the target, and newMemberSource has {matches.Count}.");
+        }
+
+        var replacement = matches[0];
+        var additions = declarations.Where(d => !ReferenceEquals(d, replacement)).ToList();
+        var eol = await _workspaceManager.ResolveEolAsync(document, cancellationToken);
+
+        // Step 1: the replacement, formatted exactly as ReplaceMemberAsync does (a doc comment in the source replaces the old one).
+        var mergedLeading = MergeLeadingTriviaForReplace(target, replacement);
+        var replacedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, target,
+            mergedLeading.HasValue ? replacement.WithLeadingTrivia(mergedLeading.Value) : replacement,
+            eol, cancellationToken,
+            mergedLeading.HasValue ? RoslynFormattingHelper.TriviaEditIntent.ReplaceLeading : RoslynFormattingHelper.TriviaEditIntent.PreserveOld);
+
+        // Step 2: the additions go after the replaced member through the AddMembersAsync insertion path. They are inserted into the
+        // text step 1 produced (a document that holds the replacement), so one UpdatedText comes out and the replacement is in place
+        // when the additions are bound-checked.
+        var replacedSolution = solution.WithDocumentText(document.Id, SourceText.From(replacedText));
+        var replacedDocument = replacedSolution.GetDocument(document.Id)!;
+        var replacedRoot = await replacedDocument.GetSyntaxRootAsync(cancellationToken);
+        var targetIndex = container.Members.IndexOf(target);
+        var replacedContainer = replacedRoot?.DescendantNodes().OfType<TypeDeclarationSyntax>()
+            .FirstOrDefault(t => t.SpanStart == container.SpanStart && t.Kind() == container.Kind() && t.Identifier.ValueText == container.Identifier.ValueText);
+        if (replacedRoot == null || replacedContainer == null || targetIndex < 0 || replacedContainer.Members.Count != container.Members.Count)
+        {
+            throw new InvalidOperationException($"ReplaceMemberWithAdditionsAsync: could not locate '{container.Identifier.ValueText}' after replacing '{memberName}'; nothing was written. This is a bug in the replace-with-additions path.");
+        }
+
+        var insertIndex = targetIndex + 1;
+        var updatedText = await RoslynFormattingHelper.InsertMemberDeclarationsAndFormatInsertionAsync(replacedDocument, replacedRoot, replacedContainer, insertIndex, additions, eol, cancellationToken);
+
+        // The binding check covers what the additions can capture. It only matters when an added name already exists somewhere in the
+        // solution as it is now (a name absent there has no existing call to capture, and the replaced member's own calls to a new
+        // helper are the point of the call). The replaced text is the baseline so the replacement itself is not compared.
+        var addedNames = additions.Select(AddMemberCallBindingCheck.CheckedNameOf).OfType<string>().Distinct(StringComparer.Ordinal).ToList();
+        foreach (var addedName in addedNames)
+        {
+            if (await AddMemberCallBindingCheck.NameAppearsAsync(solution, addedName, cancellationToken))
+            {
+                await AddMemberCallBindingCheck.RequireKeepsBindingsAsync(replacedSolution, replacedDocument, replacedContainer, additions, insertIndex, updatedText, cancellationToken);
+                break;
+            }
+        }
+
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = $"// Replaced with {DescribeParsedMember(replacement)}; added {DescribeAddedMembers(additions)} after it.",
+            UpdatedText = updatedText,
+            Warnings = snippetWarning == null ? null : new[] { snippetWarning }
+        };
+    }
+
+    /// <summary>
+    /// Splits newMemberSource into its member declarations (one or more) and guards each one: a stray '}', an incomplete member
+    /// (a statement or body fragment) or any declaration with parse errors throws a ToolInvalidArgumentException, so the declarations
+    /// are applied together or not at all. Wraps the probe-class parse of <see cref="DetectMultipleMemberDeclarations"/>.
+    /// </summary>
     internal static IReadOnlyList<MemberDeclarationSyntax> SplitMemberDeclarations(string source)
     {
-        throw new NotImplementedException(); // TODO implement (Step 5)
+        if (DetectUnbalancedClosingBrace(source) is { } braceIssue)
+        {
+            throw new ToolInvalidArgumentException(braceIssue);
+        }
+
+        var declarations = ParseNewMemberDeclarations(source, "newMemberSource is not a valid member declaration. Provide each full member (signature + body, e.g. 'private decimal Foo() { ... }'), not just a statement or method body fragment.");
+        for (var i = 0; i < declarations.Count; i++)
+        {
+            if (declarations[i] is IncompleteMemberSyntax || declarations[i].ContainsDiagnostics)
+            {
+                var error = declarations[i].GetDiagnostics().FirstOrDefault(d => d.Severity == DiagnosticSeverity.Error)?.GetMessage() ?? "incomplete member";
+                throw new ToolInvalidArgumentException($"newMemberSource holds {declarations.Count} member declaration(s); declaration {i + 1} does not parse as a full member: {error}. The declarations are applied together or not at all.");
+            }
+        }
+
+        return declarations;
     }
 
     // Leading trivia for a replace whose newMemberSource carries a doc comment, or null to keep the old trivia (PreserveOld).
