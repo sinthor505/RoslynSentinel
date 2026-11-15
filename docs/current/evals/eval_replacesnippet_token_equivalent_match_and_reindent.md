@@ -1,6 +1,6 @@
 # Finding: ReplaceSnippet token-equivalent matching and newContent re-indent remove indentation rejections in the evals
 
-**Status:** OPEN 2026-11-15. Measurement for plan_replacesnippet_token_equivalent_match_and_reindent Step 13; no fix needed for the change itself; V13 and V10 task failures are not traced.
+**Status:** OPEN 2026-11-15. Measurement for plan_replacesnippet_token_equivalent_match_and_reindent Step 13; no fix needed for the change itself; V13 and V10 failures traced to the eval harness and prompt (fixes open for the ShippingKind eval owner).
 
 ## Context
 
@@ -46,7 +46,12 @@ Pass rate per host and test:
 
 ## Root cause
 
-Not traced for the task failures. V13 failed 10 of 10 on contract-change checks and V10 failed on "standard" literal checks (first-pass log extraction, assertion text not re-verified). Hypothesis, unverified: the V13 failures follow peer commit e09fbca0 (ShippingKind contract-change checks for steps 4-6, 2026-11-15 01:11), since V13 runs earlier the same night (session roslynsentinel-b2, 05:49 UTC) passed; none of the failures shows a ReplaceSnippet rejection or re-indentation on the failing lines. Lists of the 13 ValidationFailed and 8 NotFound calls: `C:\tmp\a6ec_scratch\vf.txt`, `nf.txt`.
+Traced 2026-11-15 (failure-root-cause-analyst); neither failure class is caused by the ReplaceSnippet change: runs with no token-accepted or re-indented call fail with the identical message, and in V10 the failing line came from an exact one-line match.
+
+- **V13 0/10: harness defect.** `ShippingKindStepChecks.RunContractTestsAsync` (invoked from `CheckAsync` for step >= 4, introduced with e09fbca0, already in the dirty tree of the first failing runs at ae6f7f07) rewrites `ShippingKinds.cs` with the step-6 values (`ShippingKindStepGoldens.cs:275`) and runs the whole test project. V13 seeds the visible `ContosoOrders.Tests/ShippingBehaviourTests.cs` (`ShippingKindStepGoldens.cs:24-56`), whose `InlineData` hard-codes `"standard"`, `"pickup"` and the rest, so its 8 theory cases fail regardless of the model's code ("contract-change check failed: 8 of 30 failed", `ShippingKindSteppedAgentTests.cs:188`). Runs whose tree equals the step-5 golden (empty `step-5.golden.diff`, 112 run 081217-208, 113 run 081230-398) still fail. Step 5 may not edit that file. The golden self-test builds with `withVisibleTests: false` (`ShippingKindStepGoldenTests.cs:32`), so it never exercised this. V12 shares the fixture and is affected the same way. The earlier passing V13 runs (tested 4de70ccc) predate the check.
+- **V10 2/5 (112), 4/5 (113): partial edit the environment never surfaces.** The model replaced only the `IsExpedited` line in `DeliveryEstimator.cs` and left `if (kind == "pickup")` / `if (kind == "standard")` (literal check, `ShippingKindStepChecks.cs:~62`: "contains the literal \"standard\"; use the ShippingKinds constant instead"). In 112 run 075622, turn 5's reasoning lists all four replacements but the call covers one line; turn 6 re-reads the file and says "The changes look correct". `Build` succeeds, no test covers literals, V10 has no visible tests and its prompt has no end-state or verify sentence. V10 on 112 was 1/5 in the earlier 0225 batch, so this is not a regression.
+
+Lists of the 13 ValidationFailed and 8 NotFound calls: `C:\tmp\a6ec_scratch\vf.txt`, `nf.txt`.
 
 ## Why it matters
 
@@ -55,7 +60,7 @@ The indentation-only rejection class is gone (4.7% of calls before, 0 now) witho
 ## Recommendation
 
 - Decided: keep the change; close the plan.
-- Open: trace the V13 0/10 and V10 2/5 + 4/5 failures with `failure-root-cause-analyst` before reading them as task-difficulty results (owner of the ShippingKind eval decides).
+- Open, for the ShippingKind eval owner (ranked): (1) contract check must neutralise or exclude the visible-tests fixture (delete `ShippingBehaviourTests.cs` before the rewrite, or filter to the `ShippingKindContractStep*` classes), plus a golden self-test with `withVisibleTests: true`; until then V12/V13 results from ae6f7f07 onward are invalid. (2) V10 prompt: an end-state sentence and a verify step ("no quoted shipping kind value remains; re-read both files"); the literal check could name the offending line. (3) The `CheckFailed` detail should name the failing test classes, not only the first failure.
 - Open: the remaining 13 ValidationFailed and 8 NotFound calls are the next ReplaceSnippet friction; not related to whitespace.
 
 ## Out of scope
