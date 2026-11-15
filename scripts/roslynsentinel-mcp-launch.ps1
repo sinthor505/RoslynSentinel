@@ -226,6 +226,8 @@ if ($prodMode) {
     # Where the sweep saves each stale instance's server-telemetry_*.json before deleting the folder. A SIBLING of
     # instances\ (not under it) and created lazily by Save-StaleInstanceTelemetry, so no sweep loop enumerates it.
     $telemetryRoot = Join-Path $prodRoot 'telemetry'
+    # Per-tab durable state folders (one per Claude Code tab, see the owner probe). Created lazily, swept after 7 days.
+    $tabStateRoot = Join-Path $prodRoot 'tabstate'
     try {
         foreach ($d in @($prodRoot, $buildsRoot, $wtRoot, $instancesDirRoot)) {
             New-Item -ItemType Directory -Path $d -Force | Out-Null
@@ -239,6 +241,7 @@ if ($prodMode) {
 }
 else {
     $binVscodeRoot = Join-Path $repoRoot 'bin-vscode'
+    $tabStateRoot = Join-Path $binVscodeRoot 'tabstate'
     New-Item -ItemType Directory -Path $binVscodeRoot -Force | Out-Null
     $logRoot = $binVscodeRoot
 }
@@ -363,10 +366,13 @@ if ($BuildOnly) { Write-LaunchLog "Prebuild (BuildOnly) started, PID=$PID" }
 Write-LaunchLog "Instance ID '$instanceId' derived from random token='$instanceToken', repoHash='$repoHash' (repo: $devRepoRoot, layout: $layoutDescription)."
 Write-StartupLog "Instance ID '$instanceId' derived OK -> per-instance log is $logPath (subsequent steps logged there, not here)."
 
-# Diagnostic only (not used for keying yet): records which Claude Code tab spawned this server, to test
-# whether the owning claude.exe (PID + creation time) or CLAUDE_CODE_SESSION_ID could key a durable
-# per-tab state folder. Each VS Code tab runs its own claude.exe, unlike %VSCODE_PID% (see .DESCRIPTION).
+# Records which Claude Code tab spawned this server. The owning claude.exe (PID + creation time) is the
+# key of the durable per-tab state folder ($tabStateDir, passed to the server as --tab-state-dir). Each
+# VS Code tab runs its own claude.exe, unlike %VSCODE_PID% (see .DESCRIPTION). No claude.exe ancestor
+# leaves $tabKey null and no flag is passed. $procById (the process table) is also used by the tabstate sweep.
 # Best-effort: any failure is logged and ignored so it can never block a launch.
+$tabKey = $null
+$procById = $null
 if (-not $BuildOnly) {
     try {
         $procById = @{}
@@ -378,11 +384,24 @@ if (-not $BuildOnly) {
             if ($p.Name -eq 'claude.exe') { $claudeOwner = $p; break }
             $walkId = [int]$p.ParentProcessId
         }
-        $ownerText = if ($claudeOwner) { "claude.exe PID=$($claudeOwner.ProcessId) created=$($claudeOwner.CreationDate.ToString('o'))" } else { 'no claude.exe ancestor found' }
+        if ($claudeOwner) {
+            $tabKey = "claude-$($claudeOwner.ProcessId)-$($claudeOwner.CreationDate.ToUniversalTime().ToString('yyyyMMddHHmmss'))"
+        }
+        $ownerText = if ($claudeOwner) { "claude.exe PID=$($claudeOwner.ProcessId) created=$($claudeOwner.CreationDate.ToString('o')) tabKey=$tabKey" } else { 'no claude.exe ancestor found' }
         Write-LaunchLog "Owner probe: $ownerText; env CLAUDE_PID='$env:CLAUDE_PID' CLAUDE_CODE_SESSION_ID='$env:CLAUDE_CODE_SESSION_ID'; chain: $($chain -join ' <- ')"
     }
     catch {
         Write-LaunchLog "Owner probe failed (ignored): $($_.Exception.Message)"
+    }
+}
+# Durable per-tab state folder, keyed by repo and owning claude.exe. Null when there is no owner (no flag then).
+$tabStateDir = $null
+if ($tabKey) {
+    $tabStateDir = Join-Path $tabStateRoot "$repoHash-$tabKey"
+    try { New-Item -ItemType Directory -Path $tabStateDir -Force -ErrorAction Stop | Out-Null }
+    catch {
+        Write-LaunchLog "Tab state folder '$tabStateDir' not created (ignored): $($_.Exception.Message)"
+        $tabStateDir = $null
     }
 }
 #endregion
@@ -402,6 +421,61 @@ if ($env:ROSLYNSENTINEL_SWEEP_MIN_AGE_SECONDS -match '^\d+$') {
     $minimumAgeForSweep = [TimeSpan]::FromSeconds([int]$env:ROSLYNSENTINEL_SWEEP_MIN_AGE_SECONDS)
 }
 #endregion
+
+# Removes tabstate\<repoHash>-claude-<pid>-<stamp> folders whose LastWriteTime is older than 7 days and whose
+# owning claude.exe (same PID and creation time, from the owner probe's $procById) is no longer running. The
+# 7 days let a resumed tab seed from a closed tab's folder. Skipped when the probe did not run or found nothing.
+# Never throws: a sweep failure must not stop the server from starting.
+function Invoke-TabStateSweep {
+    param([string]$TabStateRoot)
+
+    try {
+        if (-not (Test-Path -LiteralPath $TabStateRoot)) { return }
+        if ($null -eq $procById -or $procById.Count -eq 0) {
+            Write-LaunchLog "Sweep: tabstate skipped (owner probe did not produce a process table)."
+            return
+        }
+        $tabStateMaxAge = [TimeSpan]::FromDays(7)
+        $now = Get-Date
+        $root = $TabStateRoot.TrimEnd('\')
+        $removedNames = [System.Collections.Generic.List[string]]::new()
+        Get-ChildItem -LiteralPath $TabStateRoot -Directory -ErrorAction SilentlyContinue |
+            ForEach-Object {
+                $folder = $_
+                $match = [regex]::Match($folder.Name, '^[0-9a-f]{8}-claude-(\d+)-(\d{14})$')
+                if (-not $match.Success) { return }
+                if (($now - $folder.LastWriteTime) -lt $tabStateMaxAge) { return }
+                $ownerPid = [int]$match.Groups[1].Value
+                $ownerStamp = $match.Groups[2].Value
+                $owner = $procById[$ownerPid]
+                if ($owner -and $owner.Name -eq 'claude.exe' -and $owner.CreationDate -and
+                    ($owner.CreationDate.ToUniversalTime().ToString('yyyyMMddHHmmss') -eq $ownerStamp)) {
+                    return
+                }
+                $full = $folder.FullName
+                if (-not $full.StartsWith($root + '\', [StringComparison]::OrdinalIgnoreCase)) {
+                    Write-LaunchLog "Sweep: REFUSING to delete tabstate '$full' - not strictly under '$root'. Treating as a bug and skipping."
+                    return
+                }
+                if ($folder.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+                    Write-LaunchLog "Sweep: REFUSING to delete tabstate '$full' - it is a reparse point."
+                    return
+                }
+                Remove-Item -LiteralPath $full -Recurse -Force -ErrorAction SilentlyContinue
+                if (-not (Test-Path -LiteralPath $full)) {
+                    $removedNames.Add($folder.Name)
+                    Write-LaunchLog "Sweep: removed tabstate '$($folder.Name)' (owner claude.exe PID=$ownerPid is not running; last write $($folder.LastWriteTime))."
+                }
+                else {
+                    Write-LaunchLog "Sweep: tabstate '$($folder.Name)' still present after delete attempt - left in place, will retry next launch."
+                }
+            }
+        Write-LaunchLog "Sweep: removed $($removedNames.Count) tabstate folder(s)."
+    }
+    catch {
+        Write-LaunchLog "Sweep: tabstate sweep aborted by an error (ignored): $($_.Exception.Message)"
+    }
+}
 
 if (-not $prodMode) {
 
@@ -481,6 +555,7 @@ Get-ChildItem -LiteralPath $binVscodeRoot -Directory -ErrorAction SilentlyContin
     }
 $sweptNamesDisplay = if ($sweptNames.Count -gt 0) { " ($($sweptNames -join ', '))" } else { '' }
 Write-LaunchLog "Sweep: removed $($sweptNames.Count) stale instance folder(s)$sweptNamesDisplay, skipped $skippedTooYoungCount too-young to sweep."
+Invoke-TabStateSweep -TabStateRoot $tabStateRoot
 #endregion
 
 #region Build
@@ -880,6 +955,7 @@ try {
             if (Remove-SweepFolder -Path $_.FullName -MustBeUnder $devBuildRoot) { $swept.Add(".roslynsentinel\build\$($_.Name)") }
         }
 
+    Invoke-TabStateSweep -TabStateRoot $tabStateRoot
     $sweptDisplay = if ($swept.Count -gt 0) { " ($($swept -join ', '))" } else { '' }
     Write-LaunchLog "Sweep: removed $($swept.Count) item(s)$sweptDisplay, kept $keptLive live, skipped $skippedYoung too-young."
 }
@@ -940,6 +1016,8 @@ if ($prodMode) {
     $extraLaunchArgs = @("--working-dir=$instanceDir", "--builds-root=$buildsRoot")
     $env:ROSLYNSENTINEL_INSTANCE_ID = $instanceId
 }
+# Both layouts: the per-tab state folder, when a claude.exe owner was found (no flag otherwise).
+if ($tabStateDir) { $extraLaunchArgs += "--tab-state-dir=$tabStateDir" }
 
 Write-LaunchLog "Launching: $exePath --transport=stdio $($extraLaunchArgs -join ' ') $($launchArgs -join ' ')"
 Write-StartupLog "Handing off to $exePath (instance '$instanceId') - further activity is in that instance's own launch.log, not here."
