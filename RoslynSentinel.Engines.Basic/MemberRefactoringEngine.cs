@@ -2620,6 +2620,18 @@ public class MemberRefactoringEngine
         };
     }
 
+    // Stub: Member(replace) variant that also accepts additional declarations (Step 5 contract, not yet called).
+    public Task<DocumentEditResult> ReplaceMemberWithAdditionsAsync(FilePathWrapper filePath, string memberName, string newSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containerName = null, CancellationToken cancellationToken = default)
+    {
+        throw new NotImplementedException(); // TODO implement (Step 5)
+    }
+
+    // Stub: splits source into member declarations; wraps the probe-class parse in DetectMultipleMemberDeclarations (Step 5 contract, not yet called).
+    internal static IReadOnlyList<MemberDeclarationSyntax> SplitMemberDeclarations(string source)
+    {
+        throw new NotImplementedException(); // TODO implement (Step 5)
+    }
+
     // Leading trivia for a replace whose newMemberSource carries a doc comment, or null to keep the old trivia (PreserveOld).
     private static SyntaxTriviaList? MergeLeadingTriviaForReplace(SyntaxNode oldNode, SyntaxNode newNode)
     {
