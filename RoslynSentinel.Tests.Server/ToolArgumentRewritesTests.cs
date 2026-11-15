@@ -456,4 +456,54 @@ public class ToolArgumentRewritesTests
         Assert.That(notes, Has.Count.EqualTo(1));
         Assert.That(notes![0], Does.StartWith("Note: 'path' is not a parameter of Search"));
     }
+
+    [Test]
+    public void SearchText_ProjectName_BecomesFileGlobWithNote()
+    {
+        var arguments = Args(("mode", "text"), ("query", "Foo"), ("projectName", "RoslynSentinel.Tools.Basic"));
+
+        var notes = ApplySearchPath(arguments, "mode", "query", "projectName", "fileGlob");
+
+        Assert.That(arguments.ContainsKey("projectName"), Is.False);
+        Assert.That(arguments["fileGlob"].GetString(), Is.EqualTo("RoslynSentinel.Tools.Basic/**/*.cs"));
+        Assert.That(notes, Has.Count.EqualTo(1));
+        Assert.That(notes![0], Is.EqualTo(
+            "Note: 'projectName' is not used by Search in text mode; it was treated as fileGlob: \"RoslynSentinel.Tools.Basic/**/*.cs\". Use fileGlob to restrict a text search."));
+    }
+
+    [Test]
+    public void SearchText_ProjectNameAndFileGlob_FileGlobWinsAndProjectNameIsLeft()
+    {
+        var arguments = Args(("mode", "text"), ("query", "Foo"), ("projectName", "ProjA"), ("fileGlob", "ProjB/**/*.cs"));
+
+        var notes = ApplySearchPath(arguments, "mode", "query", "projectName", "fileGlob");
+
+        Assert.That(arguments["fileGlob"].GetString(), Is.EqualTo("ProjB/**/*.cs"));
+        Assert.That(arguments["projectName"].GetString(), Is.EqualTo("ProjA"));
+        Assert.That(notes, Is.Null);
+    }
+
+    [Test]
+    public void SearchClassMode_ProjectName_IsUntouched()
+    {
+        var arguments = Args(("mode", "class"), ("query", "Foo"), ("projectName", "ProjA"));
+
+        var notes = ApplySearchPath(arguments, "mode", "query", "projectName", "fileGlob");
+
+        Assert.That(notes, Is.Null);
+        Assert.That(arguments.ContainsKey("projectName"), Is.True);
+        Assert.That(arguments.ContainsKey("fileGlob"), Is.False);
+    }
+
+    [Test]
+    public void SearchText_ProjectNameWithGlob_IsLeftUnchanged()
+    {
+        var arguments = Args(("mode", "text"), ("query", "Foo"), ("projectName", "My*"));
+
+        var notes = ApplySearchPath(arguments, "mode", "query", "projectName", "fileGlob");
+
+        Assert.That(notes, Is.Null);
+        Assert.That(arguments["projectName"].GetString(), Is.EqualTo("My*"));
+        Assert.That(arguments.ContainsKey("fileGlob"), Is.False);
+    }
 }

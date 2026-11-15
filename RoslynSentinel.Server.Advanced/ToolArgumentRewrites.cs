@@ -59,6 +59,11 @@ public static class ToolArgumentRewrites
                 var filePathNote = RewriteSearchFilePath(arguments, declared, solutionRoot);
                 if (filePathNote is not null)
                     (notes ??= new List<string>()).Add(filePathNote);
+
+                // Last, so an explicit or path/filePath-derived fileGlob wins and projectName is left alone.
+                var projectNameNote = RewriteSearchProjectName(arguments, declared);
+                if (projectNameNote is not null)
+                    (notes ??= new List<string>()).Add(projectNameNote);
             }
 
             var rewriteNote = toolName.ToLowerInvariant() switch
@@ -325,6 +330,33 @@ public static class ToolArgumentRewrites
         if (glob.IndexOf('/') < 0 && glob.IndexOfAny(GlobChars) < 0)
             note += $" This matches every file named {glob} in the solution.";
         return note;
+    }
+
+    /// <summary>
+    /// Search (mode text) <c>projectName: P</c> becomes <c>fileGlob: P/**/*.cs</c>: Search has no projectName
+    /// parameter in text mode, so the value is almost always the folder the caller meant to search. Acts only while
+    /// <c>fileGlob</c> is declared and absent (so an explicit or path/filePath-derived fileGlob wins and projectName
+    /// stays), and only for a plain name with no glob characters or separators; anything else is left for Validate.
+    /// </summary>
+    private static string? RewriteSearchProjectName(IDictionary<string, JsonElement> arguments, IReadOnlySet<string> declared)
+    {
+        if (!declared.Contains("fileGlob") || arguments.ContainsKey("fileGlob"))
+            return null;
+        if (!IsTextMode(arguments))
+            return null;
+        if (!arguments.TryGetValue("projectName", out var raw) || raw.ValueKind != JsonValueKind.String)
+            return null;
+
+        var projectName = raw.GetString();
+        if (string.IsNullOrWhiteSpace(projectName))
+            return null;
+        if (projectName.IndexOfAny(GlobChars) >= 0 || projectName.IndexOfAny(new[] { '/', '\\' }) >= 0)
+            return null;
+
+        var glob = $"{projectName}/**/*.cs";
+        Remove(arguments, "projectName");
+        arguments["fileGlob"] = JsonSerializer.SerializeToElement(glob);
+        return $"Note: 'projectName' is not used by Search in text mode; it was treated as fileGlob: \"{glob}\". Use fileGlob to restrict a text search.";
     }
 
     /// <summary>
