@@ -1,10 +1,10 @@
 # Plan: ReplaceSnippet accepts token-equivalent oldContent and re-indents newContent to the file
 
-**Status:** IN PROGRESS 2026-11-15. Steps 1-10b and 12 done (e46c4edb..54e9052e); Step 11 not needed; Step 13 eval queued. Approved 2026-11-14; owner settled R1-R4, lanes, step order, Step 10 scope and the eval set (see "Owner decisions (2026-11-14) on the plan review"); Batched mode, owner present.
+**Status:** IMPLEMENTED 2026-11-15. e46c4edb, 88dddc35, 7f4f7a3c, 202d273a, 132e9fa6, 2afde809, 2ca53f09, 0aa6b228, 3999a637, f631ba2e, 218344d1, 60ab48d7, 54e9052e, 7aeb9f72 (description trim for the schema budget); Step 11 not needed; Step 13 eval: [eval_replacesnippet_token_equivalent_match_and_reindent.md](../../evals/eval_replacesnippet_token_equivalent_match_and_reindent.md) (MatchedLooserThanRequested 94/2,003 -> 0/224). Approved 2026-11-14; owner settled R1-R4, lanes, step order, Step 10 scope and the eval set (see "Owner decisions (2026-11-14) on the plan review"); Batched mode, owner present.
 
 ## Problem
 
-Source of truth: [proposal_replacesnippet_token_equivalent_match_and_reindent.md](../proposals/proposal_replacesnippet_token_equivalent_match_and_reindent.md) (committed 4177207c). In short: 94 of 2,003 `ReplaceSnippet` calls in the 2026-11-14 runs were rejected as `MatchedLooserThanRequested`, almost all for indentation; and `newContent` is spliced verbatim, so model tabs and wrong widths are written even by exact matches.
+Source of truth: [proposal_replacesnippet_token_equivalent_match_and_reindent.md](../../proposals/proposal_replacesnippet_token_equivalent_match_and_reindent.md) (committed 4177207c). In short: 94 of 2,003 `ReplaceSnippet` calls in the 2026-11-14 runs were rejected as `MatchedLooserThanRequested`, almost all for indentation; and `newContent` is spliced verbatim, so model tabs and wrong widths are written even by exact matches.
 
 Verified against the source on 2026-11-14 (line numbers drift; a peer session was editing the solution while this plan was written, workspaceVersion 4 -> 12):
 
@@ -306,6 +306,7 @@ Two pure helpers in `RoslynSentinel.Common/SnippetMatching/` (layering: they nee
 - Done when: no stubs, 0 build errors, 0 new test failures, both live calls behave as specified.
 
 ### Step 13 - Eval run (proposal slice e)
+- Done 2026-11-15: resubmitted with -OnTreeChange RunAnyway after the first queue was refused TreeChanged; 66 runs; results in the eval doc linked from the Status line.
 - Queued 2026-11-15 07:31: on 113 (qwen3.5-9b-mtp) and 112 (qwen3.5-4b-mtp), ShippingKindStep V7-V11 and V13 with -Step 5 x5 each, OrderPricingRefactorChain10 x3 each (session roslynsentinel-a6ec083a). Host 112 added to match the 2026-11-14 baseline's 4b runs.
 - Files: none (results under `ModelTestingResults/113/`)
 - Depends on: 12, with the plan's commits on master
