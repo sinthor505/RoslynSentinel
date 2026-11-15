@@ -454,4 +454,39 @@ public class NotFoundEvidenceTests
         Assert.That(findings, Has.Count.EqualTo(1));
         Assert.That(findings[0].Message, Does.Contain("Bar.cs"));
     }
+
+    [Test]
+    public async Task AcrossFiles_OutsideSearchedScope_NoteCarriesLabel()
+    {
+        await WriteBlobForFileAsync("Bar.cs", "b7", "s1", DateTime.UtcNow.AddMinutes(-5), "class Bar { void Widget() { } }");
+
+        var findings = NotFoundEvidence.FindAcrossFiles(_root, "Widget", false, "main", "s1", DateTime.UtcNow, searchedScope: "Foo/**/*.cs", isInScope: _ => false);
+
+        Assert.That(findings, Has.Count.EqualTo(1));
+        Assert.That(findings[0].Message, Does.Contain("Bar.cs"));
+        Assert.That(findings[0].Message, Does.Contain("(outside the searched scope 'Foo/**/*.cs')"));
+    }
+
+    [Test]
+    public async Task AcrossFiles_InsideSearchedScope_NoteHasNoLabel()
+    {
+        await WriteBlobForFileAsync("Bar.cs", "b7", "s1", DateTime.UtcNow.AddMinutes(-5), "class Bar { void Widget() { } }");
+
+        var findings = NotFoundEvidence.FindAcrossFiles(_root, "Widget", false, "main", "s1", DateTime.UtcNow, searchedScope: "**/*.cs", isInScope: _ => true);
+
+        Assert.That(findings, Has.Count.EqualTo(1));
+        Assert.That(findings[0].Message, Does.Contain("Bar.cs"));
+        Assert.That(findings[0].Message, Does.Not.Contain("outside the searched scope"));
+    }
+
+    [Test]
+    public async Task AcrossFiles_NoSearchedScope_NoteHasNoLabel()
+    {
+        await WriteBlobForFileAsync("Bar.cs", "b7", "s1", DateTime.UtcNow.AddMinutes(-5), "class Bar { void Widget() { } }");
+
+        var findings = NotFoundEvidence.FindAcrossFiles(_root, "Widget", false, "main", "s1", DateTime.UtcNow);
+
+        Assert.That(findings, Has.Count.EqualTo(1));
+        Assert.That(findings[0].Message, Does.Not.Contain("outside the searched scope"));
+    }
 }

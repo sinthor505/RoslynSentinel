@@ -71,9 +71,9 @@ public static class NotFoundEvidence
 
     /// <summary>
     /// Notes for a zero-hit search, read from <see cref="ToolCallContext.Current"/>. Empty unless the call carries an agent id
-    /// and a solution root.
+    /// and a solution root. A text search with a file scope passes searchedScope and isInScope; notes about files outside that scope get a label.
     /// </summary>
-    public static IReadOnlyList<Finding> ForZeroHitSearch(string? solutionRoot, string term, bool isRegex)
+    public static IReadOnlyList<Finding> ForZeroHitSearch(string? solutionRoot, string term, bool isRegex, string? searchedScope = null, Func<string, bool>? isInScope = null)
     {
         var context = ToolCallContext.Current;
         if (context is not { AgentId: { } agentId } || string.IsNullOrWhiteSpace(solutionRoot))
@@ -81,7 +81,7 @@ public static class NotFoundEvidence
             return [];
         }
 
-        return FindAcrossFiles(solutionRoot, term, isRegex, agentId, context.SessionId, DateTime.UtcNow);
+        return FindAcrossFiles(solutionRoot, term, isRegex, agentId, context.SessionId, DateTime.UtcNow, searchedScope: searchedScope, isInScope: isInScope);
     }
 
     /// <summary>
@@ -115,9 +115,9 @@ public static class NotFoundEvidence
 
     /// <summary>
     /// The zero-hit evidence search across every file in the window: a note for a foreign write that removed the term from a
-    /// file, or for a foreign write that put it on disk less than 15 seconds ago. Never throws.
+    /// file, or for a foreign write that put it on disk less than 15 seconds ago. When searchedScope and isInScope are given, a note about a file outside the scope gets a label naming the scope. Never throws.
     /// </summary>
-    public static IReadOnlyList<Finding> FindAcrossFiles(string solutionRoot, string term, bool isRegex, string agentId, string? sessionId, DateTime utcNow, int maxNotes = 3)
+    public static IReadOnlyList<Finding> FindAcrossFiles(string solutionRoot, string term, bool isRegex, string agentId, string? sessionId, DateTime utcNow, int maxNotes = 3, string? searchedScope = null, Func<string, bool>? isInScope = null)
     {
         try
         {
@@ -128,7 +128,7 @@ public static class NotFoundEvidence
                 return [];
             }
 
-            return SearchBlobsAcrossFiles(solutionRoot, term, isRegex, agentId, sessionId, utcNow, maxNotes)
+            return SearchBlobsAcrossFiles(solutionRoot, term, isRegex, agentId, sessionId, utcNow, maxNotes, searchedScope, isInScope)
                 .Select(note => new Finding(FindingSource, note, FindingSeverity.Info))
                 .ToList();
         }
@@ -198,7 +198,7 @@ public static class NotFoundEvidence
     }
 
     // Scans every recent blob, not only those for one file. Foreign writers only; the newest explaining blob per file wins.
-    private static List<string> SearchBlobsAcrossFiles(string solutionRoot, string term, bool isRegex, string agentId, string? sessionId, DateTime utcNow, int maxNotes)
+    private static List<string> SearchBlobsAcrossFiles(string solutionRoot, string term, bool isRegex, string agentId, string? sessionId, DateTime utcNow, int maxNotes, string? searchedScope = null, Func<string, bool>? isInScope = null)
     {
         var notes = new List<string>();
         var dir = Path.Combine(solutionRoot, ".roslynsentinel", "operations");
@@ -266,12 +266,16 @@ public static class NotFoundEvidence
                     continue;
                 }
 
+                // A note about a file outside the searched scope says so; with no scope given, no note is labelled.
+                var scopeLabel = searchedScope is not null && isInScope is not null && !isInScope(fullPath)
+                    ? $" (outside the searched scope '{searchedScope}')"
+                    : string.Empty;
                 var age = utcNow - blob.Written!.Value;
                 var agentType = StringOf(item, "AppliedByAgentType");
                 var otherSession = writerSession is not null && sessionId is not null && !string.Equals(writerSession, sessionId, StringComparison.Ordinal);
                 if (TermHeld(StringOf(item, "BeforeSource"), term, isRegex))
                 {
-                    notes.Add(BlobNote(term, itemPath, writerAgent, agentType, otherSession, StringOf(document.RootElement, "toolName"), StringOf(item, "AppliedByReason"), age));
+                    notes.Add(BlobNote(term, itemPath, writerAgent, agentType, otherSession, StringOf(document.RootElement, "toolName"), StringOf(item, "AppliedByReason"), age) + scopeLabel);
                     notedFiles.Add(fullPath);
                 }
                 else if (age < AddedWindow && TermHeld(ReadSmallFileOrNull(fullPath), term, isRegex))
@@ -287,7 +291,7 @@ public static class NotFoundEvidence
                         who += " in another session";
                     }
 
-                    notes.Add($"`{ShortTerm(term)}` appears in `{Path.GetFileName(fullPath)}` on disk as written by {who} {EditAttributionFindings.FormatAge(age)} ago; the server has not loaded it yet - retry");
+                    notes.Add($"`{ShortTerm(term)}` appears in `{Path.GetFileName(fullPath)}` on disk as written by {who} {EditAttributionFindings.FormatAge(age)} ago; the server has not loaded it yet - retry{scopeLabel}");
                     notedFiles.Add(fullPath);
                 }
 

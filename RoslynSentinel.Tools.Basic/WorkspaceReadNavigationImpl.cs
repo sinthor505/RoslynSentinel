@@ -1362,7 +1362,7 @@ public class WorkspaceReadNavigationImpl
                 }
                 var justTripped = _workspaceManager.RecordSearchOutcome(0); // TODO ForZeroHitSearch takes one isRegex flag, so a query that is both a valid regex and a literal (e.g. a+b) gets only the regex match; add a literal-and-regex overload.
                 var emptyResult = new SentinelCallToolResult<object> { IsError = false, SuccessData = new TextSearchResult(literalResults, regexResults, regexOverlapCount, regexPatternValid), TotalRecords = 0, WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = string.Join(" ", warnings) };
-                return emptyResult with { IsError = false, WarningDetails = null, Findings = [.. (justTripped ? new[] { new Finding("OrientationBreaker", string.Join(" ", warnings), FindingSeverity.Warning) } : Array.Empty<Finding>()), .. NotFoundEvidence.ForZeroHitSearch(solutionRoot, pattern, isRegex: regexPatternValid)] };
+                return emptyResult with { IsError = false, WarningDetails = null, Findings = [.. (justTripped ? new[] { new Finding("OrientationBreaker", string.Join(" ", warnings), FindingSeverity.Warning) } : Array.Empty<Finding>()), .. NotFoundEvidence.ForZeroHitSearch(solutionRoot, pattern, isRegex: regexPatternValid, searchedScope: string.IsNullOrEmpty(fileGlob) ? null : fileGlob, isInScope: string.IsNullOrEmpty(fileGlob) ? null : path => GlobMatchesFileName(new FilePathWrapper(path, solutionRoot), fileGlob!))] };
             }
             else if (totalMatchCount > returnedMatchCount)
             {
