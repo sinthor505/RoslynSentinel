@@ -237,7 +237,7 @@ public class WorkspaceTools
         [Description(ToolParams.RunTestSuite)] TestSuite suite = TestSuite.fast,
         TestResultsFilter resultsType = TestResultsFilter.failed,
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 50,
-        [Description("Seconds allowed per test project (default 600); a project that exceeds it is terminated and the whole result is marked incomplete.")] int timeoutSeconds = 600,
+        [Description("Seconds per test project (default 600); a project over it is terminated and the result is marked incomplete.")] int timeoutSeconds = 600,
         [Description("true = counts and FailureSummary only, no Results list.")] bool summary = false,
         [Description(ToolParams.UseScratchDir)] bool useScratchDir = false,
         [Description("true = keep failed tests' Output and the stdout/stderr tails. Default false: compact digest.")] bool includeOutput = false,
