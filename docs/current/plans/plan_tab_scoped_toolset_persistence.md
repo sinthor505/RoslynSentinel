@@ -1,6 +1,6 @@
 # Plan: Persist enabled toolsets per Claude Code tab across server restarts, with McpServerControl restart options
 
-**Status:** IN PROGRESS 2026-11-15. Steps 1-8 done (7b2b901f, 2df3e449, 3398ae4e, 9a247fb0, 0de85bbe, 62edb05f, 0531ece8, 934f415c); left: Step 9 live checks (owner) and Step 10 docs. Supersedes D12 of `plan_tool_experience_journal_fixes.md` ("persist toolset state across a restart").
+**Status:** IN PROGRESS 2026-11-15. Steps 1-8 done (7b2b901f, 2df3e449, 3398ae4e, 9a247fb0, 0de85bbe, 62edb05f, 0531ece8, 934f415c); left: Step 9 live checks (owner) and Step 10 docs. Supersedes D12 of `closed/plan_tool_experience_journal_fixes.md` ("persist toolset state across a restart").
 
 ## Problem
 
@@ -322,7 +322,7 @@ Batches:
 - Lane: dispatcher (main session; needs the owner for `/mcp` and resume).
 
 ### Step 10 - Docs and guidance text
-- Files: `RoslynSentinel.Tools.Basic/ToolsetControlTools.cs`, `CLAUDE.md`, `docs/current/references/reference_live_server_freshness.md`, `docs/current/plans/plan_tool_experience_journal_fixes.md`, `docs/current/findings/finding_tool_experience_journal_rollup_pain_points.md`
+- Files: `RoslynSentinel.Tools.Basic/ToolsetControlTools.cs`, `CLAUDE.md`, `docs/current/references/reference_live_server_freshness.md`, `docs/current/plans/closed/plan_tool_experience_journal_fixes.md`, `docs/current/findings/closed/finding_tool_experience_journal_rollup_pain_points.md` (both closed 2026-11-15)
 - Depends on: 9 (wording follows the observed outcomes)
 - Effect: behaviour-changing (tool status text).
 - Change:
@@ -332,7 +332,7 @@ Batches:
   - **`CLAUDE.md` "Gated tools"**: drop "(the reconnect resets toolsets ...)" and "then enable again" if case B is
     `kept`.
   - **`reference_live_server_freshness.md` ~lines 14 and 17**: update to match.
-  - **D12**: in `plan_tool_experience_journal_fixes.md` (lines ~67 and ~644) and the finding's D12 row (~line 85),
+  - **D12**: in `closed/plan_tool_experience_journal_fixes.md` (lines ~67 and ~644) and the finding's D12 row (~line 85),
     point to this plan.
   - **Memory**: move `project_idle_restart_drops_toolsets` to MEMORY_CLOSED.
 - Done when: `Build` 0 errors; `scripts/Test-GuidanceHygiene.ps1` passes. The dispatcher runs `McpToolsetControlTests`.
