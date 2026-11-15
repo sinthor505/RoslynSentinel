@@ -121,6 +121,22 @@ function Remove-HereStrings([string]$cmd) {
     return $cmd
 }
 
+# Returns $cmd with quoted single-line literals blanked to '' or "" so quoted prose (`echo "blocked a git diff"`)
+# is not mistaken for a git command. Not blanked: a literal after a nested-shell or eval switch (-c, -lc,
+# -Command, /c, eval, iex, Invoke-Expression), a double-quoted literal holding $( or a backtick, and a quote
+# that is part of a word (don't). Used only by the covered-operation git test in the shell rules.
+function Remove-QuotedProse([string]$cmd) {
+    if (-not $cmd) { return $cmd }
+    $pat = '(?<!\w)(?<!(?:-c|-lc|-Command|/c|eval|iex|Invoke-Expression)\s+)(''[^'']*''|"[^"]*")'
+    $eval = [System.Text.RegularExpressions.MatchEvaluator]{
+        param($m)
+        $t = $m.Value
+        if ($t.IndexOf('$(') -ge 0 -or $t.IndexOf('`') -ge 0) { return $t }
+        return $t.Substring(0, 1) + $t.Substring(0, 1)
+    }
+    return [regex]::Replace($cmd, $pat, $eval, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+}
+
 # True only when the command contains a PATH-SHAPED .cs token: a whole unquoted token or a whole
 # quoted literal whose entire content looks like a path/glob ending in .cs (no spaces, nothing after
 # .cs). A .cs name that appears only inside prose ('see Foo.cs', 'Foo.cs:12', '(Foo.cs)') does not
@@ -1384,14 +1400,19 @@ positive if the referenced name already exists elsewhere in the file. Proceeding
         # Tool-experience journal writes (CLAUDE.md "Tool-experience journal") often quote git
         # commands in the note text itself ("blocked a git diff ..."). That is prose, not a
         # git invocation, so a command aimed at .claude/journal/ is exempt - unless git also
-        # appears at a command position, which would be a real call riding along.
-        if ($command -match '\.claude[\\/]+journal[\\/]' -and $command -notmatch '(^|[;&|(]\s*)git\s') { exit 0 }
+        # appears at a command position, which would be a real call riding along. A redirect to a
+        # variable (`>> $j`) is judged by the literal its assignment holds (Expand-SimpleAssignments).
+        $journalText = if ($command -match '>>?\s*\$\{?\w') { Expand-SimpleAssignments $command } else { $command }
+        if ($journalText -match '\.claude[\\/]+journal[\\/]' -and $journalText -notmatch '(^|[;&|(]\s*)git\s') { exit 0 }
 
         # Rules below scan a copy with here-string/heredoc bodies removed (prose is not a command).
         # $command stays the original for block messages, out-of-repo git checks and bypass lookup.
         # Simple same-command variable assignments are also substituted (Expand-SimpleAssignments), so
         # `$r='C:\other'; git -C $r log` is judged by the literal path.
         $scan = Expand-SimpleAssignments (Remove-HereStrings $command)
+        # Quoted prose is blanked only for the covered-operation test below; the uncovered and
+        # sub-action tests keep the full copy so their behaviour does not change.
+        $scanNoQuotes = Remove-QuotedProse $scan
 
         # --- shell text search/read of C# ---------------------------------------------
         # The Grep-tool rule above is trivially sidestepped by running grep/rg/Select-String/
@@ -1516,7 +1537,7 @@ to get past this hook.
         # (D-17 stash drop/clear, worktree prune/lock/unlock/move/repair) stay shell-only.
         if ($scan -match "(^|[;&|]|\s)git\s+(-C\s+\S+\s+)?(stash\s+(drop|clear)|worktree\s+(prune|lock|unlock|move|repair))\b") { exit 0 }
 
-        if ($scan -match "(^|[;&|]|\s)git\s+(-C\s+\S+\s+)?($covered)\b") {
+        if ($scanNoQuotes -match "(^|[;&|]|\s)git\s+(-C\s+\S+\s+)?($covered)\b") {
             Exit-IfBypassed "$command`n$([string]$toolInput.description)" $null
 
             DenyBypassable @"

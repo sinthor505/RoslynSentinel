@@ -193,6 +193,12 @@ $cases = @(
        p = @{ tool_name = 'Bash'; tool_input = @{ command = "echo '- 18:41 ~ Git: git commit via tool worked' >> .claude/journal/2026-10-01_aaaabbbb.md" } } }
     @{ n = 'journal path plus a real git call'; want = 'DENY'
        p = @{ tool_name = 'Bash'; tool_input = @{ command = "cat .claude/journal/x.md; git diff" } } }
+    @{ n = 'journal redirect to variable assigned a journal path, quoting git diff'; want = 'allow'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = '$j = ''.claude/journal/x.md''; echo "blocked a git diff" >> $j' } } }
+    @{ n = 'shell: unquoted git status still blocked'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'git status' } } }
+    @{ n = 'shell: git add after a quoted prose string still blocked'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'echo "note"; git add file.md' } } }
 
     # --- shell text search/read of C#: deny ---
     @{ n = 'Bash grep --include=*.cs (seen live)'; want = 'DENY'
