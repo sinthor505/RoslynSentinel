@@ -63,6 +63,12 @@ public sealed class ToolsetService
     private readonly Dictionary<ToolSetName, List<McpServerTool>> _enabled = new();
     private int _toolListChangedRaised; // guarded by _gate
 
+    /// <summary>
+    /// Raised after a real enable or disable (not a no-op), outside the lock, with every set that is on after the call.
+    /// A subscriber that throws is swallowed by <see cref="SetEnabled"/>.
+    /// </summary>
+    public event Action<IReadOnlyList<ToolSetName>>? EnabledToolSetsChanged;
+
     /// <param name="serverOptions">The server options whose <c>ToolCollection</c> is mutated.</param>
     /// <param name="services">The root provider tools are built against (and construct their targets from).</param>
     /// <param name="supportedClassNames">
@@ -134,6 +140,7 @@ public sealed class ToolsetService
         var collection = _serverOptions.ToolCollection
             ?? throw new InvalidOperationException("The server exposes no mutable tool collection, so toolsets cannot be switched at runtime.");
 
+        ToolsetChange result;
         lock (_gate)
         {
             bool isOn = _enabled.ContainsKey(toolSet);
@@ -195,7 +202,7 @@ public sealed class ToolsetService
                 _toolListChangedRaised++;
             }
 
-            return new ToolsetChange(
+            result = new ToolsetChange(
                 ToolSet: toolSet,
                 Enabled: _enabled.ContainsKey(toolSet),
                 Changed: enabled != isOn,
@@ -205,6 +212,20 @@ public sealed class ToolsetService
                 EnabledToolSets: _enabled.Keys.OrderBy(s => s).ToArray(),
                 ActiveTools: collection.PrimitiveNames.OrderBy(n => n, StringComparer.Ordinal).ToArray());
         }
+
+        if (result.Changed)
+        {
+            try
+            {
+                EnabledToolSetsChanged?.Invoke(result.EnabledToolSets);
+            }
+            catch
+            {
+                // Persistence subscribers must never fail a toolset switch.
+            }
+        }
+
+        return result;
     }
 
     private Dictionary<string, (Type ToolType, MethodInfo Method)> ResolveCandidates()

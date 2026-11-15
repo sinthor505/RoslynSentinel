@@ -123,8 +123,7 @@ public static class ServerStartupHelpers
         var unknown = new List<string>();
         foreach (var name in ParseNameList(GetArgValue(args, "--toolsets")))
         {
-            var normalized = name.Replace("-", string.Empty).Replace("_", string.Empty);
-            if (Enum.TryParse<ToolSetName>(normalized, ignoreCase: true, out var set) && Enum.IsDefined(set))
+            if (ToolsetCatalog.TryParseSetName(name, out var set))
             {
                 if (!sets.Contains(set))
                 {

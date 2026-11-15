@@ -102,10 +102,20 @@ public static class ToolsetCatalog
         return null;
     }
 
-    /// <summary>Parses a toolset name (for example "git") into its <see cref="ToolSetName"/>; false when it is not a set.</summary>
+    /// <summary>
+    /// Parses a toolset name (for example <c>git</c>) into its <see cref="ToolSetName"/>; false when it is not a set.
+    /// Matching ignores case, hyphens and underscores, so <c>move-extract</c> and <c>project_admin</c> also match.
+    /// </summary>
     public static bool TryParseSetName(string name, out ToolSetName set)
     {
-        throw new NotImplementedException(); // TODO implement (Step 3)
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            set = default;
+            return false;
+        }
+
+        var normalized = name.Replace("-", string.Empty).Replace("_", string.Empty);
+        return Enum.TryParse<ToolSetName>(normalized, ignoreCase: true, out set) && Enum.IsDefined(set);
     }
 
     /// <summary>
