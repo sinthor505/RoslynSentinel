@@ -15,6 +15,13 @@ public sealed class TabToolsetStateStore
     /// <summary>File name of the persisted toolset state inside the tab state directory.</summary>
     public const string FileName = "toolsets.json";
 
+    /// <summary>Shared serializer options for the toolset file (camelCase property names, indented).</summary>
+    private static readonly System.Text.Json.JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+        WriteIndented = true,
+    };
+
     private readonly ILogger? _logger;
 
     /// <summary>Creates a store rooted at <paramref name="tabStateDir"/> for the given session id.</summary>
@@ -42,7 +49,75 @@ public sealed class TabToolsetStateStore
     /// </summary>
     public TabToolsetState? Load()
     {
-        throw new NotImplementedException(); // TODO implement (Step 2)
+        try
+        {
+            var ownPath = Path.Combine(TabStateDir, FileName);
+            if (File.Exists(ownPath))
+            {
+                return System.Text.Json.JsonSerializer.Deserialize<TabToolsetState>(File.ReadAllText(ownPath), JsonOptions);
+            }
+
+            if (string.IsNullOrEmpty(SessionId))
+            {
+                return null;
+            }
+
+            var parent = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(Path.GetFullPath(TabStateDir)));
+            if (string.IsNullOrEmpty(parent) || !Directory.Exists(parent))
+            {
+                return null;
+            }
+
+            var ownDir = Path.GetFullPath(TabStateDir);
+            TabToolsetState? newest = null;
+            string? newestPath = null;
+            foreach (var dir in Directory.EnumerateDirectories(parent))
+            {
+                if (string.Equals(Path.GetFullPath(dir), ownDir, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    var candidatePath = Path.Combine(dir, FileName);
+                    if (!File.Exists(candidatePath))
+                    {
+                        continue;
+                    }
+
+                    var candidate = System.Text.Json.JsonSerializer.Deserialize<TabToolsetState>(File.ReadAllText(candidatePath), JsonOptions);
+                    if (candidate is null || !string.Equals(candidate.SessionId, SessionId, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    if (newest is null || candidate.SavedUtc > newest.SavedUtc)
+                    {
+                        newest = candidate;
+                        newestPath = candidatePath;
+                    }
+                }
+                catch (Exception)
+                {
+                    // A sibling that fails to read or parse is skipped; it cannot seed this tab.
+                }
+            }
+
+            if (newest is null || newestPath is null)
+            {
+                return null;
+            }
+
+            Directory.CreateDirectory(TabStateDir);
+            File.Copy(newestPath, ownPath, overwrite: true);
+            return newest;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Could not load persisted tab toolset state from {TabStateDir}", TabStateDir);
+            return null;
+        }
     }
 
     /// <summary>
@@ -50,12 +125,45 @@ public sealed class TabToolsetStateStore
     /// </summary>
     public void Save(IReadOnlyList<ToolSetName> enabled)
     {
-        throw new NotImplementedException(); // TODO implement (Step 2)
+        string? tempPath = null;
+        try
+        {
+            Directory.CreateDirectory(TabStateDir);
+            var state = new TabToolsetState(enabled.Select(s => s.ToString()).ToArray(), SessionId, DateTime.UtcNow);
+            tempPath = Path.Combine(TabStateDir, FileName + "." + Guid.NewGuid().ToString("N") + ".tmp");
+            File.WriteAllText(tempPath, System.Text.Json.JsonSerializer.Serialize(state, JsonOptions));
+            File.Move(tempPath, Path.Combine(TabStateDir, FileName), overwrite: true);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Could not save tab toolset state to {TabStateDir}", TabStateDir);
+        }
+        finally
+        {
+            try
+            {
+                if (tempPath is not null && File.Exists(tempPath))
+                {
+                    File.Delete(tempPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Could not delete temp toolset file {TempPath}", tempPath);
+            }
+        }
     }
 
-    /// <summary>Deletes the tab's toolset file, if present.</summary>
+    /// <summary>Deletes the tab's toolset file, if present. Never throws.</summary>
     public void Clear()
     {
-        throw new NotImplementedException(); // TODO implement (Step 2)
+        try
+        {
+            File.Delete(Path.Combine(TabStateDir, FileName));
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Could not clear tab toolset state in {TabStateDir}", TabStateDir);
+        }
     }
 }
