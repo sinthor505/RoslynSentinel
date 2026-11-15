@@ -704,15 +704,30 @@ public class RefactoringStructuralImpl
             return new SentinelCallToolResult<object> { IsError = false, SuccessData = AppliedChangeSummary.From(enumReplaceApply, [filePathResolved], $"Replaced '{memberName}' in enum '{replaceEnumName}' in {Path.GetFileName(filePathResolved)}.", validated: false), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = $"Replaced '{memberName}' in enum '{replaceEnumName}' in {Path.GetFileName(filePathResolved)}." };
         }
 
-        var result = await _memberRefactoringEngine.ReplaceMemberAsync(filePathResolved, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken);
+        var result = await _memberRefactoringEngine.ReplaceMemberWithAdditionsAsync(filePathResolved, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken);
         if (result.Outcome == EditOutcome.AlreadyInTargetState && RefactoringToolHelpers.RequireUpdatedText(result, "Member", filePathResolved) is { } replaceAlreadyInStateResult)
             return replaceAlreadyInStateResult;
         var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText };
         var apply = await ValidateAndApplyAsync(changes, $"Replace member '{memberName}'.", "Member", dryRun, returnDiff, progress.ToEngineProgress(), cancellationToken: cancellationToken);
         if (apply.Error is not null)
             return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
-        var replaceEnvelope = new SentinelCallToolResult<object> { IsError = false, SuccessData = AppliedChangeSummary.From(apply, [filePathResolved], $"Replaced '{memberName}' in {Path.GetFileName(filePathResolved)}.", validated: false), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = $"Replaced '{memberName}' in {Path.GetFileName(filePathResolved)}." };
+        var replaceAddedClause = AddedMembersClause(result.Message);
+        var replaceEnvelope = new SentinelCallToolResult<object> { IsError = false, SuccessData = AppliedChangeSummary.From(apply, [filePathResolved], $"Replaced '{memberName}'{replaceAddedClause} in {Path.GetFileName(filePathResolved)}.", validated: false), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = $"Replaced '{memberName}'{replaceAddedClause} in {Path.GetFileName(filePathResolved)}." };
         return replaceEnvelope with { WarningDetails = result.Warnings is { Count: > 0 } ? string.Join(" ", result.Warnings) : null };
+    }
+
+    /// <summary>Names the members a replace-with-additions added, read from the engine Message ("... ; added X after it."); empty when none were added.</summary>
+    private static string AddedMembersClause(string? engineMessage)
+    {
+        const string marker = "; added ";
+        const string suffix = " after it.";
+        var start = engineMessage?.IndexOf(marker, StringComparison.Ordinal) ?? -1;
+        if (start < 0)
+            return string.Empty;
+        var names = engineMessage![(start + marker.Length)..];
+        if (names.EndsWith(suffix, StringComparison.Ordinal))
+            names = names[..^suffix.Length];
+        return $" and added {names}";
     }
 
     /// <summary>Serializes at most 10 entries (keeps the Member(remove) refusal bounded for heavily used members) and appends " (+N more)" outside the JSON when truncated.</summary>

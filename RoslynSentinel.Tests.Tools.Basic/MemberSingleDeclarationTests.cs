@@ -40,33 +40,58 @@ public class MemberSingleDeclarationTests
     }
 
     [Test]
-    public async Task Replace_WithThreeMembers_ReportsCountNamesAndRecoveryInsteadOfInvalidDeclarationAsync()
+    public async Task Replace_WithOneNameMatchAndExtraMembers_ReplacesAndAddsAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var tools = BuildTools(workspace.Manager);
+
+        var result = await tools.MemberTool(
+            reason: "test replace with extra members",
+            operation: MemberAction.replace,
+            filePath: workspace.PathOf(FixtureRelativePath),
+            memberName: "Alpha",
+            newMemberSource: "public int Alpha() => 10;\n\npublic int Gamma() => 3;\n\nprivate string _delta = \"d\";");
+
+        Assert.That(result.IsError, Is.False);
+        var text = workspace.ReadText(FixtureRelativePath);
+        var alpha = text.IndexOf("public int Alpha() => 10;", StringComparison.Ordinal);
+        var gamma = text.IndexOf("public int Gamma() => 3;", StringComparison.Ordinal);
+        var delta = text.IndexOf("private string _delta = \"d\";", StringComparison.Ordinal);
+        var beta = text.IndexOf("public int Beta() => 2;", StringComparison.Ordinal);
+        Assert.Multiple(() =>
+        {
+            Assert.That(alpha, Is.GreaterThanOrEqualTo(0), "The replacement is in the file.");
+            Assert.That(text, Does.Not.Contain("public int Alpha() => 1;"), "The original Alpha is gone.");
+            Assert.That(gamma, Is.GreaterThan(alpha), "The added Gamma follows the replaced Alpha.");
+            Assert.That(delta, Is.GreaterThan(gamma), "The added _delta follows Gamma in source order.");
+            Assert.That(beta, Is.GreaterThan(delta), "The untouched Beta keeps its place after the additions.");
+            Assert.That(result.StatusMessage, Does.Contain("Gamma").And.Contain("_delta"), "The success text names the added members.");
+        });
+    }
+
+    [Test]
+    public async Task Replace_WithTwoSameNameSameKindMembers_StillRejectedAsync()
     {
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
         var tools = BuildTools(workspace.Manager);
         var before = workspace.ReadText(FixtureRelativePath);
 
         var result = await tools.MemberTool(
-            reason: "test multi member replace",
+            reason: "test two same-name replace",
             operation: MemberAction.replace,
             filePath: workspace.PathOf(FixtureRelativePath),
             memberName: "Alpha",
-            newMemberSource: "public int Alpha() => 10;\n\npublic int Gamma() => 3;\n\nprivate string _delta = \"d\";");
+            newMemberSource: "public int Alpha() => 10;\n\npublic int Alpha(int extra) => extra;");
 
-        Assert.That(!result.IsError, Is.False);
+        Assert.That(result.IsError, Is.True);
         var message = result.ErrorData!.Message;
         Assert.Multiple(() =>
         {
             Assert.That(result.ErrorData.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
-            Assert.That(message, Does.Contain("3 member declarations"));
+            Assert.That(message, Does.Contain("2 member declarations"));
             Assert.That(message, Does.Contain("Method 'Alpha'"));
-            Assert.That(message, Does.Contain("Method 'Gamma'"));
-            Assert.That(message, Does.Contain("Field '_delta'"));
-            Assert.That(message, Does.Contain("replace takes exactly one member"));
-            Assert.That(message, Does.Contain("operation: replace").And.Contain("once per existing member"));
-            Assert.That(message, Does.Contain("operation: addMember"));
             Assert.That(message, Does.Not.Contain("not a valid member declaration"),
-                "The multi-member case must not be misreported as a malformed declaration.");
+                "Two same-name members must not be misreported as a malformed declaration.");
         });
         Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(before), "A rejected replace must not write anything.");
     }
