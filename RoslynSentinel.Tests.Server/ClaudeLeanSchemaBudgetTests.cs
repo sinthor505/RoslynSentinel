@@ -32,9 +32,10 @@ public class ClaudeLeanSchemaBudgetTests
     // Raised 44000 -> 44100 on 2026-11-13 (owner): measured 44089 (Advanced and Basic) after 4de54d93 (Search
     // containingType description).
     // Raised 44100 -> 45000 on 2026-11-15: measured 44838 after the D2 Member replace-with-additions text, Git nameOnly on log and McpServerControl toolsets/includeTools descriptions (plan_tool_experience_journal_fixes Steps 6, 10, 14).
-    private const int AdvancedTotalBudget = 45000;
+    // Raised 45000 -> 45200 on 2026-11-15: measured 45135 after plan_tool_experience_journal_fixes wire-text steps (RunTest timeoutSeconds description, CreateFile typeKind/typeName wording, Git maxBytes paging note, ReplaceSnippet batch cap sentence); each is a deliberate fact an agent needed.
+    private const int AdvancedTotalBudget = 45200;
     // Basic raised 40000 -> 45000 on 2026-11-10 (core split slice 1): ChangeSignature (~1.9k) and MoveMember (3356) moved from Tools.Advanced to Tools.Basic (CoreRefactoringTools), so the Basic flavor now serves them and measures 44948 chars, the same as Advanced.
-    private const int BasicTotalBudget = 45000; // raised with AdvancedTotalBudget on 2026-11-15
+    private const int BasicTotalBudget = 45200; // raised with AdvancedTotalBudget on 2026-11-15 (twice)
     private const int AdvancedMaxToolBudget = 5000;
     private const int BasicMaxToolBudget = 5000;
     // Search per-tool budget.
