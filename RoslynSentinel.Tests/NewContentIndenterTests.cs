@@ -145,7 +145,141 @@ public class NewContentIndenterTests
         });
     }
 
+    // ---- Step 5: IndentsFromFormatterChanges ----
+
+    [Test]
+    public void IndentsFromFormatterChanges_PureIndentChange_IsKept()
+    {
+        var text = Lines("class C", "{", "        int x;", "}", "");
+        var lineStart = text.IndexOf("        int x;", StringComparison.Ordinal);
+        var change = new TextChange(TextSpan.FromBounds(lineStart, lineStart + 8), "    ");
+
+        var indents = NewContentIndenter.IndentsFromFormatterChanges(SourceText.From(text), [2], [change]);
+
+        Assert.That(indents, Is.EqualTo(new Dictionary<int, string> { [2] = Spaces(4) }));
+    }
+
+    [Test]
+    public void IndentsFromFormatterChanges_ChangeSpanningLineBreakAndIndent_KeepsTrailingIndent()
+    {
+        var text = Lines("class C", "{", "  int x;", "}", "");
+        var start = text.IndexOf('{') + 1;
+        var end = text.IndexOf("int x", StringComparison.Ordinal);
+        var change = new TextChange(TextSpan.FromBounds(start, end), "\n    ");
+
+        var indents = NewContentIndenter.IndentsFromFormatterChanges(SourceText.From(text), [2], [change]);
+
+        Assert.That(indents, Is.EqualTo(new Dictionary<int, string> { [2] = Spaces(4) }));
+    }
+
+    [Test]
+    public void IndentsFromFormatterChanges_IntraLineSpacingChange_IsDiscarded()
+    {
+        var text = Lines("class C", "{", "    int  x;", "}", "");
+        var start = text.IndexOf("int", StringComparison.Ordinal) + 3;
+        var end = text.IndexOf("x;", StringComparison.Ordinal);
+        var change = new TextChange(TextSpan.FromBounds(start, end), " ");
+
+        var indents = NewContentIndenter.IndentsFromFormatterChanges(SourceText.From(text), [2], [change]);
+
+        Assert.That(indents, Is.Empty);
+    }
+
+    [Test]
+    public void IndentsFromFormatterChanges_ChangeThatJoinsLines_IsDiscarded()
+    {
+        var text = Lines("class C", "{", "    int x;", "}", "");
+        var start = text.IndexOf('{') + 1;
+        var end = text.IndexOf("int x", StringComparison.Ordinal);
+        var change = new TextChange(TextSpan.FromBounds(start, end), " ");
+
+        var indents = NewContentIndenter.IndentsFromFormatterChanges(SourceText.From(text), [2], [change]);
+
+        Assert.That(indents, Is.Empty);
+    }
+
+    // ---- Step 5: IndentsFromShift ----
+
+    [Test]
+    public void IndentsFromShift_LineStartSpan_ShiftsByBaseDifference()
+    {
+        var original = Lines("class C", "{", "    void M()", "    {", "        old();", "    }", "}", "");
+
+        // newContent is written at base 0; the replaced line sits at base 8, so every line shifts by 8.
+        var indents = Shift(original, "        old();\n", "a();\n    b();\n", (false, 4));
+
+        Assert.That(indents, Is.EqualTo(new Dictionary<int, string> { [4] = Spaces(8), [5] = Spaces(12) }));
+    }
+
+    [Test]
+    public void IndentsFromShift_TabsConvertedToFileUnit()
+    {
+        var tabFile = Lines("class C", "{", "\tvoid M()", "\t{", "\t\told();", "\t}", "}", "");
+        var spaceFile = Lines("class C", "{", "  void M()", "  {", "    old();", "  }", "}", "");
+
+        // Tab file: a one-tab snippet base moves to two tabs, the deeper line to three.
+        var inTabs = Shift(tabFile, "\t\told();\n", "\ta();\n\t\tb();\n", (true, 4));
+
+        // Space file with a two-space unit: each leading tab of newContent counts as one unit (two columns).
+        var inSpaces = Shift(spaceFile, "    old();\n", "\ta();\n\t\tb();\n", (false, 2));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(inTabs, Is.EqualTo(new Dictionary<int, string> { [4] = "\t\t", [5] = "\t\t\t" }));
+            Assert.That(inSpaces, Is.EqualTo(new Dictionary<int, string> { [4] = Spaces(4), [5] = Spaces(6) }));
+        });
+    }
+
+    [Test]
+    public void IndentsFromShift_MidLineStartWithAbsoluteIndent_LeavesLaterLines()
+    {
+        var original = Lines("class C", "{", "    void M()", "    {", "        if (x) old();", "    }", "}", "");
+
+        // Later lines are already at or beyond the file base (8): taken as absolute, so no extra base is added.
+        var indents = Shift(original, "old();", "{\n            a();\n        }", (false, 4));
+
+        Assert.That(indents, Is.EqualTo(new Dictionary<int, string> { [5] = Spaces(12), [6] = Spaces(8) }));
+    }
+
+    [Test]
+    public void IndentsFromShift_MidLineStartWithRelativeIndent_AddsFileBase()
+    {
+        var original = Lines("class C", "{", "    void M()", "    {", "        if (x) old();", "    }", "}", "");
+
+        // The closing line sits at column 0 (< file base 8), so the lines are relative and get the file base added.
+        var indents = Shift(original, "old();", "{\n    a();\n}", (false, 4));
+
+        Assert.That(indents, Is.EqualTo(new Dictionary<int, string> { [5] = Spaces(12), [6] = Spaces(8) }));
+    }
+
+    [Test]
+    public void IndentsFromShift_BlockCommentContinuation_GetsSameDelta()
+    {
+        var original = Lines("class C", "{", "    void M()", "    {", "        old();", "    }", "}", "");
+
+        var indents = Shift(original, "        old();\n", "/*\n * doc\n */\nx();\n", (false, 4));
+
+        Assert.That(
+            indents,
+            Is.EqualTo(new Dictionary<int, string> { [4] = Spaces(8), [5] = Spaces(9), [6] = Spaces(9), [7] = Spaces(8) }));
+    }
+
     // ---- helpers ----
+
+    /// <summary>Replaces the first occurrence of oldText with newText and runs the fallback shift for that single edit.</summary>
+    private static IReadOnlyDictionary<int, string> Shift(string original, string oldText, string newText, (bool UseTabs, int Width) unit)
+    {
+        var start = original.IndexOf(oldText, StringComparison.Ordinal);
+        var edit = new TextChange(new TextSpan(start, oldText.Length), newText);
+        var originalText = SourceText.From(original);
+        var spliced = originalText.WithChanges(edit);
+        var inserted = new TextSpan(start, newText.Length);
+        var eligible = Eligible(spliced.ToString(), inserted, skipBlockCommentLines: false);
+
+        return NewContentIndenter.IndentsFromShift(originalText, spliced, [edit], [inserted], eligible, unit);
+    }
+
+    private static string Spaces(int count) => new(' ', count);
 
     private static string Lines(params string[] lines) => string.Join("\n", lines);
 

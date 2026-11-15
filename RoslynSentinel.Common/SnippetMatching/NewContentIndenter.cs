@@ -217,7 +217,51 @@ public static class NewContentIndenter
     internal static IReadOnlyDictionary<int, string> IndentsFromFormatterChanges(
         SourceText splicedText, IReadOnlyList<int> eligibleLines, IEnumerable<TextChange> formatterChanges)
     {
-        throw new NotImplementedException(); // TODO implement (Step 5)
+        var indents = new Dictionary<int, string>();
+        var eligible = new HashSet<int>(eligibleLines);
+        foreach (var change in formatterChanges)
+        {
+            var span = change.Span;
+            if (span.End > splicedText.Length)
+            {
+                continue;
+            }
+
+            var line = splicedText.Lines.GetLineFromPosition(span.End);
+            if (!eligible.Contains(line.LineNumber) || IsBlank(line)
+                || span.End != line.Start + LeadingWhitespaceLength(line))
+            {
+                continue;
+            }
+
+            var oldText = splicedText.ToString(span);
+            var newText = change.NewText ?? string.Empty;
+            var oldBreaks = CountLineBreaks(oldText);
+            var newBreaks = CountLineBreaks(newText);
+            var keepA = newBreaks == 0 && span.Start >= line.Start;
+            var keepB = oldBreaks == newBreaks;
+            if (!keepA && !keepB)
+            {
+                continue;
+            }
+
+            var lastBreak = newText.LastIndexOfAny(['\r', '\n']);
+            var segment = newText.Substring(lastBreak + 1);
+            if (segment.Any(character => character != ' ' && character != '\t'))
+            {
+                continue;
+            }
+
+            // A change that starts inside the line's indentation (no line break in the old text) leaves the
+            // indentation before it in place. The plan text says "the new text's segment after its last line break";
+            // this adds the preserved prefix so a partial-indent change still yields the whole indentation.
+            var prefix = oldBreaks == 0 && span.Start > line.Start
+                ? splicedText.ToString(TextSpan.FromBounds(line.Start, span.Start))
+                : string.Empty;
+            indents[line.LineNumber] = prefix + segment;
+        }
+
+        return indents;
     }
 
     /// <summary>
@@ -228,7 +272,124 @@ public static class NewContentIndenter
         SourceText originalText, SourceText splicedText, IReadOnlyList<TextChange> edits,
         IReadOnlyList<TextSpan> insertedSpans, IReadOnlyList<int> eligibleLines, (bool UseTabs, int Width) unit)
     {
-        throw new NotImplementedException(); // TODO implement (Step 5)
+        var indents = new Dictionary<int, string>();
+        var eligible = new HashSet<int>(eligibleLines);
+        var unitWidth = unit.Width > 0 ? unit.Width : DefaultIndentWidth;
+        var count = Math.Min(edits.Count, insertedSpans.Count);
+        for (var i = 0; i < count; i++)
+        {
+            var span = insertedSpans[i];
+            var end = Math.Min(span.End, splicedText.Length);
+            if (span.Start >= end)
+            {
+                continue;
+            }
+
+            var editStart = Math.Min(edits[i].Span.Start, originalText.Length);
+            var fileBase = LeadingWhitespaceWidth(originalText.Lines.GetLineFromPosition(editStart), unitWidth);
+            var firstLine = splicedText.Lines.GetLineFromPosition(span.Start);
+            var lastLineNumber = splicedText.Lines.GetLineFromPosition(end - 1).LineNumber;
+            var startsAtLineIndent = IsWhitespaceRange(splicedText, firstLine.Start, span.Start);
+
+            // Widths of the non-blank lines of the insertion; line 1 counts only its inserted part (newContent's own indent).
+            var widths = new List<(int Number, int Width)>();
+            for (var number = firstLine.LineNumber; number <= lastLineNumber; number++)
+            {
+                var line = splicedText.Lines[number];
+                if (IsBlank(line))
+                {
+                    continue;
+                }
+
+                var lineWidth = number == firstLine.LineNumber
+                    ? InsertedLeadingWidth(splicedText, line, span.Start, unitWidth)
+                    : LeadingWhitespaceWidth(line, unitWidth);
+                widths.Add((number, lineWidth));
+            }
+
+            if (startsAtLineIndent)
+            {
+                if (widths.Count == 0)
+                {
+                    continue;
+                }
+
+                var anchor = widths[0];
+                var delta = fileBase - anchor.Width;
+                foreach (var (number, lineWidth) in widths)
+                {
+                    if (eligible.Contains(number))
+                    {
+                        indents[number] = IndentTargetString(number == anchor.Number ? fileBase : lineWidth + delta, unit);
+                    }
+                }
+            }
+            else
+            {
+                // Mid-line start: line 1 is not touched. Later lines already at or beyond the file base are taken as absolute.
+                var later = widths.Where(entry => entry.Number > firstLine.LineNumber && eligible.Contains(entry.Number)).ToList();
+                if (later.Count == 0)
+                {
+                    continue;
+                }
+
+                var delta = later.Min(entry => entry.Width) >= fileBase ? 0 : fileBase;
+                foreach (var (number, lineWidth) in later)
+                {
+                    indents[number] = IndentTargetString(lineWidth + delta, unit);
+                }
+            }
+        }
+
+        return indents;
+    }
+
+    /// <summary>Builds leading whitespace of <paramref name="width"/> columns in the file's style (tabs plus remaining spaces, or spaces).</summary>
+    private static string IndentTargetString(int width, (bool UseTabs, int Width) unit)
+    {
+        width = Math.Max(width, 0);
+        if (!unit.UseTabs)
+        {
+            return new string(' ', width);
+        }
+
+        var unitWidth = unit.Width > 0 ? unit.Width : DefaultIndentWidth;
+        return new string('\t', width / unitWidth) + new string(' ', width % unitWidth);
+    }
+
+    /// <summary>Width of the whitespace that starts at <paramref name="spanStart"/> (or the line start, if later) on <paramref name="line"/>.</summary>
+    private static int InsertedLeadingWidth(SourceText text, TextLine line, int spanStart, int tabWidth)
+    {
+        var width = 0;
+        for (var position = Math.Max(line.Start, spanStart); position < line.End && char.IsWhiteSpace(text[position]); position++)
+        {
+            width += text[position] == '\t' ? tabWidth : 1;
+        }
+
+        return width;
+    }
+
+    /// <summary>Counts line breaks (CRLF counts once, lone CR and lone LF once each).</summary>
+    private static int CountLineBreaks(string text)
+    {
+        var count = 0;
+        for (var index = 0; index < text.Length; index++)
+        {
+            if (text[index] == '\r')
+            {
+                count++;
+                if (index + 1 < text.Length && text[index + 1] == '\n')
+                {
+                    index++;
+                }
+            }
+            else if (text[index] == '\n')
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     /// <summary>Indent width (and tab width for width arithmetic) used when the file gives no evidence.</summary>
