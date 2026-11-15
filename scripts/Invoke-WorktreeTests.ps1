@@ -275,20 +275,37 @@ function Get-TestArgs([string]$project) {
     return $testArgs
 }
 
+# Last line of a test log that names a failure (error, fail, exception, teardown), else its last
+# non-empty line. Empty when the file is missing.
+function Get-FailureLogLine([string]$path) {
+    if (-not (Test-Path $path)) { return '' }
+    $lines = @(Get-Content $path -Tail 300 | Where-Object { $_.Trim() })
+    if ($lines.Count -eq 0) { return '' }
+    $named = @($lines | Where-Object { $_ -match '(?i)error|fail|exception|teardown' })
+    $pick = if ($named.Count -gt 0) { $named[-1] } else { $lines[-1] }
+    return $pick.Trim()
+}
+
+# project leaf name -> dotnet exit code (set for both the parallel and sequential paths)
+$exitCodes = @{}
+
 if ($Parallel) {
     $jobs = foreach ($p in $selected) {
         $leaf = Split-Path $p -LeafBase
         $log = Join-Path $resultsDir "$leaf.log"
-        Start-Process -FilePath 'dotnet' -ArgumentList (Get-TestArgs $p) -RedirectStandardOutput $log `
+        $proc = Start-Process -FilePath 'dotnet' -ArgumentList (Get-TestArgs $p) -RedirectStandardOutput $log `
             -RedirectStandardError "$log.err" -NoNewWindow -PassThru
+        [pscustomobject]@{ leaf = $leaf; proc = $proc }
     }
-    $jobs | Wait-Process
+    $jobs.proc | Wait-Process
+    foreach ($j in $jobs) { $exitCodes[$j.leaf] = $j.proc.ExitCode }
 } else {
     foreach ($p in $selected) {
         $leaf = Split-Path $p -LeafBase
         $log = Join-Path $resultsDir "$leaf.log"
         Write-Host "Testing $leaf..."
         & dotnet @(Get-TestArgs $p) *> $log
+        $exitCodes[$leaf] = $LASTEXITCODE
     }
 }
 
@@ -306,7 +323,7 @@ $anyFailed = $false
 foreach ($p in $selected) {
     $leaf = Split-Path $p -LeafBase
     $trx = Join-Path $resultsDir "$leaf.trx"
-    $row = [ordered]@{ project = $leaf; total = 0; passed = 0; failed = 0; skipped = 0; failures = @(); skippedTests = @(); note = $null }
+    $row = [ordered]@{ project = $leaf; total = 0; passed = 0; failed = 0; skipped = 0; failures = @(); skippedTests = @(); note = $null; exitCode = $exitCodes[$leaf] }
     if (-not (Test-Path $trx)) {
         $row.note = "no TRX (crash, hang or no tests matched) - see $leaf.log"
         $anyFailed = $true
@@ -333,6 +350,8 @@ foreach ($p in $selected) {
         }
         if ($row.failed -gt 0) { $anyFailed = $true }
     }
+    # A non-zero dotnet exit with zero failed TRX tests (e.g. a failing OneTimeTearDown) is still a failure.
+    if ($null -ne $row.exitCode -and $row.exitCode -ne 0) { $anyFailed = $true }
     $summary.projects += $row
 }
 
@@ -368,6 +387,13 @@ foreach ($row in $summary.projects | Where-Object { $_.failures.Count -gt 0 }) {
     Write-Host ''
     Write-Host "Failed in $($row.project):"
     foreach ($f in $row.failures) { Write-Host "  $($f.test)`n      $($f.message)" }
+}
+foreach ($row in @($summary.projects | Where-Object { $null -ne $_.exitCode -and $_.exitCode -ne 0 })) {
+    $lastLine = Get-FailureLogLine (Join-Path $resultsDir "$($row.project).log.err")
+    if (-not $lastLine) { $lastLine = Get-FailureLogLine (Join-Path $resultsDir "$($row.project).log") }
+    $detail = if ($lastLine) { " - $lastLine" } else { '' }
+    Write-Host ''
+    Write-Host "FAILURES in $($row.project): dotnet exited $($row.exitCode)$detail"
 }
 Write-Host ''
 Write-Host ("Commit {0} - {1} in {2:n0}s. Results: {3}" -f $head.Substring(0, 8), $(if ($anyFailed) { 'FAILURES' } else { 'all passed' }), $sw.Elapsed.TotalSeconds, $resultsDir)
