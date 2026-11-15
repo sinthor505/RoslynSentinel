@@ -1343,7 +1343,9 @@ public class WorkspaceFileEditImpl
                         // H3: the oldContent holds the old text of a line the server rewrote (a lifted rename or RenameSymbol) earlier.
                         throw new ToolNotFoundException(notFound.Message + " " + rewriteNote, notFound.MissingTargetKind, notFound.MissingTargetName, notFound.Snippet, notFound.Candidates);
                     }
-                    var newFileContent = oldText.ToString().Remove(match.Start, match.Length).Insert(match.Start, newContent);
+                    // The indent pass runs on every successful match, exact ones included, apply and validate alike.
+                    var reindent = await NewContentIndenter.ReindentAsync(document, [new TextChange(new TextSpan(match.Start, match.Length), newContent)], cancellationToken);
+                    var newFileContent = reindent.Text;
                     var targetPath = document.FilePath ?? filePathResolved;
                     var targetEol = _workspaceManager.ResolveEol((string)targetPath, oldText.ToString());
                     var normalizedContent = EolUtilities.NormalizeEol(newFileContent, targetEol);
@@ -1364,7 +1366,7 @@ public class WorkspaceFileEditImpl
                     // The matched span in the baseline text and its replacement, for rename lifting (same key instance as snippetChanges).
                     IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>> liftSpans = new Dictionary<FilePathWrapper, IReadOnlyList<TextChange>>
                     {
-                        [snippetChanges.Keys.Single()] = [new TextChange(new TextSpan(match.Start, match.Length), newContent)]
+                        [snippetChanges.Keys.Single()] = [new TextChange(new TextSpan(match.Start, match.Length), reindent.InsertedTexts[0])]
                     };
                     // Visible to parallel calls' impact analysis until this call ends (see InFlightEditMemory).
                     using var inFlight = _inFlightEdits.Register([((string)targetPath, newContent ?? string.Empty)]);
@@ -1451,7 +1453,8 @@ public class WorkspaceFileEditImpl
                         _appliedEdits.Remember((string)targetPath, oldContent, newContent, changeId);
                     var blobWrite = await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet", result, blobChangeId: changeId, cancellationToken: cancellationToken);
                     var summaryBody = liftNote is null ? result.Summary : $"{liftNote} {result.Summary}";
-                    var appliedSummary = selectorNote is null ? summaryBody : $"{selectorNote} {summaryBody}";
+                    var indentNote = reindent.LinesAdjusted > 0 ? $"newContent indentation was adjusted to the file's on {reindent.LinesAdjusted} line(s); returnDiff shows the written text." : null;
+                    var appliedSummary = string.Join(" ", new[] { selectorNote, indentNote, summaryBody }.Where(part => part is not null));
                     var strippedResult = result with { PreImages = null, Summary = blobWrite.Written ? $"{appliedSummary} Call {ToolCallHint.Call("UndoLastApply", ("changeId", changeId))} to revert." : appliedSummary };
                     string? diffContent = returnDiff
                         ? ValidateAndApplyHelper.BuildDiffFromPreImages(snippetChanges, result.PreImages)
@@ -1682,14 +1685,12 @@ public class WorkspaceFileEditImpl
                 continue;
             }
 
-            // Apply highest-offset-first so an earlier splice's growth/shrink never invalidates a
-            // later match's offset -> every position was already computed against originalString above,
-            // so no running correction term is needed the way DiffEngine's forward hunk application uses.
-            var spliced = originalString;
-            foreach (var (_, match, _, newContent) in byStart.OrderByDescending(r => r.match.Start))
-            {
-                spliced = spliced.Remove(match.Start, match.Length).Insert(match.Start, newContent);
-            }
+            // All matches were computed against originalString, so one indent-aware splice applies them
+            // together. The indent pass runs on every successful match, exact ones included.
+            var reindent = await NewContentIndenter.ReindentAsync(document, resolved.Select(r => new TextChange(new TextSpan(r.match.Start, r.match.Length), r.newContent)).ToList(), cancellationToken);
+            var spliced = reindent.Text;
+            if (reindent.LinesAdjusted > 0)
+                selectorNotes.Add($"{DisplayPath(filePathResolved)}: newContent indentation was adjusted to the file's on {reindent.LinesAdjusted} line(s); returnDiff shows the written text.");
 
             var targetEol = _workspaceManager.ResolveEol((string)canonicalPath, originalString);
             var normalizedSpliced = EolUtilities.NormalizeEol(spliced, targetEol);
@@ -1703,7 +1704,7 @@ public class WorkspaceFileEditImpl
                 };
             }
             finalContents[canonicalPath] = normalizedSpliced;
-            liftSpans[canonicalPath] = resolved.Select(r => new TextChange(new TextSpan(r.match.Start, r.match.Length), r.newContent)).ToList();
+            liftSpans[canonicalPath] = resolved.Select((r, i) => new TextChange(new TextSpan(r.match.Start, r.match.Length), reindent.InsertedTexts[i])).ToList();
             newContentsByFile[(string)canonicalPath] = resolved.Select(r => (r.oldContent, r.newContent)).ToList();
         }
 
