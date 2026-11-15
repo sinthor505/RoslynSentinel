@@ -143,6 +143,36 @@ public class AdminToolsTests
         Assert.That(result, Does.Contain("cannot be combined with files"));
     }
 
+    [Test]
+    public void Acknowledge_PartialWithUnknownName_ClearsTrackedNameAndNamesUnknownOne()
+    {
+        var health = new StubHealth("A.cs", "B.cs");
+
+        var result = AdminTools.AcknowledgeDriftResult(health, "A.cs,nope.cs", AdminTools.ExternalFileDriftAcknowledgeScope.ConfirmWithListedFiles);
+
+        Assert.That(result.IsError, Is.False);
+        Assert.That(health.ClearSessionHaltCalls, Is.EqualTo(1));
+        Assert.That(health.Tracked, Is.EqualTo(new[] { "B.cs" }));
+        Assert.That(result.SuccessData, Does.StartWith("Cleared 1: A.cs from the drift list."));
+        Assert.That(result.SuccessData, Does.Contain("nope.cs"));
+        Assert.That(result.SuccessData, Does.Contain("match no tracked change"));
+        Assert.That(result.SuccessData, Does.Not.Contain("Nothing cleared"));
+    }
+
+    [Test]
+    public void Acknowledge_AllUnknownNames_IsRefusedNotFoundAndClearsNothing()
+    {
+        var health = new StubHealth("A.cs", "B.cs");
+
+        var result = AdminTools.AcknowledgeDriftResult(health, "nope.cs", AdminTools.ExternalFileDriftAcknowledgeScope.ConfirmWithListedFiles);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(result.ErrorData!.Message, Does.Contain("Nothing cleared"));
+        Assert.That(health.ClearSessionHaltCalls, Is.EqualTo(0));
+        Assert.That(health.Tracked, Has.Count.EqualTo(2));
+    }
+
     // Stub drift source: the real manager cannot be seeded with drift without a file-watcher round trip.
     private sealed class StubHealth : IWorkspaceHealthReporter
     {

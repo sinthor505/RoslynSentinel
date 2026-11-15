@@ -157,9 +157,9 @@ public class AdminTools
         var current = health.GetExternalFileChanges();
         DriftMessages.ResolveSelection(current, requested, out var matched, out var unmatched);
 
-        if (unmatched.Count > 0)
+        if (matched.Count == 0 && unmatched.Count > 0)
         {
-            return Refused(ToolErrorCode.NotFound, UnmatchedDriftNamesText(unmatched, current));
+            return Refused(ToolErrorCode.NotFound, UnmatchedDriftNamesText(unmatched, current, partial: false));
         }
 
         if (matched.Count == 0)
@@ -177,6 +177,11 @@ public class AdminTools
             message += $" {remaining.Count} file(s) remain listed: {DriftMessages.SummarizeFiles(remaining)}.";
         }
 
+        if (unmatched.Count > 0)
+        {
+            message += " " + UnmatchedDriftNamesText(unmatched, remaining, partial: true);
+        }
+
         return Ok(message);
     }
 
@@ -185,12 +190,14 @@ public class AdminTools
 
     // Facts for Acknowledge names that match no tracked change: the names, how matching works, ranked tracked names
     // (file-name similarity, top 3 per name) with a prefilled retry or the no-similar-name fact, and the List option.
-    private static string UnmatchedDriftNamesText(IReadOnlyList<string> unmatched, IReadOnlyList<string> current)
+    // partial: true means other names were cleared, so the lead reads "Not cleared" instead of "Nothing cleared".
+    private static string UnmatchedDriftNamesText(IReadOnlyList<string> unmatched, IReadOnlyList<string> current, bool partial)
     {
         var trackedNames = current.Select(p => Path.GetFileName(p)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var lead = partial ? "Not cleared" : "Nothing cleared";
         var parts = new List<string>
         {
-            $"Nothing cleared: '{string.Join("', '", unmatched)}' match no tracked change (names and relative paths are compared ignoring case; {current.Count} change(s) tracked)."
+            $"{lead}: '{string.Join("', '", unmatched)}' match no tracked change (names and relative paths are compared ignoring case; {current.Count} change(s) tracked)."
         };
 
         foreach (var token in unmatched)

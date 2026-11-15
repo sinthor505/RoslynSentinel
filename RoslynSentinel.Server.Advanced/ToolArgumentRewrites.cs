@@ -73,6 +73,7 @@ public static class ToolArgumentRewrites
                 "runtest" => RewriteRunTestProject(arguments, declared, properties),
                 "getdiagnostics" => RewriteGetDiagnosticsFile(arguments, declared, properties),
                 "build" => RewriteBuildLevel(arguments, declared, properties),
+                "externalfiledrift" => RewriteExternalFileDriftFiles(arguments, declared),
                 _ => null,
             };
             if (rewriteNote is not null)
@@ -510,6 +511,28 @@ public static class ToolArgumentRewrites
                 arguments["level"] = JsonSerializer.SerializeToElement(level);
                 return $"Note: 'mode' is not a parameter of Build; it was treated as level: \"{level}\". Use {ToolCallHint.Call("Build", ("level", level))} in future calls.";
             }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// ExternalFileDrift <c>filePath</c> or <c>filePaths</c> becomes <c>files</c>, only when <c>files</c> is
+    /// declared and not already supplied; the value is moved unchanged.
+    /// </summary>
+    private static string? RewriteExternalFileDriftFiles(
+        IDictionary<string, JsonElement> arguments,
+        IReadOnlySet<string> declared)
+    {
+        if (!declared.Contains("files"))
+            return null;
+
+        foreach (var source in new[] { "filePath", "filePaths" })
+        {
+            if (declared.Contains(source) || !Rename(arguments, source, "files"))
+                continue;
+
+            return $"Note: '{source}' is not a parameter of ExternalFileDrift; it was treated as files. Use {ToolCallHint.Call("ExternalFileDrift", ("operation", "Acknowledge"), ("files", "<name>"))} in future calls.";
         }
 
         return null;
