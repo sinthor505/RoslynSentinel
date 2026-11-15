@@ -61,6 +61,7 @@ public sealed class ToolsetService
     private readonly IReadOnlySet<string> _supportedClassNames;
     private readonly Func<IEnumerable<Assembly>> _assemblySource;
     private readonly Dictionary<ToolSetName, List<McpServerTool>> _enabled = new();
+    private int _toolListChangedRaised; // guarded by _gate
 
     /// <param name="serverOptions">The server options whose <c>ToolCollection</c> is mutated.</param>
     /// <param name="services">The root provider tools are built against (and construct their targets from).</param>
@@ -101,6 +102,22 @@ public sealed class ToolsetService
             lock (_gate)
             {
                 return _enabled.Values.SelectMany(t => t).Select(t => t.ProtocolTool.Name).OrderBy(n => n, StringComparer.Ordinal).ToArray();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Number of SetEnabled calls that mutated the tool collection (added or removed at least one tool). These are the
+    /// changes that make the SDK raise notifications/tools/list_changed on a stateful transport; it is not proof that a
+    /// client received the notification.
+    /// </summary>
+    public int ToolListChangedRaised
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _toolListChangedRaised;
             }
         }
     }
@@ -171,6 +188,11 @@ public sealed class ToolsetService
                 }
 
                 _enabled.Remove(toolSet);
+            }
+
+            if (added.Count + removed.Count > 0)
+            {
+                _toolListChangedRaised++;
             }
 
             return new ToolsetChange(

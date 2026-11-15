@@ -51,14 +51,16 @@ public class ServerStatusTools
         " workspaceStale = a workspace reload failed and the loaded solution may not match disk (see reloadFailure; recover with LoadSolution forceReload: true); lastLoadFailure = text of the last failed load." +
         " lastLaunch = the launcher's last build of source HEAD (buildFailed = it fell back to the older servedSha; firstErrors and hint say why)." +
         " operatingMode/operatingModeSource = SingleAgent or MultiAgent and why; callerAgentId = agent id of this call (null if none)." +
-        " eolMode = line-ending policy for writes (--eol / ROSLYNSENTINEL_EOL): auto keeps each file's existing endings (else .editorconfig), crlf or lf forces that ending.")]
+        " eolMode = line-ending policy for writes (--eol / ROSLYNSENTINEL_EOL): auto keeps each file's existing endings (else .editorconfig), crlf or lf forces that ending." +
+        " clientProtocolVersion = this session's negotiated MCP version; toolListChangedRaised = tool-list changes applied (not proof of delivery).")]
     public SentinelCallToolResult<McpServerStatusResult> McpServerStatusTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("inactive: declared tools not active in this mode, with an enabledBy hint. all: every declared tool.")]
         McpServerStatusToolListing toolListing = McpServerStatusToolListing.none,
         [Description("Case-insensitive substring of tool/class name; narrows toolListing.")]
         string? toolNameFilter = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        RequestContext<CallToolRequestParams>? requestContext = null)
     {
         _ = cancellationToken;
 
@@ -179,7 +181,11 @@ public class ServerStatusTools
             // Beside the orientation breaker's state, but only while the latch is switched on (null = field omitted from the wire).
             LoopLatch: LoopLatchOptions.Enabled && _loopLatch is not null ? _loopLatch.Snapshot() : null,
             // Process-wide policy; PersistentWorkspaceManager.EolModeOverride is a test seam and is not reported.
-            EolMode: EolPolicyOptions.Mode.ToString().ToLowerInvariant()
+            EolMode: EolPolicyOptions.Mode.ToString().ToLowerInvariant(),
+            // Negotiated MCP version of the calling session; null when the call carries no request context (tests, in-process callers).
+            ClientProtocolVersion: requestContext?.JsonRpcRequest.Context?.ProtocolVersion ?? requestContext?.Server.NegotiatedProtocolVersion,
+            // Tool-list change scopes this process applied; not proof a client received notifications/tools/list_changed.
+            ToolListChangedRaised: _toolsets?.ToolListChangedRaised
         )
         };
     }
@@ -299,7 +305,11 @@ public sealed record McpServerStatusResult(
     // Latched tools per agent (empty = none latched); present only while --loop-latch is on.
     IReadOnlyList<LoopLatchAgentState>? LoopLatch = null,
     // Effective --eol write policy (auto | crlf | lf), fixed per process by EolPolicyOptions.
-    string? EolMode = null);
+    string? EolMode = null,
+    // Negotiated MCP protocol version of the calling session (null without a request context).
+    string? ClientProtocolVersion = null,
+    // Tool-list change scopes ToolsetService applied in this process (null when no ToolsetService is injected).
+    int? ToolListChangedRaised = null);
 /// <summary>
 /// One <see cref="McpServerToolAttribute"/>-carrying method discovered via reflection, as reported
 /// by McpServerStatusTool's <c>AllDeclaredTools</c>. Ground truth for "does this tool exist in this
