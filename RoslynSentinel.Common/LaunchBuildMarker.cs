@@ -70,6 +70,8 @@ public static class LaunchBuildMarker
         {
             // Recovery grounded in scripts/roslynsentinel-instances-common.ps1 (Repair-RoslynSentinelSourceClone): the
             // launcher removes an index.lock older than 10 minutes, runs git reset --hard HEAD and retries the pull once.
+            // TODO a clone with a local commit (ahead of origin, "Diverging branches") is not repaired by reset --hard HEAD
+            // and this hint does not name that case; 2026-11-15 the clone was 1 ahead/198 behind and needed reset --hard origin/master.
             hints.Add("The launcher could not update its source clone, so this server may be OLDER than the dev repo"
                 + (pullError is null ? "." : $" (pull error: {pullError}).")
                 + $" Recover: wait until any <instances root>\\source\\.git\\index.lock is over 10 minutes old (or delete it), then {restart}; the next launch removes a stale lock, resets the clone and retries the pull.");

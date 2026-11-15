@@ -1,6 +1,6 @@
 # Plan: ReplaceSnippet accepts token-equivalent oldContent and re-indents newContent to the file
 
-**Status:** IN PROGRESS 2026-11-15. Steps 1-6 done (e46c4edb, 88dddc35, 7f4f7a3c, 202d273a, 132e9fa6, 2afde809). Approved 2026-11-14; owner settled R1-R4, lanes, step order, Step 10 scope and the eval set (see "Owner decisions (2026-11-14) on the plan review"); Batched mode, owner present.
+**Status:** IN PROGRESS 2026-11-15. Steps 1-10b and 12 done (e46c4edb..54e9052e); Step 11 not needed; Step 13 eval queued. Approved 2026-11-14; owner settled R1-R4, lanes, step order, Step 10 scope and the eval set (see "Owner decisions (2026-11-14) on the plan review"); Batched mode, owner present.
 
 ## Problem
 
@@ -224,6 +224,7 @@ Two pure helpers in `RoslynSentinel.Common/SnippetMatching/` (layering: they nee
 - Done when: `Build` 0 errors; dispatcher runs `NewContentIndenterTests`.
 
 ### Step 7 - Wire the token step into ResolveEditMatch (runs after Step 8; owner decision)
+- Done: 218344d1 (code + flipped tests), 60ab48d7 (new tests via test-writer)
 - Files: `RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs`, `RoslynSentinel.Tests.Tools.Basic/ReplaceSnippetLooserTierTests.cs`, `RoslynSentinel.Tests.Tools.Basic/ReplaceSnippetErrorCodeTests.cs`
 - Depends on: 3, 8
 - Also: add `ReplaceSnippet_Single_TokenMatchWithUnindentedNewContent_WritesFileIndentationAsync` (moved from Step 8) to `ReplaceSnippetLooserTierTests`. If that makes the dispatch exceed D1, hand the new tests to `test-writer` after the code lands.
@@ -237,6 +238,7 @@ Two pure helpers in `RoslynSentinel.Common/SnippetMatching/` (layering: they nee
 - Done when: `Build` 0 errors; dispatcher runs `ReplaceSnippetLooserTierTests`, `ReplaceSnippetErrorCodeTests`, `SnippetResolverCrossAssemblyTests`.
 
 ### Step 8 - Wire the indent pass into the single and batch paths (pair with Step 10a; runs before Step 7)
+- Done: 0aa6b228 (19-file list green: 124/124 Tests.Tools.Basic, 60/60 Tests; no drift)
 - Files: `RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs`, `RoslynSentinel.Tests.Tools.Basic/ReplaceSnippetReindentTests.cs` (new)
 - Depends on: 6
 - Effect: behaviour-changing: every successful `ReplaceSnippet` (apply and validate) writes `newContent` with the file's indentation; the apply summary gains a fact sentence when lines were adjusted.
@@ -254,6 +256,7 @@ Two pure helpers in `RoslynSentinel.Common/SnippetMatching/` (layering: they nee
 - Done when: `Build` 0 errors; dispatcher runs `ReplaceSnippetReindentTests`, then every test in the 19 files that call `ReplaceSnippet` (`ReplaceSnippetErrorCodeTests`, `ReplaceSnippetRenameLiftTests`, `EditImpactSpanAttributionTests`, `ReplaceSnippetBatchTests`, `ReplaceSnippetCrossFileRejectionTests`, `ReplaceSnippetSizeGuardTests`, `ReplaceSnippetLooserTierTests`, `StaleReadWriteToolsTests`, `RejectedSnippetEditTests`, `ReplaceSnippetNoTypeLeftGuardTests`, `FileNotFoundConsumerPathTests`, `PathCaseLookupRegressionTests`, `ReplaceSnippetDuplicateApplyTests`, `EolInheritanceTests`, `StaleReadEngineToolsTests`, `WholeFileApplyResultShapeTests`, `ReplaceSnippetValidateRejectionTests`, `SnippetMissFactsAndOptionsTests`, `UndoLastApplyConcurrentEditTests`). Failures go to Step 11.
 
 ### Step 9 - Duplicate-apply memory knows the written text
+- Done: 54e9052e
 - Files: `RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs`, `RoslynSentinel.Tests/ReplaceSnippetDuplicateApplyTests.cs`
 - Depends on: 8
 - Effect: behaviour-changing (restores today's no-op): an identical `ReplaceSnippet` sent twice is still a no-op success when the first write was re-indented.
@@ -262,6 +265,7 @@ Two pure helpers in `RoslynSentinel.Common/SnippetMatching/` (layering: they nee
 - Done when: `Build` 0 errors; dispatcher runs `ReplaceSnippetDuplicateApplyTests`.
 
 ### Step 10a - Descriptions in Common (pair with Step 8)
+- Done: 3999a637
 - Files: `RoslynSentinel.Common/McpToolSchemaPatcher.cs`, `RoslynSentinel.Common/ToolParams.cs`, `RoslynSentinel.Common/BatchTypes.cs`
 - Depends on: none (text only); schedule with Step 8 so the wire text and the behaviour land in the same run.
 - Effect: behaviour-changing (tool schema text)
@@ -275,6 +279,7 @@ Two pure helpers in `RoslynSentinel.Common/SnippetMatching/` (layering: they nee
 - Done when: `Build` 0 errors; `Search(mode: text, query: "literal substring match|matched exactly against the file")` over `RoslynSentinel.Common` returns only `TextSearchResult.cs`.
 
 ### Step 10b - Tool descriptions in Tools.Basic
+- Done: f631ba2e (RS1034 follow-up fix: 2ca53f09)
 - Files: `RoslynSentinel.Tools.Basic/WorkspaceTools.cs`, `RoslynSentinel.Tools.Basic/EditSnippetsTools.cs`
 - Depends on: 10a (same wording); run after Step 8 commits (both are in Tools.Basic, so not as a pair with 8).
 - Effect: behaviour-changing (tool description text)
@@ -283,6 +288,7 @@ Two pure helpers in `RoslynSentinel.Common/SnippetMatching/` (layering: they nee
 - Done when: `Build` 0 errors; `Search(mode: text, query: "Replaces one exact text block|Replaces exact text blocks")` returns 0 matches.
 
 ### Step 11 - Existing test drift from the always-on indent pass (conditional)
+- Not needed: Step 8's 19-file run showed no drift.
 - Files: only the test files that failed in Step 8's run (at most 3 per dispatch; split by file otherwise)
 - Depends on: 8
 - Effect: text-neutral (tests only)
@@ -291,6 +297,7 @@ Two pure helpers in `RoslynSentinel.Common/SnippetMatching/` (layering: they nee
 - Done when: the Step 8 test list passes, or every remaining failure is reported as a defect.
 
 ### Step 12 - Stub search, full build, live restart, baselines
+- Done 2026-11-15: 0 stubs; fullBuild 0 errors, 5 warnings (unchanged count); full RoslynSentinel.Tests run at ade1e377 1038/1038; live check on the restarted server: dropped-indent oldContent matched by tokens, tab-indented newContent written with the file's 8 spaces, summary states both (scratch edit undone). The restart first served a stale build because the launcher clone had diverged; reset with owner approval.
 - Files: none
 - Depends on: 2-11
 - Effect: none
@@ -299,6 +306,7 @@ Two pure helpers in `RoslynSentinel.Common/SnippetMatching/` (layering: they nee
 - Done when: no stubs, 0 build errors, 0 new test failures, both live calls behave as specified.
 
 ### Step 13 - Eval run (proposal slice e)
+- Queued 2026-11-15 07:31: on 113 (qwen3.5-9b-mtp) and 112 (qwen3.5-4b-mtp), ShippingKindStep V7-V11 and V13 with -Step 5 x5 each, OrderPricingRefactorChain10 x3 each (session roslynsentinel-a6ec083a). Host 112 added to match the 2026-11-14 baseline's 4b runs.
 - Files: none (results under `ModelTestingResults/113/`)
 - Depends on: 12, with the plan's commits on master
 - Effect: none (measurement)
