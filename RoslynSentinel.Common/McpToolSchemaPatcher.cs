@@ -490,11 +490,11 @@ public static class McpToolSchemaPatcher
         bool anyPatched = PatchDescription(
             propertiesObj,
             "oldContent",
-            $"Verbatim text to find and replace using literal substring match. Limit: {ReplaceSnippetOptions.MaxOldContentLines} lines / {ReplaceSnippetOptions.MaxOldContentChars} chars (excluding leading indentation).");
+            $"Text to find and replace. Indentation and the amount of spacing need not match the file; identifiers, operators, comments, string contents and line structure must. Limit: {ReplaceSnippetOptions.MaxOldContentLines} lines / {ReplaceSnippetOptions.MaxOldContentChars} chars (excluding leading indentation).");
         anyPatched |= PatchDescription(
             propertiesObj,
             "newContent",
-            $"Verbatim replacement text for oldContent. Limit: {ReplaceSnippetOptions.MaxNewContentLines} lines / {ReplaceSnippetOptions.MaxNewContentChars} chars (excluding leading indentation).");
+            $"Replacement text for oldContent. Its indentation is adjusted to the file's; spacing within lines is kept as written. Limit: {ReplaceSnippetOptions.MaxNewContentLines} lines / {ReplaceSnippetOptions.MaxNewContentChars} chars (excluding leading indentation).");
         // TODO remove ReplaceSnippet's lineBefore/lineAfter parameters and SnippetEdit.LineBefore/LineAfter once no caller sends them (hidden from the schema 2026-11-09; widen oldContent or use matchLine instead).
         anyPatched |= RemoveAnchorProperties(schemaObj, propertiesObj);
         anyPatched |= PatchBatchEditItems(schemaObj, propertiesObj);

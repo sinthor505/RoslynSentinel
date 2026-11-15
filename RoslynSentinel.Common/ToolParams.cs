@@ -72,7 +72,7 @@ public static class ToolParams
         "edits only. If it matches more than once, widen it with a neighbouring line or pass matchLine from the error's candidate list.";
 
     */
-    public const string OldContent = "Verbatim text to find and replace using literal substring match. Default limit of 2000 characters.";
+    public const string OldContent = "Text to find and replace. Indentation and the amount of spacing need not match the file; identifiers, operators, comments, string contents and line structure must. Default limit of 2000 characters.";
 
     /*
     public const string NewContent =
@@ -80,7 +80,7 @@ public static class ToolParams
         "than oldContent (net insertion), as long as it stays within the size limit (a startup-" +
         "configured line/char limit, reported in the error if exceeded).";
     */
-    public const string NewContent = "Verbatim replacement text for oldContent. Default limit of 2000 characters.";
+    public const string NewContent = "Replacement text for oldContent. Its indentation is adjusted to the file's; spacing within lines is kept as written. Default limit of 2000 characters.";
 
     public const string ContainingTypeName =
         "Name of the type that directly declares the target. Only needed when the target's name AND " +
