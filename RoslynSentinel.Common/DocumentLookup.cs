@@ -530,4 +530,29 @@ public static class DocumentLookup
 
         return null;
     }
+
+    /// <summary>
+    /// The one loaded document that a bare file name (no directory part) resolves to, as a
+    /// <see cref="FileCandidate"/> with distance 0. Returns null when <paramref name="requestedPath"/>
+    /// has a directory part, when no loaded document has that file name, or when two or more distinct
+    /// paths do.
+    /// </summary>
+    public static FileCandidate? TryResolveUniqueBareName(Solution solution, string requestedPath)
+    {
+        if (string.IsNullOrEmpty(requestedPath) || requestedPath.Contains('/') || requestedPath.Contains('\\'))
+        {
+            return null;
+        }
+
+        var matches = solution.Projects
+            .SelectMany(p => p.Documents)
+            .Where(d => !string.IsNullOrEmpty(d.FilePath))
+            .Select(d => d.FilePath!)
+            .Distinct(PathComparison.Comparer)
+            .Where(p => PathComparison.Comparer.Equals(Path.GetFileName(p), requestedPath))
+            .Take(2)
+            .ToList();
+
+        return matches.Count == 1 ? new FileCandidate(matches[0], 0, true) : null;
+    }
 }
