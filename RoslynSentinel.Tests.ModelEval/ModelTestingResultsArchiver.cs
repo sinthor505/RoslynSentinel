@@ -107,6 +107,11 @@ internal static class ModelTestingResultsArchiver
             return "113";
         }
 
+        if (baseUrl.Contains("192.168.10.85", StringComparison.OrdinalIgnoreCase))
+        {
+            return "85";
+        }
+
         var sanitized = new string(baseUrl.Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray()).Trim('_');
         return string.IsNullOrEmpty(sanitized) ? "unknown-host" : sanitized;
     }
