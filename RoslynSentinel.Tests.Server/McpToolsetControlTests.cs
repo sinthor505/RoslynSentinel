@@ -90,6 +90,42 @@ public class McpToolsetControlTests
     }
 
     [Test]
+    public void EnabledToolSetsChanged_RaisedOnceOnRealChange_NotOnIdempotentCall()
+    {
+        var (service, _) = CreateService();
+        var raised = new List<ToolSetName[]>();
+        service.EnabledToolSetsChanged += sets => raised.Add(sets.ToArray());
+
+        service.SetEnabled(ToolSetName.git, true);
+        Assert.That(raised, Has.Count.EqualTo(1));
+        Assert.That(raised[0], Is.EquivalentTo(new[] { ToolSetName.git }));
+
+        service.SetEnabled(ToolSetName.git, true);
+        Assert.That(raised, Has.Count.EqualTo(1), "re-enabling an enabled set is not a change and must not raise");
+
+        service.SetEnabled(ToolSetName.declarations, true);
+        Assert.That(raised, Has.Count.EqualTo(2));
+        Assert.That(raised[1], Is.EquivalentTo(new[] { ToolSetName.git, ToolSetName.declarations }));
+
+        service.SetEnabled(ToolSetName.git, false);
+        Assert.That(raised, Has.Count.EqualTo(3));
+        Assert.That(raised[2], Is.EqualTo(new[] { ToolSetName.declarations }));
+
+        service.SetEnabled(ToolSetName.git, false);
+        Assert.That(raised, Has.Count.EqualTo(3), "disabling an already-disabled set is not a change and must not raise");
+    }
+
+    [Test]
+    public void EnabledToolSetsChanged_ThrowingSubscriber_DoesNotBreakSetEnabled()
+    {
+        var (service, _) = CreateService();
+        service.EnabledToolSetsChanged += _ => throw new InvalidOperationException("subscriber failure");
+
+        Assert.DoesNotThrow(() => service.SetEnabled(ToolSetName.git, true));
+        Assert.That(service.EnabledToolSets, Does.Contain(ToolSetName.git));
+    }
+
+    [Test]
     public void Disable_RemovesExactlyWhatWasAdded_AndIsIdempotent()
     {
         var (service, collection) = CreateService();
