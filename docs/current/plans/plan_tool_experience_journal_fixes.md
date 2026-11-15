@@ -1,6 +1,6 @@
 # Plan: tool-experience journal fixes (R1-R25 and owner decisions D1, D2, D4-D7)
 
-**Status:** APPROVED 2026-11-15. Scope R1-R25, D1, D2, D4-D7 with open decisions O1-O16 settled; Batched mode, Batch A (owner-input steps) first.
+**Status:** IN PROGRESS 2026-11-15. Steps 1-14 done (Batch A, 6bf9025b..9c450e88); Batches B-F remain.
 
 ## Problem
 
@@ -318,6 +318,11 @@ Owner answers 2026-11-15 (all open decisions settled before the run):
 - Tests: `TestInstanceLauncherTests` - `BuildServerArguments` emits `--toolsets=git`; an unknown class name returns InvalidArgument naming the unknown name and a close known name; a tool name (`Git`) is refused with the class-name fact; a valid class name still launches arguments as before.
 - Done when: `Build` 0 errors; dispatcher runs `TestInstanceLauncherTests`, `ClaudeLeanSchemaBudgetTests` (new parameter on a lean tool), `McpToolsetControlTests` (Tests.Server).
 - Lane/tier: `implementer` D1 (3 files).
+
+Batch A done 2026-11-15: Step 1 6bf9025b, 2 0a940c60, 3 ab34c562, 4 ae6f7f07, 5 80bc1903, 6 fe44261f,
+7 8cebd6d9, 8 2eacaac5, 9 c1193c34, 10 b02a72ed + d9f86faa, 11 spike (no commit, O2 unchanged), 12 aaf1c310,
+13 224682a3, 14 d97a1f16; lean budget 44100 -> 45000 in f2539067, 9c450e88. Deviations: Step 2 went through
+the shared `ChangeSignatureAsync` pipeline (5 files); Step 10 split for `IGitOperations`.
 
 ### Batch B - Search, read lookups and paging
 
