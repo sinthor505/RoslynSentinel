@@ -1,3 +1,4 @@
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
 using RoslynSentinel.Common.SnippetMatching;
@@ -264,6 +265,124 @@ public class NewContentIndenterTests
             Is.EqualTo(new Dictionary<int, string> { [4] = Spaces(8), [5] = Spaces(9), [6] = Spaces(9), [7] = Spaces(8) }));
     }
 
+    // ---- Step 6: ReindentAsync ----
+
+    [Test]
+    public async Task ReindentAsync_ExactMatchWithTabIndentedNewContent_ConvertsToFileIndent()
+    {
+        var source = Lines("class C", "{", "    void M()", "    {", "        old();", "    }", "}", "");
+
+        var result = await Reindent(source, ("        old();\n", "\t\tif (x)\n\t\t{\n\t\t\tcall();\n\t\t}\n"));
+
+        var expected = Lines(
+            "class C", "{", "    void M()", "    {", "        if (x)", "        {", "            call();", "        }", "    }", "}", "");
+        Assert.That(result.Text, Is.EqualTo(expected));
+        Assert.That(
+            result.InsertedTexts, Is.EqualTo(new[] { Lines("        if (x)", "        {", "            call();", "        }", "") }));
+        Assert.That(result.LinesAdjusted, Is.EqualTo(4));
+        Assert.That(result.UsedFallback, Is.False);
+    }
+
+    [Test]
+    public async Task ReindentAsync_RegionDoesNotParse_UsesShiftFallback()
+    {
+        var source = Lines("class C", "{", "    void M()", "    {", "        old();", "    }", "}", "");
+
+        // The inserted if-block is never closed, so the edited text has one more syntax error than the original.
+        var result = await Reindent(source, ("        old();\n", "\t\tif (x) {\n\t\t\tcall();\n"));
+
+        var expected = Lines(
+            "class C", "{", "    void M()", "    {", "        if (x) {", "            call();", "    }", "}", "");
+        Assert.That(result.UsedFallback, Is.True);
+        Assert.That(result.Text, Is.EqualTo(expected));
+        Assert.That(result.LinesAdjusted, Is.EqualTo(2));
+    }
+
+    [Test]
+    public async Task ReindentAsync_MidLineStart_DoesNotDoubleIndentLaterLines()
+    {
+        var source = Lines("class C", "{", "    void M()", "    {", "        var x = old;", "    }", "}", "");
+
+        // Line 1 starts after "var x = " and is left alone; the later lines are already at the file's indent.
+        var result = await Reindent(source, ("old;", "new Foo\n        {\n            A = 1\n        };"));
+
+        var expected = Lines(
+            "class C", "{", "    void M()", "    {", "        var x = new Foo", "        {", "            A = 1", "        };",
+            "    }", "}", "");
+        Assert.That(result.Text, Is.EqualTo(expected));
+        Assert.That(result.LinesAdjusted, Is.EqualTo(0));
+        Assert.That(result.UsedFallback, Is.False);
+    }
+
+    [Test]
+    public async Task ReindentAsync_NewContentWithVerbatimStringLines_LeavesThemAsWritten()
+    {
+        var source = Lines("class C", "{", "    void M()", "    {", "        old();", "    }", "}", "");
+
+        // The two lines that start inside the verbatim string keep their text; the code lines around it are re-indented.
+        var result = await Reindent(
+            source, ("        old();\n", "\t\tvar s = @\"line1\n  line2\n\tline3\";\n\t\tnext();\n"));
+
+        var expected = Lines(
+            "class C", "{", "    void M()", "    {", "        var s = @\"line1", "  line2", "\tline3\";", "        next();",
+            "    }", "}", "");
+        Assert.That(result.Text, Is.EqualTo(expected));
+        Assert.That(result.LinesAdjusted, Is.EqualTo(2));
+    }
+
+    [Test]
+    public async Task ReindentAsync_IntraLineSpacingAndBraces_LeftAsWritten()
+    {
+        var source = Lines("class C", "{", "    void M()", "    {", "        old();", "    }", "}", "");
+
+        // Only leading whitespace is adjusted; the odd spacing and the one-line block stay as written.
+        var result = await Reindent(source, ("        old();\n", "\t\tint   x=1 ;\n\t\tif(x>0){x++;}\n"));
+
+        var expected = Lines(
+            "class C", "{", "    void M()", "    {", "        int   x=1 ;", "        if(x>0){x++;}", "    }", "}", "");
+        Assert.That(result.Text, Is.EqualTo(expected));
+        Assert.That(result.LinesAdjusted, Is.EqualTo(2));
+    }
+
+    [Test]
+    public async Task ReindentAsync_CorrectlyIndentedNewContent_ReportsZeroLinesAdjusted()
+    {
+        var source = Lines("class C", "{", "    void M()", "    {", "        old();", "    }", "}", "");
+        var newContent = Lines("        if (x)", "        {", "            call();", "        }", "");
+
+        var result = await Reindent(source, ("        old();\n", newContent));
+
+        var expected = Lines(
+            "class C", "{", "    void M()", "    {", "        if (x)", "        {", "            call();", "        }", "    }", "}", "");
+        Assert.That(result.Text, Is.EqualTo(expected));
+        Assert.That(result.InsertedTexts, Is.EqualTo(new[] { newContent }));
+        Assert.That(result.LinesAdjusted, Is.EqualTo(0));
+        Assert.That(result.UsedFallback, Is.False);
+    }
+
+    [Test]
+    public async Task ReindentAsync_TwoEdits_InsertedTextsMatchInputOrder()
+    {
+        var source = Lines(
+            "class C", "{", "    void A()", "    {", "        oldA();", "    }", "", "    void B()", "    {", "        oldB();",
+            "    }", "}", "");
+
+        // Input order is the later edit first; InsertedTexts must follow the input order, not the position order.
+        var result = await Reindent(
+            source,
+            ("        oldB();\n", "\t\tif (b)\n\t\t{\n\t\t\tcallB();\n\t\t}\n"),
+            ("        oldA();\n", "\t\tcallA();\n"));
+
+        var expected = Lines(
+            "class C", "{", "    void A()", "    {", "        callA();", "    }", "", "    void B()", "    {", "        if (b)",
+            "        {", "            callB();", "        }", "    }", "}", "");
+        Assert.That(result.Text, Is.EqualTo(expected));
+        Assert.That(
+            result.InsertedTexts,
+            Is.EqualTo(new[] { Lines("        if (b)", "        {", "            callB();", "        }", ""), "        callA();\n" }));
+        Assert.That(result.LinesAdjusted, Is.EqualTo(5));
+    }
+
     // ---- helpers ----
 
     /// <summary>Replaces the first occurrence of oldText with newText and runs the fallback shift for that single edit.</summary>
@@ -277,6 +396,23 @@ public class NewContentIndenterTests
         var eligible = Eligible(spliced.ToString(), inserted, skipBlockCommentLines: false);
 
         return NewContentIndenter.IndentsFromShift(originalText, spliced, [edit], [inserted], eligible, unit);
+    }
+
+    /// <summary>
+    /// Puts <paramref name="source"/> in an AdhocWorkspace document, turns each (old, new) pair into an edit on the
+    /// first occurrence of old (edits keep the order given), and runs ReindentAsync.
+    /// </summary>
+    private static async Task<NewContentIndentResult> Reindent(string source, params (string Old, string New)[] replacements)
+    {
+        using var workspace = new AdhocWorkspace();
+        var project = workspace.AddProject("NewContentIndenterTests", LanguageNames.CSharp);
+        var document = workspace.AddDocument(project.Id, "Source.cs", SourceText.From(source));
+        var edits = replacements
+            .Select(pair => new TextChange(
+                new TextSpan(source.IndexOf(pair.Old, StringComparison.Ordinal), pair.Old.Length), pair.New))
+            .ToList();
+
+        return await NewContentIndenter.ReindentAsync(document, edits, CancellationToken.None);
     }
 
     private static string Spaces(int count) => new(' ', count);

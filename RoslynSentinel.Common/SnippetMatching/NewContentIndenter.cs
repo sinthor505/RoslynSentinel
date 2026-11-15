@@ -25,10 +25,149 @@ public static class NewContentIndenter
     /// formatter path runs when the edited text parses; the delta-shift fallback runs otherwise. The result keeps the
     /// edits' own line endings; the caller normalizes EOL afterwards.
     /// </summary>
-    public static Task<NewContentIndentResult> ReindentAsync(
+    public static async Task<NewContentIndentResult> ReindentAsync(
         Document document, IReadOnlyList<TextChange> edits, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException(); // TODO implement (Step 6)
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(edits);
+
+        var originalText = await document.GetTextAsync(cancellationToken).ConfigureAwait(false);
+
+        // Sort by original position; spans and inserted texts stay in input order via the index map.
+        var sortedIndexes = Enumerable.Range(0, edits.Count).OrderBy(index => edits[index].Span.Start).ToArray();
+        var spliced = edits.Count == 0 ? originalText : originalText.WithChanges(sortedIndexes.Select(index => edits[index]));
+        var plainTexts = edits.Select(edit => edit.NewText ?? string.Empty).ToList();
+        if (edits.Count == 0 || !document.SupportsSyntaxTree)
+        {
+            return new NewContentIndentResult(spliced.ToString(), plainTexts, 0, false);
+        }
+
+        // Inserted spans in spliced coordinates (running offset), indexed in input order.
+        var insertedSpans = new TextSpan[edits.Count];
+        var offset = 0;
+        foreach (var index in sortedIndexes)
+        {
+            var edit = edits[index];
+            var length = plainTexts[index].Length;
+            insertedSpans[index] = new TextSpan(edit.Span.Start + offset, length);
+            offset += length - edit.Span.Length;
+        }
+
+        var splicedDocument = document.WithText(spliced);
+        var originalRoot = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
+        var splicedRoot = await splicedDocument.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
+        if (originalRoot is null || splicedRoot is null)
+        {
+            return new NewContentIndentResult(spliced.ToString(), plainTexts, 0, false);
+        }
+
+        IReadOnlyDictionary<int, string>? indents = null;
+        if (CanUseFormatter(originalRoot, splicedRoot, insertedSpans))
+        {
+            var eligible = EligibleLines(spliced, splicedRoot, insertedSpans, skipBlockCommentLines: true);
+            indents = await TryIndentsFromFormatterAsync(
+                splicedDocument, spliced, splicedRoot, eligible, originalText, cancellationToken).ConfigureAwait(false);
+        }
+
+        var usedFallback = indents is null;
+        if (indents is null)
+        {
+            var eligible = EligibleLines(spliced, splicedRoot, insertedSpans, skipBlockCommentLines: false);
+            indents = IndentsFromShift(originalText, spliced, edits, insertedSpans, eligible, InferIndentUnit(originalText));
+        }
+
+        return ApplyIndents(spliced, insertedSpans, indents, usedFallback);
+    }
+
+    /// <summary>
+    /// True when the spliced tree has no more syntax errors than the original tree and no syntax error touches an
+    /// inserted span (the formatter path; otherwise the delta-shift fallback runs).
+    /// </summary>
+    private static bool CanUseFormatter(SyntaxNode originalRoot, SyntaxNode splicedRoot, IReadOnlyList<TextSpan> insertedSpans)
+    {
+        var originalErrors = originalRoot.GetDiagnostics().Count(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        var splicedErrors = splicedRoot.GetDiagnostics()
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .ToList();
+        if (splicedErrors.Count > originalErrors)
+        {
+            return false;
+        }
+
+        return !splicedErrors.Any(diagnostic => insertedSpans.Any(span => diagnostic.Location.SourceSpan.IntersectsWith(span)));
+    }
+
+    /// <summary>
+    /// Runs the formatter over the eligible lines and returns the indents from its changes, or null when the formatter
+    /// throws (the caller falls back to the delta shift). Cancellation propagates.
+    /// </summary>
+    private static async Task<IReadOnlyDictionary<int, string>?> TryIndentsFromFormatterAsync(
+        Document splicedDocument, SourceText splicedText, SyntaxNode splicedRoot, IReadOnlyList<int> eligibleLines,
+        SourceText originalText, CancellationToken cancellationToken)
+    {
+        if (eligibleLines.Count == 0)
+        {
+            return new Dictionary<int, string>();
+        }
+
+        try
+        {
+            Microsoft.CodeAnalysis.Options.OptionSet options =
+                await splicedDocument.GetOptionsAsync(cancellationToken).ConfigureAwait(false);
+
+            // The file's own text is the authority on indentation: override the tab/space options with the inferred
+            // unit whenever the file has indented lines; the document options (.editorconfig) apply only otherwise.
+            if (HasIndentedLines(originalText))
+            {
+                var unit = InferIndentUnit(originalText);
+                options = options
+                    .WithChangedOption(FormattingOptions.UseTabs, LanguageNames.CSharp, unit.UseTabs)
+                    .WithChangedOption(FormattingOptions.IndentationSize, LanguageNames.CSharp, unit.Width)
+                    .WithChangedOption(FormattingOptions.TabSize, LanguageNames.CSharp, unit.Width);
+            }
+
+            // Indentation-only use of the formatter's text changes; nothing else from them is written. The whitespace
+            // ratchet (WhitespaceRatchetTests) does not count this call, see the plan's Risks R3.
+            var changes = Formatter.GetFormattedTextChanges(
+                splicedRoot, EligibleLineSpans(splicedText, eligibleLines), splicedDocument.Project.Solution.Workspace, options, cancellationToken);
+            return IndentsFromFormatterChanges(splicedText, eligibleLines, changes);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Spans covering the eligible lines, each reaching back to the end of the previous line so the whitespace between
+    /// the previous token and the line's first token (line break plus indentation) lies inside a formatted span.
+    /// Overlapping spans are merged.
+    /// </summary>
+    private static List<TextSpan> EligibleLineSpans(SourceText splicedText, IReadOnlyList<int> eligibleLines)
+    {
+        var spans = new List<TextSpan>();
+        foreach (var number in eligibleLines.OrderBy(number => number))
+        {
+            var line = splicedText.Lines[number];
+            var start = number > 0 ? splicedText.Lines[number - 1].End : 0;
+            var end = line.EndIncludingLineBreak;
+            if (spans.Count > 0 && start <= spans[^1].End)
+            {
+                spans[^1] = TextSpan.FromBounds(spans[^1].Start, Math.Max(spans[^1].End, end));
+            }
+            else
+            {
+                spans.Add(TextSpan.FromBounds(start, end));
+            }
+        }
+
+        return spans;
+    }
+
+    /// <summary>True when at least one non-blank line starts with whitespace.</summary>
+    private static bool HasIndentedLines(SourceText text)
+    {
+        return text.Lines.Any(line => !IsBlank(line) && LeadingWhitespaceLength(line) > 0);
     }
 
     /// <summary>
