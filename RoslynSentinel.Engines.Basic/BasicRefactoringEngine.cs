@@ -241,23 +241,44 @@ public class BasicRefactoringEngine
 
         var methodDecl = await FindChangeSignatureTargetAsync(document, root, filePath, methodName, contextSnippet, lineBefore, lineAfter, cancellationToken);
 
+        // No method or constructor declaration of that name: the target may be a type with a primary constructor, whose parameter list sits on the type. It is edited
+        // through the same planner as an ordinary constructor (call sites, defaults, the call-binding gate); only the declaration, the removed-parameter scope and the
+        // wrapper (a primary constructor cannot carry one) differ, and a record is decided by RecordPolicyRefusal.
+        TypeDeclarationSyntax? primaryType = null;
         if (methodDecl == null)
         {
-            if (root.DescendantNodes().OfType<TypeDeclarationSyntax>().Any(type => type.Identifier.Text == methodName && type.ParameterList != null))
+            primaryType = ChangeSignaturePrimaryConstructor.FindTypeWithPrimaryConstructor(root, methodName);
+            if (primaryType != null)
             {
-                return Refuse($"'{methodName}' is a type with a primary constructor, and ChangeSignature does not edit primary constructors (there is no constructor declaration to rewrite or to put a wrapper beside). Nothing was changed. Edit the type's parameter list and its construction sites directly, or add an ordinary constructor and change that one."); // hint-ok: names the tool in prose, not a call to make
+                if (ChangeSignaturePrimaryConstructor.RecordPolicyRefusal(primaryType, parameters) is { } recordRefusal)
+                {
+                    return Refuse(recordRefusal);
+                }
             }
-
-            var fileMethodNames = root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(methodNode => methodNode.Identifier.Text);
-            var fileCtorNames = root.DescendantNodes().OfType<ConstructorDeclarationSyntax>().Select(ctorNode => ctorNode.Identifier.Text);
-            return Refuse($"Method or constructor '{methodName}' was not found in '{filePath}' (a constructor is matched by its class name). Nothing was changed. " + DeclarationNotFoundDetail.Build("method or constructor", "methodName", methodName, fileMethodNames.Concat(fileCtorNames), filePath.ToString()));
+            else
+            {
+                var fileMethodNames = root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(methodNode => methodNode.Identifier.Text);
+                var fileCtorNames = root.DescendantNodes().OfType<ConstructorDeclarationSyntax>().Select(ctorNode => ctorNode.Identifier.Text);
+                return Refuse($"Method or constructor '{methodName}' was not found in '{filePath}' (a constructor is matched by its class name). Nothing was changed. " + DeclarationNotFoundDetail.Build("method or constructor", "methodName", methodName, fileMethodNames.Concat(fileCtorNames), filePath.ToString()));
+            }
         }
+
+        // The parameter list being edited: the method's or constructor's own, or the primary constructor's on the type.
+        var declaredParameterList = (methodDecl?.ParameterList ?? primaryType!.ParameterList)!;
 
         // ChangeSignature only edits the single symbol it's invoked on - it never walks to/from
         // the other side of an interface boundary. Refuse early with a clear error naming the
         // interface/implementers instead of a half-applied change surfacing CS0535 later. See
         // blocking_error_changesignature_interface_implementation_no_cascade.md.
-        var declaredSymbol = semanticModel.GetDeclaredSymbol(methodDecl, cancellationToken) as IMethodSymbol;
+        var declaredSymbol = primaryType is null
+            ? semanticModel.GetDeclaredSymbol(methodDecl!, cancellationToken) as IMethodSymbol
+            : ChangeSignaturePrimaryConstructor.ResolvePrimaryConstructor(semanticModel, primaryType, cancellationToken);
+        if (primaryType is not null && declaredSymbol is null)
+        {
+            // Without the symbol no call site can be found, and editing only the declaration would break them.
+            return Refuse($"Could not resolve the primary constructor of '{methodName}' to a symbol, so its construction sites cannot be found. Nothing was changed.");
+        }
+
         if (declaredSymbol != null)
         {
             if (declaredSymbol.ContainingType.TypeKind == TypeKind.Interface)
@@ -298,7 +319,7 @@ public class BasicRefactoringEngine
             }
         }
 
-        var originalParams = methodDecl.ParameterList.Parameters.ToList();
+        var originalParams = declaredParameterList.Parameters.ToList();
         if (methodDecl is ConstructorDeclarationSyntax staticConstructor && staticConstructor.Modifiers.Any(SyntaxKind.StaticKeyword))
         {
             return Refuse($"'{methodName}' is a static constructor: it takes no parameters, so there is no signature to change. Nothing was changed. Narrow the target to an instance constructor with contextSnippet.");
@@ -323,7 +344,11 @@ public class BasicRefactoringEngine
         }
 
         // A removed parameter (an existing one absent from the new list) the body still uses would leave CS0103 behind: refuse before anything is planned, in every oldSignature mode.
-        if (RefuseWhenRemovedParameterIsStillUsed(semanticModel, methodDecl, originalParams, existingIndexes, methodName, cancellationToken) is { } removedParameterStillUsed)
+        // A primary constructor's parameters are in scope in the whole type declaration (members, initializers, base arguments), not just a body.
+        var removedParameterUse = primaryType is null
+            ? RefuseWhenRemovedParameterIsStillUsed(semanticModel, methodDecl!, originalParams, existingIndexes, methodName, cancellationToken)
+            : RefuseWhenRemovedParameterIsStillUsed(semanticModel, new SyntaxNode[] { primaryType }, originalParams, existingIndexes, methodName, cancellationToken);
+        if (removedParameterUse is { } removedParameterStillUsed)
         {
             throw new ToolTargetIneligibleException(removedParameterStillUsed);
         }
@@ -341,9 +366,17 @@ public class BasicRefactoringEngine
         var oldSignatureText = string.Empty;
         var newSignatureText = string.Empty;
         string? wrapperRefusal = null;
-        if (oldSignature != ChangeSignatureOldSignature.remove)
+        if (oldSignature != ChangeSignatureOldSignature.remove && primaryType is not null)
         {
-            var prepared = ChangeSignatureWrapper.Prepare(semanticModel, methodDecl, declaredSymbol, parameters, originalParams, methodName, autoMode: autoRequested);
+            wrapperRefusal = ChangeSignaturePrimaryConstructor.WrapperRefusal(methodName);
+            if (keepRequested)
+            {
+                return Refuse($"{wrapperRefusal}. Nothing was changed. Retry with {ToolCallHint.Call("ChangeSignature", ("oldSignature", "remove"))}.");
+            }
+        }
+        else if (oldSignature != ChangeSignatureOldSignature.remove)
+        {
+            var prepared = ChangeSignatureWrapper.Prepare(semanticModel, methodDecl!, declaredSymbol, parameters, originalParams, methodName, autoMode: autoRequested);
             if (prepared.Error is not null)
             {
                 if (keepRequested)
@@ -361,7 +394,7 @@ public class BasicRefactoringEngine
 
         // A new parameter's defaultValue that names something (_logger, Instance, DateTime.UtcNow) is copied into every call site as its fill-in argument, so it must bind in that
         // site's scope; a site where it does not is unmigratable for this change (skipped below). One that is not a compile-time constant cannot be a declaration default either.
-        var newDefaults = ChangeSignatureWrapper.AnalyzeNewDefaults(semanticModel, methodDecl, parameters);
+        var newDefaults = ChangeSignatureWrapper.AnalyzeNewDefaults(semanticModel, declaredParameterList, methodDecl is null ? ChangeSignaturePrimaryConstructor.ScopePosition(primaryType!) : ChangeSignatureWrapper.ScopePosition(methodDecl), parameters);
         var scopeCheckedDefaults = newDefaults.Where(d => d.NeedsScopeCheck).ToList();
         var nonConstantDefaultSlots = newDefaults.Where(d => !d.IsConstant).Select(d => d.Slot).ToHashSet();
 
@@ -718,8 +751,8 @@ public class BasicRefactoringEngine
         }
 
         // A multi-line parameter list keeps its layout (RebuildListKeepingLayout); a single-line one is rebuilt as before.
-        var newParameterList = methodDecl.ParameterList.WithParameters(RebuildListKeepingLayout(
-            methodDecl.ParameterList.Parameters,
+        var newParameterList = declaredParameterList.WithParameters(RebuildListKeepingLayout(
+            declaredParameterList.Parameters,
             newParameterSyntaxes.Select((syntax, slot) => (syntax, parameters[slot] is ExistingParameterSpec existingSpec ? existingSpec.OriginalIndex : -1)).ToList()));
 
         static SeparatedSyntaxList<ArgumentSyntax> RebuildArguments(SeparatedSyntaxList<ArgumentSyntax> current, List<(int SrcIndex, ExpressionSyntax? Literal)> plan)
@@ -733,7 +766,7 @@ public class BasicRefactoringEngine
         // A multi-line list (the declaration's parameter list, a `: this(...)` / `: base(...)` argument list) keeps its layout from RebuildListKeepingLayout and every token it
         // adds carries its own whitespace, so it is not annotated for formatting: formatting a list that spans lines would also move a body brace on its closing line onto its
         // own line. A single-line list still takes the formatter (its separators need it).
-        var parameterListKeepsLayout = ListKeepsLayout(methodDecl.ParameterList.Parameters);
+        var parameterListKeepsLayout = ListKeepsLayout(declaredParameterList.Parameters);
         static ConstructorInitializerSyntax RebuildInitializer(ConstructorInitializerSyntax initializer, List<(int SrcIndex, ExpressionSyntax? Literal)> plan)
         {
             var keepsLayout = ListKeepsLayout(initializer.ArgumentList.Arguments);
@@ -752,7 +785,7 @@ public class BasicRefactoringEngine
             var nodes = new List<SyntaxNode>(plans.Keys);
             if (path.Equals(declPath))
             {
-                nodes.Add(methodDecl.ParameterList);
+                nodes.Add(declaredParameterList);
             }
 
             var newRoot = rootByPath[path].ReplaceNodes(nodes, (original, rewritten) => rewritten switch
@@ -770,7 +803,7 @@ public class BasicRefactoringEngine
                 // The wrapper (old signature, [Obsolete], forwards to the new member) lands right after the member in the SAME edit set, so it is
                 // applied, validated and rolled back together with the call-site edits. A blank line before it and a line end after it come from the text.
                 var newMember = newRoot.GetAnnotatedNodes(memberAnnotation).Select(n => n.Parent).OfType<BaseMethodDeclarationSyntax>().SingleOrDefault();
-                var wrapperText = ChangeSignatureWrapper.BuildWrapperText(methodDecl, declaredSymbol!, parameters, originalParams, newSignatureText, eol);
+                var wrapperText = ChangeSignatureWrapper.BuildWrapperText(methodDecl!, declaredSymbol!, parameters, originalParams, newSignatureText, eol);
                 if (newMember == null || SyntaxFactory.ParseMemberDeclaration(eol + wrapperText + eol) is not BaseMethodDeclarationSyntax wrapperNode)
                 {
                     return Refuse($"Could not generate the deprecated wrapper for '{methodName}'. Nothing was changed. Retry with {ToolCallHint.Call("ChangeSignature", ("oldSignature", "remove"))}.");
@@ -1046,6 +1079,12 @@ public class BasicRefactoringEngine
             scopes.Add(initializer);
         }
 
+        return RefuseWhenRemovedParameterIsStillUsed(semanticModel, scopes, originalParams, keptIndexes, methodName, cancellationToken);
+    }
+
+    /// <summary>The same check over explicit scopes (a primary constructor's parameters are in scope in the whole type declaration). No scopes means no uses.</summary>
+    private static string? RefuseWhenRemovedParameterIsStillUsed(SemanticModel semanticModel, IReadOnlyList<SyntaxNode> scopes, IReadOnlyList<ParameterSyntax> originalParams, IReadOnlyCollection<int> keptIndexes, string methodName, CancellationToken cancellationToken)
+    {
         if (scopes.Count == 0)
         {
             return null;
@@ -1067,7 +1106,7 @@ public class BasicRefactoringEngine
 
             var name = originalParams[index].Identifier.ValueText;
             var lines = new SortedSet<int>();
-            var fileName = System.IO.Path.GetFileName(methodDecl.SyntaxTree.FilePath);
+            var fileName = System.IO.Path.GetFileName(scopes[0].SyntaxTree.FilePath);
             foreach (var scope in scopes)
             {
                 foreach (var identifier in scope.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>())

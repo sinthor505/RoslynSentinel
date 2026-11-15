@@ -138,6 +138,8 @@ public static class ChangeSignatureCallBindingCheck
                 continue;
             }
 
+            // Ordinary methods and constructors, then a primary constructor (its parameter list is on the type, which is the only declaring syntax).
+            var declared = new List<(ParameterListSyntax ParameterList, IMethodSymbol? Symbol)>();
             foreach (var declaration in root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>())
             {
                 var identifier = declaration switch
@@ -146,7 +148,20 @@ public static class ChangeSignatureCallBindingCheck
                     ConstructorDeclarationSyntax constructor => constructor.Identifier.Text,
                     _ => null,
                 };
-                if (identifier != methodName || model.GetDeclaredSymbol(declaration, cancellationToken) is not IMethodSymbol symbol)
+                if (identifier == methodName)
+                {
+                    declared.Add((declaration.ParameterList, model.GetDeclaredSymbol(declaration, cancellationToken) as IMethodSymbol));
+                }
+            }
+
+            foreach (var type in root.DescendantNodes().OfType<TypeDeclarationSyntax>().Where(t => t.Identifier.Text == methodName && t.ParameterList != null))
+            {
+                declared.Add((type.ParameterList!, ChangeSignaturePrimaryConstructor.ResolvePrimaryConstructor(model, type, cancellationToken)));
+            }
+
+            foreach (var (parameterList, symbol) in declared)
+            {
+                if (symbol is null)
                 {
                     continue;
                 }
@@ -157,11 +172,11 @@ public static class ChangeSignatureCallBindingCheck
                     continue;
                 }
 
-                if (Compact(declaration.ParameterList.ToString()) == wantedText)
+                if (Compact(parameterList.ToString()) == wantedText)
                 {
                     byText.Add(id);
                 }
-                else if (declaration.ParameterList.Parameters.Select(p => p.Identifier.Text).SequenceEqual(wantedNames))
+                else if (parameterList.Parameters.Select(p => p.Identifier.Text).SequenceEqual(wantedNames))
                 {
                     byNames.Add(id);
                 }

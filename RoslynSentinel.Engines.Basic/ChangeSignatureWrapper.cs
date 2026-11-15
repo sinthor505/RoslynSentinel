@@ -221,9 +221,13 @@ internal static class ChangeSignatureWrapper
     /// default (IsConstant; a non-constant one such as _logger makes the new parameter required). A new parameter without a defaultValue is not listed.
     /// </summary>
     // DTO-EXEMPT: internal tuple list local to ChangeSignature planning, never serialized.
-    internal static List<(int Slot, string Name, string Text, ExpressionSyntax Expression, ITypeSymbol? ParameterType, bool NeedsScopeCheck, bool IsConstant)> AnalyzeNewDefaults(SemanticModel semanticModel, BaseMethodDeclarationSyntax methodDecl, IReadOnlyList<SignatureParameterSpec> parameters)
+    internal static List<(int Slot, string Name, string Text, ExpressionSyntax Expression, ITypeSymbol? ParameterType, bool NeedsScopeCheck, bool IsConstant)> AnalyzeNewDefaults(SemanticModel semanticModel, BaseMethodDeclarationSyntax methodDecl, IReadOnlyList<SignatureParameterSpec> parameters) =>
+        AnalyzeNewDefaults(semanticModel, methodDecl.ParameterList, ScopePosition(methodDecl), parameters);
+
+    /// <summary>The same analysis for a declaration given as its parameter list and the position its defaults bind at (a primary constructor has no method declaration).</summary>
+    // DTO-EXEMPT: internal tuple list local to ChangeSignature planning, never serialized.
+    internal static List<(int Slot, string Name, string Text, ExpressionSyntax Expression, ITypeSymbol? ParameterType, bool NeedsScopeCheck, bool IsConstant)> AnalyzeNewDefaults(SemanticModel semanticModel, ParameterListSyntax parameterList, int scope, IReadOnlyList<SignatureParameterSpec> parameters)
     {
-        var scope = ScopePosition(methodDecl);
         var found = new List<(int Slot, string Name, string Text, ExpressionSyntax Expression, ITypeSymbol? ParameterType, bool NeedsScopeCheck, bool IsConstant)>();
         for (var slot = 0; slot < parameters.Count; slot++)
         {
@@ -234,7 +238,7 @@ internal static class ChangeSignatureWrapper
 
             var text = added.DefaultValueExpression.Trim();
             var expression = SyntaxFactory.ParseExpression(text);
-            var resolved = semanticModel.GetSpeculativeTypeInfo(methodDecl.ParameterList.SpanStart, SyntaxFactory.ParseTypeName(added.Type), SpeculativeBindingOption.BindAsTypeOrNamespace).Type;
+            var resolved = semanticModel.GetSpeculativeTypeInfo(parameterList.SpanStart, SyntaxFactory.ParseTypeName(added.Type), SpeculativeBindingOption.BindAsTypeOrNamespace).Type;
             var parameterType = resolved is { TypeKind: not (TypeKind.Error or TypeKind.TypeParameter) } ? resolved : null;
             var invalid = expression.GetDiagnostics().Any(d => d.Severity == DiagnosticSeverity.Error);
             var needsScopeCheck = invalid || expression.DescendantNodesAndSelf().Any(n => n is SimpleNameSyntax or ThisExpressionSyntax or BaseExpressionSyntax);
