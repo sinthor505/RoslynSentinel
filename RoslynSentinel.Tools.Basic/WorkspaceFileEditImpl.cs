@@ -711,6 +711,8 @@ public class WorkspaceFileEditImpl
             var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault() ?? solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
 
             SourceText sourceText;
+            // Findings that describe how this read resolved its file; the success paths below append to them.
+            var readFindings = new List<Finding>();
             if (document != null)
             {
                 sourceText = await document.GetTextAsync(cancellationToken);
@@ -720,14 +722,26 @@ public class WorkspaceFileEditImpl
                 var diskContent = await FileIoHelper.ReadAllTextIfExistsAsync(filePathResolved, cancellationToken);
                 if (diskContent == null)
                 {
-                    return new SentinelCallToolResult<object>()
+                    // A bare file name that is the only loaded document with that name continues with that document.
+                    var bare = DocumentLookup.TryResolveUniqueBareName(solution, filePath);
+                    if (bare is null)
                     {
-                        IsError = true,
-                        ErrorData = BuildFileNotFoundError(solution, normalizedPath, _activeToolSurface is null ? null : _activeToolSurface.IsCallable)
-                    };
-                }
+                        return new SentinelCallToolResult<object>()
+                        {
+                            IsError = true,
+                            ErrorData = BuildFileNotFoundError(solution, normalizedPath, _activeToolSurface is null ? null : _activeToolSurface.IsCallable)
+                        };
+                    }
 
-                sourceText = SourceText.From(diskContent);
+                    filePathResolved = _workspaceManager.ResolveFromWire(bare.Path);
+                    document = solution.Projects.SelectMany(p => p.Documents).First(d => d.FilePath == bare.Path);
+                    readFindings.Add(new Finding("FileResolved", $"'{filePath}' resolved to {bare.Path} (the only loaded file with that name)", FindingSeverity.Info));
+                    sourceText = await document.GetTextAsync(cancellationToken);
+                }
+                else
+                {
+                    sourceText = SourceText.From(diskContent);
+                }
             }
 
             var totalLines = sourceText.Lines.Count;
@@ -778,7 +792,7 @@ public class WorkspaceFileEditImpl
                 {
                     IsError = false,
                     SuccessData = rangeData,
-                    Findings = sliceMixedEol is null ? [] : [new Finding("ReadFile", sliceMixedEol)],
+                    Findings = sliceMixedEol is null ? readFindings : [.. readFindings, new Finding("ReadFile", sliceMixedEol)],
                     HasMoreData = to < totalLines,
                     StatusMessage = showLineEndings == LineEndingDisplay.All ? "source is annotated with line-ending markers and is not verbatim." : null,
                     WorkspaceVersion = _workspaceManager.WorkspaceVersion,
@@ -819,7 +833,7 @@ public class WorkspaceFileEditImpl
                 {
                     IsError = false,
                     SuccessData = wholeData,
-                    Findings = mixedEol is null ? [] : [new Finding("ReadFile", mixedEol)],
+                    Findings = mixedEol is null ? readFindings : [.. readFindings, new Finding("ReadFile", mixedEol)],
                     HasMoreData = false,
                     StatusMessage = $"File is {totalLines} lines ({textBytes} bytes), over the inline limit: the first part is returned and the rest is stored (see largeResult). For a structure overview call {ToolCallHint.Call("GetFileOutline")}; for a slice call {ToolCallHint.Call("ReadFile", ("startLine", "1"), ("endLine", "200"))}." + (statusNote is null ? string.Empty : " " + statusNote),
                     WorkspaceVersion = _workspaceManager.WorkspaceVersion,
@@ -830,7 +844,7 @@ public class WorkspaceFileEditImpl
             {
                 IsError = false,
                 SuccessData = wholeData,
-                Findings = mixedEol is null ? [] : [new Finding("ReadFile", mixedEol)],
+                Findings = mixedEol is null ? readFindings : [.. readFindings, new Finding("ReadFile", mixedEol)],
                 HasMoreData = false,
                 StatusMessage = statusNote,
                 WorkspaceVersion = _workspaceManager.WorkspaceVersion,

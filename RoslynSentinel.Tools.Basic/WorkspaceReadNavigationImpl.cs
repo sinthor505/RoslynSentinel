@@ -298,6 +298,7 @@ public class WorkspaceReadNavigationImpl
             var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
             var normalizedPath = Path.GetFullPath(filePathResolved);
             var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault() ?? solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
+            // TODO GetMethodSource does not auto-resolve a unique bare file name (D4 follow-up)
             if (document == null)
             {
                 return new SentinelCallToolResult<MethodSourceResult, ResultError>()
@@ -425,13 +426,24 @@ public class WorkspaceReadNavigationImpl
             var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
             var normalizedPath = Path.GetFullPath(filePathResolved);
             var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault() ?? solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
+            // Findings that describe how this call resolved its file; the success return carries them.
+            var readFindings = new List<Finding>();
             if (document == null)
             {
-                return new SentinelCallToolResult<FileOutlineResult, ResultError>()
+                // A bare file name that is the only loaded document with that name continues with that document.
+                var bare = DocumentLookup.TryResolveUniqueBareName(solution, filePath);
+                if (bare is null)
                 {
-                    IsError = true,
-                    ErrorData = BuildFileNotFoundError(solution, normalizedPath, CallableCheck)
-                };
+                    return new SentinelCallToolResult<FileOutlineResult, ResultError>()
+                    {
+                        IsError = true,
+                        ErrorData = BuildFileNotFoundError(solution, normalizedPath, CallableCheck)
+                    };
+                }
+
+                filePathResolved = _workspaceManager.ResolveFromWire(bare.Path);
+                document = solution.Projects.SelectMany(p => p.Documents).First(d => d.FilePath == bare.Path);
+                readFindings.Add(new Finding("FileResolved", $"'{filePath}' resolved to {bare.Path} (the only loaded file with that name)", FindingSeverity.Info));
             }
 
             var root = await document.GetSyntaxRootAsync(cancellationToken: cancellationToken);
@@ -457,6 +469,7 @@ public class WorkspaceReadNavigationImpl
             {
                 IsError = false,
                 SuccessData = new FileOutlineResult { Envelope = envelope, Symbols = items },
+                Findings = readFindings,
                 WorkspaceVersion = _workspaceManager.WorkspaceVersion
             };
         }
