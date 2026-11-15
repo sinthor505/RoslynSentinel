@@ -518,43 +518,58 @@ public static class CompilerErrorLookupHelper
         if (candidates.Count == 0)
         {
             // TODO FindExtensionMethods is named unconditionally; name it only when active (gated-tool rule)
-            var noCandidate = isExtensionCandidate
-                ? $"  No member or extension method named '{memberName}' was found anywhere in the solution for type '{typeName}'. This is likely a typo, a member that needs to be added to '{typeName}', or an extension method whose defining namespace needs a `using` - check FindExtensionMethods if one is expected to exist."
-                : $"  No member named '{memberName}' was found anywhere in the solution. This is likely a typo, or '{memberName}' needs to be added to '{typeName}'.";
-            if (!isExtensionCandidate)
+            if (isExtensionCandidate)
             {
-                // Name the members that exist on the named type so a misspelled member can be fixed from the list.
-                // Private members are left out: the caller cannot reach them anyway.
-                List<SymbolLocation> typeMembers;
-                try
-                {
-                    typeMembers = await symbolNavigationEngine.LocateSymbolAsync(
-                        "", exactMatch: false, containingType: simpleTypeName, includeTests: false, cancellationToken: cancellationToken);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    typeMembers = [];
-                }
+                return $"  No member or extension method named '{memberName}' was found anywhere in the solution for type '{typeName}'. This is likely a typo, a member that needs to be added to '{typeName}', or an extension method whose defining namespace needs a `using` - check FindExtensionMethods if one is expected to exist."
+                    + (IsEdited(diagnostic.FilePath.ToString()) ? " If this edit renames a use of an existing member, change the member's declaration in the same call." : string.Empty);
+            }
 
-                var memberNames = typeMembers
-                    .Where(c => string.Equals(c.ContainingType, simpleTypeName, StringComparison.OrdinalIgnoreCase)
-                        && c.Accessibility != "Private"
-                        && !c.SymbolName.StartsWith('<')
-                        && !c.SymbolName.StartsWith('.'))
-                    .Select(c => c.SymbolName)
-                    .Distinct()
-                    .Take(20)
-                    .ToList();
-                if (memberNames.Count > 0)
+            // Name the members that exist on the named type so a misspelled member can be fixed from the list.
+            // Private members are left out: the caller cannot reach them anyway.
+            List<SymbolLocation> typeMembers;
+            try
+            {
+                typeMembers = await symbolNavigationEngine.LocateSymbolAsync(
+                    "", exactMatch: false, containingType: simpleTypeName, includeTests: false, cancellationToken: cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                typeMembers = [];
+            }
+
+            var memberNames = typeMembers
+                .Where(c => string.Equals(c.ContainingType, simpleTypeName, StringComparison.OrdinalIgnoreCase)
+                    && c.Accessibility != "Private"
+                    && !c.SymbolName.StartsWith('<')
+                    && !c.SymbolName.StartsWith('.'))
+                .Select(c => c.SymbolName)
+                .Distinct()
+                .Take(20)
+                .ToList();
+
+            // The closest name leads the message, with both spellings, so a misspelled receiver member
+            // is visible before the generic typo advice.
+            var closestClause = string.Empty;
+            var membersClause = string.Empty;
+            if (memberNames.Count > 0)
+            {
+                membersClause = $" Members of '{typeName}': {string.Join(", ", memberNames)}.";
+                var closest = RoslynSentinel.Common.NameCandidates.Rank(memberName, memberNames, n => n, cap: 1);
+                if (closest.Count > 0)
                 {
-                    noCandidate += $" Members of '{typeName}': {string.Join(", ", memberNames)}.";
-                    var closest = RoslynSentinel.Common.NameCandidates.Rank(memberName, memberNames, n => n, cap: 1);
-                    if (closest.Count > 0)
-                    {
-                        noCandidate += $" Closest to '{memberName}': {closest[0].Item}.";
-                    }
+                    var closestName = closest[0].Item;
+                    var spelling = closestName.Length <= 30
+                        ? $" ({closestName.Length} letters: {string.Join("-", closestName.Select(ch => ch.ToString()))})"
+                        : $" ({closestName.Length} letters)";
+                    closestClause = $" Closest existing member of '{typeName}': '{closestName}'. Your edit contains '{memberName}' ({memberName.Length} letters); the member is spelled '{closestName}'{spelling}.";
                 }
             }
+
+            var notFound = $"  No member named '{memberName}' was found anywhere in the solution.";
+            var likelyTypo = $"This is likely a typo, or '{memberName}' needs to be added to '{typeName}'.";
+            var noCandidate = closestClause.Length > 0
+                ? notFound + closestClause + membersClause + " " + likelyTypo
+                : notFound + " " + likelyTypo + membersClause;
 
             return noCandidate + (IsEdited(diagnostic.FilePath.ToString()) ? " If this edit renames a use of an existing member, change the member's declaration in the same call." : string.Empty);
         }

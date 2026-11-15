@@ -334,6 +334,18 @@ public class ShippingKindSteppedAgentTests
     }
 
     // The name must not contain "Model_CompletesShippingKindStep" because the baseline script filter is Name~ on that string.
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    [TestCase(5)]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
+    public async Task Model_RunsShippingKindStepPromptV14(int step)
+    {
+        await RunStepAsync(step, ShippingKindStepGoldens.PromptForStepV14(step));
+    }
+
+    // The name must not contain "Model_CompletesShippingKindStep" because the baseline script filter is Name~ on that string.
     // Final prompt set, all six steps. The name must not contain Model_CompletesShippingKindStep (the V1 filter is Name~ on it).
     [TestCase(1)]
     [TestCase(2)]

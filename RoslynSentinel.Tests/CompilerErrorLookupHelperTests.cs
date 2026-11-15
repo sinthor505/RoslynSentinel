@@ -447,7 +447,11 @@ public class CompilerErrorLookupHelperTests
 
         Assert.That(description, Does.Contain("Members of 'ShippingKinds':"));
         Assert.That(description, Does.Contain("Overnight"));
-        Assert.That(description, Does.Contain("Closest to 'Ownight': Overnight"));
+        Assert.That(description, Does.Contain("Closest existing member of 'ShippingKinds': 'Overnight'"));
+        Assert.That(description, Does.Contain("(9 letters: O-v-e-r-n-i-g-h-t)"));
+        Assert.That(
+            description.IndexOf("Closest existing member", StringComparison.Ordinal),
+            Is.LessThan(description.IndexOf("This is likely a typo", StringComparison.Ordinal)));
     }
 
     [Test]
@@ -475,7 +479,7 @@ public class CompilerErrorLookupHelperTests
         var description = await CompilerErrorLookupHelper.DescribeAsync(withLine, _symbolNavigationEngine);
 
         Assert.That(description, Does.Contain("Members of 'ShippingKinds':"));
-        Assert.That(description, Does.Not.Contain("Closest to"));
+        Assert.That(description, Does.Not.Contain("Closest existing member"));
     }
 
     /// <summary>

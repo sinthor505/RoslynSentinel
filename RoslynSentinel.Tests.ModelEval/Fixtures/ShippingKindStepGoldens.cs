@@ -477,6 +477,10 @@ internal static class ShippingKindStepGoldens
         In DeliveryEstimator.cs and CarrierSelector.cs (ContosoOrders.Core/Shipping), do two things in this order. First, replace each check for 'express or overnight' with a call to ShippingKinds.IsExpedited. Then replace every remaining shipping kind string literal in both files, including literals inside other expressions such as a ternary, with the matching ShippingKinds constant, written qualified as ShippingKinds.<Name> (for example ShippingKinds.Express). Behaviour must not change. Change no other file. When the edits are done, run the ContosoOrders tests with RunTest and confirm that none fail; if any fail, fix the cause before replying. Reply with what you changed.
         """;
 
+    private const string PromptStep5V14 = """
+        In DeliveryEstimator.cs and CarrierSelector.cs (ContosoOrders.Core/Shipping), do two things in this order. First, replace each check for 'express or overnight' with a call to ShippingKinds.IsExpedited. Then replace every remaining shipping kind string literal in both files, including literals inside other expressions such as a ternary, with the matching ShippingKinds constant, written qualified as ShippingKinds.<Name> (for example ShippingKinds.Express). Behaviour must not change. Change no other file. Make the ShippingKinds.IsExpedited edit in each file as its own edit before the literal replacements. When you finish, each of the two files calls ShippingKinds.IsExpedited, and no expression compares a kind against both ShippingKinds.Express and ShippingKinds.Overnight. Reply with what you changed.
+        """;
+
     public static string PromptForStep(int step)
     {
         return step switch
@@ -663,6 +667,22 @@ internal static class ShippingKindStepGoldens
             3 => PromptStep3V1,
             4 => PromptStep4V1,
             5 => PromptStep5V12,
+            _ => throw new ArgumentOutOfRangeException(nameof(step)),
+        };
+    }
+
+    /// <summary>
+    /// V14 = step 5 only: V7 plus an instruction to make the IsExpedited edit as its own step and to check the end state.
+    /// </summary>
+    public static string PromptForStepV14(int step)
+    {
+        return step switch
+        {
+            1 => PromptStep1V1,
+            2 => PromptStep2V1,
+            3 => PromptStep3V1,
+            4 => PromptStep4V1,
+            5 => PromptStep5V14,
             _ => throw new ArgumentOutOfRangeException(nameof(step)),
         };
     }
