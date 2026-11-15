@@ -1,6 +1,6 @@
 # Plan: ReplaceSnippet accepts token-equivalent oldContent and re-indents newContent to the file
 
-**Status:** APPROVED 2026-11-14. Owner settled R1-R4, lanes, step order, Step 10 scope and the eval set (see "Owner decisions (2026-11-14) on the plan review"); Batched mode, owner present.
+**Status:** IN PROGRESS 2026-11-15. Steps 1-6 done (e46c4edb, 88dddc35, 7f4f7a3c, 202d273a, 132e9fa6, 2afde809). Approved 2026-11-14; owner settled R1-R4, lanes, step order, Step 10 scope and the eval set (see "Owner decisions (2026-11-14) on the plan review"); Batched mode, owner present.
 
 ## Problem
 
@@ -85,6 +85,7 @@ Two pure helpers in `RoslynSentinel.Common/SnippetMatching/` (layering: they nee
 ## Steps
 
 ### Step 1 - Contract skeleton for both helpers
+- Done: e46c4edb
 - Files: `RoslynSentinel.Common/SnippetMatching/SnippetTokenEquivalence.cs` (new), `RoslynSentinel.Common/SnippetMatching/NewContentIndenter.cs` (new)
 - Depends on: none
 - Effect: text-neutral (no callers)
@@ -136,6 +137,7 @@ Two pure helpers in `RoslynSentinel.Common/SnippetMatching/` (layering: they nee
 - Done when: `Build` 0 errors.
 
 ### Step 2 - Token comparison and tree alignment bodies (pair with Step 4)
+- Done: 88dddc35 (deviation: line breaks inside token text are normalized, so LF/CRLF still match)
 - Files: `RoslynSentinel.Common/SnippetMatching/SnippetTokenEquivalence.cs`, `RoslynSentinel.Tests/SnippetTokenEquivalenceTests.cs` (new), `RoslynSentinel.Common/SnippetMatching/SnippetMatchResult.cs` (doc only)
 - Depends on: 1
 - Effect: text-neutral
@@ -153,6 +155,7 @@ Two pure helpers in `RoslynSentinel.Common/SnippetMatching/` (layering: they nee
 - Done when: `Build` 0 errors; dispatcher runs `SnippetTokenEquivalenceTests` (all pass).
 
 ### Step 3 - Candidates, acceptance, tie-break and Resolve bodies (pair with Step 5)
+- Done: 202d273a (deviations: a trailing-line-break snippet is rejected when text follows on the last file line; the tie-break skips blank snippet lines)
 - Files: `RoslynSentinel.Common/SnippetMatching/SnippetTokenEquivalence.cs`, `RoslynSentinel.Tests/SnippetTokenEquivalenceTests.cs`, `RoslynSentinel.Common/SnippetMatching/WhitespaceTolerance.cs` (doc only)
 - Depends on: 2
 - Effect: text-neutral (still no production caller)
@@ -171,6 +174,7 @@ Two pure helpers in `RoslynSentinel.Common/SnippetMatching/` (layering: they nee
 - Done when: `Build` 0 errors; dispatcher runs `SnippetTokenEquivalenceTests`.
 
 ### Step 4 - Indenter: unit inference, eligible lines, applying (pair with Step 2)
+- Done: 7f4f7a3c
 - Files: `RoslynSentinel.Common/SnippetMatching/NewContentIndenter.cs`, `RoslynSentinel.Tests/NewContentIndenterTests.cs` (new)
 - Depends on: 1
 - Effect: text-neutral
@@ -186,6 +190,7 @@ Two pure helpers in `RoslynSentinel.Common/SnippetMatching/` (layering: they nee
 - Done when: `Build` 0 errors; dispatcher runs `NewContentIndenterTests`.
 
 ### Step 5 - Indenter: formatter-change filter and fallback shift (pair with Step 3)
+- Done: 132e9fa6 (deviations: a formatter change covering only part of an indent keeps the unchanged part; the mid-line fallback counts only eligible lines)
 - Files: `RoslynSentinel.Common/SnippetMatching/NewContentIndenter.cs`, `RoslynSentinel.Tests/NewContentIndenterTests.cs`
 - Depends on: 4
 - Effect: text-neutral
@@ -203,6 +208,7 @@ Two pure helpers in `RoslynSentinel.Common/SnippetMatching/` (layering: they nee
 - Done when: `Build` 0 errors; dispatcher runs `NewContentIndenterTests`.
 
 ### Step 6 - Indenter: ReindentAsync orchestration (pair with Step 7)
+- Done: 2afde809 (R1(b) override in; no CS0618, so R2 is moot; new RS1034 warnings in SnippetTokenEquivalence.cs lines 174 and 200 are not in the baseline, fixed in Batch B)
 - Files: `RoslynSentinel.Common/SnippetMatching/NewContentIndenter.cs`, `RoslynSentinel.Tests/NewContentIndenterTests.cs`
 - Depends on: 5
 - Effect: text-neutral (still no production caller)
