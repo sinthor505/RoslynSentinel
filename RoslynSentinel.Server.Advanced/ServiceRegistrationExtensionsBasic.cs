@@ -270,6 +270,8 @@ public static class RoslynSentinelServiceExtensionsBasic
                 activeToolClasses.Add(onDemandClass);
             }
 
+            services.AddSingleton<IKnownToolClassNames, KnownToolClassNames>();
+
             if (toolsetControlActive)
             {
                 services.AddSingleton(sp => new ToolsetService(
