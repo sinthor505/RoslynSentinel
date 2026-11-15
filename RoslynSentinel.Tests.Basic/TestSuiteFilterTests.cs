@@ -31,7 +31,7 @@ public class TestSuiteFilterTests
     private static void UseRunTestCatalog()
     {
         using var runTest = JsonDocument.Parse(
-            """{"type":"object","properties":{"reason":{"type":"string"},"suite":{"type":"string","enum":["fast","full"]}},"required":["reason"]}""");
+            """{"type":"object","properties":{"reason":{"type":"string"},"suite":{"type":"string","enum":["fast","full"]},"filter":{"type":"string"},"scope":{"type":"string","enum":["file","project","solution"]},"scopeName":{"type":"string"}},"required":["reason"]}""");
         using var search = JsonDocument.Parse(
             """{"type":"object","properties":{"reason":{"type":"string"},"mode":{"type":"string","enum":["text","symbol","references","callers","implementations","attribute","all","namespace","class","interface","method","property","struct","record","enum","enum member","constructor","field"]},"query":{"type":"string"}},"required":["reason","mode"]}""");
         ToolCallHint.Current = ToolSignatureCatalog.FromSchemas(
