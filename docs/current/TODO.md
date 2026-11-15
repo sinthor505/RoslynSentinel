@@ -12,6 +12,8 @@ Blocking or in-flight slices.
 
 Committed, not started.
 
+- [OPEN] Remove the dead external-drift session halt (2026-11-15) - nothing sets `_sessionHalted` since the drift latch went (1c9cb4db), but `IsSessionHalted`/`KindExternalDrift` have 54 references in 19 files; staged removal (`[Obsolete]` first, callers per project, delete last); owner ruled it out of plan_tool_experience_journal_fixes (its Step 32); code TODO in `PersistentWorkspaceManager.cs` near the `_sessionHalted` field; Medium - [plan](plans/closed/plan_tool_experience_journal_fixes.md)
+
 - [OPEN] Agent-loop auto-compaction (2026-11-14) - when the prompt nears the context limit, ask the model for a state summary (harness writes the facts, model the plan) and restart the history from it; follow-up to the pressure-based reasoning replay (options 2-3 built), also covers the `ModelAgentRunner` TODO to force a drop and retry on `ContextSizeExceededException` - [proposal](proposals/proposal_reasoning_replay_context_management.md)
 
 - [OPEN] Git(commit) and the commit-route audit script: two stray defects (2026-11-14) - `Git(commit)` maps a commit-msg hook rejection to `GitNothingToCommit` with a "stage changes first" hint (wrong code and hint, CLI path); `scripts/Test-CommitRouteLog.ps1` reports a stale commit-graph as `fail:fsck` and the commit-less initial line as `unchecked:pre-step-1` (labels misleading); Small - [plan](plans/plan_libgit2sharp_followups.md)
@@ -35,7 +37,6 @@ Committed, not started.
 
 Ideas and low priority.
 
-- [OPEN] `Member(replace)` accepts several declarations (option 2) (2026-11-14) - replace one target plus add the rest after it, only when exactly one declaration matches the target by name and parameter types; option 1 shipped and its measurement was inconclusive (no run used the new path), so first run a targeted scenario that forces the "method plus helper" shape. Input: `docs/current/proposals/proposal_member_accepts_multiple_declarations.md` (Option 2, "Measurement of option 1"); one replace rejection seen in the baseline, ShippingKind step 3 run `20261114-102311-129` turn 2.
 
 - [OPEN] SymbolNavigationEngine hints name FindReferences on the lean surface (2026-11-14) - `SymbolNavigationEngine.cs` nextCall text (about :2793-2794, :2881) names `FindReferences`, not on the 18-tool lean list; needs a designed `Search(mode: references)` text made surface-aware through `ActiveToolSurface.IsCallable`; do it only if lean runs show models failing on that path (TODO marker left in code) - [eval](evals/eval_modeleval_lean_vs_full.md)
 - [PARKED] Stale-read ledger: per-snapshot hashes (2026-11-09) - follow-up F5 of the closed read-ledger plan; once staged writes make `Committed` and `IncludeStaged` text diverge, `_observedHashes` needs one hash per snapshot; parked until staged writes are built - [doc](plans/closed/plan_read_ledger_stale_read_guard.md)

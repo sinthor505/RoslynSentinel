@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Member(replace) accepts several declarations (option 2) - resolved (2026-11-15)
+
+`Member(replace)` accepts several declarations (option 2) (2026-11-14) - replace one target plus add the rest after it, only when exactly one declaration matches the target by name and parameter types; option 1 shipped and its measurement was inconclusive (no run used the new path), so first run a targeted scenario that forces the "method plus helper" shape. Input: `docs/current/proposals/proposal_member_accepts_multiple_declarations.md` (Option 2, "Measurement of option 1"); one replace rejection seen in the baseline, ShippingKind step 3 run `20261114-102311-129` turn 2.
+
+Evidence: plan_tool_experience_journal_fixes Steps 4-7: ae6f7f07, 80bc1903, fe44261f, 8cebd6d9; MemberReplaceMultiDeclarationTests. Match is by name and kind (owner O10). The targeted "method plus helper" measurement scenario was not run.
+
 ## Member(addMember) accepts several declarations per call (option 1) - resolved (2026-11-14)
 
 `Member(addMember)` accepts several declarations per call (2026-11-14) - option 1 of the proposal, owner-accepted: insert N declarations in source order at the requested position, atomic, one compile check and one changeId, reword the `MultipleMembers`/`FileLevel` oversize advice; needs a plan doc (open questions 2, 3, 5, 6 in the proposal); follow-up for later: option 2 (`replace` with exactly one target match plus added members) after option 1 is measured on ten-chain and ShippingKind step 3; Medium - [proposal](proposals/proposal_member_accepts_multiple_declarations.md)

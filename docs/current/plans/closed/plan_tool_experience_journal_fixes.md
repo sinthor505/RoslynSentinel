@@ -1,6 +1,6 @@
 # Plan: tool-experience journal fixes (R1-R25 and owner decisions D1, D2, D4-D7)
 
-**Status:** IN PROGRESS 2026-11-15. Steps 1-27, 29-31, 33-38 done (6bf9025b..e197ca35); Step 28 awaits owner, Step 32 deferred, Batch F remains.
+**Status:** IMPLEMENTED 2026-11-15. All steps done (6bf9025b..54d071e8, ratchet fixes 5bd7c82e, bedc6f11) except Step 32, moved to TODO.md by owner ruling.
 
 ## Problem
 
@@ -8,7 +8,7 @@
 C#/shell fallbacks). The investigation on 2026-11-15 traced every theme against source and found 25 small
 fixes with no owner decision (R1-R25) and 12 owner decisions (D1-D12). Evidence, root causes and the
 "already fixed" list live in the source finding, section "Investigation results (2026-11-15)":
-[finding_tool_experience_journal_rollup_pain_points.md](../findings/finding_tool_experience_journal_rollup_pain_points.md).
+[finding_tool_experience_journal_rollup_pain_points.md](../../findings/closed/finding_tool_experience_journal_rollup_pain_points.md).
 Per the failure doctrine each item below is an environment defect (a hook, hint, schema, tool behaviour or
 doc that let a weak model fail), not a model-competence issue.
 
@@ -59,7 +59,7 @@ Owner approved 2026-11-15:
 - R1-R25 all approved as written in the finding's table (with the verified corrections above).
 - D1 ChangeSignature supports primary constructors (record positional property policy still to settle:
   open decision O1). D2 Member replace accepts several declarations (proposal option 2,
-  [proposal_member_accepts_multiple_declarations.md](../proposals/proposal_member_accepts_multiple_declarations.md)).
+  [proposal_member_accepts_multiple_declarations.md](../../proposals/proposal_member_accepts_multiple_declarations.md)).
   D4 ReadFile and GetFileOutline auto-resolve a unique bare file name (behaviour only, no new Search mode).
   D5 Git `log` with `nameOnly` returns hash + subject. D6 McpServerStatus adds `clientProtocolVersion` and a
   `tools/list_changed` count. D7 `McpServerControl(LaunchTestInstance)` gets a `toolsets` param and validates
@@ -659,6 +659,15 @@ fix slice dispatched 2026-11-15.
 - Change: `Search(mode: text, query: "NotImplementedException")` over `RoslynSentinel.Engines.Basic/ChangeSignaturePrimaryConstructor.cs` and `MemberRefactoringEngine.cs`; it must find none of this plan's `// TODO implement (Step n)` stubs. Move TODO.md entries this plan closes (the Member option-2 item in `proposal_member_accepts_multiple_declarations.md`, the launcher-hint TODO, the `WorkspaceFileEditImpl.cs` no-solution ReadFile TODO, the `SequenceMessages` TODO, the `TestSuiteFilter` TODO) to CLOSED.md; update the finding's Status line with the commit hashes and set this plan IMPLEMENTED with `Closes:` on the last commit (Commit trailers rule).
 - Done when: the stub search returns 0 hits for the plan's files and the trailer check (`ProjectDoc action: trailers`) lists no unknown ID for `plan_tool_experience_journal_fixes`.
 - Lane/tier: dispatcher.
+
+Batch F and Step 28 done 2026-11-15: Step 28 5b0815de (owner re-scope: hung-test name from stdout,
+`--blame-hang-dump-type none`, no dump; names a single hung test, not a slow project), 39 aa95d4db,
+40 3e84f791, 41 56d06c87, 42 b7c3323c (Source and Handle left out: real data records end in them), 43 d032b303,
+44 5b46de54 (agent-doc edits are git-ignored, local only), 45 93328454, 46 6ca76c2a + 44643687 (second
+`[Category("Ratchet")]` attribute), 47 54d071e8 (`-WithRatchets` is the per-slice default), 48 stub search clean.
+Ratchet fixes for Steps 5, 9, 18 and 38: 5bd7c82e, bedc6f11. Step 32 moved to TODO.md by owner ruling.
+Last full run (bedc6f11): 0 failures from this plan; one ratchet failure from another session's tab-toolset
+work (`BareFileWrites_AreOnlyInTheAllowlist`, `TabToolsetState.cs`), reported to that session.
 
 ## Out of scope
 

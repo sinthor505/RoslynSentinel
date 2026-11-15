@@ -1,6 +1,6 @@
 # Finding: recurring tool pain points across 582 tool-experience journals (2026-10-01 to 2026-11-14)
 
-**Status:** OPEN 2026-11-15. All themes investigated: many already fixed; 25 small fixes (R1-R25) ready and 12 owner decisions (D1-D12) open.
+**Status:** FIXED 2026-11-15. R1-R25 and D1, D2, D4-D7 implemented by plans/closed/plan_tool_experience_journal_fixes.md (6bf9025b..54d071e8); D3, D9-D12 declined, D8 deferred, the dead drift-halt removal is in TODO.md.
 
 ## Context
 
