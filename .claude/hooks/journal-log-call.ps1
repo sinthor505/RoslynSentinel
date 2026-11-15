@@ -18,6 +18,22 @@
 
 $ErrorActionPreference = 'Stop'
 
+# Scan copy for the shell rule: here-string and heredoc bodies are removed, and quoted literals that contain
+# whitespace (prose such as `echo "note about Foo.cs"`) are removed. A path-shaped quoted literal (`'src/Foo.cs'`)
+# and a quoted command after -c/-Command (a nested command line) are kept. The logged detail uses the original command.
+function Remove-ProseLiterals([string]$cmd) {
+    if (-not $cmd) { return '' }
+    $s = [regex]::Replace($cmd, "@'[ \t]*\r?\n.*?\r?\n'@", "''", 'Singleline')
+    $s = [regex]::Replace($s, '@"[ \t]*\r?\n.*?\r?\n"@', '""', 'Singleline')
+    $s = [regex]::Replace($s, '<<-?\s*[''"]?(\w+)[''"]?[^\r\n]*\r?\n.*?\r?\n\s*\1\b', '', 'Singleline')
+    $keep = [System.Text.RegularExpressions.MatchEvaluator]{
+        param($m)
+        $v = $m.Value.Substring(1, $m.Value.Length - 2)
+        if ($v -match '^\S*$' -or $v -match '[\\/][^\\/\s]*\.cs$') { $m.Value } else { '""' }
+    }
+    return [regex]::Replace($s, '(?<!(?:-c|-lc|-ic|-command|-cmd|/c)\s+)(''[^'']*''|"[^"]*")', $keep, 'IgnoreCase')
+}
+
 function Test-CsFallback($toolName, $in) {
     switch ($toolName) {
         'Read' {
@@ -25,12 +41,14 @@ function Test-CsFallback($toolName, $in) {
             if ($p -match '\.cs$' -and $p -notmatch '[\\/]Worktree[\\/]') { return "Read $([System.IO.Path]::GetFileName($p))" }
         }
         'Glob' {
+            # A negated glob (`!*.cs`) excludes files, so it is not a C# fallback.
             $p = [string]$in.pattern
-            if ($p -match '\.cs\b' -and $p -notmatch '[\\/]Worktree[\\/]') { return "Glob $p" }
+            if ($p -match '\.cs$' -and $p -notmatch '^\s*!' -and $p -notmatch '[\\/]Worktree[\\/]') { return "Glob $p" }
         }
         'Grep' {
             $glob = [string]$in.glob; $path = [string]$in.path
-            if (($glob -match '\.cs["'']?$' -or $path -match '\.cs$') -and $path -notmatch '[\\/]Worktree[\\/]') { return "Grep $($in.pattern)" }
+            $globIsCs = $glob -match '\.cs["'']?$' -and $glob -notmatch '^\s*!'
+            if (($globIsCs -or $path -match '\.cs$') -and $path -notmatch '[\\/]Worktree[\\/]') { return "Grep $($in.pattern)" }
         }
         { $_ -in 'Bash', 'PowerShell' } {
             $c = [string]$in.command
@@ -38,7 +56,8 @@ function Test-CsFallback($toolName, $in) {
             # Writing or reading the journal itself is never a fallback, even when the note
             # mentions a .cs file - counting it made the Stop hook re-nudge for journaling.
             if ($c -match '\.claude[\\/]+journal[\\/]') { return $null }
-            if ($c -match '\.cs\b' -or $c -match '\bdotnet\s+(build|test)\b') {
+            $scan = Remove-ProseLiterals $c
+            if ($scan -match '\.cs\b' -or $scan -match '\bdotnet\s+(build|test)\b') {
                 $c = ($c -replace '\s+', ' ').Trim()
                 if ($c.Length -gt 100) { $c = $c.Substring(0, 100) + '...' }
                 return "$toolName $c"

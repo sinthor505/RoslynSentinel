@@ -106,6 +106,23 @@ try {
     $null = Builtin 'Glob' @{ pattern = '**/*.cs' }
     Check 'log: Glob *.cs -> fallback' ((Get-CallLines)[-1].tool -eq 'Glob')
 
+    $n0 = (Get-CallLines).Count
+    $null = Builtin 'PowerShell' @{ command = 'echo "note about Foo.cs" >> notes.txt' }
+    Check 'log: .cs in quoted prose is not a fallback' ((Get-CallLines).Count -eq $n0)
+
+    $n0 = (Get-CallLines).Count
+    $null = Builtin 'PowerShell' @{ command = '$j = "C:\repo\.claude\journal\2026-11-15_aaaabbbb.md"; echo "note about Foo.cs" >> $j' }
+    Check 'log: variable-held journal path is not a fallback' ((Get-CallLines).Count -eq $n0)
+
+    $n0 = (Get-CallLines).Count
+    $null = Builtin 'Grep' @{ pattern = 'TODO'; glob = '!*.cs'; path = 'docs' }
+    Check 'log: negated Grep glob !*.cs is not a fallback' ((Get-CallLines).Count -eq $n0)
+
+    $n0 = (Get-CallLines).Count
+    $null = Builtin 'Bash' @{ command = 'grep -rn TODO . --include=*.cs' }
+    $l = (Get-CallLines)[-1]
+    Check 'log: grep --include=*.cs is still a fallback' ((Get-CallLines).Count -gt $n0 -and $l.kind -eq 'fallback' -and $l.tool -eq 'Bash') ($l | ConvertTo-Json -Compress)
+
     $null = Mcp 'Search' $okText 'PostToolUse' @{ agent_id = 'a06a86'; agent_type = 'implementer' }
     $l = (Get-CallLines)[-1]
     Check 'log: subagent call tagged with agent' ($l.agent -eq 'implementer:a06a86')
