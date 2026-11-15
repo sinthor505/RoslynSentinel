@@ -629,6 +629,12 @@ public class WorkspaceReadNavigationImpl
                 ListAllKind.enumMember => "enum member",
                 _ => kind.ToString()
             };
+            // '|' separates alternative names (any one matches); a filter without '|' is one name, unchanged.
+            var nameFilters = string.IsNullOrEmpty(nameFilter)
+                ? Array.Empty<string>()
+                : nameFilter.Contains('|')
+                    ? nameFilter.Split('|').Select(p => p.Trim()).Where(p => p.Length > 0).ToArray()
+                    : new[] { nameFilter };
             var entries = new List<SolutionSymbolEntry>();
             var totalMatches = 0;
             var allMatches = maxItems is null ? null : new List<(string FilePath, string ProjectName)>();
@@ -658,9 +664,9 @@ public class WorkspaceReadNavigationImpl
 
                         if (!string.IsNullOrEmpty(nameFilter))
                         {
-                            var matches = exactMatch
-                                ? string.Equals(item.Name, nameFilter, StringComparison.OrdinalIgnoreCase)
-                                : item.Name.Contains(nameFilter, StringComparison.OrdinalIgnoreCase);
+                            var matches = nameFilters.Any(f => exactMatch
+                                ? string.Equals(item.Name, f, StringComparison.OrdinalIgnoreCase)
+                                : item.Name.Contains(f, StringComparison.OrdinalIgnoreCase));
                             if (!matches)
                             {
                                 continue;
@@ -1304,7 +1310,7 @@ public class WorkspaceReadNavigationImpl
                     var matchedAgainstDescription = fileGlob.Replace('\\', '/').Contains('/')
                         ? "the solution-relative path"
                         : "the bare filename";
-                    var sampleRelativePaths = solution.Projects
+                    var allRelativePaths = solution.Projects
                         .SelectMany(p => p.Documents)
                         .Select(d =>
                         {
@@ -1317,9 +1323,9 @@ public class WorkspaceReadNavigationImpl
                         })
                         .Where(p => !string.IsNullOrEmpty(p))
                         .Distinct()
-                        .Take(3)
                         .ToList();
-                    var globExampleFolder = sampleRelativePaths.Select(p => p.Split('/')[0]).FirstOrDefault(f => !string.IsNullOrEmpty(f)) ?? "MyProject";
+                    var sampleRelativePaths = allRelativePaths.Take(3).ToList();
+                    var globExampleFolder = PickGlobExampleFolder(allRelativePaths, fileGlob) ?? "MyProject";
                     var sampleText = sampleRelativePaths.Count > 0
                         ? $"Example paths in this solution: {string.Join(", ", sampleRelativePaths)}."
                         : "This solution has no documents to match against.";
@@ -1385,6 +1391,39 @@ public class WorkspaceReadNavigationImpl
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Search (mode: text)")
             };
         }
+    }
+
+    // Picks the folder shown in the zero-match glob hint: the first path segment of the candidate whose folder shares the
+    // longest case-insensitive prefix with the glob's first segment; the first candidate's folder when none shares a character.
+    private static string? PickGlobExampleFolder(IEnumerable<string> relativePaths, string fileGlob)
+    {
+        var globFolder = fileGlob.Replace('\\', '/').Split('/')[0];
+        string? best = null;
+        var bestPrefix = 0;
+        foreach (var path in relativePaths)
+        {
+            var folder = path.Split('/')[0];
+            if (string.IsNullOrEmpty(folder))
+            {
+                continue;
+            }
+
+            best ??= folder;
+            var prefix = 0;
+            while (prefix < folder.Length && prefix < globFolder.Length
+                && char.ToUpperInvariant(folder[prefix]) == char.ToUpperInvariant(globFolder[prefix]))
+            {
+                prefix++;
+            }
+
+            if (prefix > bestPrefix)
+            {
+                best = folder;
+                bestPrefix = prefix;
+            }
+        }
+
+        return best;
     }
 
     // Adds the zero-hit EditAttribution note to a non-text search that matched nothing. Text mode adds its own notes inside SearchSolutionText.

@@ -496,6 +496,84 @@ public class SearchModeTests
     }
 
     [Test]
+    public async Task Search_ClassMode_PipeSeparatedQuery_ExactMatchReturnsEveryNamedDeclaration()
+    {
+        using var h = await CreateHarnessAsync();
+
+        var result = await h.Tools.SearchSolutionTool(
+            reason: "search class pipe alternatives exact match regression",
+            SearchMode.@class,
+            query: "SearchModeProbeImpl|SearchModeProbeCaller");
+
+        Assert.That(result.IsError, Is.Not.True, result.ErrorData?.Message);
+        Assert.That(Serialize(result.SuccessData), Does.Contain("SearchModeProbeImpl"),
+            "the first '|' alternative must match its class declaration.");
+        Assert.That(Serialize(result.SuccessData), Does.Contain("SearchModeProbeCaller"),
+            "the second '|' alternative must match its class declaration.");
+    }
+
+    [Test]
+    public async Task Search_MethodMode_PipeSeparatedQuery_ExactMatchReturnsEveryNamedDeclaration()
+    {
+        using var h = await CreateHarnessAsync();
+
+        var result = await h.Tools.SearchSolutionTool(
+            reason: "search method pipe alternatives exact match regression",
+            SearchMode.method,
+            query: "Target|Invoke");
+
+        Assert.That(result.IsError, Is.Not.True, result.ErrorData?.Message);
+        Assert.That(Serialize(result.SuccessData), Does.Contain("Target"),
+            "the first '|' alternative must match its method declarations.");
+        Assert.That(Serialize(result.SuccessData), Does.Contain("Invoke"),
+            "the second '|' alternative must match its method declaration.");
+    }
+
+    [Test]
+    public async Task Search_ClassMode_PipeSeparatedQuery_SubstringMatchReturnsEveryNamedDeclaration()
+    {
+        using var h = await CreateHarnessAsync();
+
+        var result = await h.Tools.SearchSolutionTool(
+            reason: "search class pipe alternatives substring match regression",
+            SearchMode.@class,
+            query: "SearchModeProbeImp|SearchModeProbeCall",
+            exactMatch: false);
+
+        Assert.That(result.IsError, Is.Not.True, result.ErrorData?.Message);
+        Assert.That(Serialize(result.SuccessData), Does.Contain("SearchModeProbeImpl"),
+            "the first '|' substring alternative must match its class declaration.");
+        Assert.That(Serialize(result.SuccessData), Does.Contain("SearchModeProbeCaller"),
+            "the second '|' substring alternative must match its class declaration.");
+    }
+
+    [Test]
+    public async Task Search_ClassMode_QueryWithoutPipe_IsOneExactName()
+    {
+        using var h = await CreateHarnessAsync();
+
+        var single = await h.Tools.SearchSolutionTool(
+            reason: "search class single name without pipe regression",
+            SearchMode.@class,
+            query: "SearchModeProbeImpl");
+
+        Assert.That(single.IsError, Is.Not.True, single.ErrorData?.Message);
+        Assert.That(Serialize(single.SuccessData), Does.Contain("SearchModeProbeImpl"),
+            "a query without '|' must still match its exact class name.");
+        Assert.That(Serialize(single.SuccessData), Does.Not.Contain("SearchModeProbeCaller"),
+            "a query without '|' must not match other class names.");
+
+        var partial = await h.Tools.SearchSolutionTool(
+            reason: "search class partial name without pipe exact regression",
+            SearchMode.@class,
+            query: "SearchModeProbeImp");
+
+        Assert.That(partial.IsError, Is.Not.True, partial.ErrorData?.Message);
+        Assert.That(partial.TotalRecords, Is.EqualTo(0),
+            "without '|' and without exactMatch: false a partial name matches nothing.");
+    }
+
+    [Test]
     public async Task Search_DeclarationKindMode_WithContainingTypeMatchingNothing_ReportsNoDeclarationInContainer()
     {
         using var h = await CreateHarnessAsync();
