@@ -67,7 +67,7 @@
 | CoreRefactoringTools | MoveMember | Claude, claude-lean, Refactor | - | Moves methods/properties/fields from one class to another as a single atomic change, rewriting call sites. |
 | DeclarationTools | Declaration | claude-lean (on demand) | - | Changes a declaration's modifier, accessibility, attribute or base type. |
 | DocumentationTools | ProjectDoc | Claude, claude-lean (on demand), Workspace | - | Reads, writes, appends, lists project doc files under docs/; trailers/validate/close reconcile docs with... |
-| EditSnippetsTools | EditSnippets | EditSnippetsExperiment | - | Replaces exact text blocks in one or more files as one atomic change. |
+| EditSnippetsTools | EditSnippets | EditSnippetsExperiment | - | Replaces text blocks in one or more files as one atomic change. |
 | GitRemoteTools | GitRemote | Claude, claude-lean (on demand), Workspace | - | Git branch, checkout, push, fetch, pull, tag, stash, worktree and config. status, log, diff, commit, stage and the... |
 | GitTools | Git | Claude, claude-lean, Workspace | Allowed | Unified git tool. |
 | NamedArgumentsTools | NamedArguments | claude-lean (on demand), NamedArguments | - | Convert positional call arguments to named arguments (M(1, 2) -> M(a: 1, b: 2)) using the compiler's binding, for... |
@@ -121,7 +121,7 @@
 | WorkspaceTools | ListWorkspaceSolutions | Claude, claude-lean (on demand), Workspace | - | Lists .sln/.slnx files under a directory, for use with LoadSolution. |
 | WorkspaceTools | LoadSolution | Claude, claude-lean, Workspace | - | Loads a .NET solution into memory; required before any tool that needs a loaded solution. |
 | WorkspaceTools | ReadFile | Claude, claude-lean, Workspace | Allowed | Returns a file's raw text verbatim, or a 1-based line-range slice via startLine/endLine. |
-| WorkspaceTools | ReplaceSnippet | Claude, claude-lean, Workspace | - | Replaces one exact text block with another in a file, for small localized edits. |
+| WorkspaceTools | ReplaceSnippet | Claude, claude-lean, Workspace | - | Replaces one text block with another in a file, for small localized edits. |
 | WorkspaceTools | RetryFailedChanges | Claude, claude-lean (on demand), Workspace | - | Retries failed file writes using server-cached content. |
 | WorkspaceTools | RunTest | Claude, claude-lean, Workspace | - | Runs `dotnet test` on the solution or one project. |
 | WorkspaceTools | SplitProjectByFolder | Claude, claude-lean (on demand), Workspace | - | Moves all files under a folder from one project to a new target project, preserving structure. |

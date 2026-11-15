@@ -565,11 +565,11 @@ public class SnippetEdit
     /// <summary>Absolute path of the .cs file this edit applies to.</summary>
     [BatchItemField("Path of the .cs file this edit applies to. Every item needs its own filePath.", Required = true)]
     public string FilePath { get; set; } = "";
-    /// <summary>Text to find and replace. Indentation and the amount of spacing need not match the file; identifiers, operators, comments, string contents and line structure must.</summary>
-    [BatchItemField("Text to find and replace. Indentation and the amount of spacing need not match the file; identifiers, operators, comments, string contents and line structure must.", Required = true)]
+    /// <summary>Text to find and replace; indentation and the amount of spacing may differ from the file.</summary>
+    [BatchItemField("Text to find and replace; indentation and the amount of spacing may differ from the file.", Required = true)]
     public string OldContent { get; set; } = "";
-    /// <summary>Replacement text. Its indentation is adjusted to the file's; spacing within lines is kept as written. May be empty (pure deletion) or longer than OldContent (net insertion).</summary>
-    [BatchItemField("Replacement text. Its indentation is adjusted to the file's; spacing within lines is kept as written. May be empty (pure deletion) or longer than OldContent (net insertion).", Required = true)]
+    /// <summary>Replacement text, re-indented to the file. May be empty (pure deletion) or longer than OldContent (net insertion).</summary>
+    [BatchItemField("Replacement text, re-indented to the file. May be empty (pure deletion) or longer than OldContent (net insertion).", Required = true)]
     public string NewContent { get; set; } = "";
     /// <summary>Optional line immediately before OldContent, for disambiguation.</summary>
     public string? LineBefore

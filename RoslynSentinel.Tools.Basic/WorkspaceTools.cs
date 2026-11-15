@@ -149,7 +149,7 @@ public class WorkspaceTools
     // over-cap error can (see WriteToolAdviceHelper) -> and a hardcoded name here would be shown to
     // the model on every single call even when that tool is gated off, which is the run-398 failure
     // in its most persistent form. The error path is where the redirect is actually needed.
-    [Description("Replaces one text block with another in a file (indentation and the amount of spacing need not match; newContent is re-indented to the file), for small localized edits. Prefer a structural Roslyn tool for structural changes. By default the edited project(s) and their dependents are delta-compiled BEFORE writing, and the change is rejected if it introduces a new compiler error. For edits larger than the size limit or whole-member rewrites, use Member(operation: replace) instead.")]
+    [Description("Replaces one text block with another in a file, for small localized edits. Prefer a structural Roslyn tool for structural changes. By default the edited project(s) and their dependents are delta-compiled BEFORE writing, and the change is rejected if it introduces a new compiler error. For edits larger than the size limit or whole-member rewrites, use Member(operation: replace) instead.")]
     public Task<SentinelCallToolResult<ReplaceSnippetResult>> ReplaceSnippetTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("apply: writes the change. validate: checks it would apply cleanly without writing.")]

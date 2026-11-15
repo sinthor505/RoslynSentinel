@@ -20,7 +20,7 @@ public sealed class EditSnippetsTools
     // TODO remove EditSnippets or replace ReplaceSnippet after the A/B decision
     [McpServerTool(Name = "EditSnippets")]
     [Produces(DataTag.ChangeId)]
-    [Description("Replaces text blocks (indentation and the amount of spacing need not match; newContent is re-indented to the file) in one or more files as one atomic change. Every edit is an item with its own filePath, oldContent and newContent; a single edit is a list of one. By default the edited project(s) and their dependents are delta-compiled BEFORE writing, and the change is rejected if it introduces a new compiler error.")]
+    [Description("Replaces text blocks in one or more files as one atomic change. Every edit is an item with its own filePath, oldContent and newContent; a single edit is a list of one. By default the edited project(s) and their dependents are delta-compiled BEFORE writing, and the change is rejected if it introduces a new compiler error.")]
     public async Task<SentinelCallToolResult<ReplaceSnippetResult>> EditSnippetsTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("apply: writes the change. validate: checks it would apply cleanly without writing.")]
