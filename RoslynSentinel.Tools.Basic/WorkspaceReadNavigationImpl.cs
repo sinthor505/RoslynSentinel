@@ -278,7 +278,7 @@ public class WorkspaceReadNavigationImpl
             parts.Add($"To choose a type, retry {string.Join(" or ", retries)}.");
         }
 
-        parts.Add($"To choose between overloads, read the lines of any listed candidate with ReadFile(filePath, startLine: S, endLine: E) using its 'lines S-E' above, for example {ToolCallHint.Call("ReadFile", ("filePath", requestedFilePath), ("startLine", entries[0].Start.ToString()), ("endLine", entries[0].End.ToString()))}.");
+        parts.Add($"To choose between overloads, read the lines of any listed candidate using its 'lines S-E' above, for example {ToolCallHint.Call("ReadFile", ("filePath", requestedFilePath), ("startLine", entries[0].Start.ToString()), ("endLine", entries[0].End.ToString()))}.");
 
         return new ResultError(ToolErrorCode.Ambiguous, string.Join(" ", parts), null, ToolErrorMapper.ToStructuredDetail(candidates));
     }
@@ -442,7 +442,7 @@ public class WorkspaceReadNavigationImpl
                 }
 
                 filePathResolved = _workspaceManager.ResolveFromWire(bare.Path);
-                document = solution.Projects.SelectMany(p => p.Documents).First(d => d.FilePath == bare.Path);
+                document = DocumentLookup.RequireDocument(solution, filePathResolved);
                 readFindings.Add(new Finding("FileResolved", $"'{filePath}' resolved to {bare.Path} (the only loaded file with that name)", FindingSeverity.Info));
             }
 

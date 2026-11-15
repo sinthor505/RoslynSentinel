@@ -780,7 +780,7 @@ public class WorkspaceFileEditImpl
                     }
 
                     filePathResolved = _workspaceManager.ResolveFromWire(bare.Path);
-                    document = solution.Projects.SelectMany(p => p.Documents).First(d => d.FilePath == bare.Path);
+                    document = DocumentLookup.RequireDocument(solution, filePathResolved);
                     readFindings.Add(new Finding("FileResolved", $"'{filePath}' resolved to {bare.Path} (the only loaded file with that name)", FindingSeverity.Info));
                     sourceText = await document.GetTextAsync(cancellationToken);
                 }

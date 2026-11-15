@@ -2683,8 +2683,10 @@ public class MemberRefactoringEngine
         var replacedDocument = replacedSolution.GetDocument(document.Id)!;
         var replacedRoot = await replacedDocument.GetSyntaxRootAsync(cancellationToken);
         var targetIndex = container.Members.IndexOf(target);
-        var replacedContainer = replacedRoot?.DescendantNodes().OfType<TypeDeclarationSyntax>()
-            .FirstOrDefault(t => t.SpanStart == container.SpanStart && t.Kind() == container.Kind() && t.Identifier.ValueText == container.Identifier.ValueText);
+        var replacedContainerMatches = replacedRoot?.DescendantNodes().OfType<TypeDeclarationSyntax>()
+            .Where(t => t.SpanStart == container.SpanStart && t.Kind() == container.Kind() && t.Identifier.ValueText == container.Identifier.ValueText)
+            .ToList() ?? new List<TypeDeclarationSyntax>();
+        var replacedContainer = NameTargetLookup.RequireSingle(replacedContainerMatches, "type", container.Identifier.ValueText);
         if (replacedRoot == null || replacedContainer == null || targetIndex < 0 || replacedContainer.Members.Count != container.Members.Count)
         {
             throw new InvalidOperationException($"ReplaceMemberWithAdditionsAsync: could not locate '{container.Identifier.ValueText}' after replacing '{memberName}'; nothing was written. This is a bug in the replace-with-additions path.");
