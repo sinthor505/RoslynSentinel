@@ -144,6 +144,26 @@ ReplaceSnippet 109, Git 90, Search 90, RunTest 76, dispatch 31, Member 26, ReadF
 Build 21, McpServerControl 18. Unknown-parameter errors that list the valid names unstick agents in
 one call (33466d81:L24, cc715aa0:L15).
 
+### Recency check (2026-11-15)
+
+`Get-JournalDigest.ps1 -Days 14 -NoMark` (sessions 2026-11-02 to 2026-11-14, 141 sessions, 522
+bad/mixed entries; `.claude/journal/digest_last14_20261115.md`). Every theme 1-18 still has recent
+entries. Largest: Git (~40), hooks (~40), Search (~35), RunTest (~30), toolsets (~25), caps (~25).
+Top failure buckets: Member InvalidArgument 146, Member ValidationFailed 119, Search InvalidArgument
+115, ReplaceSnippet Exception 90, ReplaceSnippet NotFound / ValidationFailed 66 each.
+
+New recurring themes (not above):
+- Filtered test runs miss cross-cutting ratchet tests; shared-tree results are order-dependent (~8;
+  c0beb6fc:L10, ce0dc57f:L22, 9da85433:L32).
+- EditAttribution findings on unrelated calls or naming the wrong writer (~5; 44eba0b8:L36,
+  47174bf0:L12, ed2e51fa:L34).
+- DTO-justification hook false positives on service classes (~5; bfb6d753:L142, 9da85433:L14).
+- Malformed or escaped tool-argument JSON (~4; bdb7540c:L6, bfb6d753:L71).
+- Line-ending loop still reported after the default-on fix 426d8b83 (2026-10-25): bdb7540c:L4
+  (2026-11-02), bfb6d753:L40 (2026-11-04), 9da85433:L29 (2026-11-05). Not traced; candidates are the
+  CreateFile scaffold's literal `\n`, ReadFile ignoring `showLineEndings` without a solution, or a
+  stale server binary.
+
 ## Root cause
 
 The five dispatched items (S1-S4, line-ending loop) were traced and are already fixed; see the
@@ -162,8 +182,9 @@ each.
 Decided: investigate and fix the line-ending loop and S1-S4 now.
 
 Open, ranked by leverage:
-1. Every write path honours the file's resolved EOL, and a read tool reports EOL (removes the
-   `Set-CrlfEndings.ps1` loop). In progress.
+1. Every write path honours the file's resolved EOL (done, 426d8b83), and the active policy is
+   visible: `McpServerStatus` reports `eolMode` (2026-11-15). Open: trace the post-fix reports in the
+   recency check.
 2. Hooks judge parsed targets only, never prose (theme 1).
 3. Caps and mandatory params (`reason`, batch cap, newContent limit) in the schemas and repeated in
    offload and zero-match hints (themes 2, 7).

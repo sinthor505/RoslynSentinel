@@ -50,7 +50,8 @@ public class ServerStatusTools
         " solutionLoadStatus = NotLoaded | Loading | Loaded | Failed; tool calls wait up to 30 s for a Loading solution." +
         " workspaceStale = a workspace reload failed and the loaded solution may not match disk (see reloadFailure; recover with LoadSolution forceReload: true); lastLoadFailure = text of the last failed load." +
         " lastLaunch = the launcher's last build of source HEAD (buildFailed = it fell back to the older servedSha; firstErrors and hint say why)." +
-        " operatingMode/operatingModeSource = SingleAgent or MultiAgent and why; callerAgentId = agent id of this call (null if none).")]
+        " operatingMode/operatingModeSource = SingleAgent or MultiAgent and why; callerAgentId = agent id of this call (null if none)." +
+        " eolMode = line-ending policy for writes (--eol / ROSLYNSENTINEL_EOL): auto keeps each file's existing endings (else .editorconfig), crlf or lf forces that ending.")]
     public SentinelCallToolResult<McpServerStatusResult> McpServerStatusTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("inactive: declared tools not active in this mode, with an enabledBy hint. all: every declared tool.")]
@@ -176,7 +177,9 @@ public class ServerStatusTools
             // The only waiter on the git backend warmup: bounded (about 2 s), "warming" on timeout, never throws.
             GitBackend: _gitBackend.Report(GitBackendWarmup.StatusWait),
             // Beside the orientation breaker's state, but only while the latch is switched on (null = field omitted from the wire).
-            LoopLatch: LoopLatchOptions.Enabled && _loopLatch is not null ? _loopLatch.Snapshot() : null
+            LoopLatch: LoopLatchOptions.Enabled && _loopLatch is not null ? _loopLatch.Snapshot() : null,
+            // Process-wide policy; PersistentWorkspaceManager.EolModeOverride is a test seam and is not reported.
+            EolMode: EolPolicyOptions.Mode.ToString().ToLowerInvariant()
         )
         };
     }
@@ -294,7 +297,9 @@ public sealed record McpServerStatusResult(
     // Libgit2 backend health: active backend, native load, repo probe and the seam's fallback counters (GitBackendWarmup).
     GitBackendSnapshot? GitBackend = null,
     // Latched tools per agent (empty = none latched); present only while --loop-latch is on.
-    IReadOnlyList<LoopLatchAgentState>? LoopLatch = null);
+    IReadOnlyList<LoopLatchAgentState>? LoopLatch = null,
+    // Effective --eol write policy (auto | crlf | lf), fixed per process by EolPolicyOptions.
+    string? EolMode = null);
 /// <summary>
 /// One <see cref="McpServerToolAttribute"/>-carrying method discovered via reflection, as reported
 /// by McpServerStatusTool's <c>AllDeclaredTools</c>. Ground truth for "does this tool exist in this
