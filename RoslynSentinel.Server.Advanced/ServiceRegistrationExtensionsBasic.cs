@@ -282,6 +282,16 @@ public static class RoslynSentinelServiceExtensionsBasic
                     new HashSet<string>(
                         ToolClassRegistry.ClaudeLeanOnDemandToolClasses.Where(c => !resolvedExcludeTools.Contains(c)),
                         StringComparer.Ordinal)));
+                // Per-tab toolset persistence (toolsets.json in the tab state dir). Only when the tab dir is known;
+                // ApplyStartupToolsets restores from it and subscribes Save to EnabledToolSetsChanged.
+                var tabStateDir = ServerInstancePaths.Current.TabStateDir;
+                if (tabStateDir is not null)
+                {
+                    services.AddSingleton(sp => new TabToolsetStateStore(
+                        tabStateDir,
+                        Environment.GetEnvironmentVariable("CLAUDE_CODE_SESSION_ID"),
+                        sp.GetService<ILoggerFactory>()?.CreateLogger<TabToolsetStateStore>()));
+                }
                 services.AddSingleton<ToolsetControlTools>();
                 mcpBuilder.WithSentinelTools<ToolsetControlTools>();
             }

@@ -142,22 +142,66 @@ public static class ServerStartupHelpers
     /// <summary>
     /// Switches on the <c>--toolsets</c> sets at startup. Call it after the host is built and BEFORE the host
     /// starts, so the first tools/list already contains the tools. Returns one warning per problem (empty = clean).
+    /// When a <see cref="TabToolsetStateStore"/> is registered, the sets saved by an earlier run replace the
+    /// <c>--toolsets</c> sets, and every later change to the enabled sets is written back to the tab's state file.
     /// Never throws: a bad toolset list must not stop the server, which can still run with a smaller surface.
     /// </summary>
     public static IReadOnlyList<string> ApplyStartupToolsets(IServiceProvider services, string[] args)
     {
-        var (sets, unknown) = ParseToolsets(args);
-        if (sets.Count == 0 && unknown.Count == 0)
+        var (argSets, argUnknown) = ParseToolsets(args);
+        var sets = argSets.ToList();
+        var unknown = argUnknown.ToList();
+        var warnings = new List<string>();
+        var toolsetService = services.GetService<ToolsetService>();
+        var store = services.GetService<TabToolsetStateStore>();
+
+        if (store is not null)
+        {
+            store.ConfiguredToolSets = sets;
+            try
+            {
+                var saved = store.Load();
+                if (saved is not null)
+                {
+                    sets = new List<ToolSetName>();
+                    foreach (var name in saved.EnabledToolSets)
+                    {
+                        if (ToolsetCatalog.TryParseSetName(name, out var set))
+                        {
+                            if (!sets.Contains(set))
+                            {
+                                sets.Add(set);
+                            }
+                        }
+                        else
+                        {
+                            unknown.Add(name);
+                        }
+                    }
+
+                    store.RestoredAtStartup = true;
+                    warnings.Add($"toolsets restored from tab state: {string.Join(",", sets.Select(s => s.ToString()))}");
+                }
+            }
+            catch (Exception ex)
+            {
+                warnings.Add($"tab toolset state not read: {ex.Message}");
+            }
+        }
+
+        if (sets.Count == 0 && unknown.Count == 0 && store is null)
         {
             return Array.Empty<string>();
         }
 
-        var warnings = new List<string>();
-        var toolsetService = services.GetService<ToolsetService>();
         if (toolsetService is null)
         {
-            var requested = string.Join(",", sets.Select(s => s.ToString()).Concat(unknown));
-            warnings.Add($"--toolsets={requested} ignored: toolsets exist only in --mode claude-lean.");
+            if (sets.Count > 0 || unknown.Count > 0)
+            {
+                var requested = string.Join(",", sets.Select(s => s.ToString()).Concat(unknown));
+                warnings.Add($"--toolsets={requested} ignored: toolsets exist only in --mode claude-lean.");
+            }
+
             return warnings;
         }
 
@@ -182,6 +226,12 @@ public static class ServerStartupHelpers
             {
                 warnings.Add($"--toolsets={set} not applied: {ex.Message}");
             }
+        }
+
+        // Subscribed after the apply loop on purpose: enabling the startup sets must not itself rewrite the file.
+        if (store is not null)
+        {
+            toolsetService.EnabledToolSetsChanged += store.Save;
         }
 
         return warnings;
