@@ -16,7 +16,9 @@ namespace RoslynSentinel.Common.SnippetMatching;
 /// <param name="Start">0-based character offset where the matched span starts.</param>
 /// <param name="Line">1-based line number of <paramref name="Start"/>.</param>
 /// <param name="Length">The true length of the matched span in the file text (never the snippet's length).</param>
-/// <param name="Tier">The tier at which this match was found; never looser than the requested tier.</param>
+/// <param name="Tier">The tier at which this match was found; never looser than the requested tier, except for a match whose
+/// <paramref name="MatcherName"/> is <see cref="SnippetTokenEquivalence.MatcherName"/>: that one was found at the looser
+/// <paramref name="Tier"/> and accepted because its C# tokens equal the snippet's.</param>
 /// <param name="MatcherName">Name of the matcher that produced the match.</param>
 public sealed record SnippetMatch(int Start, int Line, int Length, WhitespaceTolerance Tier, string MatcherName);
 

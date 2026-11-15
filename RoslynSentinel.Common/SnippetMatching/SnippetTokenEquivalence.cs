@@ -45,7 +45,71 @@ public static class SnippetTokenEquivalence
     /// </summary>
     internal static bool AreTokenEquivalent(string snippet, string candidateText, CSharpParseOptions options)
     {
-        throw new NotImplementedException(); // TODO implement (Step 2)
+        var snippetTokens = SyntaxFactory.ParseTokens(snippet, options: options).ToList();
+        var candidateTokens = SyntaxFactory.ParseTokens(candidateText, options: options).ToList();
+        if (snippetTokens.Count != candidateTokens.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < snippetTokens.Count; i++)
+        {
+            var snippetToken = snippetTokens[i];
+            var candidateToken = candidateTokens[i];
+            // Line breaks inside a token (verbatim or raw string) are compared normalized: the edit path matches with
+            // IgnoreLineEndings and normalizes the written file's line endings afterwards.
+            if (snippetToken.Kind() != candidateToken.Kind()
+                || NormalizeLineBreaks(snippetToken.Text) != NormalizeLineBreaks(candidateToken.Text)
+                || !SignificantTriviaEquivalent(snippetToken, candidateToken))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static string NormalizeLineBreaks(string text) =>
+        text.Replace("\r\n", "\n").Replace('\r', '\n');
+
+    // Non-whitespace trivia (leading then trailing) of both tokens must have the same count, kinds and per-line trimmed text.
+    private static bool SignificantTriviaEquivalent(SyntaxToken snippetToken, SyntaxToken candidateToken)
+    {
+        var snippetTrivia = SignificantTrivia(snippetToken);
+        var candidateTrivia = SignificantTrivia(candidateToken);
+        if (snippetTrivia.Count != candidateTrivia.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < snippetTrivia.Count; i++)
+        {
+            if (snippetTrivia[i].Kind() != candidateTrivia[i].Kind()
+                || !TrimmedLines(snippetTrivia[i].ToFullString()).SequenceEqual(TrimmedLines(candidateTrivia[i].ToFullString())))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static List<SyntaxTrivia> SignificantTrivia(SyntaxToken token) =>
+        token.LeadingTrivia.Concat(token.TrailingTrivia)
+            .Where(trivia => !trivia.IsKind(SyntaxKind.WhitespaceTrivia) && !trivia.IsKind(SyntaxKind.EndOfLineTrivia))
+            .ToList();
+
+    // Owner decision R4: per-line trim. Trailing empty lines are dropped so a directive's own line break (present in a
+    // mid-file directive, absent at the end of a snippet) does not make equal directives differ.
+    private static List<string> TrimmedLines(string triviaText)
+    {
+        var lines = triviaText.Split(["\r\n", "\n", "\r"], StringSplitOptions.None).Select(line => line.Trim()).ToList();
+        while (lines.Count > 0 && lines[^1].Length == 0)
+        {
+            lines.RemoveAt(lines.Count - 1);
+        }
+
+        return lines;
     }
 
     /// <summary>
@@ -56,7 +120,31 @@ public static class SnippetTokenEquivalence
     internal static bool TokensAlignWithTree(
         SyntaxNode fileRoot, int candidateTextStart, string candidateText, CSharpParseOptions options)
     {
-        throw new NotImplementedException(); // TODO implement (Step 2)
+        var fullSpan = fileRoot.FullSpan;
+        foreach (var token in SyntaxFactory.ParseTokens(candidateText, options: options))
+        {
+            if (token.IsKind(SyntaxKind.EndOfFileToken) || token.Span.Length == 0)
+            {
+                continue;
+            }
+
+            var start = candidateTextStart + token.Span.Start;
+            var end = candidateTextStart + token.Span.End;
+            if (start < fullSpan.Start || end > fullSpan.End)
+            {
+                return false;
+            }
+
+            // A lexer token that starts or ends inside a tree token, string literal or comment lands on a position whose
+            // owning tree token starts earlier / ends later. A whole interpolated string is one lexer token spanning
+            // several tree tokens: only its outer start and end are checked, and both sit on tree token boundaries.
+            if (fileRoot.FindToken(start).Span.Start != start || fileRoot.FindToken(end - 1).Span.End != end)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>
