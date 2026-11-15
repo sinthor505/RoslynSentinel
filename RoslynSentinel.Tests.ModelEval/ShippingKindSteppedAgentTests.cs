@@ -131,14 +131,15 @@ public class ShippingKindSteppedAgentTests
         await RunStepAsync(step, ShippingKindStepGoldens.PromptForStep(step));
     }
 
-    private async Task RunStepAsync(int step, string prompt)
+    // withVisibleTests (V12/V13) seeds a visible shipping test file in the step-0 golden; every other variant keeps the original fixture so earlier results stay comparable.
+    private async Task RunStepAsync(int step, string prompt, bool withVisibleTests = false)
     {
         var cancellationToken = TestContext.CurrentContext.CancellationToken;
         Directory.CreateDirectory(_runDirectory);
 
         // The checkout happens before LoadSolutionAsync, so the server never sees a harness write.
         var repository = GoldenStepRepository.Create(
-            _fixture.SolutionDirectory, ShippingKindStepGoldens.LastStep, ShippingKindStepGoldens.FilesForStep);
+            _fixture.SolutionDirectory, ShippingKindStepGoldens.LastStep, s => ShippingKindStepGoldens.FilesForStep(s, withVisibleTests));
         repository.CheckoutStep(step - 1, $"run/step-{step}");
 
         var workspaceManager = _host.Services.GetRequiredService<IWorkspaceManager>();
@@ -304,5 +305,30 @@ public class ShippingKindSteppedAgentTests
     public async Task Model_RunsShippingKindStepPromptV11(int step)
     {
         await RunStepAsync(step, ShippingKindStepGoldens.PromptForStepV11(step));
+    }
+
+    // The name must not contain "Model_CompletesShippingKindStep" because the baseline script filter is Name~ on that string.
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    [TestCase(5)]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
+    public async Task Model_RunsShippingKindStepPromptV12(int step)
+    {
+        await RunStepAsync(step, ShippingKindStepGoldens.PromptForStepV12(step), withVisibleTests: true);
+    }
+
+    // The name must not contain "Model_CompletesShippingKindStep" because the baseline script filter is Name~ on that string.
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    [TestCase(5)]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
+    public async Task Model_RunsShippingKindStepPromptV13(int step)
+    {
+        // V13 = control: the V7 prompt with the visible tests present but not mentioned.
+        await RunStepAsync(step, ShippingKindStepGoldens.PromptForStepV7(step), withVisibleTests: true);
     }
 }

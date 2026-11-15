@@ -354,7 +354,11 @@ A bare pass/fail sends the analyst back into transcripts to learn what happened.
   `V6` (V5 plus a search-before-replying sentence in step 5 only). V3, V5 and V6 reuse V1 for steps 1 and 4.
   `V7` to `V11` override step 5 only (steps 1-4 reuse V1; run them with `-Step 5`): V7 helper-first order, V8 V3 plus an
   `IsExpedited` equivalence sentence, V9 V7 plus a worked example on invented names, V10 a no-code description of the
-  files' shape, V11 an exactly-one-`IsExpedited` end state. Results land
+  files' shape, V11 an exactly-one-`IsExpedited` end state. `V12` and `V13` (step 5 only) also seed a visible
+  `ContosoOrders.Tests/ShippingBehaviourTests.cs` (the shipping table, unknown kind `teleport`) in the step-0 golden so
+  `RunTest` has something to run: V12 is V7 plus "run the ContosoOrders tests with RunTest and confirm none fail",
+  V13 is the V7 prompt with the file present but unmentioned (the control; compare V12 against V13, not against V7
+  runs made without the file). Results land
   under the variant's own test name. A
   variant's test name must not contain `Model_CompletesShippingKindStep` (the V1 filter is `Name~` on it).
 - Per-step output in the archived run folder `ModelTestingResults/<host>/Model_CompletesShippingKindStep(<k>)/<timestamp>/`:

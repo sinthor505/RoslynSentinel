@@ -6,10 +6,55 @@ internal static class ShippingKindStepGoldens
 
     private const string ShippingDir = "ContosoOrders.Core/Shipping/";
 
+    private const string VisibleShippingTestsPath = "ContosoOrders.Tests/ShippingBehaviourTests.cs";
+
     private const string ShipmentSeed = """
         namespace ContosoOrders.Core;
 
         public sealed record Shipment(string OrderId, string Kind, decimal WeightKg);
+
+        """;
+
+    private const string VisibleShippingTestsSeed = """
+        using ContosoOrders.Core;
+        using Xunit;
+
+        namespace ContosoOrders.Tests;
+
+        public class ShippingBehaviourTests
+        {
+            [Theory]
+            [InlineData("standard", 5)]
+            [InlineData("express", 2)]
+            [InlineData("overnight", 1)]
+            [InlineData("pickup", 0)]
+            public void EstimateDays_ReturnsTheDocumentedDays(string kind, int expected)
+            {
+                Assert.Equal(expected, DeliveryEstimator.EstimateDays(kind));
+            }
+
+            [Fact]
+            public void EstimateDays_RejectsAnUnknownKind()
+            {
+                Assert.Throws<ArgumentException>(() => DeliveryEstimator.EstimateDays("teleport"));
+            }
+
+            [Theory]
+            [InlineData("standard", "GroundPost")]
+            [InlineData("express", "AirFast")]
+            [InlineData("overnight", "AirFast")]
+            [InlineData("pickup", "none")]
+            public void Select_ReturnsTheDocumentedCarrier(string kind, string expected)
+            {
+                Assert.Equal(expected, CarrierSelector.Select(new Shipment("o1", kind, 1m)));
+            }
+
+            [Fact]
+            public void Select_RejectsAnUnknownKind()
+            {
+                Assert.Throws<ArgumentException>(() => CarrierSelector.Select(new Shipment("o1", "teleport", 1m)));
+            }
+        }
 
         """;
 
@@ -229,7 +274,12 @@ internal static class ShippingKindStepGoldens
 
     private static string Crlf(string s) => s.Replace("\r\n", "\n").Replace("\n", "\r\n");
 
-    public static IReadOnlyDictionary<string, string> FilesForStep(int step)
+    public static IReadOnlyDictionary<string, string> FilesForStep(int step) => FilesForStep(step, withVisibleTests: false);
+
+    /// <summary>
+    /// withVisibleTests adds a visible xunit file with the shipping behaviour table to the step-0 commit so a model's RunTest can exercise it (V12/V13 only).
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> FilesForStep(int step, bool withVisibleTests)
     {
         var files = new Dictionary<string, string>();
         switch (step)
@@ -240,6 +290,7 @@ internal static class ShippingKindStepGoldens
                 files[ShippingDir + "ShipmentValidator.cs"] = Crlf(ShipmentValidatorSeed);
                 files[ShippingDir + "DeliveryEstimator.cs"] = Crlf(DeliveryEstimatorSeed);
                 files[ShippingDir + "CarrierSelector.cs"] = Crlf(CarrierSelectorSeed);
+                if (withVisibleTests) { files[VisibleShippingTestsPath] = Crlf(VisibleShippingTestsSeed); }
                 break;
             case 1:
                 break;
@@ -376,6 +427,10 @@ internal static class ShippingKindStepGoldens
 
     private const string PromptStep5V11 = """
         In DeliveryEstimator.cs and CarrierSelector.cs (ContosoOrders.Core/Shipping), replace every shipping kind string literal with the matching ShippingKinds constant, written qualified as ShippingKinds.<Name> (for example ShippingKinds.Express), and replace each check for 'express or overnight' with a call to ShippingKinds.IsExpedited. When you finish, each of the two files contains exactly one call to ShippingKinds.IsExpedited and no quoted shipping kind value. Behaviour must not change. Change no other file. Reply with what you changed.
+        """;
+
+    private const string PromptStep5V12 = """
+        In DeliveryEstimator.cs and CarrierSelector.cs (ContosoOrders.Core/Shipping), do two things in this order. First, replace each check for 'express or overnight' with a call to ShippingKinds.IsExpedited. Then replace every remaining shipping kind string literal in both files, including literals inside other expressions such as a ternary, with the matching ShippingKinds constant, written qualified as ShippingKinds.<Name> (for example ShippingKinds.Express). Behaviour must not change. Change no other file. When the edits are done, run the ContosoOrders tests with RunTest and confirm that none fail; if any fail, fix the cause before replying. Reply with what you changed.
         """;
 
     public static string PromptForStep(int step)
@@ -547,6 +602,22 @@ internal static class ShippingKindStepGoldens
             3 => PromptStep3V1,
             4 => PromptStep4V1,
             5 => PromptStep5V11,
+            _ => throw new ArgumentOutOfRangeException(nameof(step)),
+        };
+    }
+
+    /// <summary>
+    /// V12 = step 5 only: V7 plus a final instruction to run the tests; run with the visible-test fixture.
+    /// </summary>
+    public static string PromptForStepV12(int step)
+    {
+        return step switch
+        {
+            1 => PromptStep1V1,
+            2 => PromptStep2V1,
+            3 => PromptStep3V1,
+            4 => PromptStep4V1,
+            5 => PromptStep5V12,
             _ => throw new ArgumentOutOfRangeException(nameof(step)),
         };
     }
