@@ -390,7 +390,9 @@ public class CompilerErrorLookupHelperTests
 
         Assert.That(description, Does.Contain("No symbol named 'ComputeTotal' was found anywhere in the solution"));
         Assert.That(description, Does.Contain("is called here, so the method itself is missing"));
-        Assert.That(description, Does.Contain("in the same newContent as the code that calls it"));
+        Assert.That(description, Does.Contain("in the same edit as the code that calls it"));
+        Assert.That(description, Does.Contain("newContent"));
+        Assert.That(description, Does.Contain("newMemberSource"));
         Assert.That(description, Does.Contain("addMember"));
         Assert.That(description, Does.Not.Contain("needs to be added"));
     }

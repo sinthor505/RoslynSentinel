@@ -425,7 +425,7 @@ public static class CompilerErrorLookupHelper
                     ("operation", "addMember"),
                     ("containerName", callerType ?? "<the type that contains the call>"),
                     ("newMemberSource", $"<declaration of {name}>"));
-                return $"  No symbol named '{name}' was found anywhere in the solution, and it is called here, so the method itself is missing. Declare '{name}' in the same newContent as the code that calls it, or add it first with {addCall} and then re-apply this edit.";
+                return $"  No symbol named '{name}' was found anywhere in the solution, and it is called here, so the method itself is missing. Declare '{name}' in the same edit as the code that calls it (the same newContent for ReplaceSnippet, the same newMemberSource for Member), or add it first with {addCall} and then re-apply this edit.";
             }
 
             return $"  No symbol named '{name}' was found anywhere in the solution. This is likely a typo, or the member genuinely doesn't exist yet and needs to be added.";
