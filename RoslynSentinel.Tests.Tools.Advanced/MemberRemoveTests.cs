@@ -185,6 +185,61 @@ public sealed class MemberRemoveTests
     }
 
     [Test]
+    [Category("RefactoringStructuralTools")]
+    public async Task RemoveMember_HasCaller_RefusedByDefault_MessageScopesSkipPrecheck()
+    {
+        var source = Crlf("""
+            namespace TestProj;
+
+            public class Helper
+            {
+                public string GetName() => "Test";
+
+                public void UseHelper()
+                {
+                    var name = GetName();
+                }
+            }
+            """);
+        using var workspace = InMemoryWorkspace.Create(("Helper.cs", source));
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
+        var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Helper.cs"), MemberAction.remove, memberName: "GetName");
+        Assert.That(result.IsError, Is.True, "A member with a real caller must be refused by default.");
+        Assert.That(result.ErrorData, Is.Not.Null);
+        Assert.That(result.ErrorData!.Message, Does.Contain("skipPrecheck"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("only this caller/implementation precheck"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("crefs"));
+        Assert.That(workspace.ReadText("Helper.cs"), Does.Contain("public string GetName()"));
+    }
+
+    [Test]
+    [Category("RefactoringStructuralTools")]
+    public async Task RemoveMember_HasCaller_SkipPrecheckTrue_EngineRefusalNamesSymbolFinderAndCrefs()
+    {
+        var source = Crlf("""
+            namespace TestProj;
+
+            public class Helper
+            {
+                public string GetName() => "Test";
+
+                public void UseHelper()
+                {
+                    var name = GetName();
+                }
+            }
+            """);
+        using var workspace = InMemoryWorkspace.Create(("Helper.cs", source));
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
+        var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Helper.cs"), MemberAction.remove, memberName: "GetName", skipPrecheck: true);
+        Assert.That(result.IsError, Is.True, "The engine's own usage check still applies even with skipPrecheck: true.");
+        Assert.That(result.ErrorData, Is.Not.Null);
+        Assert.That(result.ErrorData!.Message, Does.Contain("SymbolFinder"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("cref"));
+        Assert.That(workspace.ReadText("Helper.cs"), Does.Contain("public string GetName()"));
+    }
+
+    [Test]
     [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task RemoveMember_HasImplementationOnly_SkipPrecheckTrue_BypassesToolLevelCheck()
     {

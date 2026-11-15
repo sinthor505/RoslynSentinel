@@ -773,7 +773,7 @@ public class RefactoringStructuralImpl
                     IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
                         $"Member: '{memberName}' has {string.Join(" and ", parts)} - refusing to remove. " +
-                        "Pass skipPrecheck: true to remove anyway, or resolve the callers/implementations first. " +
+                        "skipPrecheck: true skips only this caller/implementation precheck; the engine still refuses a member with usages in the solution (semantic references, doc-comment crefs included). Resolve the callers/implementations first, or pass skipPrecheck: true to reach the engine check. " +
                         $"Callers: {SerializeCapped(callers)}. " +
                         $"Implementations: {SerializeCapped(implementations)}.")
                 };

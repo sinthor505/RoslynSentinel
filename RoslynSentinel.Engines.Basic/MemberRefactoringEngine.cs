@@ -3028,7 +3028,7 @@ public class MemberRefactoringEngine
                     !(l.Location.SourceTree == memberTree && memberSpan.Contains(l.Location.SourceSpan))));
                 if (usageCount > 0)
                 {
-                    throw new ToolTargetIneligibleException($"Cannot remove member '{memberName}' - it has {usageCount} usages in the solution. Call {ToolCallHint.Call("Search", ("mode", "references"), ("query", memberName))} to list them, update or remove those usages, then retry.");
+                    throw new ToolTargetIneligibleException($"Cannot remove member '{memberName}' - it has {usageCount} usages in the solution (counted as semantic references by SymbolFinder, so a doc-comment cref counts). Call {ToolCallHint.Call("Search", ("mode", "references"), ("query", memberName))} to list them, update or remove those usages, then retry.");
                 }
             }
         }
