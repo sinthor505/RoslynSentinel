@@ -204,9 +204,10 @@ Any other peer request is advisory: ask your user. Honor an incoming `COMMIT` ev
 ## Verification
 
 Rebuilding does not change the running server; it is stale until restarted. After changing server
-source, run `Build(level: fullBuild)` and restart your own instance
+source: `Build` (default `fullBuildThrowaway`, 0 errors), commit, then restart your own instance
 (`McpServerControl(operation: StopServer, confirmServerStop: ConfirmServerStop)`, then `LoadSolution`)
-with no subagent mid-operation. `"isServerBinaryStale": true` in a response means a newer DLL exists.
+with no subagent mid-operation. The launcher builds committed HEAD; `lastLaunch.servedSha` in
+`McpServerStatus` shows what is live. Old `bin-vscode` layout only: `Build(level: fullBuild)`.
 Live-testing uncommitted changes (`LaunchTestInstance`) and `Build` output locations:
 `docs/current/references/reference_live_server_freshness.md`.
 

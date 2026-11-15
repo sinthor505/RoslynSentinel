@@ -1,6 +1,6 @@
 # Live MCP server freshness
 
-**Status:** CURRENT 2026-10-17. Detail moved out of CLAUDE.md "Verification"; the rule stays there.
+**Status:** CURRENT 2026-11-15. Detail moved out of CLAUDE.md "Verification"; the rule stays there. Instances layout needs no `fullBuild` before a restart.
 
 Rebuilding RoslynSentinel does not change the running server: VS Code builds and spawns a server only
 when a session starts. After changing server source, the running server is **stale** until stopped and
@@ -28,8 +28,11 @@ respawned, so restart it before verifying fixes live.
   the stale flag; use `fullBuild` only when you need the shared `bin/` updated. `RunTest` always builds
   into the same instance folder. Within one server, Build/RunTest calls queue behind one gate.
 - `McpServerStatus` gives `binaryStaleness.staleAssemblies`, `serverBinaryPath`,
-  `serverBuildTimeUtc` (DLL mtime on disk) and `serverPid`. If you edited server source but have not
-  run a `fullBuild`, assume the live server is old.
+  `serverBuildTimeUtc` (DLL mtime on disk) and `serverPid`. Old `bin-vscode` layout: if you edited
+  server source but have not run a `fullBuild`, assume the live server is old. Instances layout
+  (`serverBinaryPath` under `RoslynSentinelInstances\builds\`): a restart builds committed HEAD itself,
+  so verify with the default `Build` (`fullBuildThrowaway`, which a peer's build or test does not block),
+  commit, restart, and read `lastLaunch.servedSha`; `fullBuild` is only for updating the repo's own `bin/`.
 - If `Build` reports a suspicious warning/error count, force a full rebuild; incremental builds can
   skip recompiles and under-report.
 
