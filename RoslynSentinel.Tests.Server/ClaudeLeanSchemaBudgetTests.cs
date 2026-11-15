@@ -31,10 +31,10 @@ public class ClaudeLeanSchemaBudgetTests
     // values (plan_libgit2sharp_followups.md Step 20: GitRemote +514 chars).
     // Raised 44000 -> 44100 on 2026-11-13 (owner): measured 44089 (Advanced and Basic) after 4de54d93 (Search
     // containingType description).
-    // Raised 44100 -> 44500 on 2026-11-15: measured about 44350 after D2 Member replace-with-additions text (plan_tool_experience_journal_fixes Step 6) plus the Git nameOnly-on-log description and an McpServerControl toolsets parameter planned in the same batch (Steps 10 and 14).
-    private const int AdvancedTotalBudget = 44500;
+    // Raised 44100 -> 45000 on 2026-11-15: measured 44838 after the D2 Member replace-with-additions text, Git nameOnly on log and McpServerControl toolsets/includeTools descriptions (plan_tool_experience_journal_fixes Steps 6, 10, 14).
+    private const int AdvancedTotalBudget = 45000;
     // Basic raised 40000 -> 45000 on 2026-11-10 (core split slice 1): ChangeSignature (~1.9k) and MoveMember (3356) moved from Tools.Advanced to Tools.Basic (CoreRefactoringTools), so the Basic flavor now serves them and measures 44948 chars, the same as Advanced.
-    private const int BasicTotalBudget = 44500; // raised with AdvancedTotalBudget on 2026-11-15
+    private const int BasicTotalBudget = 45000; // raised with AdvancedTotalBudget on 2026-11-15
     private const int AdvancedMaxToolBudget = 5000;
     private const int BasicMaxToolBudget = 5000;
     // Search per-tool budget.
