@@ -362,6 +362,29 @@ function Write-LaunchLog {
 if ($BuildOnly) { Write-LaunchLog "Prebuild (BuildOnly) started, PID=$PID" }
 Write-LaunchLog "Instance ID '$instanceId' derived from random token='$instanceToken', repoHash='$repoHash' (repo: $devRepoRoot, layout: $layoutDescription)."
 Write-StartupLog "Instance ID '$instanceId' derived OK -> per-instance log is $logPath (subsequent steps logged there, not here)."
+
+# Diagnostic only (not used for keying yet): records which Claude Code tab spawned this server, to test
+# whether the owning claude.exe (PID + creation time) or CLAUDE_CODE_SESSION_ID could key a durable
+# per-tab state folder. Each VS Code tab runs its own claude.exe, unlike %VSCODE_PID% (see .DESCRIPTION).
+# Best-effort: any failure is logged and ignored so it can never block a launch.
+if (-not $BuildOnly) {
+    try {
+        $procById = @{}
+        Get-CimInstance Win32_Process -ErrorAction Stop | ForEach-Object { $procById[[int]$_.ProcessId] = $_ }
+        $chain = @(); $claudeOwner = $null; $walkId = $PID
+        for ($depth = 0; $depth -lt 12 -and $procById.ContainsKey($walkId); $depth++) {
+            $p = $procById[$walkId]
+            $chain += "$($p.ProcessId):$($p.Name)"
+            if ($p.Name -eq 'claude.exe') { $claudeOwner = $p; break }
+            $walkId = [int]$p.ParentProcessId
+        }
+        $ownerText = if ($claudeOwner) { "claude.exe PID=$($claudeOwner.ProcessId) created=$($claudeOwner.CreationDate.ToString('o'))" } else { 'no claude.exe ancestor found' }
+        Write-LaunchLog "Owner probe: $ownerText; env CLAUDE_PID='$env:CLAUDE_PID' CLAUDE_CODE_SESSION_ID='$env:CLAUDE_CODE_SESSION_ID'; chain: $($chain -join ' <- ')"
+    }
+    catch {
+        Write-LaunchLog "Owner probe failed (ignored): $($_.Exception.Message)"
+    }
+}
 #endregion
 
 #region Sweep settings (shared by both layouts)
