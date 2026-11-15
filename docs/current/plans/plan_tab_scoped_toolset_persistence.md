@@ -1,6 +1,6 @@
 # Plan: Persist enabled toolsets per Claude Code tab across server restarts, with McpServerControl restart options
 
-**Status:** APPROVED 2026-11-15. Reviewed against source, decisions settled, Batched run with owner away. Supersedes D12 of `plan_tool_experience_journal_fixes.md` ("persist toolset state across a restart").
+**Status:** IN PROGRESS 2026-11-15. Steps 1, 2, 3, 6 done (7b2b901f, 2df3e449, 3398ae4e, 9a247fb0, 0de85bbe); Batched run, owner away. Supersedes D12 of `plan_tool_experience_journal_fixes.md` ("persist toolset state across a restart").
 
 ## Problem
 
@@ -82,6 +82,7 @@ Batches:
 ## Steps
 
 ### Step 1 - Contract skeleton (Common)
+- Done: 7b2b901f
 - Files: `RoslynSentinel.Common/TabToolsetState.cs` (new), `RoslynSentinel.Common/ToolsetCatalog.cs`, `RoslynSentinel.Common/ServerInstancePaths.cs`
 - Depends on: none
 - Effect: text-neutral (new members, no callers).
@@ -119,6 +120,7 @@ Batches:
 - Lane: `implementer` D1 (3 files).
 
 ### Step 2 - TabToolsetStateStore implementation
+- Done: 2df3e449
 - Files: `RoslynSentinel.Common/TabToolsetState.cs`
 - Depends on: 1
 - Effect: text-neutral.
@@ -143,6 +145,7 @@ Batches:
   - `Clear_MissingFile_DoesNotThrow`
 
 ### Step 3 - Set-name parser and change event
+- Done: 3398ae4e, test 9a247fb0
 - Files: `RoslynSentinel.Common/ToolsetCatalog.cs`, `RoslynSentinel.Common/ToolsetService.cs`, `RoslynSentinel.Server.Advanced/ServerStartupHelpers.cs`
 - Depends on: 1
 - Effect: text-neutral (same parsing, new event with no subscriber).
@@ -238,6 +241,7 @@ Batches:
   - Dispatcher also runs `ClaudeLeanSchemaBudgetTests` and `TestInstanceLauncherTests`.
 
 ### Step 6 - Launcher: tab key, --tab-state-dir, tabstate sweep
+- Done: 0de85bbe
 - Files: `scripts/roslynsentinel-mcp-launch.ps1`
 - Depends on: none. It can run beside Steps 1-4 (disjoint files). Server-side use needs Step 4.
 - Effect: behaviour-changing. Servers launched from a Claude tab get `--tab-state-dir`.
