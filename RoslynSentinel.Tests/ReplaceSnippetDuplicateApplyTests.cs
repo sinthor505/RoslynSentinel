@@ -80,4 +80,41 @@ public class ReplaceSnippetDuplicateApplyTests
         Assert.That(other.IsError, Is.True);
         Assert.That(other.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound), other.ErrorData.Message);
     }
+
+    [Test]
+    public async Task ReplaceSnippet_SameReindentedEditSentTwice_SecondIsNoOpSuccessAsync()
+    {
+        var relativePath = $"DuplicateApply/Totals_{Guid.NewGuid():n}.cs";
+        using var workspace = InMemoryWorkspace.Create((relativePath, Source));
+        var tools = TestTools.WorkspaceTools(workspace.Manager);
+
+        var first = await tools.ReplaceSnippetTool(
+            reason: "change the total from 1 to 2 with tab-indented newContent",
+            ProposedChangeAction.apply,
+            filePath: workspace.PathOf(relativePath),
+            oldContent: "public int Total() => 1;",
+            newContent: "\t\t\tpublic int Total() => 2;");
+        Assert.That(first.IsError, Is.False, first.ErrorData?.Message);
+        var afterFirst = workspace.ReadText(relativePath);
+        Assert.Multiple(() =>
+        {
+            Assert.That(afterFirst, Does.Not.Contain("\t"));
+            Assert.That(afterFirst, Does.Contain("    public int Total() => 2;"));
+        });
+
+        var second = await tools.ReplaceSnippetTool(
+            reason: "send the same tab-indented edit again in the same turn",
+            ProposedChangeAction.apply,
+            filePath: workspace.PathOf(relativePath),
+            oldContent: "public int Total() => 1;",
+            newContent: "\t\t\tpublic int Total() => 2;");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(second.IsError, Is.False, second.ErrorData?.Message);
+            Assert.That(second.SuccessData?.ReplacementResult?.Summary ?? string.Empty, Does.Contain("already applied"));
+            Assert.That(second.SuccessData?.ReplacementResult?.Summary ?? string.Empty, Does.Contain("changeId " + first.SuccessData?.ChangeId));
+            Assert.That(workspace.ReadText(relativePath), Is.EqualTo(afterFirst));
+        });
+    }
 }

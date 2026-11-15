@@ -204,12 +204,12 @@ public class WorkspaceFileEditImpl
     // The last few SUCCESSFUL single-edit ReplaceSnippet calls per file. A model that sends the same edit twice in one turn
     // (action replace, then apply) reaches the second call after the first has landed; without this it fails "oldContent was
     // not found" and burns its failure budget (eval batch H4 run 1). Bounded per file. Not dropped on a write: the write
-    // itself is what makes a repeat a no-op. FindDuplicate also checks that the file still holds the edit's newContent.
+    // itself is what makes a repeat a no-op. FindDuplicate also checks that the file still holds what was written for that edit (the re-indented newContent).
     // NOTE: shared process-wide through SharedAppliedEdits, like RejectedEditMemory.
     private sealed class AppliedEditMemory
     {
         private const int MaxEntriesPerFile = 3;
-        private readonly Dictionary<string, List<(string OldContent, string NewContent, string ChangeId)>> _byFile = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, List<(string OldContent, string NewContent, string WrittenContent, string ChangeId)>> _byFile = new(StringComparer.OrdinalIgnoreCase);
         private readonly object _gate = new();
 
         private static string Key(string path)
@@ -226,7 +226,7 @@ public class WorkspaceFileEditImpl
 
         private static string NormalizeEol(string text) => text.Replace("\r\n", "\n").Replace('\r', '\n');
 
-        public void Remember(string path, string? oldContent, string? newContent, string changeId)
+        public void Remember(string path, string? oldContent, string? newContent, string changeId, string? writtenContent = null)
         {
             // A pure deletion leaves nothing a repeat could be matched against.
             if (string.IsNullOrWhiteSpace(newContent))
@@ -236,7 +236,7 @@ public class WorkspaceFileEditImpl
                 var key = Key(path);
                 if (!_byFile.TryGetValue(key, out var entries))
                     _byFile[key] = entries = [];
-                entries.Add((oldContent ?? string.Empty, newContent, changeId));
+                entries.Add((oldContent ?? string.Empty, newContent, writtenContent ?? newContent, changeId));
                 while (entries.Count > MaxEntriesPerFile)
                     entries.RemoveAt(0);
             }
@@ -244,7 +244,7 @@ public class WorkspaceFileEditImpl
 
         /// <summary>
         /// The changeId of a remembered edit with the same oldContent AND newContent (ignoring line endings), when the file
-        /// still contains that newContent; null otherwise. Newest entry wins.
+        /// still holds what was written for that edit (the re-indented newContent); null otherwise. Newest entry wins.
         /// </summary>
         public string? FindDuplicate(string path, string? oldContent, string? newContent, string fileText)
         {
@@ -252,8 +252,7 @@ public class WorkspaceFileEditImpl
                 return null;
             var normalizedOld = NormalizeEol(oldContent ?? string.Empty);
             var normalizedNew = NormalizeEol(newContent);
-            if (!NormalizeEol(fileText).Contains(normalizedNew, StringComparison.Ordinal))
-                return null;
+            var normalizedFile = NormalizeEol(fileText);
             lock (_gate)
             {
                 if (!_byFile.TryGetValue(Key(path), out var entries))
@@ -261,7 +260,8 @@ public class WorkspaceFileEditImpl
                 for (var i = entries.Count - 1; i >= 0; i--)
                 {
                     var entry = entries[i];
-                    if (NormalizeEol(entry.OldContent) == normalizedOld && NormalizeEol(entry.NewContent) == normalizedNew)
+                    if (NormalizeEol(entry.OldContent) == normalizedOld && NormalizeEol(entry.NewContent) == normalizedNew
+                        && normalizedFile.Contains(NormalizeEol(entry.WrittenContent), StringComparison.Ordinal))
                         return entry.ChangeId;
                 }
                 return null;
@@ -1493,7 +1493,7 @@ public class WorkspaceFileEditImpl
                     var changeId = Guid.NewGuid().ToString("n")[..8];
                     // Batch H4 R1: remember the applied edit so an identical second call is a no-op (see AppliedEditMemory). A lifted edit wrote other files too, so it is not remembered.
                     if (!result.IsError && liftNote is null)
-                        _appliedEdits.Remember((string)targetPath, oldContent, newContent, changeId);
+                        _appliedEdits.Remember((string)targetPath, oldContent, newContent, changeId, reindent.InsertedTexts[0]);
                     var blobWrite = await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet", result, blobChangeId: changeId, cancellationToken: cancellationToken);
                     var summaryBody = liftNote is null ? result.Summary : $"{liftNote} {result.Summary}";
                     var indentNote = reindent.LinesAdjusted > 0 ? $"newContent indentation was adjusted to the file's on {reindent.LinesAdjusted} line(s); returnDiff shows the written text." : null;
