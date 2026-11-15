@@ -273,6 +273,9 @@ type, move construction behind factories first.
 - Memory: engine reorg leftovers (open bug 2, cross-project MoveType); server flavours and build configs
 - Ideas: `docs/current/ideas/idea_tool_attribution.md`, `docs/current/ideas/closed/idea_server_telemetry.md`.
   Both overlap with the slice 1 usage report.
+- Finding: `docs/current/findings/finding_tool_surface_usage_review.md` (2026-11-15). Per-tool usage recount
+  (80,195 calls, 231 journal files, plus model-eval and PlanStepRunner tallies), keep/delete/tier-2 verdicts
+  and the dependency audit. It supersedes the 2026-10-19 per-tool counts above.
 
 ## Decisions (todo review 2026-11-09)
 
