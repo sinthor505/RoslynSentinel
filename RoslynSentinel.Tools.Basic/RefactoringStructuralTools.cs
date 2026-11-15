@@ -119,7 +119,7 @@ public class RefactoringStructuralTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         //[Description("addMember: adds raw member source into an existing container (requires containerName + newMemberSource). addTopLevelType: adds a brand-new top-level type declaration - no container (requires newMemberSource as the full type source; optional namespaceName). remove: deletes a member - by default checks for callers/implementations first (see skipPrecheck); for a zero-usages-only contract use DeleteUnusedSymbolTool instead. replace: replaces a member's full source, including for small in-member batchEdits. view: lists a container's direct members (name, kind, signature, line range) to find the exact memberName/contextSnippet to pass to remove or replace.")]
         //[Description("Add, remove, replace, or view a raw source member, a typed property/field, or a brand-new top-level type. Also views constructors.")]
-        [Description("Required params per operation. addMember: containerName+newMemberSource (optional insertAfterMemberName or insertBeforeMemberName). addTopLevelType: newMemberSource (optional namespaceName). remove: memberName. replace: memberName+newMemberSource (one declaration matching memberName by name and kind, plus optional extra members added after it). view: containerName (lists its members) or memberName (returns that member's full source; a type name returns the whole type's source).")]
+        [Description("Required params per operation. addMember: containerName+newMemberSource (optional insertAfterMemberName or insertBeforeMemberName). addTopLevelType: newMemberSource (optional namespaceName). remove: memberName. replace: memberName+newMemberSource (extra members after the first are added after it). view: containerName (lists its members) or memberName (returns that member's full source; a type name returns the whole type's source).")]
         [Consumes(DataTag.Action, required: true)] MemberAction operation,
         [Description("The type that holds the member.")]
         [Consumes(DataTag.SymbolName, required: false)] string? containerName = null,
@@ -127,7 +127,7 @@ public class RefactoringStructuralTools
         [ExternalInputRequired(DataTag.SymbolName, required: false)] string? namespaceName = null,
         [Description("The member to target. For overloads, combine with contextSnippet/lineBefore/lineAfter.")]
         [Consumes(DataTag.SymbolName, required: false)] string? memberName = null,
-        [Description("For replace one declaration matching memberName, plus optional extra members added after it; for addMember one or more, each with signature and body (a doc comment in it replaces the old one on replace, and with none the old doc comment is kept); for addTopLevelType, the full type declaration.")]
+        [Description("For replace the member (plus optional extras, added after it); for addMember one or more, each with signature and body (a doc comment in it replaces the old one on replace, and with none the old doc comment is kept); for addTopLevelType, the full type declaration.")]
         [Consumes(DataTag.SourceCode, required: false)] string? newMemberSource = null,
         // No [Description] on the two anchor names by design (owner ruling): the names say they are member names, not line numbers.
         [ExternalInputRequired(DataTag.SymbolName, required: false)] string? insertAfterMemberName = null,
