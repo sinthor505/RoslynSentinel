@@ -1,6 +1,6 @@
 # Finding: recurring tool pain points across 582 tool-experience journals (2026-10-01 to 2026-11-14)
 
-**Status:** OPEN 2026-11-14. The line-ending loop and the four severe one-offs are dispatched for investigation and fixing; every other theme is open, fix not decided.
+**Status:** OPEN 2026-11-15. All themes investigated: many already fixed; 25 small fixes (R1-R25) ready and 12 owner decisions (D1-D12) open.
 
 ## Context
 
@@ -167,7 +167,78 @@ New recurring themes (not above):
 ## Root cause
 
 The five dispatched items (S1-S4, line-ending loop) were traced and are already fixed; see the
-outcome notes under each. The other themes are not traced: each is a cluster of agent impressions.
+outcome notes under each.
+
+### Investigation results (2026-11-15)
+
+Seven read-only investigations traced themes 1-18, the new themes and the top error buckets against
+source at HEAD b5a267ab. No live reproduction except a few Search calls; the live server queried was
+stale (servedSha c3efa20e, ~80 commits behind, launcher `pullError: Diverging branches can't be
+fast-forwarded`), which also explains many post-fix journal reports.
+
+**Already fixed (journal entries predate the fix):**
+- ReplaceSnippet Exception x90: compile-gate rejection mislabelled; relabelled ValidationFailed in
+  22645c8b (2026-11-10). ReplaceSnippet changeId on success: 4a6772ef.
+- Member addMember InvalidArgument (110 of 146): one-declaration rule; multi-add in 0c47145b
+  (2026-11-14). CreateFile `content` param: 25be5c3e (theme 16).
+- Search declaration modes honour `query` (plan_search_kind_mode_query_filter, 2026-10-08); fileGlob
+  zero-match is a warning with samples; guessed `isRegex`/`path` are rewritten.
+- Line-ending reports after 426d8b83 were read-side (no tool reported EOL until ReadFile
+  `showLineEndings`, 4d7c4486, 2026-11-05); no LF-writing path found.
+- Refactor: instance-to-static (b773820d), extension moves refused (39e64481), ChangeSignature
+  Ambiguous selector, MoveType CS0426 (NestedTypeReferenceLifter).
+- Git: pure-insertion hunks (a4b69685), param aliases, GitRemote config (dfa5d985).
+- Build ErrorCount inline; scope=project honoured. ExternalFileDrift latch removed (1c9cb4db).
+- McpServerControl StopServer "Connection closed" (f03b99c0). RunTest projectName rewrite (892e59fe),
+  0-test wording (aad595db). InspectSymbol NotFound, ExtractMembers missing destination (4f511a8c).
+- Helper scripts: evalqueue -Id (3fd4cd9c), -Projects split (7843fba2).
+
+**Still present, no owner decision needed (text, hook or behaviour; no new param or shape):**
+
+| # | Item | Root cause | Size |
+| --- | --- | --- | --- |
+| R1 | Journal logger flags prose `.cs`/`dotnet test`, variable-held journal paths, Grep `!*.cs` | `.claude/hooks/journal-log-call.ps1:29,33,40,41` | ~25 lines + 4 hook tests |
+| R2 | Dogfood git rule matches `; git` inside quoted prose; journal exemption needs literal path, no handoff | `enforce-dogfood.ps1:1388,1519` | ~30 lines |
+| R3 | Dispatch brief: label rule (20 chars to colon) not stated; `.cs` in prose counted as files; sweep file count for RenameSymbol | `enforce-dogfood.ps1:1173-1181,1226` | ~15 lines |
+| R4 | DTO hook decides by name suffix only (30 DTO-EXEMPT overrides) | `enforce-dto-justification.ps1:58-60,133-136` | 2 lines (suffixes) or ~25 (body check) |
+| R5 | `Invoke-WorktreeTests.ps1` ignores dotnet exit code; teardown-only failure prints all passed | `scripts/Invoke-WorktreeTests.ps1:285,291,373` | ~8 lines |
+| R6 | Search rejects mode-ignored params (main InvalidArgument source since 101ec745): honour or ignore with a note (text `projectName` -> fileGlob rewrite, `containingType` filter in ListAll, `symbolKind` note) | `WorkspaceReadNavigationTools.cs:~246-285`, `ToolArgumentRewrites.cs` | 2 files, 3 edits |
+| R7 | Search declaration-mode `query` has no `\|` alternation; zero-match glob hint could name the matching `RoslynSentinel.*` folder | `WorkspaceReadNavigationImpl.cs` ListAll, `:1297` | 2 edits |
+| R8 | ReplaceSnippet 20-edit batch cap absent from schema | `WorkspaceFileEditImpl.cs:858`; `McpToolSchemaPatcher.ApplyReplaceSnippetLimits` | ~3 files |
+| R9 | GetLargeResult last page says COMPLETE while the tool capped the list | `SequenceMessages.cs:27` TODO | 1-2 files |
+| R10 | GetMethodSource Ambiguous gives a ReadFile range for candidate 1 only | `WorkspaceReadNavigationImpl.cs` BuildAmbiguousMethodError | 1 file |
+| R11 | CS0103 hint names ReplaceSnippet's `newContent` for Member callers | `CompilerErrorLookupHelper.cs:384` (peer has uncommitted edits) | 1 file + test |
+| R12 | Member remove refusal does not say skipPrecheck skips only the tool precheck, nor code vs doc-comment counts | `RefactoringStructuralImpl.cs:757`, `MemberRefactoringEngine.cs:2910` | 2 files |
+| R13 | Member replace/remove/addTopLevelType/enum add pass `validated: false` after the compile gate | `RefactoringStructuralImpl.cs:704,714,787,815,860,919` | 1 file (check pinned tests) |
+| R14 | CreateFile `typeKind`/`typeName` descriptions say "Required for .cs files", contradicting `content` | `WorkspaceTools.cs:171-183` | 1 line |
+| R15 | Build probe counts a peer's isolated RunTest (`-p:ArtifactsPath=`) as a competing build; names one pid at a time | `BuildIsolation.cs:145`, `TestRunEngine.cs:438` | 1 file, 2 edits (verify isolated runs never write repo obj) |
+| R16 | EditAttribution: not-found evidence ignores search scope and term presence; no session id in wording | `NotFoundEvidence.cs:~257`, `EditAttributionLedger.cs:12`, `EditAttributionFindings.cs:36` | 4-5 files |
+| R17 | Git `maxBytes` description does not say output over ~12K chars is paged anyway | `GitTools.cs:59` | 1 line |
+| R18 | ExternalFileDrift: no `filePath`/`filePaths` alias; Acknowledge refuses all on one unmatched name; dead halt code | `AdminTools.cs`, `HaltInfo.cs:62` | 2-3 files |
+| R19 | RunTest zero-match hint's `suite: full` call drops filter and scope (copy runs whole solution) | `TestSuiteFilter.cs:~55` TODO | 2 call sites |
+| R20 | RunTest `timeoutSeconds` undocumented (per project); no `--blame-hang` so a hung test is unnamed; detached rows capped by maxDetails | `TestRunEngine.cs`, `WorkspaceBuildTestImpl.cs:~490` | 1-2 files (blame-hang: verify partial TRX) |
+| R21 | Launcher recovery hint describes only index.lock whatever the pull error (diverged clone unhandled) | `LaunchBuildMarker.cs:~70-76` | 1 file |
+| R22 | RenameSymbol `residualMentions` scans bin deps.json and untracked files | rename residual scan (engine) | 1 edit |
+| R23 | ReadFile without a solution ignores `showLineEndings` | `WorkspaceFileEditImpl.cs:701` TODO | 1 file |
+| R24 | Docs: dispatcher enables toolsets before spawning; implementer/test-writer briefs verify EOL with `ReadFile(showLineEndings: summary)`; schema loads excluded from the tool-call cap | dispatch-implementer skill, agent docs | 3-4 doc edits |
+| R25 | Ratchet tests have no shared category; filtered runs miss them | 11+ ratchet classes, `ClaudeLeanSchemaBudgetTests` | ~14 attribute edits + skill/script filter |
+
+**Owner decisions (new param, response shape, contract reversal):**
+
+| # | Decision | Recommendation |
+| --- | --- | --- |
+| D1 | ChangeSignature supports primary constructors (records: positional property handling) | Yes; 2-3 Engines.Basic files, decide record property policy |
+| D2 | Member replace accepts several declarations (proposal option 2) | Yes; last InvalidArgument driver on Member |
+| D3 | Member remove ignores doc-comment cref references (reverses `MemberRemoveTests.cs:163`) | No; do R12 text first |
+| D4 | File lookup by name: auto-resolve a unique bare name in ReadFile/GetFileOutline, or new `Search(mode: file)` | Auto-resolve (behaviour only) |
+| D5 | Git `log` with `nameOnly` returns hash + subject | Yes; log pages after ~10 records today |
+| D6 | McpServerStatus adds `clientProtocolVersion` and `list_changed` send count | Yes; answers the open toolset-refresh question |
+| D7 | LaunchTestInstance: `toolsets` and `environment` params; validate `includeTools` names | Yes for validation and `toolsets` |
+| D8 | RunTest `includeOutput` keeps passing tests' output; RunTest reports HEAD sha + dirty count | Defer |
+| D9 | Member opt-out of the changedFiles detach pointer | No |
+| D10 | ExternalFileDrift `List` reports committed/dirty state | No; drift halts are gone |
+| D11 | Write results carry the resolved EOL | No; `eolMode` in McpServerStatus covers it |
+| D12 | Persist toolset state across restart (reverses the accepted tradeoff) | No |
 
 ## Why it matters
 
@@ -179,18 +250,19 @@ each.
 
 ## Recommendation
 
-Decided: investigate and fix the line-ending loop and S1-S4 now.
+Done: S1-S4 and the line-ending loop were already fixed; `McpServerStatus` reports `eolMode`
+(b5a267ab).
 
-Open, ranked by leverage:
-1. Every write path honours the file's resolved EOL (done, 426d8b83), and the active policy is
-   visible: `McpServerStatus` reports `eolMode` (2026-11-15). Open: trace the post-fix reports in the
-   recency check.
-2. Hooks judge parsed targets only, never prose (theme 1).
-3. Caps and mandatory params (`reason`, batch cap, newContent limit) in the schemas and repeated in
-   offload and zero-match hints (themes 2, 7).
-4. Every failure path returns isError with a code; a 0-test RunTest filter is a failure (themes 8, 10).
-5. Search: honour `query` in declaration modes and resolve `fileGlob` like ReadFile resolves paths
-   (theme 6).
+Open, ranked by leverage (items in "Investigation results"):
+1. Hooks: R1, R2, R3, R4 (largest recurring theme; cheap, no server restart).
+2. Search InvalidArgument: R6, R7.
+3. Test-run trust: R5, R19, R20, R25.
+4. Schema/hint facts: R8, R9, R10, R11, R12, R14, R17.
+5. Wrong-success or misleading data: R13, R15, R16.
+6. The rest (R18, R21-R24) and owner decisions D1-D12.
+
+Operational: the live server was ~80 commits stale because the launcher's clone diverged; fixing that
+removes many reports at once.
 
 ## Out of scope
 
