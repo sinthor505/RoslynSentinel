@@ -358,6 +358,26 @@ internal static class ShippingKindStepGoldens
         Out of scope: change no other file
         """;
 
+    private const string PromptStep5V7 = """
+        In DeliveryEstimator.cs and CarrierSelector.cs (ContosoOrders.Core/Shipping), do two things in this order. First, replace each check for 'express or overnight' with a call to ShippingKinds.IsExpedited. Then replace every remaining shipping kind string literal in both files, including literals inside other expressions such as a ternary, with the matching ShippingKinds constant, written qualified as ShippingKinds.<Name> (for example ShippingKinds.Express). Behaviour must not change. Change no other file. Reply with what you changed.
+        """;
+
+    private const string PromptStep5V8 = """
+        In DeliveryEstimator.cs and CarrierSelector.cs (ContosoOrders.Core/Shipping), do two things. First, replace every shipping kind string literal in both files with the matching ShippingKinds constant, written qualified as ShippingKinds.<Name> (for example ShippingKinds.Express), including literals inside other expressions such as a ternary. Then replace each check for 'express or overnight' with a call to ShippingKinds.IsExpedited. ShippingKinds.IsExpedited(kind) is true for exactly Express and Overnight, so it replaces such a check even when the same line goes on to branch on Overnight. Behaviour must not change. Change no other file. Reply with what you changed.
+        """;
+
+    private const string PromptStep5V9 = """
+        In DeliveryEstimator.cs and CarrierSelector.cs (ContosoOrders.Core/Shipping), do two things in this order. First, replace each check for 'express or overnight' with a call to ShippingKinds.IsExpedited. Then replace every remaining shipping kind string literal in both files, including literals inside other expressions such as a ternary, with the matching ShippingKinds constant, written qualified as ShippingKinds.<Name> (for example ShippingKinds.Express). For example, if (x == "express" || x == "overnight") return x == "overnight" ? 1 : 2; becomes if (ShippingKinds.IsExpedited(x)) return x == ShippingKinds.Overnight ? 1 : 2; Behaviour must not change. Change no other file. Reply with what you changed.
+        """;
+
+    private const string PromptStep5V10 = """
+        In DeliveryEstimator.cs and CarrierSelector.cs (ContosoOrders.Core/Shipping), each file has one check for 'express or overnight' and two checks for a single kind; in DeliveryEstimator the express-or-overnight line also contains a ternary on overnight. Each express-or-overnight check becomes a call to ShippingKinds.IsExpedited, and every shipping kind string literal that remains, including the one in that ternary, becomes the matching ShippingKinds constant, written qualified as ShippingKinds.<Name> (for example ShippingKinds.Express). Behaviour must not change. Change no other file. Reply with what you changed.
+        """;
+
+    private const string PromptStep5V11 = """
+        In DeliveryEstimator.cs and CarrierSelector.cs (ContosoOrders.Core/Shipping), replace every shipping kind string literal with the matching ShippingKinds constant, written qualified as ShippingKinds.<Name> (for example ShippingKinds.Express), and replace each check for 'express or overnight' with a call to ShippingKinds.IsExpedited. When you finish, each of the two files contains exactly one call to ShippingKinds.IsExpedited and no quoted shipping kind value. Behaviour must not change. Change no other file. Reply with what you changed.
+        """;
+
     public static string PromptForStep(int step)
     {
         return step switch
@@ -447,6 +467,86 @@ internal static class ShippingKindStepGoldens
             3 => PromptStep3V4,
             4 => PromptStep4V4,
             5 => PromptStep5V4,
+            _ => throw new ArgumentOutOfRangeException(nameof(step)),
+        };
+    }
+
+    /// <summary>
+    /// V7 = step 5 only: IsExpedited check first, then the remaining literals; steps 1-4 reuse V1.
+    /// </summary>
+    public static string PromptForStepV7(int step)
+    {
+        return step switch
+        {
+            1 => PromptStep1V1,
+            2 => PromptStep2V1,
+            3 => PromptStep3V1,
+            4 => PromptStep4V1,
+            5 => PromptStep5V7,
+            _ => throw new ArgumentOutOfRangeException(nameof(step)),
+        };
+    }
+
+    /// <summary>
+    /// V8 = step 5 only: V3 plus an equivalence sentence for IsExpedited; steps 1-4 reuse V1.
+    /// </summary>
+    public static string PromptForStepV8(int step)
+    {
+        return step switch
+        {
+            1 => PromptStep1V1,
+            2 => PromptStep2V1,
+            3 => PromptStep3V1,
+            4 => PromptStep4V1,
+            5 => PromptStep5V8,
+            _ => throw new ArgumentOutOfRangeException(nameof(step)),
+        };
+    }
+
+    /// <summary>
+    /// V9 = step 5 only: V7 plus a worked example on invented names; steps 1-4 reuse V1.
+    /// </summary>
+    public static string PromptForStepV9(int step)
+    {
+        return step switch
+        {
+            1 => PromptStep1V1,
+            2 => PromptStep2V1,
+            3 => PromptStep3V1,
+            4 => PromptStep4V1,
+            5 => PromptStep5V9,
+            _ => throw new ArgumentOutOfRangeException(nameof(step)),
+        };
+    }
+
+    /// <summary>
+    /// V10 = step 5 only: describes the shape of the two files without code; steps 1-4 reuse V1.
+    /// </summary>
+    public static string PromptForStepV10(int step)
+    {
+        return step switch
+        {
+            1 => PromptStep1V1,
+            2 => PromptStep2V1,
+            3 => PromptStep3V1,
+            4 => PromptStep4V1,
+            5 => PromptStep5V10,
+            _ => throw new ArgumentOutOfRangeException(nameof(step)),
+        };
+    }
+
+    /// <summary>
+    /// V11 = step 5 only: V1-style instruction plus an exactly-one-IsExpedited end-state; steps 1-4 reuse V1.
+    /// </summary>
+    public static string PromptForStepV11(int step)
+    {
+        return step switch
+        {
+            1 => PromptStep1V1,
+            2 => PromptStep2V1,
+            3 => PromptStep3V1,
+            4 => PromptStep4V1,
+            5 => PromptStep5V11,
             _ => throw new ArgumentOutOfRangeException(nameof(step)),
         };
     }
