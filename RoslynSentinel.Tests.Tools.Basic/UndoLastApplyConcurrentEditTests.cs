@@ -159,6 +159,31 @@ public class UndoLastApplyConcurrentEditTests
     }
 
     [Test]
+    [Description("Undo success text names each reverted file with the lines the revert added and removed")]
+    public async Task Undo_SuccessText_ReportsLinesChangedByRevert()
+    {
+        await SeedAsync();
+
+        ToolCallContext.Set(new ToolCallContext("agent-a", "implementer", "SemanticFindReplace", "apply replaceConstruction", 0));
+        var data = Data(await RunAsync(SemanticReplaceMode.apply, WidgetType, CreateFactory));
+        var changeId = data.GetProperty("changeId").GetString()!;
+
+        var editImpl = new WorkspaceFileEditImpl(
+            _workspaceManager,
+            Battery.Basic.TestTools.WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
+            NullLogger.Instance,
+            _validationEngine,
+            Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            WriteToolAdviceHelper.WithAllToolsExposed());
+        var undo = await editImpl.UndoLastApply(new ToolCallReason("testing undo line-delta summary"), changeId);
+
+        Assert.That(undo.IsError, Is.False, undo.ErrorData?.Message);
+        var text = undo.SuccessData?.ToString();
+        Assert.That(text, Does.Contain("Lines changed by the revert:"));
+        Assert.That(text, Does.Contain("Consumers.cs"));
+    }
+
+    [Test]
     [Description("ReplaceSnippet on disk returns a ChangeId that names UndoLastApply in its success text and reverts the file")]
     public async Task ReplaceSnippet_DiskBackedApply_ReturnsChangeIdThatUndoLastApplyReverts()
     {

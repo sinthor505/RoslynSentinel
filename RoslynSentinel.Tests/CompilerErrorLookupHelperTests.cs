@@ -419,6 +419,63 @@ public class CompilerErrorLookupHelperTests
         Assert.That(description, Does.Not.Contain("is called here"));
     }
 
+    [Test]
+    public async Task DescribeAsync_Cs0117MissingMember_ListsTheTypesMembersAndTheClosestName()
+    {
+        var report = await CompileAndGetErrorsAsync(
+            ("Shipping.cs", """
+            namespace TestProj;
+
+            public static class ShippingKinds
+            {
+                public const string Standard = "standard";
+                public const string Express = "express";
+                public const string Overnight = "overnight";
+            }
+
+            public class Order
+            {
+                public string Pick() => ShippingKinds.Ownight;
+            }
+            """));
+        var cs0117 = report.Diagnostics.Single(d => d.Id == "CS0117");
+        var withLine = new DiagnosticReport(true, [cs0117]);
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(withLine, _symbolNavigationEngine);
+
+        Assert.That(description, Does.Contain("Members of 'ShippingKinds':"));
+        Assert.That(description, Does.Contain("Overnight"));
+        Assert.That(description, Does.Contain("Closest to 'Ownight': Overnight"));
+    }
+
+    [Test]
+    public async Task DescribeAsync_Cs0117MissingMemberNoCloseName_StillListsMembers()
+    {
+        var report = await CompileAndGetErrorsAsync(
+            ("Shipping.cs", """
+            namespace TestProj;
+
+            public static class ShippingKinds
+            {
+                public const string Standard = "standard";
+                public const string Express = "express";
+                public const string Overnight = "overnight";
+            }
+
+            public class Order
+            {
+                public string Pick() => ShippingKinds.Zzzzzzzz;
+            }
+            """));
+        var cs0117 = report.Diagnostics.Single(d => d.Id == "CS0117");
+        var withLine = new DiagnosticReport(true, [cs0117]);
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(withLine, _symbolNavigationEngine);
+
+        Assert.That(description, Does.Contain("Members of 'ShippingKinds':"));
+        Assert.That(description, Does.Not.Contain("Closest to"));
+    }
+
     /// <summary>
     /// CS0107 (eval run 20261109-233953-684: a whole-file write produced "private static internal", and the model removed the wrong
     /// modifier). The gate's diagnostics carry the source line, which names the modifiers found.

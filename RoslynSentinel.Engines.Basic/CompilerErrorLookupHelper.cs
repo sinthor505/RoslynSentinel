@@ -520,6 +520,41 @@ public static class CompilerErrorLookupHelper
             var noCandidate = isExtensionCandidate
                 ? $"  No member or extension method named '{memberName}' was found anywhere in the solution for type '{typeName}'. This is likely a typo, a member that needs to be added to '{typeName}', or an extension method whose defining namespace needs a `using` - check FindExtensionMethods if one is expected to exist."
                 : $"  No member named '{memberName}' was found anywhere in the solution. This is likely a typo, or '{memberName}' needs to be added to '{typeName}'.";
+            if (!isExtensionCandidate)
+            {
+                // Name the members that exist on the named type so a misspelled member can be fixed from the list.
+                // Private members are left out: the caller cannot reach them anyway.
+                List<SymbolLocation> typeMembers;
+                try
+                {
+                    typeMembers = await symbolNavigationEngine.LocateSymbolAsync(
+                        "", exactMatch: false, containingType: simpleTypeName, includeTests: false, cancellationToken: cancellationToken);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    typeMembers = [];
+                }
+
+                var memberNames = typeMembers
+                    .Where(c => string.Equals(c.ContainingType, simpleTypeName, StringComparison.OrdinalIgnoreCase)
+                        && c.Accessibility != "Private"
+                        && !c.SymbolName.StartsWith('<')
+                        && !c.SymbolName.StartsWith('.'))
+                    .Select(c => c.SymbolName)
+                    .Distinct()
+                    .Take(20)
+                    .ToList();
+                if (memberNames.Count > 0)
+                {
+                    noCandidate += $" Members of '{typeName}': {string.Join(", ", memberNames)}.";
+                    var closest = RoslynSentinel.Common.NameCandidates.Rank(memberName, memberNames, n => n, cap: 1);
+                    if (closest.Count > 0)
+                    {
+                        noCandidate += $" Closest to '{memberName}': {closest[0].Item}.";
+                    }
+                }
+            }
+
             return noCandidate + (IsEdited(diagnostic.FilePath.ToString()) ? " If this edit renames a use of an existing member, change the member's declaration in the same call." : string.Empty);
         }
 

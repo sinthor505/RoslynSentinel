@@ -410,8 +410,19 @@ public class WorkspaceFileEditImpl
             ApplyChangesResult? revertResult = null;
             var reverted = new List<string>();
             var noOpFiles = new List<string>();
+            // Line delta of each revert (keyed by absolute path), measured against the file's text on disk before the write.
+            var revertDeltas = new Dictionary<string, FileLineChange>(StringComparer.OrdinalIgnoreCase);
             if (revertChanges.Count > 0)
             {
+                foreach (var (revertPath, restoredText) in revertChanges)
+                {
+                    if (!File.Exists(revertPath.Absolute))
+                    {
+                        continue;
+                    }
+                    revertDeltas[revertPath.Absolute] = FileLineChange.Compute(revertPath.Absolute, File.ReadAllText(revertPath.Absolute), restoredText);
+                }
+
                 // exactRestore: this writes back a pre-image the server captured itself, so it bypasses the
                 // EOL-change guard and EOL normalization (a mixed-EOL pre-image over a since-normalized file would
                 // otherwise be refused as an EOL change) and writes the captured bytes verbatim.
@@ -460,6 +471,13 @@ public class WorkspaceFileEditImpl
                 OperationBlobWriter.MarkUndone(blobPath, _logger);
             }
 
+            var lineChangeEntries = reverted
+                .Where(p => revertDeltas.ContainsKey(p))
+                .Select(p => $"{Path.GetFileName(p)} +{revertDeltas[p].LinesAdded}/-{revertDeltas[p].LinesRemoved}")
+                .ToList();
+            var lineChangePart = lineChangeEntries.Count > 0
+                ? $" Lines changed by the revert: {string.Join(", ", lineChangeEntries)}."
+                : "";
             var failedPart = failed.Count > 0 ? $" Failures: {string.Join("; ", failed)}" : "";
             var noOpPart = noOpFiles.Count > 0
                 ? $" ({noOpFiles.Count} already matched pre-apply state - no change needed: {string.Join(", ", noOpFiles)})"
@@ -467,7 +485,7 @@ public class WorkspaceFileEditImpl
             return new SentinelCallToolResult<object>()
             {
                 IsError = false,
-                SuccessData = $"Reverted {reverted.Count} files{noOpPart}. Files: {string.Join(", ", reverted)}{failedPart}",
+                SuccessData = $"Reverted {reverted.Count} files{noOpPart}. Files: {string.Join(", ", reverted)}{lineChangePart}{failedPart}",
                 Findings = revertResult?.Findings ?? []
             };
         }

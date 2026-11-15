@@ -344,7 +344,7 @@ public class WorkspaceTools
 
     [McpServerTool(Name = "UndoLastApply")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Reverts files from a previous apply back to their pre-apply state.")]
+    [Description("Reverts files from a previous apply back to their pre-apply state. The result lists the lines each reverted file gained and lost.")]
     public Task<SentinelCallToolResult<object>> UndoLastApplyTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.OperationId, required: true)] string changeId,
