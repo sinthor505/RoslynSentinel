@@ -495,6 +495,7 @@ public static class McpToolSchemaPatcher
             propertiesObj,
             "newContent",
             $"Replacement text, re-indented to the file. Limit: {ReplaceSnippetOptions.MaxNewContentLines} lines / {ReplaceSnippetOptions.MaxNewContentChars} chars (excluding leading indentation).");
+        anyPatched |= PatchBatchLimitDescription(propertiesObj);
         // TODO remove ReplaceSnippet's lineBefore/lineAfter parameters and SnippetEdit.LineBefore/LineAfter once no caller sends them (hidden from the schema 2026-11-09; widen oldContent or use matchLine instead).
         anyPatched |= RemoveAnchorProperties(schemaObj, propertiesObj);
         anyPatched |= PatchBatchEditItems(schemaObj, propertiesObj);
@@ -579,6 +580,31 @@ public static class McpToolSchemaPatcher
             }
 
             propObj["description"] = description;
+            return true;
+        }
+
+        // Appends the batch cap to the batch parameter's existing description (not replaced). Resolves the
+        // batch parameter name like PatchBatchEditItems does; skips when the sentence is already present.
+        static bool PatchBatchLimitDescription(JsonObject propertiesObj)
+        {
+            string batchName = propertiesObj.ContainsKey("edits") ? "edits" : "batchEdits";
+            if (!propertiesObj.TryGetPropertyValue(batchName, out JsonNode? batchNode) ||
+                batchNode is not JsonObject batchObj)
+            {
+                return false;
+            }
+
+            string sentence = $"Limit: {ReplaceSnippetOptions.MaxEditsPerBatch} edits per call; split larger batches.";
+            string existing = batchObj["description"] is JsonValue existingValue &&
+                existingValue.TryGetValue(out string? existingText) && existingText is not null
+                ? existingText
+                : string.Empty;
+            if (existing.Contains(sentence, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            batchObj["description"] = existing.Length == 0 ? sentence : $"{existing} {sentence}";
             return true;
         }
     }
