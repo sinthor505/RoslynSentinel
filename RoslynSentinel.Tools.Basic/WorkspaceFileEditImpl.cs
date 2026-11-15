@@ -575,7 +575,7 @@ public class WorkspaceFileEditImpl
         return new("FileNotFound", FileNotFoundMessage.Build(normalizedPath, DocumentLookup.FindFileCandidates(solution, normalizedPath), solution.Projects.Count(), isCallable, DocumentLookup.FindDeclaringTypeFiles(solution, normalizedPath), moved?.NewPath, moved?.ToolName, DocumentLookup.FindFolderFileNames(solution, normalizedPath)));
     }
 
-    private async Task<SentinelCallToolResult<object>> ReadFileWithoutSolutionAsync(string absolutePath, int? startLine, int? endLine, CancellationToken cancellationToken)
+    private async Task<SentinelCallToolResult<object>> ReadFileWithoutSolutionAsync(string absolutePath, int? startLine, int? endLine, CancellationToken cancellationToken, LineEndingDisplay showLineEndings = LineEndingDisplay.None)
     {
         try
         {
@@ -593,6 +593,9 @@ public class WorkspaceFileEditImpl
             var totalLines = sourceText.Lines.Count;
             var explanation = "No solution is loaded; read directly from disk (no outline or offload available). "
                 + (_workspaceManager.LoadState is { IsFreshStartup: true } ? $"This server was freshly (re)started and has not loaded a solution yet; call {ToolCallHint.Call("LoadSolution")} to restore full functionality. " : string.Empty);
+            var statusMessage = showLineEndings == LineEndingDisplay.All
+                ? explanation.TrimEnd() + " source is annotated with line-ending markers and is not verbatim."
+                : explanation.TrimEnd();
 
             if (startLine.HasValue || endLine.HasValue)
             {
@@ -611,17 +614,61 @@ public class WorkspaceFileEditImpl
                 // instance ResolveFromWire yields an empty path while no solution is loaded
                 _workspaceManager.RecordObserved(FilePathWrapper.ResolveFromWire(absolutePath, null), diskContent);
                 var slice = sourceText.ToString(TextSpan.FromBounds(sourceText.Lines[from - 1].Start, sourceText.Lines[to - 1].EndIncludingLineBreak));
+                var rangeLineEndings = showLineEndings == LineEndingDisplay.None ? null : EolUtilities.DescribeLineEndings(diskContent);
+                if (showLineEndings == LineEndingDisplay.All)
+                {
+                    slice = EolUtilities.AnnotateLineEndings(slice);
+                }
+
+                object rangeData = showLineEndings == LineEndingDisplay.None
+                    ? new
+                    {
+                        filePath = absolutePath,
+                        startLine = from,
+                        endLine = to,
+                        totalLines,
+                        source = slice
+                    }
+                    : new
+                    {
+                        filePath = absolutePath,
+                        startLine = from,
+                        endLine = to,
+                        totalLines,
+                        lineEndings = rangeLineEndings,
+                        source = slice
+                    };
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = false,
-                    SuccessData = new { filePath = absolutePath, startLine = from, endLine = to, totalLines, source = slice },
+                    SuccessData = rangeData,
                     HasMoreData = to < totalLines,
-                    StatusMessage = explanation.TrimEnd(),
+                    StatusMessage = statusMessage,
                     WorkspaceVersion = _workspaceManager.WorkspaceVersion,
                 };
             }
 
-            var textBytes = System.Text.Encoding.UTF8.GetByteCount(diskContent);
+            var wholeLineEndings = showLineEndings == LineEndingDisplay.None ? null : EolUtilities.DescribeLineEndings(diskContent);
+            var wholeSource = showLineEndings == LineEndingDisplay.All ? EolUtilities.AnnotateLineEndings(diskContent) : diskContent;
+            var textBytes = System.Text.Encoding.UTF8.GetByteCount(wholeSource);
+            object wholeData = showLineEndings == LineEndingDisplay.None
+                ? new
+                {
+                    filePath = absolutePath,
+                    startLine = 1,
+                    endLine = totalLines,
+                    totalLines,
+                    source = diskContent
+                }
+                : new
+                {
+                    filePath = absolutePath,
+                    startLine = 1,
+                    endLine = totalLines,
+                    totalLines,
+                    lineEndings = wholeLineEndings,
+                    source = wholeSource
+                };
             if (textBytes > LargeResultHelper.InlineBudgetChars)
             {
                 return new SentinelCallToolResult<object>()
@@ -635,9 +682,9 @@ public class WorkspaceFileEditImpl
             return new SentinelCallToolResult<object>()
             {
                 IsError = false,
-                SuccessData = new { filePath = absolutePath, startLine = 1, endLine = totalLines, totalLines, source = diskContent },
+                SuccessData = wholeData,
                 HasMoreData = false,
-                StatusMessage = explanation.TrimEnd(),
+                StatusMessage = statusMessage,
                 WorkspaceVersion = _workspaceManager.WorkspaceVersion,
             };
         }
@@ -698,8 +745,7 @@ public class WorkspaceFileEditImpl
             && !string.IsNullOrWhiteSpace(filePath)
             && Path.IsPathRooted(filePath))
         {
-            // TODO showLineEndings is ignored on the no-solution ReadFile path
-            return await ReadFileWithoutSolutionAsync(filePath, startLine, endLine, cancellationToken);
+            return await ReadFileWithoutSolutionAsync(filePath, startLine, endLine, cancellationToken, showLineEndings);
         }
         try
         {

@@ -365,6 +365,98 @@ public class ReadFileTests
     }
 
     [Test]
+    public async Task ReadFile_NoSolutionLoaded_ShowLineEndingsSummary_ReportsCrlfAsync()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "ReadFileNoSolutionEol_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var filePath = Path.Combine(tempDir, "CrlfFile.cs");
+
+        try
+        {
+            await File.WriteAllTextAsync(filePath, "line1\r\nline2\r\n");
+
+            var toolsWithoutSolution = BuildToolsWithoutSolution();
+            var result = await toolsWithoutSolution.ReadFileTool(reason: "test message", filePath, showLineEndings: LineEndingDisplay.Summary);
+
+            Assert.That(result.IsError, Is.False);
+            var data = result.SuccessData!;
+            Assert.That(GetProp(data, "lineEndings") as string, Does.Contain("CRLF"));
+            Assert.That((string)GetProp(data, "source")!, Is.EqualTo("line1\r\nline2\r\n"));
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(filePath);
+                Directory.Delete(tempDir);
+            }
+            catch { }
+        }
+    }
+
+    [Test]
+    public async Task ReadFile_NoSolutionLoaded_ShowLineEndingsAll_AnnotatesCrlfAndSaysNotVerbatimAsync()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "ReadFileNoSolutionEol_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var filePath = Path.Combine(tempDir, "CrlfFile.cs");
+
+        try
+        {
+            await File.WriteAllTextAsync(filePath, "line1\r\nline2\r\n");
+
+            var toolsWithoutSolution = BuildToolsWithoutSolution();
+            var result = await toolsWithoutSolution.ReadFileTool(reason: "test message", filePath, showLineEndings: LineEndingDisplay.All);
+
+            Assert.That(result.IsError, Is.False);
+            var data = result.SuccessData!;
+            Assert.That(GetProp(data, "lineEndings"), Is.Not.Null);
+            Assert.That((string)GetProp(data, "source")!, Does.Contain("line1<CRLF>").And.Contain("line2<CRLF>"));
+            Assert.That(result.StatusMessage, Does.Contain("not verbatim"));
+            Assert.That(result.StatusMessage, Does.Contain("No solution is loaded"));
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(filePath);
+                Directory.Delete(tempDir);
+            }
+            catch { }
+        }
+    }
+
+    [Test]
+    public async Task ReadFile_NoSolutionLoaded_ShowLineEndingsNone_OmitsLineEndingsAndKeepsCrlfVerbatimAsync()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "ReadFileNoSolutionEol_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var filePath = Path.Combine(tempDir, "CrlfFile.cs");
+
+        try
+        {
+            await File.WriteAllTextAsync(filePath, "line1\r\nline2\r\n");
+
+            var toolsWithoutSolution = BuildToolsWithoutSolution();
+            var result = await toolsWithoutSolution.ReadFileTool(reason: "test message", filePath);
+
+            Assert.That(result.IsError, Is.False);
+            var data = result.SuccessData!;
+            Assert.That(HasProp(data, "lineEndings"), Is.False);
+            Assert.That((string)GetProp(data, "source")!, Is.EqualTo("line1\r\nline2\r\n"));
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(filePath);
+                Directory.Delete(tempDir);
+            }
+            catch { }
+        }
+    }
+
+    [Test]
     public async Task ReadFile_NoSolutionLoadedAndRelativePath_StillReportsSolutionNotLoadedAsync()
     {
         var toolsWithoutSolution = BuildToolsWithoutSolution();
