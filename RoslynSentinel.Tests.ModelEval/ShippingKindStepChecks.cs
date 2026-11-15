@@ -86,6 +86,7 @@ internal static class ShippingKindStepChecks
             3 => Step3Source,
             4 => Step4Source,
             5 => Step5Source,
+            6 => Step6Source,
             _ => throw new ArgumentOutOfRangeException(nameof(step)),
         };
         var testDirectory = Path.Combine(solutionDirectory, "ContosoOrders.Tests", "ModelEvalGenerated");
@@ -117,6 +118,15 @@ internal static class ShippingKindStepChecks
             }
 
             return (ShippingKindStepOutcome.CheckFailed, detail);
+        }
+
+        if (step >= 4)
+        {
+            var (contractOk, contractDetail) = await RunContractTestsAsync(step, solutionDirectory, cancellationToken);
+            if (!contractOk)
+            {
+                return (ShippingKindStepOutcome.CheckFailed, contractDetail);
+            }
         }
 
         var violation = FindScopeViolation(step, changedPaths, ShippingKindStepGoldens.AllowedPathsForStep(step));
@@ -277,9 +287,245 @@ public class ShippingKindStep5Tests
 }
 """;
 
+    private const string Step6Source = """
+using ContosoOrders.Core;
+using Xunit;
+
+namespace ContosoOrders.Tests;
+
+public class ShippingKindStep6Tests
+{
+    [Fact]
+    public void Constants_HaveTheNewValues()
+    {
+        Assert.Equal("regular", ShippingKinds.Standard);
+        Assert.Equal("rush", ShippingKinds.Express);
+        Assert.Equal("nextday", ShippingKinds.Overnight);
+        Assert.Equal("collect", ShippingKinds.Pickup);
+        Assert.Equal("sameday", ShippingKinds.SameDay);
+    }
+
+    [Fact]
+    public void All_HasTheFiveValues()
+    {
+        Assert.Equal(5, ShippingKinds.All.Count);
+        Assert.Contains("regular", ShippingKinds.All);
+        Assert.Contains("rush", ShippingKinds.All);
+        Assert.Contains("nextday", ShippingKinds.All);
+        Assert.Contains("collect", ShippingKinds.All);
+        Assert.Contains("sameday", ShippingKinds.All);
+    }
+
+    [Fact]
+    public void IsKnown_IncludesSameDayAndRejectsTheOldValues()
+    {
+        Assert.True(ShippingKinds.IsKnown(ShippingKinds.SameDay));
+        Assert.False(ShippingKinds.IsKnown("express"));
+        Assert.False(ShippingKinds.IsKnown(null));
+    }
+
+    [Fact]
+    public void IsExpedited_IncludesSameDay()
+    {
+        Assert.True(ShippingKinds.IsExpedited(ShippingKinds.SameDay));
+        Assert.True(ShippingKinds.IsExpedited(ShippingKinds.Express));
+        Assert.True(ShippingKinds.IsExpedited(ShippingKinds.Overnight));
+        Assert.False(ShippingKinds.IsExpedited(ShippingKinds.Standard));
+        Assert.False(ShippingKinds.IsExpedited(ShippingKinds.Pickup));
+    }
+
+    [Fact]
+    public void Normalize_UsesTheNewValues()
+    {
+        Assert.Equal("rush", ShippingKinds.Normalize(" RUSH "));
+        Assert.ThrowsAny<ArgumentException>(() => ShippingKinds.Normalize("express"));
+    }
+}
+""";
+
+    private const string ContractStep4Source = """
+using ContosoOrders.Core;
+using Xunit;
+
+namespace ContosoOrders.Tests;
+
+public class ShippingKindContractStep4Tests
+{
+    [Theory]
+    [InlineData(ShippingKinds.Standard, 2.0, 5.99)]
+    [InlineData(ShippingKinds.Express, 2.0, 11.49)]
+    [InlineData(ShippingKinds.Overnight, 2.0, 21.99)]
+    [InlineData(ShippingKinds.Pickup, 3.0, 0.0)]
+    public void Fee_FollowsTheConstants(string kind, double weight, double expected)
+    {
+        Assert.Equal((decimal)expected, ShippingFeeCalculator.Calculate(new Shipment("o1", kind, (decimal)weight)));
+    }
+
+    [Theory]
+    [InlineData("standard")]
+    [InlineData("express")]
+    [InlineData("overnight")]
+    [InlineData("pickup")]
+    public void Fee_RejectsTheOldValues(string oldValue)
+    {
+        Assert.Throws<ArgumentException>(() => ShippingFeeCalculator.Calculate(new Shipment("o1", oldValue, 1m)));
+    }
+
+    [Theory]
+    [InlineData(ShippingKinds.Standard, 1, true)]
+    [InlineData(ShippingKinds.Standard, 0, false)]
+    [InlineData(ShippingKinds.Express, 0, false)]
+    [InlineData(ShippingKinds.Overnight, -1, false)]
+    [InlineData(ShippingKinds.Pickup, 0, true)]
+    [InlineData(ShippingKinds.Pickup, -1, false)]
+    public void Valid_FollowsTheConstants(string kind, int weight, bool expected)
+    {
+        Assert.Equal(expected, ShipmentValidator.IsValid(new Shipment("o1", kind, weight)));
+    }
+
+    [Theory]
+    [InlineData("standard")]
+    [InlineData("express")]
+    [InlineData("overnight")]
+    [InlineData("pickup")]
+    public void Valid_RejectsTheOldValues(string oldValue)
+    {
+        Assert.False(ShipmentValidator.IsValid(new Shipment("o1", oldValue, 1m)));
+    }
+}
+""";
+
+    private const string ContractStep5Source = """
+using ContosoOrders.Core;
+using Xunit;
+
+namespace ContosoOrders.Tests;
+
+public class ShippingKindContractStep5Tests
+{
+    [Theory]
+    [InlineData(ShippingKinds.Standard, 5)]
+    [InlineData(ShippingKinds.Express, 2)]
+    [InlineData(ShippingKinds.Overnight, 1)]
+    [InlineData(ShippingKinds.Pickup, 0)]
+    [InlineData(ShippingKinds.SameDay, 2)]
+    public void Days_FollowTheConstants(string kind, int expected)
+    {
+        Assert.Equal(expected, DeliveryEstimator.EstimateDays(kind));
+    }
+
+    [Theory]
+    [InlineData("standard")]
+    [InlineData("express")]
+    [InlineData("overnight")]
+    [InlineData("pickup")]
+    public void Days_RejectTheOldValues(string oldValue)
+    {
+        Assert.Throws<ArgumentException>(() => DeliveryEstimator.EstimateDays(oldValue));
+    }
+
+    [Theory]
+    [InlineData(ShippingKinds.Standard, "GroundPost")]
+    [InlineData(ShippingKinds.Express, "AirFast")]
+    [InlineData(ShippingKinds.Overnight, "AirFast")]
+    [InlineData(ShippingKinds.Pickup, "none")]
+    [InlineData(ShippingKinds.SameDay, "AirFast")]
+    public void Carrier_FollowsTheConstants(string kind, string expected)
+    {
+        Assert.Equal(expected, CarrierSelector.Select(new Shipment("o1", kind, 1m)));
+    }
+
+    [Theory]
+    [InlineData("standard")]
+    [InlineData("express")]
+    [InlineData("overnight")]
+    [InlineData("pickup")]
+    public void Carrier_RejectTheOldValues(string oldValue)
+    {
+        Assert.Throws<ArgumentException>(() => CarrierSelector.Select(new Shipment("o1", oldValue, 1m)));
+    }
+}
+""";
+
     private static readonly string[] Step1RequiredStems = { "ShippingFeeCalculator", "ShipmentValidator", "DeliveryEstimator", "CarrierSelector" };
 
     private static readonly string[] ForbiddenLiterals = { "\"standard\"", "\"express\"", "\"overnight\"", "\"pickup\"" };
+
+    /// <summary>
+    /// Contract-change check for steps 4 to 6: the step 4 and 5 checks first write the step 6 ShippingKinds.cs (new values, an extra expedited kind SameDay) over the model's tree and run tests written only against the constants, so a leftover string literal or an inline kind comparison fails; step 6 runs the same tests on the model's own ShippingKinds.cs. The tree is restored afterwards.
+    /// </summary>
+    private static async Task<(bool Ok, string Detail)> RunContractTestsAsync(int step, string solutionDirectory, CancellationToken cancellationToken)
+    {
+        (string FileName, string Source)[] sources = step switch
+        {
+            4 => new[] { ("ShippingKindContractStep4Tests.cs", ContractStep4Source) },
+            5 => new[] { ("ShippingKindContractStep5Tests.cs", ContractStep5Source) },
+            _ => new[] { ("ShippingKindContractStep4Tests.cs", ContractStep4Source), ("ShippingKindContractStep5Tests.cs", ContractStep5Source) },
+        };
+        var mutate = step != 6;
+        var kindsPath = Path.Combine(solutionDirectory, "ContosoOrders.Core", "Shipping", "ShippingKinds.cs");
+        var testDirectory = Path.Combine(solutionDirectory, "ContosoOrders.Tests", "ModelEvalGenerated");
+        var testProject = Path.Combine(solutionDirectory, "ContosoOrders.Tests", "ContosoOrders.Tests.csproj");
+        byte[]? originalKinds = mutate && File.Exists(kindsPath) ? await File.ReadAllBytesAsync(kindsPath, cancellationToken) : null;
+        DotnetTestResult result;
+        try
+        {
+            Directory.CreateDirectory(testDirectory);
+            if (mutate)
+            {
+                await File.WriteAllTextAsync(kindsPath, ShippingKindStepGoldens.ContractChangedShippingKinds, cancellationToken);
+            }
+
+            foreach (var (fileName, source) in sources)
+            {
+                await File.WriteAllTextAsync(Path.Combine(testDirectory, fileName), NormalizeToCrlf(source), cancellationToken);
+            }
+
+            result = await DotnetTestRunner.RunAsync(testProject, cancellationToken);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return (false, "contract-change check did not compile: " + BuildBrokenDetail(ex.Message));
+        }
+        finally
+        {
+            foreach (var (fileName, _) in sources)
+            {
+                File.Delete(Path.Combine(testDirectory, fileName));
+            }
+
+            if (mutate)
+            {
+                if (originalKinds is not null)
+                {
+                    await File.WriteAllBytesAsync(kindsPath, originalKinds, CancellationToken.None);
+                }
+                else
+                {
+                    File.Delete(kindsPath);
+                }
+            }
+        }
+
+        if (result.Total == 0 || result.Failed > 0 || result.Passed != result.Total)
+        {
+            var detail = $"contract-change check failed: {result.Failed} of {result.Total} failed";
+            var failedLine = result.RawOutput.Split('\n').Select(line => line.Trim()).FirstOrDefault(line => line.StartsWith("Failed ", StringComparison.Ordinal));
+            if (failedLine is not null)
+            {
+                detail += $"; {failedLine}";
+            }
+
+            if (mutate)
+            {
+                detail += " (the check rewrote ShippingKinds.cs with different constant values and an extra expedited kind; code that still uses a string literal or an inline kind comparison breaks)";
+            }
+
+            return (false, detail);
+        }
+
+        return (true, string.Empty);
+    }
 
     private static string? FindScopeViolation(int step, IReadOnlyList<string> changedPaths, IEnumerable<string> allowed)
     {

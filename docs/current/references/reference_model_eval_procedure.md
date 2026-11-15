@@ -339,12 +339,18 @@ A bare pass/fail sends the analyst back into transcripts to learn what happened.
 ## Stepped ShippingKind scenario (`-Test ShippingKindStep`)
 
 - Measures one small step at a time: a ContosoOrders fixture copy gets a "shipping kind" vocabulary
-  (find literals, add `ShippingKinds` constants, add helpers, migrate two files, migrate two more).
-  Each of the five steps is a fresh conversation (`ShippingKindSteppedAgentTests.Model_CompletesShippingKindStep(k)`)
+  (find literals, add `ShippingKinds` constants, add helpers, migrate two files, migrate two more, then change the
+  constant values and add an expedited `SameDay` kind). Each of the six steps is a fresh conversation (`ShippingKindSteppedAgentTests.Model_CompletesShippingKindStep(k)`)
   that starts from a golden git tag `step-(k-1)`, never from the model's earlier output.
   Outcome per step: `Pass`, `OutOfScopeEdit`, `CheckFailed`, `BuildBroken`, `Blocked`, `NotConverged`.
-- All five: `.\scripts\roslynsentinel-modeleval.ps1 -Test ShippingKindStep -Model <key>` (queue it on a
-  shared host). One step or a range: add `-Step 4` or `-Step 4,5`.
+- All six: `.\scripts\roslynsentinel-modeleval.ps1 -Test ShippingKindStep -Model <key>` (queue it on a
+  shared host). One step or a range: add `-Step 4` or `-Step 4,5`. The variants V2 to V13 stop at step 5.
+- Contract-change check (steps 4 to 6): after the normal hidden tests pass, steps 4 and 5 write the step-6
+  `ShippingKinds.cs` (`ShippingKindStepGoldens.ContractChangedShippingKinds`: values `regular`/`rush`/`nextday`/`collect`,
+  plus an expedited `SameDay`) over the model's tree and run tests written only against the constants, so a leftover string
+  literal or an inline `== Express || == Overnight` pair fails with `contract-change check failed`; the tree is restored
+  afterwards. Step 6 is the same change given to the model as a task (only `ShippingKinds.cs` may change) and is graded by
+  the same constant-only tests. Pass rates measured before 2026-11-15 used text checks only and are not comparable.
 - Prompt variants: `-Test ShippingKindStep` runs the V1 prompts (`ShippingKindStepGoldens.PromptStepNV1`);
   `-Test ShippingKindStepV2` runs `Model_RunsShippingKindStepPromptV2` with the V2 prompts for steps 2, 3 and 5
   (steps 1 and 4 reuse V1 as a control). Both share `ShippingKindSteppedAgentTests.RunStepAsync(step, prompt)`; a new

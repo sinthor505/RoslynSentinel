@@ -2,7 +2,7 @@ namespace RoslynSentinel.Tests.ModelEval.Fixtures;
 
 internal static class ShippingKindStepGoldens
 {
-    public const int LastStep = 5;
+    public const int LastStep = 6;
 
     private const string ShippingDir = "ContosoOrders.Core/Shipping/";
 
@@ -272,7 +272,44 @@ internal static class ShippingKindStepGoldens
 
         """;
 
+    private const string ShippingKindsV6 = """
+        namespace ContosoOrders.Core;
+
+        public static class ShippingKinds
+        {
+            public const string Standard = "regular";
+            public const string Express = "rush";
+            public const string Overnight = "nextday";
+            public const string Pickup = "collect";
+            public const string SameDay = "sameday";
+
+            public static IReadOnlySet<string> All { get; } = new HashSet<string> { Standard, Express, Overnight, Pickup, SameDay };
+
+            public static bool IsKnown(string? kind) =>
+                kind == Standard || kind == Express || kind == Overnight || kind == Pickup || kind == SameDay;
+
+            public static bool IsExpedited(string? kind) => kind == Express || kind == Overnight || kind == SameDay;
+
+            public static string Normalize(string kind)
+            {
+                var normalized = kind.Trim().ToLowerInvariant();
+                if (IsKnown(normalized))
+                {
+                    return normalized;
+                }
+
+                throw new ArgumentException($"Unknown shipping kind: {kind}", nameof(kind));
+            }
+        }
+
+        """;
+
     private static string Crlf(string s) => s.Replace("\r\n", "\n").Replace("\n", "\r\n");
+
+    /// <summary>
+    /// The ShippingKinds.cs of step 6. The step 4 and 5 checks write it over the model's tree to prove no string literal or inline kind pair is left.
+    /// </summary>
+    public static string ContractChangedShippingKinds => Crlf(ShippingKindsV6);
 
     public static IReadOnlyDictionary<string, string> FilesForStep(int step) => FilesForStep(step, withVisibleTests: false);
 
@@ -306,6 +343,9 @@ internal static class ShippingKindStepGoldens
                 files[ShippingDir + "DeliveryEstimator.cs"] = Crlf(DeliveryEstimatorG5);
                 files[ShippingDir + "CarrierSelector.cs"] = Crlf(CarrierSelectorG5);
                 break;
+            case 6:
+                files[ShippingDir + "ShippingKinds.cs"] = Crlf(ShippingKindsV6);
+                break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(step));
         }
@@ -331,6 +371,10 @@ internal static class ShippingKindStepGoldens
 
     private const string PromptStep5V1 = """
         In DeliveryEstimator.cs and CarrierSelector.cs (ContosoOrders.Core/Shipping), replace every shipping kind string literal with the matching ShippingKinds constant, written qualified as ShippingKinds.<Name> (for example ShippingKinds.Express), and replace each check for 'express or overnight' with a call to ShippingKinds.IsExpedited. Behaviour must not change. Change no other file. Reply with what you changed.
+        """;
+
+    private const string PromptStep6V1 = """
+        In ShippingKinds.cs (ContosoOrders.Core/Shipping), change the shipping kind values to Standard = 'regular', Express = 'rush', Overnight = 'nextday' and Pickup = 'collect', and add a constant SameDay = 'sameday' that counts as a known kind and as an expedited kind (it belongs in All, IsKnown and IsExpedited). The rest of ContosoOrders.Core already refers to these kinds through ShippingKinds, so it must keep working unchanged. Change no other file. Reply with what you changed.
         """;
 
     private const string PromptStep2V2 = """
@@ -442,6 +486,7 @@ internal static class ShippingKindStepGoldens
             3 => PromptStep3V1,
             4 => PromptStep4V1,
             5 => PromptStep5V1,
+            6 => PromptStep6V1,
             _ => throw new ArgumentOutOfRangeException(nameof(step)),
         };
     }
@@ -630,6 +675,7 @@ internal static class ShippingKindStepGoldens
             2 or 3 => new[] { ShippingDir + "ShippingKinds.cs" },
             4 => new[] { ShippingDir + "ShippingFeeCalculator.cs", ShippingDir + "ShipmentValidator.cs" },
             5 => new[] { ShippingDir + "DeliveryEstimator.cs", ShippingDir + "CarrierSelector.cs" },
+            6 => new[] { ShippingDir + "ShippingKinds.cs" },
             _ => throw new ArgumentOutOfRangeException(nameof(step)),
         };
     }

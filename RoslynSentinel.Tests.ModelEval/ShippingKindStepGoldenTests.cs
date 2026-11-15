@@ -40,6 +40,7 @@ public class ShippingKindStepGoldenTests
     [TestCase(3)]
     [TestCase(4)]
     [TestCase(5)]
+    [TestCase(6)]
     public async Task Golden_PassesItsOwnCheck(int step)
     {
         _repository!.CheckoutStep(step, $"verify/step-{step}");
@@ -60,6 +61,7 @@ public class ShippingKindStepGoldenTests
     [TestCase(3)]
     [TestCase(4)]
     [TestCase(5)]
+    [TestCase(6)]
     public async Task PreviousGolden_FailsTheCheck(int step)
     {
         _repository!.CheckoutStep(step - 1, $"verify/previous-of-step-{step}");
@@ -76,6 +78,67 @@ public class ShippingKindStepGoldenTests
             outcome,
             Is.Not.EqualTo(ShippingKindStepOutcome.Pass),
             $"step {step} check passed on the step-{step - 1} golden: {detail}");
+    }
+
+    private const string InlinePairDeliveryEstimatorSource = """
+namespace ContosoOrders.Core;
+
+public static class DeliveryEstimator
+{
+    public static int EstimateDays(string kind)
+    {
+        var expedited = ShippingKinds.IsExpedited(kind);
+        if (kind == ShippingKinds.Express || kind == ShippingKinds.Overnight) return kind == ShippingKinds.Overnight ? 1 : 2;
+        if (kind == ShippingKinds.Pickup) return 0;
+        if (kind == ShippingKinds.Standard) return 5;
+        throw new ArgumentException($"Unknown shipping kind: {kind}", nameof(kind));
+    }
+}
+""";
+
+    private const string InlinePairCarrierSelectorSource = """
+namespace ContosoOrders.Core;
+
+public static class CarrierSelector
+{
+    public static string Select(Shipment shipment)
+    {
+        var expedited = ShippingKinds.IsExpedited(shipment.Kind);
+        if (shipment.Kind == ShippingKinds.Pickup) return "none";
+        if (shipment.Kind == ShippingKinds.Express || shipment.Kind == ShippingKinds.Overnight) return "AirFast";
+        if (shipment.Kind == ShippingKinds.Standard) return "GroundPost";
+        throw new ArgumentException($"Unknown shipping kind: {shipment.Kind}", nameof(shipment));
+    }
+}
+""";
+
+    [Test]
+    public async Task Step5_ConstantsWithAnInlineKindPair_PassesTheTextChecksButFailsTheContractCheck()
+    {
+        _repository!.CheckoutStep(4, "verify/inline-pair");
+        var shippingDir = Path.Combine(_fixture!.SolutionDirectory, "ContosoOrders.Core", "Shipping");
+        File.WriteAllText(
+            Path.Combine(shippingDir, "DeliveryEstimator.cs"),
+            InlinePairDeliveryEstimatorSource.Replace("\r\n", "\n").Replace("\n", "\r\n"));
+        File.WriteAllText(
+            Path.Combine(shippingDir, "CarrierSelector.cs"),
+            InlinePairCarrierSelectorSource.Replace("\r\n", "\n").Replace("\n", "\r\n"));
+        try
+        {
+            var (outcome, detail) = await ShippingKindStepChecks.CheckAsync(
+                5,
+                _fixture.SolutionDirectory,
+                null,
+                Array.Empty<string>(),
+                TestContext.CurrentContext.CancellationToken);
+
+            Assert.That(outcome, Is.EqualTo(ShippingKindStepOutcome.CheckFailed), detail);
+            Assert.That(detail, Does.Contain("contract-change check failed"), detail);
+        }
+        finally
+        {
+            RoslynSentinel.Tests.Battery.Basic.GitTestRepo.RunGit(_repository!.RepoDirectory, "checkout", "--", ".");
+        }
     }
 
     private IReadOnlyList<string> PathsChangedFromPreviousStep(int step)

@@ -122,8 +122,8 @@
     OrderPricingRefactorChain10 | ResumeTranscript (resume a saved ten-chain transcript and resample
     the next turns; see -ResumeTranscript) | ScoreTranscript (score a saved transcript without calling a
     model; see -ScoreTranscript) | Scenario (run a registered targeted scenario for -Samples samples; see -Scenario) |
-    ShippingKindStep (Model_CompletesShippingKindStep: five independent steps of the stepped ShippingKind scenario,
-    each from a golden commit; all five by default, or the ones named by -Step) | ShippingKindStepV2
+    ShippingKindStep (Model_CompletesShippingKindStep: six independent steps of the stepped ShippingKind scenario,
+    each from a golden commit; all six by default, or the ones named by -Step) | ShippingKindStepV2
     (Model_RunsShippingKindStepPromptV2: the same five steps with the V2 prompts for steps 2, 3 and 5; steps 1 and 4
     reuse the V1 prompts as a control; -Step works the same) | ShippingKindStepV3 / V4 / V5 / V6
     (Model_RunsShippingKindStepPromptV3..V6: further prompt variants; V3 targeted fixes, V4 Haiku-style brief for
@@ -256,7 +256,8 @@
     ROSLYNSENTINEL_REASONING_PRESSURE, and the script clears the variable otherwise. Ignored when -ReasoningWindow >= 0.
 
 .PARAMETER Step
-    ShippingKindStep only: step numbers 1-5 to run (for example -Step 4,5 runs steps 4 and 5). Default: all five.
+    ShippingKindStep only: step numbers 1-6 to run (for example -Step 4,5 runs steps 4 and 5). Default: all six
+    for ShippingKindStep (ShippingKindStepV2..V13 have steps 1-5 only, so use -Step there when you want fewer).
     Each listed step is one Model_CompletesShippingKindStep test case.
 
 .EXAMPLE

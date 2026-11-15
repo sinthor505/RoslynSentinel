@@ -125,6 +125,7 @@ public class ShippingKindSteppedAgentTests
     [TestCase(3)]
     [TestCase(4)]
     [TestCase(5)]
+    [TestCase(6)]
     [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
     public async Task Model_CompletesShippingKindStep(int step)
     {
