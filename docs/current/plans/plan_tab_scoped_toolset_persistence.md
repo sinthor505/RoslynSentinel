@@ -1,6 +1,6 @@
 # Plan: Persist enabled toolsets per Claude Code tab across server restarts, with McpServerControl restart options
 
-**Status:** IN PROGRESS 2026-11-15. Steps 1, 2, 3, 6 done (7b2b901f, 2df3e449, 3398ae4e, 9a247fb0, 0de85bbe); Batched run, owner away. Supersedes D12 of `plan_tool_experience_journal_fixes.md` ("persist toolset state across a restart").
+**Status:** IN PROGRESS 2026-11-15. Steps 1-4, 6, 7 done (7b2b901f, 2df3e449, 3398ae4e, 9a247fb0, 0de85bbe, 62edb05f, 0531ece8); Batched run, owner away. Supersedes D12 of `plan_tool_experience_journal_fixes.md` ("persist toolset state across a restart").
 
 ## Problem
 
@@ -164,6 +164,7 @@ Batches:
   - The existing `ParseToolsets_*` tests stay green.
 
 ### Step 4 - Startup restore and save wiring
+- Done: 62edb05f
 - Files: `RoslynSentinel.Server.Advanced/ServiceRegistrationExtensionsBasic.cs`, `RoslynSentinel.Server.Advanced/ServerStartupHelpers.cs`
 - Depends on: 2, 3
 - Effect: behaviour-changing only with `--tab-state-dir` (none until Step 6). A restored server loads the saved sets
@@ -268,6 +269,7 @@ Batches:
 - Lane: `implementer` D1 (1 file).
 
 ### Step 7 - list_changed after a restored start
+- Done: 0531ece8
 - Files: `RoslynSentinel.Server.Advanced/ServiceRegistrationExtensionsBasic.cs` (or a new handler file in `Server.Advanced`)
 - Depends on: 4
 - Effect: behaviour-changing. After a start that restored at least one set, the client receives one
