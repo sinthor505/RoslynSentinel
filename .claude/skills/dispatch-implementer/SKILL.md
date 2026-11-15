@@ -51,6 +51,8 @@ Out of scope: what not to touch (e.g. "do not commit", "items 5-7") - always inc
   and "no Write/Edit/shell writes on .cs files"
 ```
 
+Each label starts a line and the colon must follow within 20 characters (`Files:`, not `Files - every path the slice touches, with its project:`).
+
 Dispatch with `model: "haiku"` pinned explicitly.
 
 **Measure first, then slice.** Get the call-site list from `InspectSymbol(aspect: blastRadius)` (or
@@ -58,7 +60,8 @@ Dispatch with `model: "haiku"` pinned explicitly.
 `Search(mode: symbol)`, then pass `filePath` + a verbatim `contextSnippet`) and returns `totalCallSites`,
 `affectedProjectsCount` and the reference list; count distinct files yourself. Treat a non-empty
 `error` field as a failed measurement even if `isError` is false - on a stale server binary it
-otherwise reads as "zero blast radius".
+otherwise reads as "zero blast radius". A `RenameSymbol` sweep lists the declaration file plus the call-site files it
+will touch (the hook counts only the paths under `Files:` and cannot know the real fan-out; the agent preflight measures it).
 
 ## Slicing rules
 

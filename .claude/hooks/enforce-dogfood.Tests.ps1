@@ -589,6 +589,16 @@ $cases = @(
        p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = (New-Brief 3 'D0') } } }
     @{ n = 'file limit: depth D0 denies 4 files'; want = 'DENY'; fx = 'tiers'; match = 'at most 3'
        p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = (New-Brief 4 'D0') } } }
+    @{ n = 'file limit: prose Foo.cs in Symbols is not counted as a file'; want = 'allow'; fx = 'tiers'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: P/A.cs`nSymbols: Foo.cs, Bar.cs, Baz.cs, Qux.cs, A.Foo`nCall sites: none`nAcceptance: clean Build`nTier: D0`nLimits: 3 files / 10 edits / 1 acceptance / 25 tool calls`n$oosText" } } }
+    @{ n = 'file limit: bare Foo.cs names under Files are not counted'; want = 'allow'; fx = 'tiers'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: P/A.cs, Foo.cs, Bar.cs, Baz.cs`nSymbols: x`nCall sites: none`nAcceptance: clean Build`nTier: D0`nLimits: 3 files / 10 edits / 1 acceptance / 25 tool calls`n$oosText" } } }
+    @{ n = 'file limit: two real full paths count as two (allowed)'; want = 'allow'; fx = 'tiers'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: RoslynSentinel.Common/A.cs, RoslynSentinel.Common/B.cs`nSymbols: x`nCall sites: none`nAcceptance: clean Build`nTier: D0`nLimits: 3 files / 10 edits / 1 acceptance / 25 tool calls`n$oosText" } } }
+    @{ n = 'file limit: four real full paths count as four (denied)'; want = 'DENY'; fx = 'tiers'; match = 'lists 4 distinct .cs files'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: RoslynSentinel.Common/A.cs, RoslynSentinel.Common/B.cs, RoslynSentinel.Common/C.cs, RoslynSentinel.Common/D.cs`nSymbols: x`nCall sites: none`nAcceptance: clean Build`nTier: D0`nLimits: 3 files / 10 edits / 1 acceptance / 25 tool calls`n$oosText" } } }
+    @{ n = 'label: 21-character gap before colon is reported missing'; want = 'DENY'; fx = 'tiers'; match = "missing field 'Files:'"
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = ((New-Brief 2 'D0') -replace '(?m)^Files:', ('Files' + (' ' * 21) + ':')) } } }
     @{ n = 'file limit: brief tier S0 (not current S1) sets the limit'; want = 'DENY'; fx = 'tiers'; match = 'at most 8'
        p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer-sweep'; model = 'haiku'; prompt = (New-Brief 12 'S0' 'Limits: x' 'Rename') } } }
     # Tier file missing / unreadable / invalid: fail closed with the file named.

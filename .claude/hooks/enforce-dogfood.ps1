@@ -1239,7 +1239,8 @@ docs/current/blockers/blocking_error_<slug>.md, and end the turn.
                     if ($k -ne 'Files' -and $found[$k].Index -gt $start -and $found[$k].Index -lt $end) { $end = $found[$k].Index }
                 }
                 $filesText = $brief.Substring($start, $end - $start)
-                $csFiles = @([regex]::Matches($filesText, '[\w.\\/\-]+\.cs\b') | ForEach-Object { $_.Value.ToLowerInvariant() } | Select-Object -Unique)
+                # Count only path-like tokens (a directory separator, or a RoslynSentinel. prefix); a bare Foo.cs in prose is not a file.
+                $csFiles = @([regex]::Matches($filesText, '[\w.\\/\-]+\.cs\b') | ForEach-Object { $_.Value } | Where-Object { $_ -match '[\\/]|^RoslynSentinel\.' } | ForEach-Object { $_.ToLowerInvariant() } | Select-Object -Unique)
                 $maxFiles = [int]$tierEntry.maxFiles
                 if ($csFiles.Count -gt $maxFiles) {
                     $problems.Add("  Files lists $($csFiles.Count) distinct .cs files; the $laneName lane at tier $tierLabel allows at most $maxFiles. Split it into compile-green slices (CLAUDE.md), or send it to implementer-senior if it cannot be split.")
