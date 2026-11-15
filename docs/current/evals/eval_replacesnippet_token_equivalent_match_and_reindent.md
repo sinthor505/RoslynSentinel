@@ -60,7 +60,8 @@ The indentation-only rejection class is gone (4.7% of calls before, 0 now) witho
 ## Recommendation
 
 - Decided: keep the change; close the plan.
-- Open, for the ShippingKind eval owner (ranked): (1) contract check must neutralise or exclude the visible-tests fixture (delete `ShippingBehaviourTests.cs` before the rewrite, or filter to the `ShippingKindContractStep*` classes), plus a golden self-test with `withVisibleTests: true`; until then V12/V13 results from ae6f7f07 onward are invalid. (2) V10 prompt: an end-state sentence and a verify step ("no quoted shipping kind value remains; re-read both files"); the literal check could name the offending line. (3) The `CheckFailed` detail should name the failing test classes, not only the first failure.
+- Done (eval owner, b9aaa8e5): the contract check runs only the `ShippingKindContractStep*` classes, and a golden self-test with the visible file guards it. V12/V13 runs between e09fbca0 and b9aaa8e5 (including this batch's V13) are invalid and need re-running.
+- Not acted on (eval owner's decision: V10 is a losing variant; with the filter only contract classes can fail): (2) V10 prompt: an end-state sentence and a verify step ("no quoted shipping kind value remains; re-read both files"); the literal check could name the offending line. (3) The `CheckFailed` detail should name the failing test classes, not only the first failure.
 - Open: the remaining 13 ValidationFailed and 8 NotFound calls are the next ReplaceSnippet friction; not related to whitespace.
 
 ## Out of scope
