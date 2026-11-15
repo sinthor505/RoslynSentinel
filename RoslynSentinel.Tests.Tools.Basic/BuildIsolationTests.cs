@@ -31,6 +31,22 @@ public class BuildIsolationTests
         Assert.That(actual, Is.EqualTo(expected));
     }
 
+    [TestCase("dotnet.exe", @"dotnet test C:\work\RoslynSentinel\RoslynSentinel.slnx -p:ArtifactsPath=C:\tmp\scratch_1", false)]
+    [TestCase("dotnet.exe", @"dotnet test C:\work\RoslynSentinel\RoslynSentinel.slnx --artifacts-path C:\tmp\_scratchbuild_112", false)]
+    [TestCase("dotnet.exe", @"dotnet test C:\work\RoslynSentinel\RoslynSentinel.slnx --artifacts-path=C:\tmp\x", false)]
+    [TestCase("dotnet.exe", @"dotnet test C:\work\RoslynSentinel\RoslynSentinel.slnx -p:ArtifactsPath=""C:\work\RoslynSentinel\.roslynsentinel\build\123""", false)]
+    [TestCase("dotnet.exe", @"dotnet test C:\work\RoslynSentinel\RoslynSentinel.slnx", true)]
+    [TestCase("dotnet.exe", @"dotnet build C:\work\RoslynSentinel\RoslynSentinel.slnx -o C:\out", true)]
+    [TestCase("dotnet.exe", @"dotnet build C:\work\RoslynSentinel\RoslynSentinel.slnx --output C:\out", true)]
+    [TestCase("dotnet.exe", @"dotnet build C:\work\RoslynSentinel\RoslynSentinel.slnx -p:ArtifactsPath=C:\work\RoslynSentinel\RoslynSentinel.Engines.Basic\obj", true)]
+    [TestCase("dotnet.exe", @"dotnet build C:\work\RoslynSentinel\RoslynSentinel.slnx --artifacts-path C:\work\RoslynSentinel\bin", true)]
+    public void IsCompetingBuild_IgnoresIsolatedArtifactsPathOutsideRepoBinObj(string processName, string commandLine, bool expected)
+    {
+        var actual = BuildIsolation.IsCompetingBuild(processName, commandLine, [Solution]);
+
+        Assert.That(actual, Is.EqualTo(expected));
+    }
+
     [Test]
     [Category("CompetingBuildProcess")] // sentinel:auto-category
     public void DescribeCompetingBuilds_NamesTheBlockerAndTheEscapeHatch()

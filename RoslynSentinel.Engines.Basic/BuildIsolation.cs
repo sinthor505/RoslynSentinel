@@ -141,7 +141,9 @@ public static class BuildIsolation
     }
 
     /// <summary>True for a dotnet process running a build-like verb (build/test/publish/pack/restore/msbuild),
-    /// or any msbuild process, whose command line contains one of <paramref name="targetPaths"/>.</summary>
+    /// or any msbuild process, whose command line contains one of <paramref name="targetPaths"/>. A command line
+    /// that sends its artifacts to an isolated directory outside the repo's bin/obj (<c>-p:ArtifactsPath=</c> or
+    /// <c>--artifacts-path</c>) is not competing.</summary>
     public static bool IsCompetingBuild(string processName, string commandLine, IReadOnlyCollection<string> targetPaths)
     {
         if (string.IsNullOrWhiteSpace(commandLine))
@@ -158,6 +160,11 @@ public static class BuildIsolation
         }
 
         if (isDotnet && !HasBuildVerb(commandLine))
+        {
+            return false;
+        }
+
+        if (HasIsolatedArtifactsPath(commandLine))
         {
             return false;
         }
@@ -181,6 +188,87 @@ public static class BuildIsolation
     {
         var tokens = commandLine.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
         return tokens.Any(t => BuildVerbs.Contains(t.Trim('"'), StringComparer.OrdinalIgnoreCase));
+    }
+
+    // An isolated artifacts directory (-p:ArtifactsPath= or the CLI --artifacts-path) keeps the build out of the
+    // repo's bin/obj, so it does not compete for the same files. A directory with a bin or obj segment is treated
+    // as the repo's own folders and still counts as competing.
+    private static bool HasIsolatedArtifactsPath(string commandLine)
+    {
+        var tokens = TokenizeCommandLine(commandLine);
+        for (var i = 0; i < tokens.Count; i++)
+        {
+            var token = tokens[i];
+            string? value = null;
+            foreach (var prefix in new[] { "-p:ArtifactsPath=", "/p:ArtifactsPath=", "-property:ArtifactsPath=", "/property:ArtifactsPath=", "--artifacts-path=" })
+            {
+                if (token.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    value = token[prefix.Length..];
+                    break;
+                }
+            }
+
+            if (value is null && token.Equals("--artifacts-path", StringComparison.OrdinalIgnoreCase) && i + 1 < tokens.Count)
+            {
+                value = tokens[++i];
+            }
+
+            if (value is not null && IsIsolatedArtifactsDirectory(value))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsIsolatedArtifactsDirectory(string value)
+    {
+        var path = NormalizeSeparators(value.Trim('"')).TrimEnd('\\');
+        if (path.Length == 0)
+        {
+            return false;
+        }
+
+        return !path.Split('\\').Any(segment =>
+            segment.Equals("bin", StringComparison.OrdinalIgnoreCase) ||
+            segment.Equals("obj", StringComparison.OrdinalIgnoreCase));
+    }
+
+    // Splits on whitespace outside double quotes. The quote characters stay in the token; callers strip them.
+    private static List<string> TokenizeCommandLine(string commandLine)
+    {
+        var tokens = new List<string>();
+        var current = new System.Text.StringBuilder();
+        var inQuotes = false;
+        foreach (var c in commandLine)
+        {
+            if (c == '"')
+            {
+                inQuotes = !inQuotes;
+                current.Append(c);
+            }
+            else if (char.IsWhiteSpace(c) && !inQuotes)
+            {
+                if (current.Length > 0)
+                {
+                    tokens.Add(current.ToString());
+                    current.Clear();
+                }
+            }
+            else
+            {
+                current.Append(c);
+            }
+        }
+
+        if (current.Length > 0)
+        {
+            tokens.Add(current.ToString());
+        }
+
+        return tokens;
     }
 
     private static string NormalizeSeparators(string path) => path.Replace('/', '\\');
