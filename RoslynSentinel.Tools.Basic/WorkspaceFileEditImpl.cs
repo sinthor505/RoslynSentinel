@@ -915,7 +915,7 @@ public class WorkspaceFileEditImpl
 
     private static int MaxNewContentChars => ReplaceSnippetOptions.MaxNewContentChars;
 
-    private const int MaxSnippetEditsPerBatch = 20;
+    private const int MaxSnippetEditsPerBatch = ReplaceSnippetOptions.MaxEditsPerBatch;
 
     private static int CountCharsIgnoringLeadingIndentation(string content)
     {

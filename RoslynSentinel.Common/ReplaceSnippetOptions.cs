@@ -10,6 +10,9 @@ namespace RoslynSentinel.Common;
 /// </summary>
 public static class ReplaceSnippetOptions
 {
+    /// <summary>Maximum entries in one ReplaceSnippet batchEdits call; the schema text and the batch refusal both read it.</summary>
+    public const int MaxEditsPerBatch = 20;
+
     public static int MaxOldContentLines { get; private set; } = 100;
     public static int MaxNewContentLines { get; private set; } = 100;
     public static int MaxOldContentChars { get; private set; } = 2000;
