@@ -55,9 +55,12 @@ $ErrorActionPreference = 'Stop'
 # This script lives in <repo>\.claude\hooks\.
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path.TrimEnd('\', '/')
 
+# Service-like suffixes, owner-approved from the DTO-EXEMPT overrides in the journal. 'Source' and 'Handle' are
+# deliberately left out: real data records end in them (TestInstanceBuildSource, RenameSymbolUpdatedHandle, SymbolHandle).
 $exemptSuffixes = @('Engine', 'Tools', 'Impl', 'Helper', 'Helpers', 'Extensions', 'Service', 'Manager', 'Factory',
                     'Exception', 'Attribute', 'Builder', 'Visitor', 'Rewriter', 'Walker', 'Provider', 'Handler',
-                    'Converter', 'Comparer')
+                    'Converter', 'Comparer', 'Collector', 'Memory', 'Ledger', 'Gate', 'Launcher', 'Marshaller', 'Store',
+                    'Flusher', 'Summarizer', 'Pumps', 'Lease')
 
 # Optional modifiers, then record/class/struct at line start, then the type name.
 $declPattern = '(?m)^\s*(?<mods>(?:(?:public|internal|private|protected|file|sealed|abstract|static|partial|readonly|unsafe|new)\s+)*)(?<kind>record\s+struct|record\s+class|record|class|struct)\s+(?<name>\w+)'

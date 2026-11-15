@@ -169,6 +169,34 @@ $cases = @(
     @{ n = 'ApplyDiff diff format, record renamed within the diff'; want = 'allow'; fx = 'dto'
        p = @{ tool_name = 'mcp__x__ApplyDiff'; tool_input = @{ changesetFormat = 'diff'; reason = $gen; filePath = '{ROOT}\RoslynSentinel.Common\Existing.cs'; unifiedDiff = "--- a/Existing.cs`n+++ b/Existing.cs`n@@ -1 +1 @@`n-public record OldResult(int A);`n+public record OldResult(int A, int B);" } } }
 
+    # --- ALLOW: service-like suffixes (classes only; a record always triggers) ---
+    @{ n = 'class FooCollector (suffix)'; want = 'allow'; fx = 'dto'
+       p = (New-MemberPayload 'addTopLevelType' 'public sealed class FooCollector { }' $gen) }
+    @{ n = 'class FooMemory (suffix)'; want = 'allow'; fx = 'dto'
+       p = (New-MemberPayload 'addTopLevelType' 'public sealed class FooMemory { }' $gen) }
+    @{ n = 'class BuildGateLease (suffix Lease)'; want = 'allow'; fx = 'dto'
+       p = (New-MemberPayload 'addTopLevelType' 'public sealed class BuildGateLease { }' $gen) }
+    @{ n = 'class EditAttributionLedger (suffix)'; want = 'allow'; fx = 'dto'
+       p = (New-MemberPayload 'addTopLevelType' 'public sealed class EditAttributionLedger { }' $gen) }
+    @{ n = 'class FooGate (suffix)'; want = 'allow'; fx = 'dto'
+       p = (New-MemberPayload 'addTopLevelType' 'public sealed class FooGate { }' $gen) }
+    @{ n = 'class FooLauncher (suffix)'; want = 'allow'; fx = 'dto'
+       p = (New-MemberPayload 'addTopLevelType' 'public sealed class FooLauncher { }' $gen) }
+    @{ n = 'class FooMarshaller (suffix)'; want = 'allow'; fx = 'dto'
+       p = (New-MemberPayload 'addTopLevelType' 'public sealed class FooMarshaller { }' $gen) }
+    @{ n = 'class FooStore (suffix)'; want = 'allow'; fx = 'dto'
+       p = (New-MemberPayload 'addTopLevelType' 'public sealed class FooStore { }' $gen) }
+    @{ n = 'class FooFlusher (suffix)'; want = 'allow'; fx = 'dto'
+       p = (New-MemberPayload 'addTopLevelType' 'public sealed class FooFlusher { }' $gen) }
+    @{ n = 'class FooSummarizer (suffix)'; want = 'allow'; fx = 'dto'
+       p = (New-MemberPayload 'addTopLevelType' 'public sealed class FooSummarizer { }' $gen) }
+    @{ n = 'class FooPumps (suffix)'; want = 'allow'; fx = 'dto'
+       p = (New-MemberPayload 'addTopLevelType' 'public sealed class FooPumps { }' $gen) }
+
+    # --- DENY: data records ending in suffixes deliberately not exempt ---
+    @{ n = 'record TestInstanceBuildSource still triggers'; want = 'DENY'; fx = 'dto'
+       p = (New-MemberPayload 'addTopLevelType' 'public sealed record TestInstanceBuildSource(int A);' $gen) }
+
     # --- ALLOW: other tools never checked ---
     @{ n = 'Edit payload with record text'; want = 'allow'; fx = 'dto'
        p = @{ tool_name = 'Edit'; tool_input = @{ file_path = '{ROOT}\RoslynSentinel.Common\Foo.cs'; new_string = 'public record FooResult(int A);' } } }
