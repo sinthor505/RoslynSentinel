@@ -332,6 +332,58 @@ public class TestRunEngine
         return null;
     }
 
+    /// <summary>Arguments that make `dotnet test` abort a hung test host after a per-test timeout
+    /// (`--blame-hang`), so one hung test cannot consume the whole per-project timeout. The per-test
+    /// timeout is kept slightly under the per-project <paramref name="timeoutSeconds"/> so the abort
+    /// fires first, with a 30s floor. No dump is written (`--blame-hang-dump-type none`).</summary>
+    public static IReadOnlyList<string> BlameHangArguments(int timeoutSeconds)
+    {
+        return
+        [
+            "--blame-hang",
+            "--blame-hang-dump-type",
+            "none",
+            "--blame-hang-timeout",
+            $"{Math.Max(30, timeoutSeconds - 5)}s",
+        ];
+    }
+
+    /// <summary>Extracts the name of the test that was running when `dotnet test --blame-hang` aborted a
+    /// hung test host. The name is taken from the marker line or, when the marker line ends without
+    /// one, from the next non-blank line. Returns null when the marker is absent or no name follows.</summary>
+    public static string? ParseHungTestName(string stdout)
+    {
+        const string Marker = "The test running when the crash occurred:";
+        var lines = stdout.Split('\n');
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var index = lines[i].IndexOf(Marker, StringComparison.Ordinal);
+            if (index < 0)
+            {
+                continue;
+            }
+
+            var sameLine = lines[i][(index + Marker.Length)..].Trim();
+            if (sameLine.Length > 0)
+            {
+                return sameLine;
+            }
+
+            for (var j = i + 1; j < lines.Length; j++)
+            {
+                var next = lines[j].Trim();
+                if (next.Length > 0)
+                {
+                    return next;
+                }
+            }
+
+            return null;
+        }
+
+        return null;
+    }
+
     /// <summary>Parses `[OneTimeTearDown]` failures of a `[SetUpFixture]` out of `dotnet test` stderr. Those failures
     /// never reach the TRX, so each one becomes a grouped summary entry (merged by fixture and message).</summary>
     public static List<GroupedCountSummary> ParseFixtureTearDownFailures(string stderr)
@@ -426,6 +478,10 @@ public class TestRunEngine
             process.StartInfo.ArgumentList.Add("quiet");
             process.StartInfo.ArgumentList.Add("--logger");
             process.StartInfo.ArgumentList.Add($"trx;LogFileName={trxPath}");
+            foreach (var blameArgument in BlameHangArguments(timeoutSeconds))
+            {
+                process.StartInfo.ArgumentList.Add(blameArgument);
+            }
             // Caller env is applied first so the instance-isolation ArtifactsPath argument still wins.
             if (environment is not null)
             {
@@ -461,6 +517,8 @@ public class TestRunEngine
             }
 
             var stdoutText = capture.StdOut;
+            var hungTestName = ParseHungTestName(stdoutText);
+            string? hungDetail = hungTestName is null ? null : $"Test host aborted after the per-test hang timeout; the test running was: {hungTestName}.";
             var stderrText = capture.StdErr;
 
             var lockDetail = DetectFileLock(stdoutText, stderrText);
@@ -479,7 +537,7 @@ public class TestRunEngine
                     StdoutTail: Tail(stdoutText),
                     StderrTail: string.IsNullOrWhiteSpace(stderrText) ? null : Tail(stderrText),
                     Duration: DateTime.UtcNow - start,
-                    Detail: timeoutDetail,
+                    Detail: hungTestName is null ? timeoutDetail : $"{timeoutDetail} The test running when it hung: {hungTestName}.",
                     RunCompleted: false
                 );
             }
@@ -499,7 +557,7 @@ public class TestRunEngine
                     StdoutTail: Tail(stdoutText),
                     StderrTail: string.IsNullOrWhiteSpace(stderrText) ? null : Tail(stderrText),
                     Duration: DateTime.UtcNow - start,
-                    Detail: noTrxDetail,
+                    Detail: hungDetail ?? noTrxDetail,
                     RunCompleted: false
                 );
             }
@@ -537,7 +595,8 @@ public class TestRunEngine
                 StdoutTail: Tail(stdoutText),
                 StderrTail: string.IsNullOrWhiteSpace(stderrText) ? null : Tail(stderrText),
                 Duration: DateTime.UtcNow - start,
-                Detail: detail
+                Detail: hungDetail ?? detail,
+                RunCompleted: hungTestName is null
             );
         }
         finally
