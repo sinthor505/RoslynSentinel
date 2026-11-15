@@ -96,6 +96,28 @@ public class TestSuiteFilterTests
     }
 
     [Test]
+    public void ZeroMatchHint_FastWithScopedFilterAndZeroTests_FullRunHintCarriesFilterScopeAndScopeName()
+    {
+        UseRunTestCatalog();
+
+        var hint = TestSuiteFilter.ZeroMatchHint(TestSuite.fast, "FullyQualifiedName~Foo", totalCount: 0, ToolScope.project, "P.Tests");
+
+        Assert.That(hint, Is.Not.Null);
+        Assert.That(hint, Does.Contain("suite: full").And.Contain("FullyQualifiedName~Foo").And.Contain("scope: project").And.Contain("scopeName: \"P.Tests\""));
+    }
+
+    [Test]
+    public void ZeroMatchHint_FastWithFilterAndDefaultScope_FullRunHintCarriesFilterButNoScopeName()
+    {
+        UseRunTestCatalog();
+
+        var hint = TestSuiteFilter.ZeroMatchHint(TestSuite.fast, "FullyQualifiedName~Foo", totalCount: 0);
+
+        Assert.That(hint, Does.Contain("suite: full").And.Contain("FullyQualifiedName~Foo"));
+        Assert.That(hint, Does.Not.Contain("scopeName"));
+    }
+
+    [Test]
     public void UsesNUnitAdapter_ReadsTheProjectFile()
     {
         var nunit = Path.Combine(_tempDirectory, "NUnitTests.csproj");

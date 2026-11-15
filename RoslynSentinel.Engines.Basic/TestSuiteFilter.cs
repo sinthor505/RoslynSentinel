@@ -35,9 +35,11 @@ public static class TestSuiteFilter
     /// The zero-match addendum: null unless the caller gave a filter and no test matched, on any suite. It says no test
     /// matched, so nothing ran and nothing was verified, and names the next call: check the test name with a Search, or
     /// drop the filter. On the fast suite only it adds a secondary clause: the fast suite also skips the OutOfProcess
-    /// fixtures, which may hold the test, and it names the full run.
+    /// fixtures, which may hold the test, and it names the full run with the caller's filter, and scope and scopeName
+    /// when the scope is not solution, so the call can be pasted as written. <paramref name="scope"/> and
+    /// <paramref name="scopeName"/> are optional trailing parameters; omitted, the full-run call names the solution scope.
     /// </summary>
-    public static string? ZeroMatchHint(TestSuite suite, string? filter, int totalCount)
+    public static string? ZeroMatchHint(TestSuite suite, string? filter, int totalCount, ToolScope scope = ToolScope.solution, string? scopeName = null)
     {
         if (string.IsNullOrWhiteSpace(filter) || totalCount != 0)
         {
@@ -53,9 +55,18 @@ public static class TestSuiteFilter
             return hint;
         }
 
+        var fullRunArguments = new List<(string Name, string Value)> { ("suite", "full"), ("filter", filter) };
+        if (scope != ToolScope.solution)
+        {
+            fullRunArguments.Add(("scope", scope.ToString()));
+            if (!string.IsNullOrWhiteSpace(scopeName))
+            {
+                fullRunArguments.Add(("scopeName", scopeName));
+            }
+        }
+
         return hint
             + $" The fast suite also skips [Category(\"{OutOfProcessCategory}\")] fixtures; if the test lives in one, "
-            // TODO the hint drops the caller's filter/scope/scopeName, so a model copying it verbatim runs the whole solution full (~11 min); thread them through.
-            + ToolCallHint.Next("RunTest", "to include them.", ("suite", "full"));
+            + ToolCallHint.Next("RunTest", "to include them.", fullRunArguments.ToArray());
     }
 }

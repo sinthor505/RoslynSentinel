@@ -295,7 +295,7 @@ public class TestRunEngine
         {
             overallDetail = !string.IsNullOrEmpty(filter)
                 ? $"0 tests matched filter '{filter}' across {targets.Count} project(s)."
-                    + (TestSuiteFilter.ZeroMatchHint(suite, filter, totalCount) is { } zeroMatchHint ? " " + zeroMatchHint : "")
+                    + (TestSuiteFilter.ZeroMatchHint(suite, filter, totalCount, scope, scopeName) is { } zeroMatchHint ? " " + zeroMatchHint : "")
                 : "No test projects found under the resolved scope.";
         }
 
