@@ -1,6 +1,6 @@
 # Plan: Persist enabled toolsets per Claude Code tab across server restarts, with McpServerControl restart options
 
-**Status:** IN PROGRESS 2026-11-15. Steps 1-4, 6, 7 done (7b2b901f, 2df3e449, 3398ae4e, 9a247fb0, 0de85bbe, 62edb05f, 0531ece8); Batched run, owner away. Supersedes D12 of `plan_tool_experience_journal_fixes.md` ("persist toolset state across a restart").
+**Status:** IN PROGRESS 2026-11-15. Steps 1-8 done (7b2b901f, 2df3e449, 3398ae4e, 9a247fb0, 0de85bbe, 62edb05f, 0531ece8, 934f415c); left: Step 9 live checks (owner) and Step 10 docs. Supersedes D12 of `plan_tool_experience_journal_fixes.md` ("persist toolset state across a restart").
 
 ## Problem
 
@@ -195,6 +195,7 @@ Batches:
   - `UnknownSavedName_WarnsAndSkips`
 
 ### Step 5 - McpServerControl(StopServer) toolset options
+- Done: 934f415c (budget 45200 -> 45500, owner approved)
 - Files: `RoslynSentinel.Tools.Basic/AdminTools.cs`
 - Depends on: 3, 4
 - Effect: behaviour-changing. There is one new optional param, `keepToolsets`. `toolsets` gains a StopServer meaning.
@@ -293,6 +294,7 @@ Batches:
   - `PlainStart_SendsNone`
 
 ### Step 8 - Stub sweep
+- Done: no stubs left; fullBuildThrowaway 0 errors; fullBuild owed (peer ModelEval runs held the lock)
 - Files: Step 1-7 files
 - Depends on: 2, 3, 4, 5, 7
 - Effect: text-neutral.
