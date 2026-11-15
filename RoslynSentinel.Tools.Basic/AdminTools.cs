@@ -17,6 +17,8 @@ public class AdminTools
     private readonly TestInstanceLauncher _testInstances;
     private readonly ActiveToolSurface? _activeToolSurface;
     private readonly ResponseGatedProcessExit? _gatedExit;
+    private readonly TabToolsetStateStore? _tabToolsetState;
+    private readonly ToolsetService? _toolsetService;
 
     // Property names are the wire contract: camelCase, nulls omitted.
     private static readonly System.Text.Json.JsonSerializerOptions TestInstanceJson = new(SharedJsonOptions.Default)
@@ -29,13 +31,17 @@ public class AdminTools
     /// <param name="testInstances">Owns the test-instance registry; null (tests) builds a private one.</param>
     /// <param name="activeToolSurface">Supplies this server's --mode string, the default mode of a launched test instance; null means claude-lean.</param>
     /// <param name="gatedExit">Exits the process after StopServer's response is written (the outgoing-message filter drives it); null (tests, hosts without the filter) falls back to the blind-timer <see cref="ProcessExitScheduler"/>.</param>
-    public AdminTools(IWorkspaceManager workspaceManager, SentinelHostOptions? hostOptions = null, TestInstanceLauncher? testInstances = null, ActiveToolSurface? activeToolSurface = null, ResponseGatedProcessExit? gatedExit = null)
+    /// <param name="tabToolsetState">Persists the toolset set a StopServer restart starts with; null (not launched by the MCP launcher) makes toolsets/keepToolsets a no-op with a message.</param>
+    /// <param name="toolsetService">Supplies the currently enabled toolsets for StopServer's keepToolsets=true; null means none.</param>
+    public AdminTools(IWorkspaceManager workspaceManager, SentinelHostOptions? hostOptions = null, TestInstanceLauncher? testInstances = null, ActiveToolSurface? activeToolSurface = null, ResponseGatedProcessExit? gatedExit = null, TabToolsetStateStore? tabToolsetState = null, ToolsetService? toolsetService = null)
     {
         _gatedExit = gatedExit;
         _workspaceManager = workspaceManager;
         _respawn = hostOptions?.Respawn ?? RespawnPolicy.Auto;
         _testInstances = testInstances ?? new TestInstanceLauncher(workspaceManager, new BuildEngine(workspaceManager));
         _activeToolSurface = activeToolSurface;
+        _tabToolsetState = tabToolsetState;
+        _toolsetService = toolsetService;
     }
 
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
@@ -540,7 +546,7 @@ public class AdminTools
 
     [McpServerTool(Name = "McpServerControl")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Operator control. StopServer needs confirmServerStop. LaunchTestInstance starts an HTTP copy of the working tree, returns url and request snippets (build Auto rebuilds only if sources changed). StopTestInstance stops pid or all. ListTestInstances lists.")]
+    [Description("Operator control. StopServer needs confirmServerStop. LaunchTestInstance starts an HTTP copy of the working tree, returns url and request snippets (build Auto: only if sources changed). StopTestInstance: pid or all.")]
     public async Task<SentinelCallToolResult<object>> McpServerControlTool(
      [Description(ToolParams.Reason)] ToolCallReason reason,
      McpServerControlOperation operation,
@@ -549,8 +555,10 @@ public class AdminTools
      string? mode = null,
      [Description("Tool CLASS names (e.g. GitTools), not tool names (Git).")]
      string? includeTools = null,
-     [Description("ToolSetName values, comma-separated, e.g. git,moveExtract.")]
+     [Description("ToolSetName values, e.g. git,moveExtract. LaunchTestInstance: the child's. StopServer: added to the restarted server's.")]
      string? toolsets = null,
+     [Description("StopServer: false = restart from the configured --toolsets, not the current ones.")]
+     bool keepToolsets = true,
      int? pid = null,
      RequestContext<CallToolRequestParams>? requestContext = null,
      CancellationToken cancellationToken = default)
@@ -566,10 +574,47 @@ public class AdminTools
         // falls back to the blind timer. McpServerControl is not task-eligible (TaskEnabledToolsHelper), so the id is always
         // the one answered with this call's own response; if it ever became task-augmented the response would be a task
         // handle for that id and the gate's fallback timer would end the process instead.
+        IReadOnlyList<ToolSetName> added = Array.Empty<ToolSetName>();
+        if (operation == McpServerControlOperation.StopServer && !string.IsNullOrWhiteSpace(toolsets))
+        {
+            var parsed = new List<ToolSetName>();
+            var unknown = new List<string>();
+            foreach (var raw in toolsets.Split(','))
+            {
+                var name = raw.Trim();
+                if (name.Length == 0)
+                {
+                    continue;
+                }
+
+                if (ToolsetCatalog.TryParseSetName(name, out var set))
+                {
+                    parsed.Add(set);
+                }
+                else
+                {
+                    unknown.Add(name);
+                }
+            }
+
+            if (unknown.Count > 0)
+            {
+                return new SentinelCallToolResult<object>
+                {
+                    IsError = true,
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown toolset name(s): {string.Join(", ", unknown)}. Valid names: {string.Join(", ", Enum.GetNames<ToolSetName>())}."),
+                };
+            }
+
+            added = parsed;
+        }
+
+        var stopLine = string.Empty;
         var requestId = requestContext?.JsonRpcRequest.Id;
         var result = ControlServerResult(operation, confirmServerStop, () =>
         {
             _testInstances.KillAll();
+            stopLine = ApplyStopToolsets(_tabToolsetState, _toolsetService, keepToolsets, added);
             if (_gatedExit is not null && requestId is { } id)
             {
                 _gatedExit.ExpectResponseTo(id);
@@ -580,9 +625,13 @@ public class AdminTools
             }
         }, _workspaceManager.SolutionPath, _respawn, cancellationToken);
 
-        return result.IsError
-            ? new SentinelCallToolResult<object> { IsError = true, ErrorData = result.ErrorData }
-            : new SentinelCallToolResult<object> { IsError = false, SuccessData = result.SuccessData };
+        if (result.IsError)
+        {
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = result.ErrorData };
+        }
+
+        var text = stopLine.Length == 0 ? result.SuccessData : $"{result.SuccessData} {stopLine}";
+        return new SentinelCallToolResult<object> { IsError = false, SuccessData = text };
     }
 
     /// <summary>
@@ -655,5 +704,31 @@ public class AdminTools
         }
 
         return Refused(ToolErrorCode.InvalidArgument, $"Unknown operation '{operation}'. Valid operations: GetServerStatus, StopServer, LaunchTestInstance, StopTestInstance, ListTestInstances.");
+    }
+
+    /// <summary>
+    /// Records the toolset state a restarted server starts with, for StopServer. Static so tests can call it directly
+    /// (the confirmed-stop path calls Environment.Exit). Returns the text appended to the StopServer response.
+    /// </summary>
+    public static string ApplyStopToolsets(TabToolsetStateStore? store, ToolsetService? toolsetService, bool keepToolsets, IReadOnlyList<ToolSetName> added)
+    {
+        if (store is null)
+        {
+            return keepToolsets && added.Count == 0
+                ? string.Empty
+                : "toolsets/keepToolsets had no effect: this server has no --tab-state-dir (not started by the MCP launcher).";
+        }
+
+        if (!keepToolsets && added.Count == 0)
+        {
+            store.Clear();
+            return "Toolsets after restart: configured --toolsets.";
+        }
+
+        var baseSets = keepToolsets ? (toolsetService?.EnabledToolSets ?? Array.Empty<ToolSetName>()) : store.ConfiguredToolSets;
+        var merged = baseSets.Concat(added).Distinct().ToList();
+        store.Save(merged);
+        var names = merged.Count == 0 ? "none" : string.Join(", ", merged);
+        return $"Toolsets after restart: {names}.";
     }
 }

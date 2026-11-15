@@ -4,6 +4,9 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Tools.Basic;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Tests.Battery.Basic;
 
@@ -373,5 +376,167 @@ public class AdminToolsTests
         Assert.That(Nullable.GetUnderlyingType(parameter.ParameterType), Is.EqualTo(typeof(AdminTools.McpServerStopConfirmation)));
         Assert.That(parameter.HasDefaultValue, Is.True);
         Assert.That(Enum.GetNames<AdminTools.McpServerStopConfirmation>(), Is.EqualTo(new[] { "ConfirmServerStop" }));
+    }
+
+    private static string NewStateDir() => Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+
+    private static void DeleteStateDir(string dir)
+    {
+        if (Directory.Exists(dir))
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    private static ToolsetService CreateToolsetService(params ToolSetName[] enable)
+    {
+        var options = Options.Create(new McpServerOptions { ToolCollection = new McpServerPrimitiveCollection<McpServerTool>() });
+        var service = new ToolsetService(
+            options,
+            new ServiceCollection().BuildServiceProvider(),
+            new HashSet<string> { "GitRemoteTools", "DeclarationTools", "ParameterEditTools" },
+            () => new[] { typeof(AdminTools).Assembly });
+        foreach (var set in enable)
+        {
+            service.SetEnabled(set, true);
+        }
+
+        return service;
+    }
+
+    [Test]
+    public void StopServer_WithToolsets_AddsToCurrentSets()
+    {
+        var stateDir = NewStateDir();
+        try
+        {
+            var store = new TabToolsetStateStore(stateDir, sessionId: null);
+            var service = CreateToolsetService(ToolSetName.git);
+
+            var line = AdminTools.ApplyStopToolsets(store, service, keepToolsets: true, added: new[] { ToolSetName.declarations });
+
+            Assert.That(store.Load()!.EnabledToolSets, Is.EqualTo(new[] { "git", "declarations" }));
+            Assert.That(line, Does.Contain("Toolsets after restart:"));
+            Assert.That(line, Does.Contain("git"));
+            Assert.That(line, Does.Contain("declarations"));
+        }
+        finally
+        {
+            DeleteStateDir(stateDir);
+        }
+    }
+
+    [Test]
+    public void StopServer_Default_SavesCurrentSets()
+    {
+        var stateDir = NewStateDir();
+        try
+        {
+            var store = new TabToolsetStateStore(stateDir, sessionId: null);
+            var service = CreateToolsetService(ToolSetName.git);
+
+            AdminTools.ApplyStopToolsets(store, service, keepToolsets: true, added: Array.Empty<ToolSetName>());
+
+            Assert.That(store.Load()!.EnabledToolSets, Is.EqualTo(new[] { "git" }));
+        }
+        finally
+        {
+            DeleteStateDir(stateDir);
+        }
+    }
+
+    [Test]
+    public void StopServer_KeepToolsetsFalse_ClearsState()
+    {
+        var stateDir = NewStateDir();
+        try
+        {
+            var store = new TabToolsetStateStore(stateDir, sessionId: null);
+            store.Save(new[] { ToolSetName.git });
+            var service = CreateToolsetService(ToolSetName.declarations);
+
+            var line = AdminTools.ApplyStopToolsets(store, service, keepToolsets: false, added: Array.Empty<ToolSetName>());
+
+            Assert.That(File.Exists(Path.Combine(stateDir, TabToolsetStateStore.FileName)), Is.False);
+            Assert.That(store.Load(), Is.Null);
+            Assert.That(line, Does.Contain("configured --toolsets"));
+        }
+        finally
+        {
+            DeleteStateDir(stateDir);
+        }
+    }
+
+    [Test]
+    public void StopServer_KeepFalseWithToolsets_IsConfiguredPlusList()
+    {
+        var stateDir = NewStateDir();
+        try
+        {
+            var store = new TabToolsetStateStore(stateDir, sessionId: null)
+            {
+                ConfiguredToolSets = new[] { ToolSetName.git },
+            };
+            var service = CreateToolsetService(ToolSetName.projectAdmin);
+
+            AdminTools.ApplyStopToolsets(store, service, keepToolsets: false, added: new[] { ToolSetName.declarations });
+
+            Assert.That(store.Load()!.EnabledToolSets, Is.EqualTo(new[] { "git", "declarations" }));
+        }
+        finally
+        {
+            DeleteStateDir(stateDir);
+        }
+    }
+
+    [Test]
+    public async Task StopServer_UnknownToolset_InvalidArgumentListsValidNames()
+    {
+        var result = await _tools.McpServerControlTool(
+            reason: "test message",
+            operation: AdminTools.McpServerControlOperation.StopServer,
+            confirmServerStop: AdminTools.McpServerStopConfirmation.ConfirmServerStop,
+            toolsets: "git,notASet");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData!.Message, Does.Contain("notASet"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("git"));
+    }
+
+    [Test]
+    public async Task StopServer_WithoutConfirmation_DoesNotTouchState()
+    {
+        var stateDir = NewStateDir();
+        try
+        {
+            var store = new TabToolsetStateStore(stateDir, sessionId: null);
+            var service = CreateToolsetService(ToolSetName.git);
+            var tools = new AdminTools(_workspaceManager, tabToolsetState: store, toolsetService: service);
+
+            var result = await tools.McpServerControlTool(
+                reason: "test message",
+                operation: AdminTools.McpServerControlOperation.StopServer,
+                confirmServerStop: null,
+                toolsets: "git");
+
+            Assert.That(result.IsError, Is.True);
+            Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.ConfirmationRequired));
+            Assert.That(File.Exists(Path.Combine(stateDir, TabToolsetStateStore.FileName)), Is.False);
+        }
+        finally
+        {
+            DeleteStateDir(stateDir);
+        }
+    }
+
+    [Test]
+    public void StopServer_NoTabStateDir_SaysOptionsHadNoEffect()
+    {
+        var line = AdminTools.ApplyStopToolsets(null, null, keepToolsets: false, added: Array.Empty<ToolSetName>());
+        Assert.That(line, Does.Contain("had no effect"));
+
+        var quiet = AdminTools.ApplyStopToolsets(null, null, keepToolsets: true, added: Array.Empty<ToolSetName>());
+        Assert.That(quiet, Is.Empty);
     }
 }
