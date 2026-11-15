@@ -144,6 +144,35 @@ public class SnippetCandidateTests
     }
 
     [Test]
+    public void LooserMessage_LfSnippetAgainstCrLfFile_OmitsLineEndingDifferences()
+    {
+        var source = "class C\r\n{\r\n    void M()\r\n    {\r\n        int a;\r\n        int b;\r\n        int c;\r\n    }\r\n}\r\n";
+        var snippet = "        int a;\nint b;\nint c;";
+
+        var result = Resolve(source, snippet, WhitespaceTolerance.IgnoreLineEndings);
+        var message = SnippetErrorFormatter.Build(result, SourceText.From(source), snippet, "oldContent").Message;
+
+        Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.MatchedLooserThanRequested));
+        Assert.That(message, Does.Not.Contain("ends this line with"), "IgnoreLineEndings tolerates line endings, so they are not why the call was rejected");
+        Assert.That(message, Does.Contain("leading"), "the indentation difference on lines 2 and 3 must still be listed");
+    }
+
+    [Test]
+    public void LooserMessage_OffersTheFileTextAsAFact_WithoutOrderingTheCaller()
+    {
+        var source = "class C\r\n{\r\n    void M()\r\n    {\r\n        int a;\r\n        int b;\r\n        int c;\r\n    }\r\n}\r\n";
+        var snippet = "        int a;\nint b;\nint c;";
+
+        var result = Resolve(source, snippet, WhitespaceTolerance.IgnoreLineEndings);
+        var message = SnippetErrorFormatter.Build(result, SourceText.From(source), snippet, "oldContent").Message;
+
+        Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.MatchedLooserThanRequested));
+        Assert.That(message, Does.Not.Contain("Resend"));
+        Assert.That(message, Does.Not.Contain("do not retype"));
+        Assert.That(message, Does.Contain("File text at this location:"));
+    }
+
+    [Test]
     public void LineWhichTheExactMatcherAccepts_HasNoDifferenceEntry()
     {
         // The first line starts mid-line and the last stops mid-line, so both are fine at Exact; only the middle

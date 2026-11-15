@@ -182,7 +182,7 @@ namespace RoslynSentinel.Common.SnippetMatching
 
         // ---- MatchedLooserThanRequested ----
 
-        // TODO BuildLooser still orders the caller ("Resend ... copied verbatim (do not retype it)"), as do AmbiguityAdvice
+        // TODO AmbiguityAdvice still orders the caller,
         // and the escaped-quote, literal-escape and tool-markup diagnoses ("Send real newlines", "remove ..."); reword them as facts
         // and options in a later slice (outside inventory rows C6a-C6e).
         private static ToolMatchedLooserTierException BuildLooser(SnippetMatchResult result, string label)
@@ -191,7 +191,7 @@ namespace RoslynSentinel.Common.SnippetMatching
             var sb = new StringBuilder();
             sb.Append($"{label} matched only at a looser whitespace tolerance than this call accepts: it matches at {tier}, ");
             sb.Append($"but this call requires {result.RequestedTolerance}. The near-match was NOT used and nothing was applied.");
-            sb.Append('\n').Append($"Resend {label} using the file's own text shown below, copied verbatim (do not retype it).");
+            sb.Append('\n').Append($"The file's own text for each near-match is shown below; sent unchanged as {label}, it matches at {result.RequestedTolerance}.");
             sb.Append('\n').Append(DescribeProbe(result));
 
             var total = Math.Max(result.NearMatchTotalCount, result.NearMatches.Count);
@@ -200,24 +200,29 @@ namespace RoslynSentinel.Common.SnippetMatching
             {
                 var near = result.NearMatches[i];
                 var notes = new List<string>();
-                if (near.Differences.Count == 0)
+                // A LineEnding difference is not why the call was rejected when the requested tier already tolerates it
+                // (ReplaceSnippet requests IgnoreLineEndings), so it is left out of the listing.
+                var differences = near.Differences
+                    .Where(d => !(d.Kind == SnippetDifferenceKind.LineEnding && result.RequestedTolerance >= WhitespaceTolerance.IgnoreLineEndings))
+                    .ToList();
+                if (differences.Count == 0)
                 {
                     notes.Add($"- no per-line whitespace difference could be isolated; the file's text below matches your {label} at {near.LowestTier}.");
                 }
                 else
                 {
-                    foreach (var difference in near.Differences.Take(MaxDifferencesListed))
+                    foreach (var difference in differences.Take(MaxDifferencesListed))
                     {
                         notes.Add("- " + DescribeDifference(difference));
                     }
 
-                    if (near.Differences.Count > MaxDifferencesListed)
+                    if (differences.Count > MaxDifferencesListed)
                     {
-                        notes.Add($"- ({near.Differences.Count - MaxDifferencesListed} more difference(s) not listed)");
+                        notes.Add($"- ({differences.Count - MaxDifferencesListed} more difference(s) not listed)");
                     }
                 }
 
-                notes.Add("File text to send, verbatim:");
+                notes.Add("File text at this location:");
                 candidates.Add(new Candidate(
                     $"Near-match {i + 1} of {total} (starts at line {near.StartLine}, matches at {near.LowestTier}); differences from your {label}:",
                     notes, near.ActualLines));
