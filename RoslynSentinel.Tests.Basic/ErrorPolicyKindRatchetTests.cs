@@ -13,6 +13,7 @@ namespace RoslynSentinel.Tests.Basic;
 // Non-constant arguments (variables, ?? expressions) are skipped.
 [TestFixture]
 [Category("ErrorPolicyKindRatchet")]
+[Category("Ratchet")]
 public class ErrorPolicyKindRatchetTests
 {
     private const int MinimumKindSites = 30;

@@ -12,6 +12,7 @@ namespace RoslynSentinel.Tests.Basic;
 /// </summary>
 [TestFixture]
 [Category("FirstMatchRatchet")]
+[Category("Ratchet")]
 public class FirstMatchRatchetTests
 {
     private static string RepoRoot()

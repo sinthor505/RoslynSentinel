@@ -12,6 +12,7 @@ namespace RoslynSentinel.Tests.Basic;
 // Only invocation nodes are counted, so comments and string literals never match. Counts may only shrink.
 [TestFixture]
 [Category("BareFileWriteRatchet")]
+[Category("Ratchet")]
 public class BareFileWriteRatchetTests
 {
     // Allowlist keyed "<relative file>::<enclosing member>" to the exact number of bare File writes that member may contain.

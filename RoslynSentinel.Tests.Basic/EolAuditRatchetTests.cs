@@ -9,6 +9,7 @@ namespace RoslynSentinel.Tests.Basic;
 // If this fails on a fresh Linux checkout without autocrlf, the repo is not in the CRLF state the policy expects.
 [TestFixture]
 [Category("EolAuditRatchet")]
+[Category("Ratchet")]
 public class EolAuditRatchetTests
 {
     private static readonly string[] ExcludedDirectoryNames = new[] { "bin", "obj", ".git", ".roslynsentinel", "node_modules", "Worktree" };

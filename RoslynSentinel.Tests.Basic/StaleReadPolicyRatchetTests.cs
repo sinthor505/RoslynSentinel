@@ -12,6 +12,7 @@ namespace RoslynSentinel.Tests.Basic;
 // Excluded: RoslynSentinel.Common (the chokepoint's own implementations and wrappers), test projects, and bin, obj and Worktree folders.
 [TestFixture]
 [Category("StaleReadPolicyRatchet")]
+[Category("Ratchet")]
 public class StaleReadPolicyRatchetTests
 {
     private const string ApplyMethodName = "ApplyProposedChangesAsync";

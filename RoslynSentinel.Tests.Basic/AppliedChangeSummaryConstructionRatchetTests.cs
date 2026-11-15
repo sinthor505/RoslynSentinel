@@ -10,6 +10,7 @@ namespace RoslynSentinel.Tests.Basic;
 // and Findings. Only object-creation nodes are counted, so comments and string literals never match. Baseline is zero allowed files.
 [TestFixture]
 [Category("AppliedChangeSummaryConstructionRatchet")]
+[Category("Ratchet")]
 public class AppliedChangeSummaryConstructionRatchetTests
 {
     private const string FactoryFile = "RoslynSentinel.Common/AppliedChangeSummary.cs";

@@ -11,6 +11,7 @@ namespace RoslynSentinel.Tests.Basic;
 // Comments and string literals never match (the scan walks syntax, not text). Counts may only shrink.
 [TestFixture]
 [Category("NewlineLiteralRatchet")]
+[Category("Ratchet")]
 public class NewlineLiteralRatchetTests
 {
     // Exempt from the scan: RoslynFormattingHelper.cs is where the resolved eol is applied, EolUtilities.cs defines detection. ContentHasher.cs normalizes line endings only to compute a hash input, never output.

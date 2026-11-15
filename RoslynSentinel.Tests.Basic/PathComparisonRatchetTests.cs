@@ -15,6 +15,7 @@ namespace RoslynSentinel.Tests.Basic;
 // Counts may only shrink: a higher count or a new key fails; a lower count fails too so the baseline cannot go stale.
 [TestFixture]
 [Category("PathComparisonRatchet")]
+[Category("Ratchet")]
 public class PathComparisonRatchetTests
 {
     // True for "x.FilePath" / "x.Absolute" (also "x?.FilePath" and parenthesized forms): a plain string that has lost FilePathWrapper's case-insensitivity.
