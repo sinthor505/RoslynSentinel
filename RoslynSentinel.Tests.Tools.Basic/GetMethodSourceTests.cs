@@ -322,6 +322,29 @@ public class GetMethodSourceTests
     }
 
     [Test]
+    public async Task GetMethodSource_OverloadsInOneType_AmbiguityHintNamesAnyListedCandidateAsync()
+    {
+        var solution = TestSolutionBuilder.CreateSolutionWithProject(
+            "TestProj",
+            Path.Combine(Path.GetDirectoryName(_documentPath)!, "TestProj.csproj"),
+            new[]
+            {
+                ("Foo.cs", "public class A\n{\n    public void Run(int x)\n    {\n    }\n\n    public void Run(string s)\n    {\n    }\n}\n", _documentPath),
+            });
+        _workspaceManager.SetTestSolution(solution);
+
+        var result = await _tools.GetMethodSourceTool(reason: "test message", _documentPath, "Run");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("Ambiguous"));
+        var message = result.ErrorData!.Message;
+        Assert.That(message, Does.Contain("any listed candidate"));
+        var candidates = result.ErrorData!.StructuredDetail!.Cast<AmbiguousCandidate>().ToList();
+        Assert.That(candidates, Has.Count.EqualTo(2));
+        Assert.That(message, Does.Contain($"startLine: {candidates[0].Line}"));
+    }
+
+    [Test]
     public async Task GetMethodSource_AmbiguityRetryHint_ReadFileRange_ReturnsTheNamedOverloadAsync()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject(

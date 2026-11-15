@@ -235,7 +235,7 @@ public class WorkspaceReadNavigationImpl
     /// Builds the Ambiguous error for GetMethodSource when a name is still declared more than once after the container
     /// filter, name match and interface rule. Lists each candidate (containing type, signature, line range, capped at 10)
     /// and names retries that work: <c>containerName</c> only for types with exactly one candidate (at most 3), and
-    /// <c>ReadFile</c> with the first candidate's real line range.
+    /// <c>ReadFile</c> with any candidate's real line range (the first shown as the example).
     /// </summary>
     internal static ResultError BuildAmbiguousMethodError(IReadOnlyList<BaseMethodDeclarationSyntax> matches, string methodName, string? containerName, string requestedFilePath)
     {
@@ -278,7 +278,7 @@ public class WorkspaceReadNavigationImpl
             parts.Add($"To choose a type, retry {string.Join(" or ", retries)}.");
         }
 
-        parts.Add($"To choose between overloads, read the exact lines: {ToolCallHint.Call("ReadFile", ("filePath", requestedFilePath), ("startLine", entries[0].Start.ToString()), ("endLine", entries[0].End.ToString()))}.");
+        parts.Add($"To choose between overloads, read the lines of any listed candidate with ReadFile(filePath, startLine: S, endLine: E) using its 'lines S-E' above, for example {ToolCallHint.Call("ReadFile", ("filePath", requestedFilePath), ("startLine", entries[0].Start.ToString()), ("endLine", entries[0].End.ToString()))}.");
 
         return new ResultError(ToolErrorCode.Ambiguous, string.Join(" ", parts), null, ToolErrorMapper.ToStructuredDetail(candidates));
     }
