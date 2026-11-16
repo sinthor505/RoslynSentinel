@@ -194,6 +194,25 @@ public class IdenticalSuccessRunnerTests
         Assert.That(result.StopReason, Is.EqualTo(AgentStopReason.RepeatedIdenticalCall));
     }
 
+    // Hosted here only because this fixture already has a scripted model and a real tool host; it is about
+    // transcript.json encoding, not the identical-success nudge.
+    [Test]
+    public async Task Run_WritesTranscriptJson_WithoutUnicodeEscapesForBackticksQuotesAndArrows()
+    {
+        var runner = NewRunner(Finish("Maps \"standard\" → `ShippingKinds.Standard`."));
+
+        var result = await runner.RunAsync("system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken);
+
+        var json = await File.ReadAllTextAsync(result.TranscriptPath!, TestContext.CurrentContext.CancellationToken);
+        Assert.Multiple(() =>
+        {
+            Assert.That(json, Does.Contain("→ `ShippingKinds.Standard`."));
+            Assert.That(json, Does.Not.Contain("\\u0060"));
+            Assert.That(json, Does.Not.Contain("\\u2192"));
+            Assert.That(JsonDocument.Parse(json).RootElement.GetProperty("Turns").GetArrayLength(), Is.EqualTo(1));
+        });
+    }
+
     private static string ArgsWithReason(string reason) => "{\"reason\":\"" + reason + "\"}";
 
     private ModelAgentRunner NewRunner(params ScriptedTurn[] script)

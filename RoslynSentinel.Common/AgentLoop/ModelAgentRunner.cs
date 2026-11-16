@@ -971,12 +971,21 @@ public sealed class ModelAgentRunner
             : $"[{json.Length / 1024.0:F1} KB offloaded -> {sidecarFileName}]";
     }
 
+    // Relaxed escaping keeps backticks, quotes and arrows readable in transcript.json (the default HTML-safe encoder
+    // writes them as ` and similar). Only the file changes: the model request is serialized elsewhere and the
+    // loaders decode both forms.
+    private static readonly JsonSerializerOptions TranscriptFileOptions = new()
+    {
+        WriteIndented = true,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
     private static async Task<string> WriteTranscriptAsync(
         AgentTranscript transcript, string directory, CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(directory);
         var path = Path.Combine(directory, "transcript.json");
-        var json = JsonSerializer.Serialize(transcript, new JsonSerializerOptions { WriteIndented = true });
+        var json = JsonSerializer.Serialize(transcript, TranscriptFileOptions);
         await File.WriteAllTextAsync(path, json, cancellationToken);
         return path;
     }
