@@ -162,7 +162,7 @@ public class ShippingKindMappingProbeTests
         builder.AppendLine();
         builder.AppendLine(
             "ShippingFeeCalculator.cs and ShipmentValidator.cs compare shipping kinds against string literals. " +
-            "List each distinct string literal that is a shipping kind, one per line, in the form: \"literal\" -> ShippingKinds.ConstantName. " +
+            "List each distinct string literal that is a shipping kind, one per line, in the form: \"literal\" -> ShippingKinds.<constant name>. " +
             "Use the constant names exactly as ShippingKinds.cs declares them. Reply with only these lines.");
         return builder.ToString();
     }

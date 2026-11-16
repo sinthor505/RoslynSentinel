@@ -62,6 +62,7 @@ $pathGiven = [bool]$Path
 if (-not $Path) { $Path = @(Join-Path $repoRoot 'ModelTestingResults') }
 
 $fallbackNames = @('Standard', 'Express', 'Overnight', 'Pickup', 'SameDay', 'IsKnown', 'IsExpedited', 'IsPickup', 'All', 'Normalize')
+$placeholderNames = @('ConstantName', 'Name', 'Xxx', 'Foo', 'Member', 'Constant')
 $memberRegex = [regex]'ShippingKinds\.([A-Za-z_][A-Za-z0-9_]*)'
 $declRegex = [regex]'(?:const\s+string\s+|static\s+[\w<>\?\[\]]+\s+)([A-Za-z_][A-Za-z0-9_]*)\s*(?:=|\()'
 
@@ -84,7 +85,7 @@ function Get-Misspellings([string]$text, [System.Collections.Generic.HashSet[str
     foreach ($m in $memberRegex.Matches($text)) {
         $name = $m.Groups[1].Value
         # 'ShippingKinds.cs' is the file name and one- or two-letter names are placeholders in prose ('ShippingKinds.X').
-        if ($name.Length -lt 3 -or $name -eq 'cs') { continue }
+        if ($name.Length -lt 3 -or $name -eq 'cs' -or $name -in $placeholderNames) { continue }
         if (-not $known.Contains($name)) { $name }
     }
 }
