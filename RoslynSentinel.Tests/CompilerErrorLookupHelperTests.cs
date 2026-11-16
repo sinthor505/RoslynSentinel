@@ -794,6 +794,43 @@ public class CompilerErrorLookupHelperTests
     }
 
     /// <summary>
+    /// SpanText coverage: a diagnostic carrying the text of its span gets an "Expression the error points at" line,
+    /// so the model can tell which expression the error is on, not only which source line it is on.
+    /// </summary>
+    [Test]
+    public async Task DescribeAsync_DiagnosticWithSpanText_NamesTheExpression()
+    {
+        var report = new DiagnosticReport(true, new List<DiagnosticInfo>
+        {
+            new DiagnosticInfo("CS0029", "Error", "Cannot implicitly convert type 'string' to 'bool'", "C:\\repo\\DeliveryEstimator.cs", 7, 53, 7, 76, null,
+                "if (ShippingKinds.IsExpedited(kind)) return ShippingKinds.Overnight ? 1 : 2;", "ShippingKinds.Overnight"),
+        });
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine);
+
+        Assert.That(description, Does.Contain("Expression the error points at: 'ShippingKinds.Overnight'"));
+    }
+
+    /// <summary>
+    /// Redundancy guard: when SpanText equals SourceLine the expression line would repeat the quoted source line,
+    /// so it must be omitted.
+    /// </summary>
+    [Test]
+    public async Task DescribeAsync_SpanTextEqualsSourceLine_OmitsExpressionLine()
+    {
+        const string line = "var x = 1";
+        var report = new DiagnosticReport(true, new List<DiagnosticInfo>
+        {
+            new DiagnosticInfo("CS1002", "Error", "; expected", "C:\\repo\\Other.cs", 7, 1, 7, 2, null, line, line),
+        });
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine);
+
+        Assert.That(description, Does.Not.Contain("Expression the error points at"));
+        Assert.That(description, Is.EqualTo("CS1002 at C:\\repo\\Other.cs:7: ; expected\n    > var x = 1"));
+    }
+
+    /// <summary>
     /// Regression guard (throw-typed-exceptions S1a): the best-effort symbol lookups behind a hint must
     /// not swallow cancellation into a "not a known symbol" message; a cancelled token has to surface.
     /// </summary>

@@ -61,7 +61,8 @@ public record DiagnosticInfo(
     int EndLine,
     int EndColumn,
     string? Project = null,
-    string? SourceLine = null
+    string? SourceLine = null,
+    string? SpanText = null
 );
 
 public static class DiagnosticExtensions
@@ -70,10 +71,19 @@ public static class DiagnosticExtensions
     {
         var lineSpan = diagnostic.Location.GetLineSpan();
         string? sourceLine = null;
+        string? spanText = null;
         if (includeSourceLine && diagnostic.Location.SourceTree is { } tree)
         {
             var text = tree.GetText().Lines[lineSpan.StartLinePosition.Line].ToString().Trim();
             sourceLine = text.Length > 160 ? text[..160] + "..." : text;
+            if (lineSpan.StartLinePosition.Line == lineSpan.EndLinePosition.Line)
+            {
+                var span = tree.GetText().ToString(diagnostic.Location.SourceSpan).Trim();
+                if (span.Length > 0)
+                {
+                    spanText = span.Length > 80 ? span[..80] + "..." : span;
+                }
+            }
         }
         return new DiagnosticInfo(
             diagnostic.Id,
@@ -84,7 +94,8 @@ public static class DiagnosticExtensions
             lineSpan.StartLinePosition.Character + 1,
             lineSpan.EndLinePosition.Line + 1,
             lineSpan.EndLinePosition.Character + 1,
-            SourceLine: sourceLine
+            SourceLine: sourceLine,
+            SpanText: spanText
         );
     }
 

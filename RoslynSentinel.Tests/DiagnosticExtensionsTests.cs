@@ -62,4 +62,27 @@ public class DiagnosticExtensionsTests
         Assert.That(info.SourceLine, Is.Null,
             "SourceLine is opt-in; the default ToInfo() call must not read the source text");
     }
+
+    [Test]
+    public void ToInfo_IncludeSourceLine_FillsSpanTextWithTheFlaggedExpression()
+    {
+        var source = "class C\n{\n    void M()\n    {\n        var x = undefinedName;\n    }\n}\n";
+        var diagnostic = CompileUndefinedNameDiagnostic(source);
+
+        var info = diagnostic.ToInfo(includeSourceLine: true);
+
+        Assert.That(info.SpanText, Is.EqualTo("undefinedName"),
+            "SpanText should be the text of the span the compiler flagged, not the whole line");
+    }
+
+    [Test]
+    public void ToInfo_Default_LeavesSpanTextNull()
+    {
+        var source = "class C\n{\n    void M()\n    {\n        var x = undefinedName;\n    }\n}\n";
+        var diagnostic = CompileUndefinedNameDiagnostic(source);
+
+        var info = diagnostic.ToInfo();
+
+        Assert.That(info.SpanText, Is.Null, "SpanText is opt-in alongside SourceLine");
+    }
 }

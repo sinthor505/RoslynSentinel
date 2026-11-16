@@ -74,7 +74,7 @@ public static class CompilerErrorLookupHelper
             var first = items[0];
             if (items.Count == 1)
             {
-                var single = $"{first.Id} at {first.FilePath}:{first.StartLine}: {first.Message}" + (string.IsNullOrEmpty(first.SourceLine) ? string.Empty : "\n    > " + first.SourceLine);
+                var single = $"{first.Id} at {first.FilePath}:{first.StartLine}: {first.Message}" + (string.IsNullOrEmpty(first.SourceLine) ? string.Empty : "\n    > " + first.SourceLine) + (string.IsNullOrEmpty(first.SpanText) || string.Equals(first.SpanText, first.SourceLine, StringComparison.Ordinal) ? string.Empty : "\n    Expression the error points at: '" + first.SpanText + "'");
                 var singleHint = await HintAsync(first);
                 parts.Add(singleHint == null ? single : single + "\n" + singleHint);
                 continue;
@@ -83,7 +83,7 @@ public static class CompilerErrorLookupHelper
             var locations = items.Select(d => $"{d.FilePath}:{d.StartLine}").Distinct().ToList();
             var shown = string.Join(", ", locations.Take(MaxGroupedLocations));
             var more = locations.Count > MaxGroupedLocations ? $" (+{locations.Count - MaxGroupedLocations} more)" : string.Empty;
-            var header = $"{first.Id} (x{items.Count}): {first.Message} at: {shown}{more}" + (string.IsNullOrEmpty(first.SourceLine) ? string.Empty : "\n    > " + first.SourceLine);
+            var header = $"{first.Id} (x{items.Count}): {first.Message} at: {shown}{more}" + (string.IsNullOrEmpty(first.SourceLine) ? string.Empty : "\n    > " + first.SourceLine) + (string.IsNullOrEmpty(first.SpanText) || string.Equals(first.SpanText, first.SourceLine, StringComparison.Ordinal) ? string.Empty : "\n    Expression the error points at: '" + first.SpanText + "'");
             var hint = await HintAsync(first);
             parts.Add(hint == null ? header : header + "\n" + hint);
         }
