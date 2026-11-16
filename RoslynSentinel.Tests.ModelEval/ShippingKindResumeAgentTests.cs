@@ -74,6 +74,7 @@ public class ShippingKindResumeAgentTests
             "model-eval",
             TestContext.CurrentContext.Test.Name,
             DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
+        // TODO the run folder is archived only in the finally below, so the eval queue sees no run folder until all samples end (about 4-5 min each on tiel); submit with -NoRunFolderMinutes and -TimeLimitMinutes above Samples x 5, or archive per sample
         Directory.CreateDirectory(runDirectory);
         var csvPath = Path.Combine(runDirectory, "results.csv");
 
