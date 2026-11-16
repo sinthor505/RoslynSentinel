@@ -208,6 +208,10 @@
     ResumeTranscript only: keep turns 1..K of the transcript as history (default 3, so the model
     generates turn 4). ROSLYNSENTINEL_MODELEVAL_RESUME_KEEP_TURNS.
 
+.PARAMETER ShippingKindMappingProbe
+    Not a parameter: -Test ShippingKindMappingProbe sends one text turn (no tools, the three step 4 files in the prompt, "reply with the
+    literal -> ShippingKinds.Name mapping") -Samples times and writes a results.csv of the names found and any that are not members.
+
 .PARAMETER ResumeStep
     ShippingKindResume only (required there, 1-6): the ShippingKind step the transcript came from, which selects the golden
     commit each sample starts from (ROSLYNSENTINEL_MODELEVAL_RESUME_STEP). -Test ShippingKindResume also takes -ResumeTranscript,
@@ -294,7 +298,7 @@ param(
     [string]$HostAddress,
 
     [Parameter(Position = 1, Mandatory)]
-    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'LargeResultPaging', 'LargeResultPagingReadFileOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor', 'OrderPricingRefactorChain4', 'OrderPricingRefactorChain5', 'OrderPricingRefactorChain6', 'OrderPricingRefactorChain7', 'OrderPricingRefactorChain8', 'OrderPricingRefactorChain9', 'OrderPricingRefactorChain10', 'ResumeTranscript', 'ScoreTranscript', 'Scenario', 'ShippingKindStep', 'ShippingKindStepV2', 'ShippingKindStepV3', 'ShippingKindStepV4', 'ShippingKindStepV5', 'ShippingKindStepV6', 'ShippingKindStepV7', 'ShippingKindStepV8', 'ShippingKindStepV9', 'ShippingKindStepV10', 'ShippingKindStepV11', 'ShippingKindStepV12', 'ShippingKindStepV13', 'ShippingKindStepV14', 'ShippingKindStepFinal', 'ShippingKindResume')]
+    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'LargeResultPaging', 'LargeResultPagingReadFileOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor', 'OrderPricingRefactorChain4', 'OrderPricingRefactorChain5', 'OrderPricingRefactorChain6', 'OrderPricingRefactorChain7', 'OrderPricingRefactorChain8', 'OrderPricingRefactorChain9', 'OrderPricingRefactorChain10', 'ResumeTranscript', 'ScoreTranscript', 'Scenario', 'ShippingKindStep', 'ShippingKindStepV2', 'ShippingKindStepV3', 'ShippingKindStepV4', 'ShippingKindStepV5', 'ShippingKindStepV6', 'ShippingKindStepV7', 'ShippingKindStepV8', 'ShippingKindStepV9', 'ShippingKindStepV10', 'ShippingKindStepV11', 'ShippingKindStepV12', 'ShippingKindStepV13', 'ShippingKindStepV14', 'ShippingKindStepFinal', 'ShippingKindResume', 'ShippingKindMappingProbe')]
     [string[]]$Test,
 
     [Parameter(Position = 2)]
@@ -420,6 +424,8 @@ $testNames = @{
     'ShippingKindStepFinal'         = 'Model_RunsShippingKindStepPromptFinal'
     # Resume a saved ShippingKind transcript at turn -ResumeKeepTurns and resample the next turns; needs -ResumeTranscript and -ResumeStep.
     'ShippingKindResume'            = 'ResumeShippingKindStep_SamplesTheNextTurns'
+    # One text turn with the step 4 files in the prompt and no tools: how often does the model misspell a constant it can see? Uses -Samples.
+    'ShippingKindMappingProbe'      = 'ShippingKindMappingProbe_SamplesTheMapping'
 }
 
 if ($Step -and -not ($Test | Where-Object { $_ -like 'ShippingKindStep*' })) {
@@ -560,6 +566,10 @@ if ($currentTest -eq 'SizeThreshold') {
 else {
     Remove-Item Env:\ROSLYNSENTINEL_MODELEVAL_SIZES -ErrorAction SilentlyContinue
 }
+if ($currentTest -eq 'ShippingKindMappingProbe') {
+    $env:ROSLYNSENTINEL_MODELEVAL_RESUME_SAMPLES = "$Samples"
+    Write-Host "    ShippingKindMappingProbe samples=$Samples" -ForegroundColor Cyan
+}
 if ($currentTest -eq 'ShippingKindResume') {
     $env:ROSLYNSENTINEL_MODELEVAL_RESUME_STEP = "$ResumeStep"
 }
@@ -577,7 +587,9 @@ if ($currentTest -in 'ResumeTranscript', 'ShippingKindResume') {
     Write-Host "    ResumeTranscript=$ResumeTranscript keep=$ResumeKeepTurns samples=$Samples continue=$ContinueTurns loopAssist=$($LoopAssist.IsPresent) role=$LoopAssistRole" -ForegroundColor Cyan
 }
 else {
-    Remove-Item Env:\ROSLYNSENTINEL_MODELEVAL_RESUME_TRANSCRIPT, Env:\ROSLYNSENTINEL_MODELEVAL_RESUME_KEEP_TURNS, Env:\ROSLYNSENTINEL_MODELEVAL_RESUME_SAMPLES, Env:\ROSLYNSENTINEL_MODELEVAL_RESUME_CONTINUE_TURNS -ErrorAction SilentlyContinue
+    Remove-Item Env:\ROSLYNSENTINEL_MODELEVAL_RESUME_TRANSCRIPT, Env:\ROSLYNSENTINEL_MODELEVAL_RESUME_KEEP_TURNS, Env:\ROSLYNSENTINEL_MODELEVAL_RESUME_CONTINUE_TURNS -ErrorAction SilentlyContinue
+    # The mapping probe reads its sample count from the same variable, set above.
+    if ($currentTest -ne 'ShippingKindMappingProbe') { Remove-Item Env:\ROSLYNSENTINEL_MODELEVAL_RESUME_SAMPLES -ErrorAction SilentlyContinue }
 }
 
 if ($currentTest -eq 'ScoreTranscript') {
