@@ -121,7 +121,8 @@
     OrderPricingRefactorChain7 | OrderPricingRefactorChain8 | OrderPricingRefactorChain9 |
     OrderPricingRefactorChain10 | ResumeTranscript (resume a saved ten-chain transcript and resample
     the next turns; see -ResumeTranscript) | ScoreTranscript (score a saved transcript without calling a
-    model; see -ScoreTranscript) | Scenario (run a registered targeted scenario for -Samples samples; see -Scenario) |
+    model; see -ScoreTranscript) | ShippingKindResume (resume a saved ShippingKind transcript at turn
+    -ResumeKeepTurns and resample the next turns; needs -ResumeTranscript and -ResumeStep) | Scenario (run a registered targeted scenario for -Samples samples; see -Scenario) |
     ShippingKindStep (Model_CompletesShippingKindStep: six independent steps of the stepped ShippingKind scenario,
     each from a golden commit; all six by default, or the ones named by -Step) | ShippingKindStepV2
     (Model_RunsShippingKindStepPromptV2: the same five steps with the V2 prompts for steps 2, 3 and 5; steps 1 and 4
@@ -207,8 +208,14 @@
     ResumeTranscript only: keep turns 1..K of the transcript as history (default 3, so the model
     generates turn 4). ROSLYNSENTINEL_MODELEVAL_RESUME_KEEP_TURNS.
 
+.PARAMETER ResumeStep
+    ShippingKindResume only (required there, 1-6): the ShippingKind step the transcript came from, which selects the golden
+    commit each sample starts from (ROSLYNSENTINEL_MODELEVAL_RESUME_STEP). -Test ShippingKindResume also takes -ResumeTranscript,
+    -ResumeKeepTurns, -Samples and -ContinueTurns; keep the turns up to the read of ShippingKinds.cs (2) and continue 1 turn to
+    sample the first edit. Count typos in the saved samples with scripts/Get-ShippingKindTypoCounts.ps1.
+
 .PARAMETER Samples
-    ResumeTranscript and Scenario: how many samples (default 10). ROSLYNSENTINEL_MODELEVAL_RESUME_SAMPLES or ROSLYNSENTINEL_MODELEVAL_SCENARIO_SAMPLES.
+    ResumeTranscript, ShippingKindResume and Scenario: how many samples (default 10). ROSLYNSENTINEL_MODELEVAL_RESUME_SAMPLES or ROSLYNSENTINEL_MODELEVAL_SCENARIO_SAMPLES.
 
 .PARAMETER ContinueTurns
     ResumeTranscript only: live turns each sample runs after the resume point (default 3).
@@ -287,7 +294,7 @@ param(
     [string]$HostAddress,
 
     [Parameter(Position = 1, Mandatory)]
-    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'LargeResultPaging', 'LargeResultPagingReadFileOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor', 'OrderPricingRefactorChain4', 'OrderPricingRefactorChain5', 'OrderPricingRefactorChain6', 'OrderPricingRefactorChain7', 'OrderPricingRefactorChain8', 'OrderPricingRefactorChain9', 'OrderPricingRefactorChain10', 'ResumeTranscript', 'ScoreTranscript', 'Scenario', 'ShippingKindStep', 'ShippingKindStepV2', 'ShippingKindStepV3', 'ShippingKindStepV4', 'ShippingKindStepV5', 'ShippingKindStepV6', 'ShippingKindStepV7', 'ShippingKindStepV8', 'ShippingKindStepV9', 'ShippingKindStepV10', 'ShippingKindStepV11', 'ShippingKindStepV12', 'ShippingKindStepV13', 'ShippingKindStepV14', 'ShippingKindStepFinal')]
+    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'LargeResultPaging', 'LargeResultPagingReadFileOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor', 'OrderPricingRefactorChain4', 'OrderPricingRefactorChain5', 'OrderPricingRefactorChain6', 'OrderPricingRefactorChain7', 'OrderPricingRefactorChain8', 'OrderPricingRefactorChain9', 'OrderPricingRefactorChain10', 'ResumeTranscript', 'ScoreTranscript', 'Scenario', 'ShippingKindStep', 'ShippingKindStepV2', 'ShippingKindStepV3', 'ShippingKindStepV4', 'ShippingKindStepV5', 'ShippingKindStepV6', 'ShippingKindStepV7', 'ShippingKindStepV8', 'ShippingKindStepV9', 'ShippingKindStepV10', 'ShippingKindStepV11', 'ShippingKindStepV12', 'ShippingKindStepV13', 'ShippingKindStepV14', 'ShippingKindStepFinal', 'ShippingKindResume')]
     [string[]]$Test,
 
     [Parameter(Position = 2)]
@@ -316,6 +323,8 @@ param(
     [string]$ResumeTranscript,
 
     [int]$ResumeKeepTurns = 3,
+
+    [int]$ResumeStep,
 
     [int]$Samples = 10,
 
@@ -409,15 +418,21 @@ $testNames = @{
     'ShippingKindStepV14'           = 'Model_RunsShippingKindStepPromptV14'
     # Final = the chosen prompt set for all six steps (V1 for 1, 4, 6; V2 for 2, 3; V7 for 5); the baseline for later changes.
     'ShippingKindStepFinal'         = 'Model_RunsShippingKindStepPromptFinal'
+    # Resume a saved ShippingKind transcript at turn -ResumeKeepTurns and resample the next turns; needs -ResumeTranscript and -ResumeStep.
+    'ShippingKindResume'            = 'ResumeShippingKindStep_SamplesTheNextTurns'
 }
 
 if ($Step -and -not ($Test | Where-Object { $_ -like 'ShippingKindStep*' })) {
     throw "-Step applies only to -Test ShippingKindStep or ShippingKindStepV2..V6."
 }
 
-if ($Test -contains 'ResumeTranscript') {
+if ($Test -contains 'ShippingKindResume' -and ($ResumeStep -lt 1 -or $ResumeStep -gt 6)) {
+    throw "-Test ShippingKindResume needs -ResumeStep <1-6>, the ShippingKind step the transcript came from."
+}
+
+if ($Test -contains 'ResumeTranscript' -or $Test -contains 'ShippingKindResume') {
     if (-not $ResumeTranscript) {
-        throw "-Test ResumeTranscript needs -ResumeTranscript <path to transcript.json or its run folder>."
+        throw "-Test ResumeTranscript/ShippingKindResume needs -ResumeTranscript <path to transcript.json or its run folder>."
     }
     if (-not (Test-Path -LiteralPath $ResumeTranscript)) {
         throw "-ResumeTranscript '$ResumeTranscript' does not exist."
@@ -545,7 +560,13 @@ if ($currentTest -eq 'SizeThreshold') {
 else {
     Remove-Item Env:\ROSLYNSENTINEL_MODELEVAL_SIZES -ErrorAction SilentlyContinue
 }
-if ($currentTest -eq 'ResumeTranscript') {
+if ($currentTest -eq 'ShippingKindResume') {
+    $env:ROSLYNSENTINEL_MODELEVAL_RESUME_STEP = "$ResumeStep"
+}
+else {
+    Remove-Item Env:\ROSLYNSENTINEL_MODELEVAL_RESUME_STEP -ErrorAction SilentlyContinue
+}
+if ($currentTest -in 'ResumeTranscript', 'ShippingKindResume') {
     $env:ROSLYNSENTINEL_MODELEVAL_RESUME_TRANSCRIPT = $ResumeTranscript
     $env:ROSLYNSENTINEL_MODELEVAL_RESUME_KEEP_TURNS = "$ResumeKeepTurns"
     $env:ROSLYNSENTINEL_MODELEVAL_RESUME_SAMPLES = "$Samples"
