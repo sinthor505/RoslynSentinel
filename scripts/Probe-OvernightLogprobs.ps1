@@ -13,9 +13,14 @@
     chosen channel. Use a ShippingKindReplay sample (sample-NN\transcript.json, seeded turns + one live turn) or a full run.
       -Channel content    the live turn's reasoning goes in as a reasoning item, the content prefix as the assistant message. This is
                           exact: logprobs are reported for message content.
-      -Channel reasoning  the reasoning prefix is sent as the assistant message "<think>\n" + prefix, so the model continues inside its
-                          think block; LM Studio still reports logprobs for that continuation. -ReasoningAsText drops the "<think>"
-                          (plain-text approximation, which measured far lower P(".O")).
+      -Channel reasoning  the reasoning prefix is sent as the assistant message "<think>\n" + prefix. The stock Qwen3.5 template
+                          wraps every assistant message after the user turn in "<think>\n{reasoning}\n</think>\n\n", so it renders
+                          "<think>\n\n</think>\n\n<think>\n" + prefix: a CLOSED empty think block, i.e. content mode, an approximation.
+                          Loading .scratch/chat_template_probe.txt (one added branch: a final assistant message that starts with
+                          "<think>" and has no "</think>" is rendered raw) makes it continue inside an open think block, which is how
+                          the real reasoning is generated. -ReasoningAsText drops the "<think>" (plain text).
+    Sampler: 200 sampled replies on the 9b step 5 decision request (-SampleCount 200) were all ".Over", matching the logprobs
+    (0.5% ".O", below the min-p cut-off), so a mismatch with real slip rates is in the rendered context, not the sampling path.
       -Channel auto       content if the live turn's content has the decision, otherwise reasoning (default).
 
     Per variant it makes three one-token requests: at the decision, after "." and after ".O". Variants (all by default):
@@ -60,7 +65,11 @@ param(
     [int]$TopK = 20,
     [double]$TopP = 0.95,
     [double]$MinP = 0.05,
-    [switch]$ShowPrefix
+    [switch]$ShowPrefix,
+    # Sampled-frequency check: send the first variant's decision request this many times with the server's own sampler settings
+    # (no temperature, no logprobs, 3 tokens) and count how often the reply starts with ".O". Compares the logprob-implied rate with
+    # what the sampling path actually draws on the same rendered prompt.
+    [int]$SampleCount = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -123,7 +132,9 @@ function Convert-Text([string]$text, [string]$variant, [string]$kind) {
 
 function New-Input([string]$variant, [string]$assistantText) {
     $items = [System.Collections.Generic.List[object]]::new()
-    $items.Add(@{ type = 'message'; role = 'system'; content = (Convert-Text $t.SystemPrompt $variant 'system') + $inlineTools })
+    $system = (Convert-Text $t.SystemPrompt $variant 'system').Trim()
+    if ($toolBlock) { $system = $toolBlock + "`n`n" + $system }
+    $items.Add(@{ type = 'message'; role = 'system'; content = $system })
     $items.Add(@{ type = 'message'; role = 'user'; content = (Convert-Text $t.UserPrompt $variant 'user') })
     $n = 0
     foreach ($turn in $turns[0..($KeepTurns - 1)]) {
@@ -150,16 +161,34 @@ $tools = foreach ($name in @($t.Tools)) {
     @{ type = 'function'; name = $name; description = $t.ToolDescriptions.$name; parameters = $t.ToolSchemas.$name }
 }
 
-# LM Studio refuses logprobs together with a tools list ("logprobs is not supported with tools + stream"). Inline mode writes the
-# tool list into the system message in the common Qwen layout instead; it approximates what the chat template renders (check it
-# against the rendered prompt in an LM Studio trace log). None drops the tools; Native sends them (fails until LM Studio allows it).
-$inlineTools = ''
+# LM Studio refuses logprobs together with a tools list ("logprobs is not supported with tools + stream"). Inline mode puts the
+# tool block into the system message text exactly as the loaded Qwen3.5 chat template writes it (.scratch/chat_template.txt: the
+# "# Tools" block first, then "\n\n" + the system prompt, all in one system message), so with no tools list the template renders the
+# same system turn. Unverified detail: how LM Studio's tojson spaces the tool JSON (Python-style ", " / ": " assumed) and the key
+# order of its tool objects; check against __lmstudio.model_input in a trace log. None drops the tools; Native sends them.
+function ConvertTo-PyJson($value) {
+    if ($null -eq $value) { return 'null' }
+    if ($value -is [bool]) { return $(if ($value) { 'true' } else { 'false' }) }
+    if ($value -is [string]) { return ($value | ConvertTo-Json -Compress) }
+    if ($value -is [int] -or $value -is [long] -or $value -is [double] -or $value -is [decimal]) { return ([string]::Format([System.Globalization.CultureInfo]::InvariantCulture, '{0}', $value)) }
+    if ($value -is [System.Collections.IDictionary]) {
+        return '{' + (($value.Keys | ForEach-Object { (ConvertTo-PyJson ([string]$_)) + ': ' + (ConvertTo-PyJson $value[$_]) }) -join ', ') + '}'
+    }
+    if ($value -is [pscustomobject]) {
+        return '{' + (($value.PSObject.Properties | ForEach-Object { (ConvertTo-PyJson $_.Name) + ': ' + (ConvertTo-PyJson $_.Value) }) -join ', ') + '}'
+    }
+    if ($value -is [System.Collections.IEnumerable]) { return '[' + ((@($value) | ForEach-Object { ConvertTo-PyJson $_ }) -join ', ') + ']' }
+    return ($value | ConvertTo-Json -Compress)
+}
+
+$toolBlock = ''
 if ($ToolsMode -eq 'Inline' -and $tools) {
     $lines = foreach ($tool in $tools) {
-        @{ type = 'function'; function = @{ name = $tool.name; description = $tool.description; parameters = $tool.parameters } } | ConvertTo-Json -Depth 60 -Compress
+        $o = [ordered]@{ type = 'function'; function = [ordered]@{ name = $tool.name; description = $tool.description; parameters = $tool.parameters } }
+        ConvertTo-PyJson $o
     }
-    $inlineTools = "`n`n# Tools`n`nYou may call one or more functions to assist with the user query.`n`nYou are provided with function signatures within <tools></tools> XML tags:`n<tools>`n" +
-        ($lines -join "`n") + "`n</tools>`n`nFor each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:`n<tool_call>`n{""name"": <function-name>, ""arguments"": <args-json-object>}`n</tool_call>"
+    $toolBlock = "# Tools`n`nYou have access to the following functions:`n`n<tools>`n" + ($lines -join "`n") + "`n</tools>" +
+        "`n`nIf you choose to call a function ONLY reply in the following format with NO suffix:`n`n<tool_call>`n<function=example_function_name>`n<parameter=example_parameter_1>`nvalue_1`n</parameter>`n<parameter=example_parameter_2>`nThis is the value for the second parameter`nthat can span`nmultiple lines`n</parameter>`n</function>`n</tool_call>`n`n<IMPORTANT>`nReminder:`n- Function calls MUST follow the specified format: an inner <function=...></function> block must be nested within <tool_call></tool_call> XML tags`n- Required parameters MUST be specified`n- You may provide optional reasoning for your function call in natural language BEFORE the function call, but NOT after`n- If there is no function call available, answer the question like normal with your current knowledge and do not tell the user about function calls`n</IMPORTANT>"
 }
 
 function Get-NextToken([string]$variant, [string]$assistantText) {
@@ -222,3 +251,27 @@ $rows = foreach ($v in $Variant) {
 ''
 "Sampled = chance of drawing '.O' with temperature $Temperature, top-k $TopK, top-p $TopP, min-p $MinP (from the top $TopLogprobs candidates)."
 $rows | Format-Table -AutoSize | Out-String -Width 200
+
+if ($SampleCount -gt 0) {
+    $v = $Variant[0]
+    $p = Convert-Text $prefix $v $useChannel
+    if ($useChannel -eq 'reasoning' -and -not $ReasoningAsText) { $p = "<think>`n" + $p }
+    $counts = @{}
+    $examples = @{}
+    for ($i = 1; $i -le $SampleCount; $i++) {
+        $body = @{ model = $Model; input = (New-Input $v $p); max_output_tokens = 3 }
+        if ($ToolsMode -eq 'Native') { $body.tools = @($tools); $body.tool_choice = 'auto' }
+        $r = Invoke-RestMethod -Uri "$BaseUrl/v1/responses" -Method Post -ContentType 'application/json' -Body ($body | ConvertTo-Json -Depth 60 -Compress) -TimeoutSec 900
+        $text = (($r.output | Where-Object { $_.type -eq 'message' } | Select-Object -First 1).content | Select-Object -First 1).text
+        if ($null -eq $text) { $text = '' }
+        $class = if ($text.StartsWith('.Over', [StringComparison]::Ordinal)) { '.Over (correct path)' }
+            elseif ($text.StartsWith('.O', [StringComparison]::Ordinal)) { '.O (typo path)' }
+            elseif ($text.StartsWith('.', [StringComparison]::Ordinal)) { '. then other' }
+            else { 'other' }
+        $counts[$class] = 1 + [int]$counts[$class]
+        if (-not $examples.ContainsKey($class)) { $examples[$class] = $text }
+        if ($i % 25 -eq 0) { Write-Host "  $i/$SampleCount sampled" }
+    }
+    "Sampled $SampleCount replies to the '$v' decision request with the server's sampler settings (temperature reported: $($r.temperature), top_p: $($r.top_p)):"
+    foreach ($k in $counts.Keys | Sort-Object) { '  {0,-22} {1,4}  ({2:P1})  e.g. [{3}]' -f $k, $counts[$k], ($counts[$k] / $SampleCount), ($examples[$k] -replace "`n", '\n') }
+}
