@@ -331,6 +331,22 @@ public static class TranscriptResume
     }
 
     /// <summary>
+    /// For a saved tool result (a JSON object) that holds the source of class ShippingKinds, inserts a leading
+    /// "qualifiedMembers" field listing ShippingKinds.Standard, .Express, .Overnight and .Pickup: stands in for a tool result that
+    /// shows the qualified names, so a replay can test whether seeing them before the first write prevents the ".O" misspelling.
+    /// Any other text is returned unchanged.
+    /// </summary>
+    public static string? AddQualifiedShippingKindMembers(string? text)
+    {
+        if (string.IsNullOrEmpty(text) || !text.StartsWith('{') || !text.Contains("class ShippingKinds", StringComparison.Ordinal))
+        {
+            return text;
+        }
+
+        return "{\"qualifiedMembers\":[\"ShippingKinds.Standard\",\"ShippingKinds.Express\",\"ShippingKinds.Overnight\",\"ShippingKinds.Pickup\"]," + text[1..];
+    }
+
+    /// <summary>
     /// A turn whose call was authored by the harness, not the model: the call itself is authored by the harness, only
     /// its <paramref name="resultText"/> is real (executed on the fixture). Used to seed a failed last call. For several calls
     /// in one assistant turn (a twin-call turn) use the list overload.

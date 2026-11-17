@@ -75,12 +75,26 @@ public class ShippingKindReplayTests
         var host = new ReplayToolHost(source);
         var keptTurns = TranscriptResume.KeepTurns(source, settings.KeepTurns);
 
-        Func<string?, string?> rewrite = literalCase == LiteralCase.Capitalized
-            ? TranscriptResume.CapitalizeShippingKindLiterals
-            : text => text;
+        // TODO the env variable and script parameter are still named LiteralCase although the variants now go beyond casing
+        Func<string?, string?> rewrite = literalCase switch
+        {
+            HistoryVariant.Capitalized => TranscriptResume.CapitalizeShippingKindLiterals,
+            HistoryVariant.QualifiedResult => TranscriptResume.AddQualifiedShippingKindMembers,
+            _ => text => text,
+        };
         var seed = TranscriptResume.RewriteTurnsText(keptTurns, rewrite);
         var systemPrompt = rewrite(source.SystemPrompt)!;
         var userPrompt = rewrite(source.UserPrompt)!;
+        if (literalCase == HistoryVariant.ExampleOvernight)
+        {
+            const string example = "(for example ShippingKinds.Express)";
+            if (!userPrompt.Contains(example, StringComparison.Ordinal))
+            {
+                Assert.Ignore($"ExampleOvernight needs a user prompt containing '{example}' (the step 4 prompt).");
+            }
+
+            userPrompt = userPrompt.Replace(example, "(for example ShippingKinds.Overnight)", StringComparison.Ordinal);
+        }
         var declared = DeclaredNames(seed);
 
         var runDirectory = Path.Combine(
@@ -147,15 +161,15 @@ public class ShippingKindReplayTests
         }
     }
 
-    private static LiteralCase ReadLiteralCase()
+    private static HistoryVariant ReadLiteralCase()
     {
         var raw = Environment.GetEnvironmentVariable(LiteralCaseVariable);
         if (string.IsNullOrWhiteSpace(raw))
         {
-            return LiteralCase.Original;
+            return HistoryVariant.Original;
         }
 
-        if (!Enum.TryParse<LiteralCase>(raw.Trim(), ignoreCase: true, out var value))
+        if (!Enum.TryParse<HistoryVariant>(raw.Trim(), ignoreCase: true, out var value))
         {
             throw new ArgumentException($"{LiteralCaseVariable} must be Original or Capitalized, got '{raw}'.");
         }
@@ -182,7 +196,7 @@ public class ShippingKindReplayTests
     }
 
     private static ReplayRow BuildRow(
-        int sampleIndex, TimeSpan elapsed, LiteralCase literalCase, AgentTranscriptTurn? liveTurn, HashSet<string> declared, string stopReason)
+        int sampleIndex, TimeSpan elapsed, HistoryVariant literalCase, AgentTranscriptTurn? liveTurn, HashSet<string> declared, string stopReason)
     {
         if (liveTurn is null)
         {
@@ -221,16 +235,18 @@ public class ShippingKindReplayTests
         return found;
     }
 
-    private enum LiteralCase
+    private enum HistoryVariant
     {
         Original,
         Capitalized,
+        QualifiedResult,
+        ExampleOvernight,
     }
 
     private sealed record ReplayRow(
         int SampleIndex,
         TimeSpan Elapsed,
-        LiteralCase LiteralCase,
+        HistoryVariant LiteralCase,
         IReadOnlyList<string> UnknownNames,
         bool InReasoning,
         bool InContent,

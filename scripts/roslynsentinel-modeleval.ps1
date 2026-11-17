@@ -337,7 +337,7 @@ param(
 
     [int]$ResumeStep,
 
-    [ValidateSet('Original', 'Capitalized')]
+    [ValidateSet('Original', 'Capitalized', 'QualifiedResult', 'ExampleOvernight')]
     [string]$LiteralCase = 'Original',
 
     [int]$Samples = 10,
