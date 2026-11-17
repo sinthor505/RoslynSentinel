@@ -306,6 +306,10 @@ internal static class ShippingKindStepGoldens
 
     private static string Crlf(string s) => s.Replace("\r\n", "\n").Replace("\n", "\r\n");
 
+    private static string WithUsingStatic(string source) => "using static ContosoOrders.Core.ShippingKinds;\n\n" + source;
+
+    private static string BareNames(string source) => source.Replace("ShippingKinds.", string.Empty, StringComparison.Ordinal);
+
     /// <summary>
     /// The ShippingKinds.cs of step 6. The step 4 and 5 checks write it over the model's tree to prove no string literal or inline kind pair is left.
     /// </summary>
@@ -317,41 +321,7 @@ internal static class ShippingKindStepGoldens
     /// withVisibleTests adds a visible xunit file with the shipping behaviour table to the step-0 commit so a model's RunTest can exercise it (V12/V13 only).
     /// </summary>
     public static IReadOnlyDictionary<string, string> FilesForStep(int step, bool withVisibleTests)
-    {
-        var files = new Dictionary<string, string>();
-        switch (step)
-        {
-            case 0:
-                files[ShippingDir + "Shipment.cs"] = Crlf(ShipmentSeed);
-                files[ShippingDir + "ShippingFeeCalculator.cs"] = Crlf(ShippingFeeCalculatorSeed);
-                files[ShippingDir + "ShipmentValidator.cs"] = Crlf(ShipmentValidatorSeed);
-                files[ShippingDir + "DeliveryEstimator.cs"] = Crlf(DeliveryEstimatorSeed);
-                files[ShippingDir + "CarrierSelector.cs"] = Crlf(CarrierSelectorSeed);
-                if (withVisibleTests) { files[VisibleShippingTestsPath] = Crlf(VisibleShippingTestsSeed); }
-                break;
-            case 1:
-                break;
-            case 2:
-            case 3:
-                files[ShippingDir + "ShippingKinds.cs"] = Crlf(step == 2 ? ShippingKindsV2 : ShippingKindsV3);
-                break;
-            case 4:
-                files[ShippingDir + "ShippingFeeCalculator.cs"] = Crlf(ShippingFeeCalculatorG4);
-                files[ShippingDir + "ShipmentValidator.cs"] = Crlf(ShipmentValidatorG4);
-                break;
-            case 5:
-                files[ShippingDir + "DeliveryEstimator.cs"] = Crlf(DeliveryEstimatorG5);
-                files[ShippingDir + "CarrierSelector.cs"] = Crlf(CarrierSelectorG5);
-                break;
-            case 6:
-                files[ShippingDir + "ShippingKinds.cs"] = Crlf(ShippingKindsV6);
-                break;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(step));
-        }
-
-        return files;
-    }
+        => FilesForStep(step, withVisibleTests, ShippingKindFixtureStyle.Default);
 
     private const string PromptStep1V1 = """
         The files under ContosoOrders.Core/Shipping compare shipping kinds as string literals (for example "express"). Find every such comparison or case label. Do not change any file. Reply with one line per occurrence: file name, method name, literal.
@@ -480,6 +450,14 @@ internal static class ShippingKindStepGoldens
     private const string PromptStep5V14 = """
         In DeliveryEstimator.cs and CarrierSelector.cs (ContosoOrders.Core/Shipping), do two things in this order. First, replace each check for 'express or overnight' with a call to ShippingKinds.IsExpedited. Then replace every remaining shipping kind string literal in both files, including literals inside other expressions such as a ternary, with the matching ShippingKinds constant, written qualified as ShippingKinds.<Name> (for example ShippingKinds.Express). Behaviour must not change. Change no other file. Make the ShippingKinds.IsExpedited edit in each file as its own edit before the literal replacements. When you finish, each of the two files calls ShippingKinds.IsExpedited, and no expression compares a kind against both ShippingKinds.Express and ShippingKinds.Overnight. Reply with what you changed.
         """;
+
+    private const string PromptStep5UsingStatic = """
+    In DeliveryEstimator.cs and CarrierSelector.cs (ContosoOrders.Core/Shipping), do two things in this order. First, replace each check for 'express or overnight' with a call to IsExpedited. Then replace every remaining shipping kind string literal in both files, including literals inside other expressions such as a ternary, with the matching ShippingKinds constant, written as the bare constant name (for example Express). Both files already have `using static ContosoOrders.Core.ShippingKinds;`, so write `IsExpedited(kind)` and `== Pickup`, not `ShippingKinds.IsExpedited(kind)` or `ShippingKinds.Pickup`, and do not change the using directives. Behaviour must not change. Change no other file. Reply with what you changed.
+    """;
+
+    private const string PromptStep4UsingStatic = """
+    In ShippingFeeCalculator.cs and ShipmentValidator.cs (ContosoOrders.Core/Shipping), replace every shipping kind string literal with the matching ShippingKinds constant, written as the bare constant name (for example Express). Both files already have `using static ContosoOrders.Core.ShippingKinds;`, so write `case Overnight:` or `== Express`, not `ShippingKinds.Express`, and do not change the using directives. Behaviour must not change. Change no other file. Reply with the number of literals replaced per file.
+    """;
 
     public static string PromptForStep(int step)
     {
@@ -704,6 +682,20 @@ internal static class ShippingKindStepGoldens
         };
     }
 
+    /// <summary>
+    /// UsingStatic = the Final prompts, except steps 4 and 5 ask for bare constant names because the fixture (style UsingStatic) already
+    /// has `using static ContosoOrders.Core.ShippingKinds;` in the target files. Use with FilesForStep(step, false, ShippingKindFixtureStyle.UsingStatic).
+    /// </summary>
+    public static string PromptForStepUsingStatic(int step)
+    {
+        return step switch
+        {
+            4 => PromptStep4UsingStatic,
+            5 => PromptStep5UsingStatic,
+            _ => PromptForStepFinal(step),
+        };
+    }
+
     public static IReadOnlyList<string> AllowedPathsForStep(int step)
     {
         return step switch
@@ -716,4 +708,91 @@ internal static class ShippingKindStepGoldens
             _ => throw new ArgumentOutOfRangeException(nameof(step)),
         };
     }
+
+    /// <summary>
+    /// Paths a style's golden commit for this step changes beyond the model's allowed paths (fixture set-up, not model work), so the
+    /// golden self-test can exclude them from the scope check. Empty for the Default style.
+    /// </summary>
+    public static IReadOnlyList<string> HarnessInjectedPathsForStep(int step, ShippingKindFixtureStyle style)
+    {
+        if (style == ShippingKindFixtureStyle.UsingStatic && step == 3)
+        {
+            return new[]
+            {
+            ShippingDir + "ShippingFeeCalculator.cs",
+            ShippingDir + "ShipmentValidator.cs",
+            ShippingDir + "DeliveryEstimator.cs",
+            ShippingDir + "CarrierSelector.cs",
+        };
+        }
+
+        return Array.Empty<string>();
+    }
+
+    /// <summary>
+    /// The golden files of one step for the given fixture style. Default is byte-identical to the two-argument overload.
+    /// UsingStatic: the step 3 golden also writes the four target files (the seeds plus a `using static` directive, still with literals) so the
+    /// directive is already present in the start state of steps 4 and 5 and in every later step; the steps 4 and 5 goldens use bare names.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> FilesForStep(int step, bool withVisibleTests, ShippingKindFixtureStyle style)
+    {
+        var files = new Dictionary<string, string>();
+        var usingStatic = style == ShippingKindFixtureStyle.UsingStatic;
+        switch (step)
+        {
+            case 0:
+                files[ShippingDir + "Shipment.cs"] = Crlf(ShipmentSeed);
+                files[ShippingDir + "ShippingFeeCalculator.cs"] = Crlf(ShippingFeeCalculatorSeed);
+                files[ShippingDir + "ShipmentValidator.cs"] = Crlf(ShipmentValidatorSeed);
+                files[ShippingDir + "DeliveryEstimator.cs"] = Crlf(DeliveryEstimatorSeed);
+                files[ShippingDir + "CarrierSelector.cs"] = Crlf(CarrierSelectorSeed);
+                if (withVisibleTests) { files[VisibleShippingTestsPath] = Crlf(VisibleShippingTestsSeed); }
+                break;
+            case 1:
+                break;
+            case 2:
+                files[ShippingDir + "ShippingKinds.cs"] = Crlf(ShippingKindsV2);
+                break;
+            case 3:
+                files[ShippingDir + "ShippingKinds.cs"] = Crlf(ShippingKindsV3);
+                if (usingStatic)
+                {
+                    files[ShippingDir + "ShippingFeeCalculator.cs"] = Crlf(WithUsingStatic(ShippingFeeCalculatorSeed));
+                    files[ShippingDir + "ShipmentValidator.cs"] = Crlf(WithUsingStatic(ShipmentValidatorSeed));
+                    files[ShippingDir + "DeliveryEstimator.cs"] = Crlf(WithUsingStatic(DeliveryEstimatorSeed));
+                    files[ShippingDir + "CarrierSelector.cs"] = Crlf(WithUsingStatic(CarrierSelectorSeed));
+                }
+
+                break;
+            case 4:
+                files[ShippingDir + "ShippingFeeCalculator.cs"] = Crlf(usingStatic ? WithUsingStatic(BareNames(ShippingFeeCalculatorG4)) : ShippingFeeCalculatorG4);
+                files[ShippingDir + "ShipmentValidator.cs"] = Crlf(usingStatic ? WithUsingStatic(BareNames(ShipmentValidatorG4)) : ShipmentValidatorG4);
+                break;
+            case 5:
+                files[ShippingDir + "DeliveryEstimator.cs"] = Crlf(usingStatic ? WithUsingStatic(BareNames(DeliveryEstimatorG5)) : DeliveryEstimatorG5);
+                files[ShippingDir + "CarrierSelector.cs"] = Crlf(usingStatic ? WithUsingStatic(BareNames(CarrierSelectorG5)) : CarrierSelectorG5);
+                break;
+            case 6:
+                files[ShippingDir + "ShippingKinds.cs"] = Crlf(ShippingKindsV6);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(step));
+        }
+
+        return files;
+    }
+}
+/// <summary>
+/// Which golden fixture a stepped ShippingKind run starts from. DTO-EXEMPT: a plain selector enum, not a data carrier.
+/// </summary>
+public enum ShippingKindFixtureStyle
+{
+    /// <summary>The original fixture: qualified ShippingKinds.&lt;Name&gt; constants, no using static directive.</summary>
+    Default,
+
+    /// <summary>
+    /// The step 3 golden adds `using static ContosoOrders.Core.ShippingKinds;` to the four target files, and the steps 4 and 5
+    /// goldens use bare constant names, so the run isolates the token effect of a bare name versus a qualified one.
+    /// </summary>
+    UsingStatic,
 }

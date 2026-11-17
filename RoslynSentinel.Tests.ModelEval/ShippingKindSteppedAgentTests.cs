@@ -133,14 +133,15 @@ public class ShippingKindSteppedAgentTests
     }
 
     // withVisibleTests (V12/V13) seeds a visible shipping test file in the step-0 golden; every other variant keeps the original fixture so earlier results stay comparable.
-    private async Task RunStepAsync(int step, string prompt, bool withVisibleTests = false)
+    // style UsingStatic seeds `using static ...ShippingKinds;` into the four target files from the step 3 golden on (see ShippingKindStepGoldens.FilesForStep).
+    private async Task RunStepAsync(int step, string prompt, bool withVisibleTests = false, ShippingKindFixtureStyle style = ShippingKindFixtureStyle.Default)
     {
         var cancellationToken = TestContext.CurrentContext.CancellationToken;
         Directory.CreateDirectory(_runDirectory);
 
         // The checkout happens before LoadSolutionAsync, so the server never sees a harness write.
         var repository = GoldenStepRepository.Create(
-            _fixture.SolutionDirectory, ShippingKindStepGoldens.LastStep, s => ShippingKindStepGoldens.FilesForStep(s, withVisibleTests));
+            _fixture.SolutionDirectory, ShippingKindStepGoldens.LastStep, s => ShippingKindStepGoldens.FilesForStep(s, withVisibleTests, style));
         repository.CheckoutStep(step - 1, $"run/step-{step}");
 
         var workspaceManager = _host.Services.GetRequiredService<IWorkspaceManager>();
@@ -357,5 +358,21 @@ public class ShippingKindSteppedAgentTests
     public async Task Model_RunsShippingKindStepPromptFinal(int step)
     {
         await RunStepAsync(step, ShippingKindStepGoldens.PromptForStepFinal(step));
+    }
+
+    // The name must not contain "Model_CompletesShippingKindStep" because the baseline script filter is Name~ on that string.
+    // UsingStatic variant, all six steps: the step 3 golden seeds `using static ContosoOrders.Core.ShippingKinds;` into the four target
+    // files, and the steps 4 and 5 prompts ask for bare constant names; steps 1, 2, 3 and 6 reuse the Final prompts. Token-effect test
+    // against Model_RunsShippingKindStepPromptFinal: the model never has to write the directive itself.
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    [TestCase(5)]
+    [TestCase(6)]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
+    public async Task Model_RunsShippingKindStepPromptUsingStatic(int step)
+    {
+        await RunStepAsync(step, ShippingKindStepGoldens.PromptForStepUsingStatic(step), style: ShippingKindFixtureStyle.UsingStatic);
     }
 }
