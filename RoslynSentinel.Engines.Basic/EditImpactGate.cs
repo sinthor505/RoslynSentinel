@@ -38,6 +38,7 @@ public static class EditImpactGate
     /// The <c>errorData.structuredDetail</c> of a rejected edit, shared by every compile-gate site: one <see cref="EditImpactDetail"/> holding the verdicts
     /// (<paramref name="liftVerdict"/> first when the edit was tried as a RenameSymbol, then the symbol-diff verdicts) and the compiler diagnostics as two
     /// named lists. Both lists may be empty; the shape does not vary.
+    /// The diagnostics list holds only those that no verdict's brokenUses already carries, so no diagnostic is on the wire twice.
     /// </summary>
     public static List<object> BuildDetail(EditImpactResult? impact, IReadOnlyList<DiagnosticInfo> diagnostics, IEnumerable<ImpactVerdict>? liftVerdicts = null)
     {
@@ -46,7 +47,11 @@ public static class EditImpactGate
             verdicts.AddRange(liftVerdicts);
         if (impact?.Verdicts is { } fromImpact)
             verdicts.AddRange(fromImpact);
-        return [new EditImpactDetail(verdicts, diagnostics)];
+        var carried = new HashSet<DiagnosticInfo>();
+        foreach (var verdict in verdicts)
+            carried.UnionWith(verdict.BrokenUses);
+        var uncarried = diagnostics.Where(d => !carried.Contains(d)).ToList();
+        return [new EditImpactDetail(verdicts, uncarried)];
     }
 
     /// <summary>

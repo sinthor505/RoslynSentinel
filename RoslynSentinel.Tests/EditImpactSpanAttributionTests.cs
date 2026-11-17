@@ -339,7 +339,7 @@ public class EditImpactSpanAttributionTests
         var detail = result.ErrorData?.StructuredDetail?.OfType<EditImpactDetail>().Single();
         Assert.That(detail, Is.Not.Null, "structuredDetail is one {verdicts, diagnostics} item");
         Assert.That(detail!.Verdicts, Has.Count.EqualTo(1));
-        Assert.That(detail.Diagnostics.Any(d => d.Id == "CS1061"), Is.True, "the single path carries its compiler diagnostics too");
+        Assert.That(detail.Diagnostics.Concat(detail.Verdicts.SelectMany(v => v.BrokenUses)).Any(d => d.Id == "CS1061"), Is.True, "the single path carries its compiler diagnostics too, in a verdict's brokenUses or in diagnostics");
         var verdict = detail.Verdicts[0];
         Assert.Multiple(() =>
         {
@@ -358,6 +358,28 @@ public class EditImpactSpanAttributionTests
         // The wire form: camelCase properties, the verdict named in plain text.
         var json = System.Text.Json.JsonSerializer.Serialize(result.ErrorData, new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase });
         Assert.That(json, Does.Contain("\"verdicts\":[{").And.Contain("\"diagnostics\":[{").And.Contain("\"verdict\":\"breaksUses\"").And.Contain("\"kind\":\"renamed\"").And.Contain("\"brokenUseCount\":1"));
+    }
+
+    [Test]
+    public async Task RejectedRename_StructuredDetail_SendsNoDiagnosticTwice()
+    {
+        using var _ = LiftRenamesOptions.OverrideForCurrentContext(false);
+        using var workspace = CreateWorkspace();
+
+        var result = await TestTools.WorkspaceTools(workspace.Manager).ReplaceSnippetTool(
+            reason: "rename the discount method on its declaration only",
+            ProposedChangeAction.apply,
+            filePath: workspace.PathOf(PricingRelativePath),
+            oldContent: "CalcDisc(decimal amount, decimal rate)",
+            newContent: "CalculateTotal(decimal amount, decimal rate)");
+
+        Assert.That(result.IsError, Is.True);
+        var detail = result.ErrorData?.StructuredDetail?.OfType<EditImpactDetail>().Single();
+        Assert.That(detail, Is.Not.Null, "structuredDetail is one {verdicts, diagnostics} item");
+        var carried = detail!.Verdicts.SelectMany(v => v.BrokenUses).ToList();
+        Assert.That(carried.Any(d => d.Id == "CS1061"), Is.True, "the CS1061 diagnostic rides in the verdict's brokenUses");
+        var twice = detail.Diagnostics.Where(d => carried.Any(c => c.Id == d.Id && c.FilePath.Equals(d.FilePath) && c.StartLine == d.StartLine)).ToList();
+        Assert.That(twice, Is.Empty, "no diagnostic is sent in both verdicts[].brokenUses and diagnostics");
     }
 
     [Test]
@@ -380,7 +402,7 @@ public class EditImpactSpanAttributionTests
         Assert.Multiple(() =>
         {
             Assert.That(detail!.Verdicts.Single().Verdict, Is.EqualTo("breaksUses"));
-            Assert.That(detail.Diagnostics.Any(d => d.Id == "CS1061"), Is.True, "the batch path's diagnostics are in the same item");
+            Assert.That(detail.Diagnostics.Concat(detail.Verdicts.SelectMany(v => v.BrokenUses)).Any(d => d.Id == "CS1061"), Is.True, "the batch path's diagnostics are in the same item, in a verdict's brokenUses or in diagnostics");
         });
     }
 

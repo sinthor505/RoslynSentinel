@@ -155,7 +155,7 @@ public class EditImpactGateWiringTests
         {
             Assert.That(detail.Verdicts, Has.Some.Matches<ImpactVerdict>(v => v!.Verdict == "breaksUses" && v.OldName == "CalcDisc" && v.BrokenUseCount > 0),
                 string.Join(" | ", detail.Verdicts.Select(v => $"{v.Kind} {v.OldName}->{v.NewName} {v.Verdict}")));
-            Assert.That(detail.Diagnostics, Is.Not.Empty, "the compiler diagnostics that rejected the edit ride along");
+            Assert.That(detail.Diagnostics.Concat(detail.Verdicts.SelectMany(v => v.BrokenUses)), Is.Not.Empty, "the compiler diagnostics that rejected the edit ride along, in a verdict's brokenUses or in diagnostics");
         });
     }
 
