@@ -10,7 +10,7 @@ namespace RoslynSentinel.Engines.Basic;
 /// compiler error and tends to repeat the slip (ShippingKinds.Ownight, then Oovernight); showing the line with the right
 /// spelling puts the correct text in front of it. No Roslyn types here, so the rules are unit-testable on strings.
 /// </summary>
-internal static class CorrectedLineHint
+public static class CorrectedLineHint
 {
     /// <summary>Hard cap on the edit distance, whatever the name length.</summary>
     private const int MaxDistanceCap = 3;

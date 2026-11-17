@@ -482,6 +482,183 @@ public class CompilerErrorLookupHelperTests
         Assert.That(description, Does.Not.Contain("Closest existing member"));
     }
 
+    private const string ShippingKindsSource = """
+        public static class ShippingKinds
+        {
+            public const string Standard = "standard";
+            public const string Express = "express";
+            public const string Overnight = "overnight";
+            public const string Pickup = "pickup";
+        }
+        """;
+
+    /// <summary>Attaches the trimmed source line of the diagnostic, as the write gate does (ToInfo(includeSourceLine: true)).</summary>
+    private static DiagnosticInfo WithQuotedSourceLine(DiagnosticInfo diagnostic, string fileContent)
+    {
+        var line = fileContent.Replace("\r\n", "\n").Split('\n')[diagnostic.StartLine - 1].Trim();
+        return diagnostic with { SourceLine = line, SpanText = line };
+    }
+
+    /// <summary>
+    /// CS0117 on a misspelled ShippingKinds.Overnight (eval: Ownight, Oovernight, Oversight): the text names the closest member and
+    /// quotes the rejected line rewritten with it, so the correct spelling appears next to the wrong one.
+    /// </summary>
+    [TestCase("Ownight")]
+    [TestCase("Oovernight")]
+    [TestCase("Oversight")]
+    public async Task DescribeAsync_Cs0117MisspelledMember_ShowsTheLineWithTheClosestMemberAsync(string typo)
+    {
+        var orderSource = $$"""
+            namespace TestProj;
+
+            public class Order
+            {
+                public string Pick(string kind)
+                {
+                    switch (kind)
+                    {
+                        case ShippingKinds.{{typo}}:
+                            return "x";
+                    }
+
+                    return "";
+                }
+            }
+            """;
+        var report = await CompileAndGetErrorsAsync(
+            ("Shipping.cs", "namespace TestProj;\n\n" + ShippingKindsSource),
+            ("Order.cs", orderSource));
+        var cs0117 = WithQuotedSourceLine(report.Diagnostics.Single(d => d.Id == "CS0117"), orderSource);
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(new DiagnosticReport(true, [cs0117]), _symbolNavigationEngine);
+
+        Assert.That(description, Does.Contain("Closest member: ShippingKinds.Overnight."));
+        Assert.That(description, Does.Contain("The line with it: case ShippingKinds.Overnight:"));
+        Assert.That(description, Does.Not.Contain("do not").IgnoreCase.And.Not.Contain("must not").IgnoreCase);
+    }
+
+    [Test]
+    public async Task DescribeAsync_Cs0117NoCloseMember_LeavesTheTextWithoutACorrectedLineAsync()
+    {
+        var orderSource = """
+            namespace TestProj;
+
+            public class Order
+            {
+                public string Pick() => ShippingKinds.Zebra;
+            }
+            """;
+        var report = await CompileAndGetErrorsAsync(
+            ("Shipping.cs", "namespace TestProj;\n\n" + ShippingKindsSource),
+            ("Order.cs", orderSource));
+        var cs0117 = WithQuotedSourceLine(report.Diagnostics.Single(d => d.Id == "CS0117"), orderSource);
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(new DiagnosticReport(true, [cs0117]), _symbolNavigationEngine);
+
+        Assert.That(description, Does.Not.Contain("Closest member:"));
+        Assert.That(description, Does.Not.Contain("The line with it"));
+        Assert.That(description, Does.Contain("Members of 'ShippingKinds':"));
+    }
+
+    /// <summary>The same misspellings as bare names under <c>using static</c> (CS0103): the closest name in scope and the rewritten line.</summary>
+    [TestCase("Ownight")]
+    [TestCase("Oovernight")]
+    [TestCase("Oversight")]
+    public async Task DescribeAsync_Cs0103MisspelledStaticImportMember_ShowsTheLineWithTheClosestNameAsync(string typo)
+    {
+        var orderSource = $$"""
+            using static TestProj.ShippingKinds;
+
+            namespace TestProj;
+
+            public class Order
+            {
+                public string Pick(string kind)
+                {
+                    switch (kind)
+                    {
+                        case {{typo}}:
+                            return "x";
+                    }
+
+                    return "";
+                }
+            }
+            """;
+        var report = await CompileAndGetErrorsAsync(
+            ("Shipping.cs", "namespace TestProj;\n\n" + ShippingKindsSource),
+            ("Order.cs", orderSource));
+        var cs0103 = WithQuotedSourceLine(report.Diagnostics.Single(d => d.Id == "CS0103"), orderSource);
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(new DiagnosticReport(true, [cs0103]), _symbolNavigationEngine);
+
+        Assert.That(description, Does.Contain("Closest name: Overnight."));
+        Assert.That(description, Does.Contain("The line with it: case Overnight:"));
+        Assert.That(description, Does.Contain($"No symbol named '{typo}' was found anywhere in the solution."), "the existing fact stays");
+    }
+
+    [Test]
+    public async Task DescribeAsync_Cs0103NoCloseName_LeavesTheTextWithoutACorrectedLineAsync()
+    {
+        var orderSource = """
+            using static TestProj.ShippingKinds;
+
+            namespace TestProj;
+
+            public class Order
+            {
+                public string Pick(string kind)
+                {
+                    switch (kind)
+                    {
+                        case Zebra:
+                            return "x";
+                    }
+
+                    return "";
+                }
+            }
+            """;
+        var report = await CompileAndGetErrorsAsync(
+            ("Shipping.cs", "namespace TestProj;\n\n" + ShippingKindsSource),
+            ("Order.cs", orderSource));
+        var cs0103 = WithQuotedSourceLine(report.Diagnostics.Single(d => d.Id == "CS0103"), orderSource);
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(new DiagnosticReport(true, [cs0103]), _symbolNavigationEngine);
+
+        Assert.That(description, Does.Not.Contain("Closest name:"));
+        Assert.That(description, Does.Not.Contain("The line with it"));
+        Assert.That(description, Does.Contain("No symbol named 'Zebra' was found anywhere in the solution."));
+    }
+
+    [Test]
+    public void CorrectedLineHint_RewriteLine_ReplacesOnlyTheQualifyingOccurrence()
+    {
+        // The name also appears unqualified earlier (CS0117 looks at the member after the dot) and as a part of a longer identifier.
+        var memberLine = CorrectedLineHint.RewriteLine(
+            "var Ownight = ShippingKinds.Ownight; var OwnightX = 1;", "Ownight", "Overnight", startColumn: 30, memberAccess: true);
+        Assert.That(memberLine, Is.EqualTo("var Ownight = ShippingKinds.Overnight; var OwnightX = 1;"));
+
+        var bareLine = CorrectedLineHint.RewriteLine(
+            "x = ShippingKinds.Ownight + Ownight;", "Ownight", "Overnight", startColumn: 30, memberAccess: false);
+        Assert.That(bareLine, Is.EqualTo("x = ShippingKinds.Ownight + Overnight;"));
+
+        Assert.That(CorrectedLineHint.RewriteLine("return Ownight;", "Ownight", "Overnight", 8, memberAccess: true), Is.Null);
+        Assert.That(CorrectedLineHint.RewriteLine(null, "Ownight", "Overnight", 8, memberAccess: false), Is.Null);
+    }
+
+    [Test]
+    public void CorrectedLineHint_FindClosest_AppliesTheDistanceRuleAndBreaksTiesByOrdinalOrder()
+    {
+        string[] members = ["Standard", "Express", "Overnight", "Pickup"];
+
+        Assert.That(CorrectedLineHint.FindClosest("Ownight", members), Is.EqualTo("Overnight"));
+        Assert.That(CorrectedLineHint.FindClosest("overnight", members), Is.EqualTo("Overnight"), "a case-insensitive exact match counts");
+        Assert.That(CorrectedLineHint.FindClosest("Zebra", members), Is.Null);
+        Assert.That(CorrectedLineHint.FindClosest("Aaa", ["Aab", "Aac"]), Is.EqualTo("Aab"));
+        Assert.That(CorrectedLineHint.FindClosest("Aaa", ["Aac", "Aab"]), Is.EqualTo("Aab"), "same result for either enumeration order");
+    }
+
     /// <summary>
     /// CS0107 (eval run 20261109-233953-684: a whole-file write produced "private static internal", and the model removed the wrong
     /// modifier). The gate's diagnostics carry the source line, which names the modifiers found.

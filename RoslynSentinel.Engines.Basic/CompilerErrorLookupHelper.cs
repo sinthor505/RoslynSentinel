@@ -381,6 +381,44 @@ public static class CompilerErrorLookupHelper
         return Regex.IsMatch(sourceLine, $@"(?<![\w.]){Regex.Escape(name)}\s*(<[^<>()]*>)?\s*\(");
     }
 
+    /// <summary>
+    /// CS0103 corrected-line sentence: the closest name in scope at the error (locals, members of the enclosing types,
+    /// <c>using static</c> imports, imported types) and the rejected source line rewritten with it, e.g.
+    /// " Closest name: Overnight. The line with it: case Overnight:". Empty when no name is close, the source line carries
+    /// no unqualified use of the name, or the lookup fails: the caller's text then stays as it was. The committed model is
+    /// queried at the diagnostic position, so the scope is best effort when the pending edit moved the position.
+    /// </summary>
+    private static async Task<string> DescribeClosestNameInScopeAsync(
+        DiagnosticInfo diagnostic,
+        string name,
+        SymbolNavigationEngine symbolNavigationEngine,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var namesInScope = await symbolNavigationEngine.GetNamesInScopeAsync(
+                diagnostic.FilePath, diagnostic.StartLine, diagnostic.StartColumn, cancellationToken);
+            var closest = CorrectedLineHint.FindClosest(name, namesInScope);
+            if (closest == null)
+            {
+                return string.Empty;
+            }
+
+            var sentence = $" Closest name: {closest}.";
+            if (CorrectedLineHint.RewriteLine(diagnostic.SourceLine, name, closest, diagnostic.StartColumn, memberAccess: false) is { } correctedLine)
+            {
+                sentence += $" The line with it: {correctedLine}";
+            }
+
+            return sentence;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The hint is an extra; any lookup failure leaves the original text unchanged.
+            return string.Empty;
+        }
+    }
+
     private static async Task<string> DescribeCs0103Async(
         DiagnosticInfo diagnostic,
         SymbolNavigationEngine symbolNavigationEngine,
@@ -406,6 +444,7 @@ public static class CompilerErrorLookupHelper
 
         if (candidates.Count == 0)
         {
+            var closestNameSentence = await DescribeClosestNameInScopeAsync(diagnostic, name, symbolNavigationEngine, cancellationToken);
             if (IsInvocationUse(diagnostic.SourceLine, name))
             {
                 // The committed model may not contain the pending edit, so the enclosing type is best effort; a placeholder keeps the call shape complete.
@@ -426,10 +465,10 @@ public static class CompilerErrorLookupHelper
                     ("containerName", callerType ?? "<the type that contains the call>"),
                     ("newMemberSource", $"<declaration of {name}>"));
                 // hint-ok: names the owning tool of the newMemberSource parameter in prose; it is not a call to make
-                return $"  No symbol named '{name}' was found anywhere in the solution, and it is called here, so the method itself is missing. Declare '{name}' in the same edit as the code that calls it (the same newContent for ReplaceSnippet, the same newMemberSource for Member), or add it first with {addCall} and then re-apply this edit.";
+                return $"  No symbol named '{name}' was found anywhere in the solution, and it is called here, so the method itself is missing. Declare '{name}' in the same edit as the code that calls it (the same newContent for ReplaceSnippet, the same newMemberSource for Member), or add it first with {addCall} and then re-apply this edit." + closestNameSentence;
             }
 
-            return $"  No symbol named '{name}' was found anywhere in the solution. This is likely a typo, or the member genuinely doesn't exist yet and needs to be added.";
+            return $"  No symbol named '{name}' was found anywhere in the solution. This is likely a typo, or the member genuinely doesn't exist yet and needs to be added." + closestNameSentence;
         }
 
         FileUsingContext? usingContext = null;
@@ -537,15 +576,15 @@ public static class CompilerErrorLookupHelper
                 typeMembers = [];
             }
 
-            var memberNames = typeMembers
+            var allMemberNames = typeMembers
                 .Where(c => string.Equals(c.ContainingType, simpleTypeName, StringComparison.OrdinalIgnoreCase)
                     && c.Accessibility != "Private"
                     && !c.SymbolName.StartsWith('<')
                     && !c.SymbolName.StartsWith('.'))
                 .Select(c => c.SymbolName)
                 .Distinct()
-                .Take(20)
                 .ToList();
+            var memberNames = allMemberNames.Take(20).ToList();
 
             // The closest name leads the message, with both spellings, so a misspelled receiver member
             // is visible before the generic typo advice.
@@ -554,7 +593,8 @@ public static class CompilerErrorLookupHelper
             if (memberNames.Count > 0)
             {
                 membersClause = $" Members of '{typeName}': {string.Join(", ", memberNames)}.";
-                var closest = RoslynSentinel.Common.NameCandidates.Rank(memberName, memberNames, n => n, cap: 1);
+                // Ranked over every member (not only the 20 listed) in ordinal order, so a tie resolves the same way on every run.
+                var closest = RoslynSentinel.Common.NameCandidates.Rank(memberName, allMemberNames.OrderBy(n => n, StringComparer.Ordinal), n => n, cap: 1);
                 if (closest.Count > 0)
                 {
                     var closestName = closest[0].Item;
@@ -562,6 +602,18 @@ public static class CompilerErrorLookupHelper
                         ? $" ({closestName.Length} letters: {string.Join("-", closestName.Select(ch => ch.ToString()))})"
                         : $" ({closestName.Length} letters)";
                     closestClause = $" Closest existing member of '{typeName}': '{closestName}'. Your edit contains '{memberName}' ({memberName.Length} letters); the member is spelled '{closestName}'{spelling}.";
+                }
+
+                // Corrected line: the rejected source line with the misspelled member replaced by the closest one, so the correct spelling
+                // appears in the same text that repeats the wrong one. Only for a close name (CorrectedLineHint.FindClosest documents the rule).
+                var closestForLine = CorrectedLineHint.FindClosest(memberName, allMemberNames);
+                if (closestForLine != null)
+                {
+                    closestClause += $" Closest member: {typeName}.{closestForLine}.";
+                    if (CorrectedLineHint.RewriteLine(diagnostic.SourceLine, memberName, closestForLine, diagnostic.StartColumn, memberAccess: true) is { } correctedLine)
+                    {
+                        closestClause += $" The line with it: {correctedLine}";
+                    }
                 }
             }
 
