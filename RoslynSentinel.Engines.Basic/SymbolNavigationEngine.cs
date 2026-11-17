@@ -1156,6 +1156,39 @@ public class SymbolNavigationEngine
     }
 
     /// <summary>
+    /// Returns the names of the symbols in scope at the given source position (locals, members of the enclosing types,
+    /// members imported by <c>using static</c>, types of imported namespaces), as the semantic model's LookupSymbols sees
+    /// them. Intended for the CS0103 closest-name hint. Reads the committed model, which may not contain the pending
+    /// edit, so the position is best effort: it is clamped into the document and still lands in the same member in the
+    /// common case of a one-line edit. Returns an empty list when the document cannot be found.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> GetNamesInScopeAsync(
+        FilePathWrapper filePath, int line, int column, CancellationToken cancellationToken = default)
+    {
+        // READCHOKEPOINT-CAST: see LocateSymbolAsync above for rationale (production-caller cascade avoided).
+        var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var document = DocumentLookup.FindDocumentOrNull(solution, filePath);
+        if (document == null)
+        {
+            return [];
+        }
+
+        var text = await document.GetTextAsync(cancellationToken);
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+        if (semanticModel == null || line < 1 || line > text.Lines.Count)
+        {
+            return [];
+        }
+
+        var position = Math.Min(text.Lines[line - 1].Start + Math.Max(0, column - 1), text.Length);
+        return semanticModel.LookupSymbols(position)
+            .Where(s => !s.IsImplicitlyDeclared && s.Name.Length > 0)
+            .Select(s => s.Name)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+    }
+
+    /// <summary>
     /// Resolves the one method declaration a call-graph request targets. With a contextSnippet (or lineBefore/lineAfter) the
     /// shared snippet resolver selects the overload, and a snippet that matches none or several throws the usual snippet error.
     /// Without one, class members are preferred over interface members of the same name, and a name that still has several
