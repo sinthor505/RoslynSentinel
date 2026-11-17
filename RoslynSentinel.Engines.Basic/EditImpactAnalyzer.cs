@@ -556,8 +556,9 @@ public static class EditImpactAnalyzer
     }
 
     /// <summary>
-    /// The names the compiler reports as missing that are declared nowhere in the baseline solution but appear in a recent rejected edit of another
-    /// file: one <see cref="SymbolChangeKind.Unapplied"/> entry per name. Empty when there are no rejected sibling edits.
+    /// The names the compiler reports as missing that are declared nowhere in the baseline solution but are DECLARED (not merely mentioned) by a
+    /// recent rejected edit of another file: one <see cref="SymbolChangeKind.Unapplied"/> entry per name. A name no sibling declares gets no entry,
+    /// so the normal compile error leads. Empty when there are no rejected sibling edits.
     /// </summary>
     private static List<SymbolChange> UnappliedNames(
         IReadOnlyList<DiagnosticInfo> errors,
@@ -571,9 +572,9 @@ public static class EditImpactAnalyzer
             return result;
         }
 
-        var tokensByFile = rejectedSiblingTexts.ToDictionary(
+        var declaredByFile = rejectedSiblingTexts.ToDictionary(
             kv => kv.Key,
-            kv => Identifier.Matches(kv.Value).Select(m => m.Value).ToHashSet(StringComparer.Ordinal));
+            kv => EditImpactSymbolDiff.DeclaredNames(kv.Value));
         foreach (var diagnostic in errors.Where(d => MissingNameIds.Contains(d.Id)))
         {
             foreach (var name in MessageIdentifiers(diagnostic.Message))
@@ -583,7 +584,7 @@ public static class EditImpactAnalyzer
                     continue;
                 }
 
-                var file = tokensByFile.Where(kv => kv.Value.Contains(name)).Select(kv => kv.Key).FirstOrDefault();
+                var file = declaredByFile.Where(kv => kv.Value.Contains(name)).Select(kv => kv.Key).FirstOrDefault();
                 if (file is not null)
                 {
                     result.Add(new SymbolChange(SymbolChangeKind.Unapplied, "name", string.Empty, name, null, file, 0, null, null));
@@ -745,7 +746,7 @@ public static class EditImpactAnalyzer
         var batch = isToolActive("ReplaceSnippet") ? "ReplaceSnippet call with batchEdits (one item per file, each with its own filePath)" : "call that edits each affected file";
         if (change.Kind == SymbolChangeKind.Unapplied)
         {
-            return $"{change.OldName} is declared nowhere in the solution as it is on disk now, and the only place your edits mention it is your other edit of {change.File}, which was rejected or was still being applied when this call was checked "
+            return $"{change.OldName} is declared nowhere in the solution as it is on disk now, and the only place your edits declare it is your other edit of {change.File}, which was rejected or was still being applied when this call was checked "
                 + $"(each call is checked on its own against the files as they are on disk, so parallel calls cannot see each other): wait for that edit to land (fix it first if it was rejected), then send this one, or put both files in one {batch}.";
         }
 

@@ -292,6 +292,31 @@ internal static class EditImpactSymbolDiff
         return all;
     }
 
+    /// <summary>
+    /// The type, member and enum-member names a snippet declares. A sibling edit is a fragment, not always a whole file, so it is parsed three
+    /// ways: as a file, as class members (wrapped in a class) and as enum members (wrapped in an enum). Roslyn parsing is error tolerant, so a
+    /// shape that does not fit a fragment just yields fewer names.
+    /// </summary>
+    internal static HashSet<string> DeclaredNames(string snippet)
+    {
+        var texts = new Dictionary<string, string?>
+        {
+            ["a.cs"] = snippet,
+            ["b.cs"] = "class __W {\n" + snippet + "\n}",
+            ["c.cs"] = "enum __E {\n" + snippet + "\n}",
+        };
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var declaration in Collect(texts))
+        {
+            if (declaration.Name is not ("__W" or "__E" or ".ctor"))
+            {
+                names.Add(declaration.Name);
+            }
+        }
+
+        return names;
+    }
+
     private static void CollectFrom(SyntaxNode node, string container, string file, SyntaxTree tree, List<Declaration> output)
     {
         foreach (var child in node.ChildNodes())

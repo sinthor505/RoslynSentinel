@@ -209,7 +209,7 @@ public class EditImpactSpanAttributionTests
     // Pattern B of the proposal: call 1 (a rename that also names a base interface nobody declared) is rejected; call 2 (the caller file, sent in parallel)
     // uses that interface, which only the rejected call 1 mentions. Call 2 used to get a bare CS0246.
     [Test]
-    public async Task ParallelCallerEdit_UsingANameOnlyARejectedSiblingMentions_GetsAnAttributedNextStep()
+    public async Task ParallelCallerEdit_UsingANameOnlyARejectedSiblingMentions_IsNotToldToWait()
     {
         using var workspace = CreateWorkspace();
         var tools = TestTools.WorkspaceTools(workspace.Manager);
@@ -233,10 +233,10 @@ public class EditImpactSpanAttributionTests
         var message = second.ErrorData?.Message ?? string.Empty;
         Assert.Multiple(() =>
         {
-            Assert.That(message, Does.Contain("Next step:"));
-            Assert.That(message, Does.Contain("IPricingPolicyContract is declared nowhere in the solution"));
-            Assert.That(message, Does.Contain("your other edit of OrderPricingCalculator.cs"));
-            Assert.That(message, Does.Contain("fix it first if it was rejected"));
+            Assert.That(message, Does.Not.Contain("your other edit of"));
+            Assert.That(message, Does.Not.Contain("wait for that edit"));
+            Assert.That(message, Does.Not.Contain("batchEdits"));
+            Assert.That(message, Does.Contain("IPricingPolicyContract"));
         });
     }
 
@@ -264,7 +264,7 @@ public class EditImpactSpanAttributionTests
             ProposedChangeAction.apply,
             filePath: workspace.PathOf(PricingRelativePath),
             oldContent: "public class OrderPricingCalculator",
-            newContent: "public class StandardPricingCalculator : IPricingPolicyContract");
+            newContent: "public interface IPricingPolicyContract { }\n\n    public class StandardPricingCalculator : IPricingPolicyContract");
         await entered.Task.WaitAsync(TimeSpan.FromSeconds(30));
         Assert.That(siblingTask.IsCompleted, Is.False, "the sibling must still be in flight, with no rejection recorded yet");
 
@@ -278,7 +278,7 @@ public class EditImpactSpanAttributionTests
         release.SetResult();
         var sibling = await siblingTask;
 
-        Assert.That(sibling.IsError, Is.True, "IPricingPolicyContract is declared nowhere, so the sibling is rejected too");
+        Assert.That(sibling.IsError, Is.False, "the sibling declares the interface, so it applies");
         Assert.That(caller.IsError, Is.True);
         var message = caller.ErrorData?.Message ?? string.Empty;
         Assert.Multiple(() =>
@@ -286,6 +286,38 @@ public class EditImpactSpanAttributionTests
             Assert.That(message, Does.Contain("Next step:"));
             Assert.That(message, Does.Contain("IPricingPolicyContract is declared nowhere in the solution"));
             Assert.That(message, Does.Contain("your other edit of OrderPricingCalculator.cs"));
+        });
+    }
+
+    // Two parallel calls that both use a name nobody declares: the rejected one (call 1) only mentions it, so neither call may be told to wait.
+    [Test]
+    public async Task ParallelCallerEdits_BothUsingTheSameUndeclaredName_GetNoWaitAdvice()
+    {
+        using var workspace = CreateWorkspace();
+        var tools = TestTools.WorkspaceTools(workspace.Manager);
+
+        var first = await tools.ReplaceSnippetTool(
+            reason: "add a policy field with a misspelled type",
+            ProposedChangeAction.apply,
+            filePath: workspace.PathOf(PricingRelativePath),
+            oldContent: "var discount = amount * rate;",
+            newContent: "IPricingPolicyContrct policy = null!;\n            var discount = amount * rate;");
+        Assert.That(first.IsError, Is.True, "IPricingPolicyContrct is declared nowhere, so call 1 is rejected");
+
+        var second = await tools.ReplaceSnippetTool(
+            reason: "point the caller at the same misspelled type",
+            ProposedChangeAction.apply,
+            filePath: workspace.PathOf(CheckoutRelativePath),
+            oldContent: "decimal F(OrderPricingCalculator c) => c.CalcDisc(1m, 2m);",
+            newContent: "decimal F(IPricingPolicyContrct c) => 1m;");
+
+        Assert.That(second.IsError, Is.True);
+        var message = second.ErrorData?.Message ?? string.Empty;
+        Assert.Multiple(() =>
+        {
+            Assert.That(message, Does.Not.Contain("your other edit of"));
+            Assert.That(message, Does.Not.Contain("wait for that edit"));
+            Assert.That(message, Does.Contain("IPricingPolicyContrct"));
         });
     }
 
