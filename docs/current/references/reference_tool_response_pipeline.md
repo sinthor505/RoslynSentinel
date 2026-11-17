@@ -103,7 +103,9 @@ the `CallToolFilterRegistrations` table in `Server.Advanced/ServiceRegistrationE
    arguments, latches the operating mode and sets the ambient `ToolCallContext` (`Common/ToolCallContext.cs`), with the
    `filePath` and missing term of the tools in its `MissingTermArgument` map. Outermost so the echo and the argument
    validator never see the keys. Never refuses or throws; on failure the call runs with a null context.
-2. `AddToolCallEchoFilter`: stamps call id/tool/args onto the first text block (sees final content).
+2. `AddToolCallEchoFilter`: always assigns the call id to `ToolCallContext` (commit trailer, edit effects); stamps call id/tool/args
+   onto the first text block (sees final content) only when `ToolCallEchoOptions.Enabled` (off by default; `--echo-tool-args=true`
+   or `ROSLYNSENTINEL_ECHO_TOOL_ARGS=true`).
 3. `AddToolTelemetryFilter` (`Server.Advanced/ToolTelemetryRecorder.cs`, `Common/ToolTelemetry.cs`): counts every call per
    tool (success / error / error code / duration) for `McpServerStatus.toolTelemetry`. Third on purpose, so it wraps the
    argument-validation and breaker refusals and sees the `IsError` that the ToolError filter (item 7) copied from the body.

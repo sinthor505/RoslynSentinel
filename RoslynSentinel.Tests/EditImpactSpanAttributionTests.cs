@@ -355,9 +355,10 @@ public class EditImpactSpanAttributionTests
             Assert.That(verdict.Location, Does.StartWith("OrderPricingCalculator.cs:"));
         });
 
-        // The wire form: camelCase properties, the verdict named in plain text.
+        // The wire form: camelCase properties, the verdict named in plain text. The compiler diagnostics ride in verdicts[].brokenUses;
+        // the top-level diagnostics key is present but may be empty, since no diagnostic is sent twice.
         var json = System.Text.Json.JsonSerializer.Serialize(result.ErrorData, new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase });
-        Assert.That(json, Does.Contain("\"verdicts\":[{").And.Contain("\"diagnostics\":[{").And.Contain("\"verdict\":\"breaksUses\"").And.Contain("\"kind\":\"renamed\"").And.Contain("\"brokenUseCount\":1"));
+        Assert.That(json, Does.Contain("\"verdicts\":[{").And.Contain("\"diagnostics\":[").And.Contain("\"brokenUses\":[{").And.Contain("\"verdict\":\"breaksUses\"").And.Contain("\"kind\":\"renamed\"").And.Contain("\"brokenUseCount\":1"));
     }
 
     [Test]
