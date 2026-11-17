@@ -62,8 +62,11 @@ $deltaPrefixes = @(
 )
 
 $typos = [System.Collections.Generic.List[object]]::new()
-$correctSignatures = [System.Collections.Generic.List[string]]::new()
-$stats = @{ Files = 0; Streams = 0; Deltas = 0 }
+$correctUses = [System.Collections.Generic.List[object]]::new()    # Model, Name, Signature of every correct member use
+$stats = @{ Files = 0; Streams = 0; Deltas = 0; Duplicates = 0 }
+$streamsByModel = @{}
+$filesByModel = @{}
+$script:currentModel = '(unknown model)'
 
 function Get-LogFiles {
     foreach ($p in $Path) {
@@ -88,6 +91,7 @@ function Search-Stream([string]$label, $turn, [string]$channel, $deltas) {
     if ($deltas.Count -eq 0) { return }
     $stats.Streams++
     $stats.Deltas += $deltas.Count
+    $streamsByModel[$script:currentModel] = 1 + [int]$streamsByModel[$script:currentModel]
 
     $starts = [int[]]::new($deltas.Count)
     $builder = [System.Text.StringBuilder]::new()
@@ -116,7 +120,10 @@ function Search-Stream([string]$label, $turn, [string]$channel, $deltas) {
         }
         $signature = $parts -join '|'
 
-        if ($isKnown) { $correctSignatures.Add($signature); continue }
+        if ($isKnown) {
+            $correctUses.Add([pscustomobject]@{ Model = $script:currentModel; Name = $name; Signature = $signature })
+            continue
+        }
 
         # First k characters of the name that no real member starts with: the typo is committed at character k.
         $k = 0
@@ -139,6 +146,7 @@ function Search-Stream([string]$label, $turn, [string]$channel, $deltas) {
         }
 
         $typos.Add([pscustomobject]@{
+                Model        = $script:currentModel
                 Log          = $label
                 Turn         = $turn
                 Channel      = $channel
@@ -156,8 +164,16 @@ function Search-Stream([string]$label, $turn, [string]$channel, $deltas) {
     }
 }
 
+$seenLogs = [System.Collections.Generic.HashSet[string]]::new()
+
 foreach ($file in Get-LogFiles) {
+    # An archived run folder can hold a copy of a log: skip a file with the same length and the same first 600 characters.
+    $head = (New-Object System.IO.StreamReader($file.FullName))
+    try { $buffer = [char[]]::new(600); $read = $head.Read($buffer, 0, 600); $headText = [string]::new($buffer, 0, $read) } finally { $head.Dispose() }
+    if (-not $seenLogs.Add("$($file.Length)|$headText")) { $stats.Duplicates++; continue }
+
     $stats.Files++
+    $script:currentModel = '(unknown model)'
     $label = Split-Path -Leaf (Split-Path -Parent $file.FullName)
     $turn = '?'
     $deltas = [System.Collections.Generic.List[object]]::new()
@@ -189,7 +205,11 @@ foreach ($file in Get-LogFiles) {
         }
         if ($isDelta) { continue }
 
-        if ($message -match '^Agent run starting in (.+?)\. Exposing') {
+        if ($message -match '^LM Studio agent client targeting model (\S+) at ') {
+            $script:currentModel = $Matches[1]
+            $filesByModel[$script:currentModel] = 1 + [int]$filesByModel[$script:currentModel]
+        }
+        elseif ($message -match '^Agent run starting in (.+?)\. Exposing') {
             Search-Stream $label $turn $channel $deltas
             $deltas.Clear()
             $label = (Split-Path -Leaf $Matches[1])
@@ -204,9 +224,9 @@ foreach ($file in Get-LogFiles) {
     Search-Stream $label $turn $channel $deltas
 }
 
-if ($Csv) { $typos | Select-Object Log, Turn, Channel, Time, Typo, Nearest, Truncated, BadChar, ExpectedChar, FirstBad, LastGood, Signature | Export-Csv -LiteralPath $Csv -NoTypeInformation -Encoding utf8 }
+if ($Csv) { $typos | Select-Object Model, Log, Turn, Channel, Time, Typo, Nearest, Truncated, BadChar, ExpectedChar, FirstBad, LastGood, Signature | Export-Csv -LiteralPath $Csv -NoTypeInformation -Encoding utf8 }
 
-"Logs: $($stats.Files)   streams with deltas: $($stats.Streams)   deltas: $($stats.Deltas)   typos: $($typos.Count)   correct member uses: $($correctSignatures.Count)"
+"Logs: $($stats.Files) (+$($stats.Duplicates) duplicate copies skipped)   streams with deltas: $($stats.Streams)   deltas: $($stats.Deltas)   typos: $($typos.Count)   correct member uses: $($correctUses.Count)"
 if ($stats.Deltas -eq 0) { 'No streamed deltas found: the log has no "LM Studio streaming:" lines (older log, or turns with no message content).' }
 ''
 
@@ -232,7 +252,41 @@ if ($typos.Count -gt 0) {
     Show-Histogram 'Last good token (the token before it):' ($typos | ForEach-Object { $_.LastGood })
     Show-Histogram 'Typo tokenization (from the "." to the end of the name):' ($typos | ForEach-Object { $_.Signature })
 }
-if ($correctSignatures.Count -gt 0) {
+if ($correctUses.Count -gt 0) {
     ''
-    Show-Histogram 'Correct member tokenization, for comparison:' $correctSignatures
+    Show-Histogram 'Correct member tokenization, for comparison:' ($correctUses | ForEach-Object { "$($_.Name): $($_.Signature)" })
+}
+
+# Per model: how often Overnight is written wrongly, and whether the ".O" start decides it. "Overnight written" counts the
+# correct uses plus the typos whose nearest member is Overnight; "starts with .O" looks at the tokenization from the dot.
+if ($stats.Streams -gt 0) {
+    ''
+    'Per model (content-channel streams only; Overnight written = correct uses + typos of Overnight):'
+    $models = @($streamsByModel.Keys) + @($typos | ForEach-Object { $_.Model }) + @($correctUses | ForEach-Object { $_.Model }) | Sort-Object -Unique
+    $rows = foreach ($model in $models) {
+        $good = @($correctUses | Where-Object { $_.Model -eq $model -and $_.Name -eq 'Overnight' })
+        $bad = @($typos | Where-Object { $_.Model -eq $model -and $_.Nearest -eq 'Overnight' })
+        $other = @($typos | Where-Object { $_.Model -eq $model -and $_.Nearest -ne 'Overnight' })
+        $written = $good.Count + $bad.Count
+        $dotO = @($good | Where-Object { $_.Signature.StartsWith('.O', [StringComparison]::Ordinal) }).Count + @($bad | Where-Object { $_.Signature.StartsWith('.O', [StringComparison]::Ordinal) }).Count
+        $dotOBad = @($bad | Where-Object { $_.Signature.StartsWith('.O', [StringComparison]::Ordinal) }).Count
+        [pscustomobject]@{
+            Model             = $model
+            Logs              = [int]$filesByModel[$model]
+            Streams           = [int]$streamsByModel[$model]
+            OvernightWritten  = $written
+            OvernightTypos    = $bad.Count
+            TypoRate          = if ($written) { '{0:P1}' -f ($bad.Count / $written) } else { 'n/a' }
+            StartedWithDotO   = $dotO
+            TyposAfterDotO    = if ($dotO) { '{0}/{1}' -f $dotOBad, $dotO } else { 'n/a' }
+            TyposNotAfterDotO = $bad.Count - $dotOBad
+            OtherTypos        = $other.Count
+        }
+    }
+    $rows | Where-Object { $_.Streams -gt 0 -or $_.OvernightWritten -gt 0 } | Sort-Object Streams -Descending | Format-Table -AutoSize | Out-String -Width 200
+    $all = @($typos | Where-Object { $_.Nearest -eq 'Overnight' })
+    $allGood = @($correctUses | Where-Object { $_.Name -eq 'Overnight' })
+    $allWritten = $all.Count + $allGood.Count
+    $allDotO = @($all + $allGood | Where-Object { $_.Signature.StartsWith('.O', [StringComparison]::Ordinal) })
+    'All models: Overnight written {0}, typos {1} ({2}); tokenized from ".O": {3}, of which typos {4}; typos not from ".O": {5}.' -f $allWritten, $all.Count, $(if ($allWritten) { '{0:P1}' -f ($all.Count / $allWritten) } else { 'n/a' }), $allDotO.Count, @($allDotO | Where-Object { $_.Typo }).Count, @($all | Where-Object { -not $_.Signature.StartsWith('.O', [StringComparison]::Ordinal) }).Count
 }
