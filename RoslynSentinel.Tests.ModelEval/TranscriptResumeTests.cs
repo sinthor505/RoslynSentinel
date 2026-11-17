@@ -145,6 +145,47 @@ public class TranscriptResumeTests
     }
 
     [Test]
+    public void CapitalizeShippingKindLiterals_CapitalizesQuotedValues_PlainAndJsonEscaped_AndNothingElse()
+    {
+        const string text =
+            "case \"overnight\": return 1; Kind == \"standard\" || x == \\\"express\\\" || y == \\\"pickup\\\"; " +
+            "ShippingKinds.Overnight = \"nextday\"; the overnight literal; \"overnights\"; \"mode\":\"symbol\"";
+
+        var rewritten = TranscriptResume.CapitalizeShippingKindLiterals(text);
+
+        Assert.That(
+            rewritten,
+            Is.EqualTo(
+                "case \"Overnight\": return 1; Kind == \"Standard\" || x == \\\"Express\\\" || y == \\\"Pickup\\\"; " +
+                "ShippingKinds.Overnight = \"nextday\"; the overnight literal; \"overnights\"; \"mode\":\"symbol\""));
+        Assert.Multiple(() =>
+        {
+            Assert.That(TranscriptResume.CapitalizeShippingKindLiterals(null), Is.Null);
+            Assert.That(TranscriptResume.CapitalizeShippingKindLiterals(""), Is.EqualTo(""));
+        });
+    }
+
+    [Test]
+    public void RewriteTurnsText_AppliesTheRewriteToEveryTextAndKeepsIdsAndFlags()
+    {
+        var original = Turn(2, "ReadFile", isError: true, argumentsJson: "{\"q\":\"a\"}", resultJson: "{\"r\":\"a\"}");
+
+        var rewritten = TranscriptResume.RewriteTurnsText([original], text => text?.Replace("a", "b")).Single();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(rewritten.ModelMessage.Content, Is.EqualTo(original.ModelMessage.Content), "no 'a' in the content, so unchanged");
+            Assert.That(rewritten.ModelMessage.ToolCalls[0].ArgumentsJson, Is.EqualTo("{\"q\":\"b\"}"));
+            Assert.That(rewritten.ToolCalls[0].ArgumentsJson, Is.EqualTo("{\"q\":\"b\"}"));
+            Assert.That(rewritten.ToolCalls[0].ResultJson, Is.EqualTo("{\"r\":\"b\"}"));
+            Assert.That(rewritten.ToolCalls[0].IsError, Is.True);
+            Assert.That(rewritten.ToolCalls[0].ToolCallId, Is.EqualTo("call_2"));
+            Assert.That(rewritten.TurnNumber, Is.EqualTo(2));
+            Assert.That(original.ToolCalls[0].ResultJson, Is.EqualTo("{\"r\":\"a\"}"), "the source turn is not modified");
+        });
+    }
+
+    [Test]
     public void RewriteTurns_PointsArgumentsAndResultsAtTheNewFixture_WithoutTouchingTheOriginals()
     {
         var oldPath = "C:/Temp/" + OldGuidFolder + "/ContosoOrders.Core/a.cs";

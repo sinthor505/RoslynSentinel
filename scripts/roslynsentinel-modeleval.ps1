@@ -218,8 +218,15 @@
     -ResumeKeepTurns, -Samples and -ContinueTurns; keep the turns up to the read of ShippingKinds.cs (2) and continue 1 turn to
     sample the first edit. Count typos in the saved samples with scripts/Get-ShippingKindTypoCounts.ps1.
 
+.PARAMETER LiteralCase
+    ShippingKindReplay only: Original (default) keeps the saved history as recorded; Capitalized rewrites the quoted values "standard",
+    "express", "overnight", "pickup" in it to "Standard", ... so a value is spelled exactly like its constant name
+    (ROSLYNSENTINEL_MODELEVAL_RESUME_LITERAL_CASE). -Test ShippingKindReplay seeds the saved turns 1..-ResumeKeepTurns (use 2: up to the
+    read of ShippingKinds.cs), runs no fixture and no tools, and samples one live turn -Samples times; it takes -ResumeTranscript
+    and -Samples. Count typos with scripts/Get-ShippingKindTypoCounts.ps1.
+
 .PARAMETER Samples
-    ResumeTranscript, ShippingKindResume and Scenario: how many samples (default 10). ROSLYNSENTINEL_MODELEVAL_RESUME_SAMPLES or ROSLYNSENTINEL_MODELEVAL_SCENARIO_SAMPLES.
+    ResumeTranscript, ShippingKindResume, ShippingKindReplay and Scenario: how many samples (default 10). ROSLYNSENTINEL_MODELEVAL_RESUME_SAMPLES or ROSLYNSENTINEL_MODELEVAL_SCENARIO_SAMPLES.
 
 .PARAMETER ContinueTurns
     ResumeTranscript only: live turns each sample runs after the resume point (default 3).
@@ -298,7 +305,7 @@ param(
     [string]$HostAddress,
 
     [Parameter(Position = 1, Mandatory)]
-    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'LargeResultPaging', 'LargeResultPagingReadFileOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor', 'OrderPricingRefactorChain4', 'OrderPricingRefactorChain5', 'OrderPricingRefactorChain6', 'OrderPricingRefactorChain7', 'OrderPricingRefactorChain8', 'OrderPricingRefactorChain9', 'OrderPricingRefactorChain10', 'ResumeTranscript', 'ScoreTranscript', 'Scenario', 'ShippingKindStep', 'ShippingKindStepV2', 'ShippingKindStepV3', 'ShippingKindStepV4', 'ShippingKindStepV5', 'ShippingKindStepV6', 'ShippingKindStepV7', 'ShippingKindStepV8', 'ShippingKindStepV9', 'ShippingKindStepV10', 'ShippingKindStepV11', 'ShippingKindStepV12', 'ShippingKindStepV13', 'ShippingKindStepV14', 'ShippingKindStepFinal', 'ShippingKindResume', 'ShippingKindMappingProbe')]
+    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'LargeResultPaging', 'LargeResultPagingReadFileOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor', 'OrderPricingRefactorChain4', 'OrderPricingRefactorChain5', 'OrderPricingRefactorChain6', 'OrderPricingRefactorChain7', 'OrderPricingRefactorChain8', 'OrderPricingRefactorChain9', 'OrderPricingRefactorChain10', 'ResumeTranscript', 'ScoreTranscript', 'Scenario', 'ShippingKindStep', 'ShippingKindStepV2', 'ShippingKindStepV3', 'ShippingKindStepV4', 'ShippingKindStepV5', 'ShippingKindStepV6', 'ShippingKindStepV7', 'ShippingKindStepV8', 'ShippingKindStepV9', 'ShippingKindStepV10', 'ShippingKindStepV11', 'ShippingKindStepV12', 'ShippingKindStepV13', 'ShippingKindStepV14', 'ShippingKindStepFinal', 'ShippingKindResume', 'ShippingKindMappingProbe', 'ShippingKindReplay')]
     [string[]]$Test,
 
     [Parameter(Position = 2)]
@@ -329,6 +336,9 @@ param(
     [int]$ResumeKeepTurns = 3,
 
     [int]$ResumeStep,
+
+    [ValidateSet('Original', 'Capitalized')]
+    [string]$LiteralCase = 'Original',
 
     [int]$Samples = 10,
 
@@ -426,6 +436,8 @@ $testNames = @{
     'ShippingKindResume'            = 'ResumeShippingKindStep_SamplesTheNextTurns'
     # One text turn with the step 4 files in the prompt and no tools: how often does the model misspell a constant it can see? Uses -Samples.
     'ShippingKindMappingProbe'      = 'ShippingKindMappingProbe_SamplesTheMapping'
+    # Stateless replay of a saved ShippingKind transcript: no fixture or tool execution, one live turn per sample; needs -ResumeTranscript, optional -LiteralCase.
+    'ShippingKindReplay'            = 'ShippingKindReplay_SamplesTheDecisionTurn'
 }
 
 if ($Step -and -not ($Test | Where-Object { $_ -like 'ShippingKindStep*' })) {
@@ -436,9 +448,9 @@ if ($Test -contains 'ShippingKindResume' -and ($ResumeStep -lt 1 -or $ResumeStep
     throw "-Test ShippingKindResume needs -ResumeStep <1-6>, the ShippingKind step the transcript came from."
 }
 
-if ($Test -contains 'ResumeTranscript' -or $Test -contains 'ShippingKindResume') {
+if ($Test -contains 'ResumeTranscript' -or $Test -contains 'ShippingKindResume' -or $Test -contains 'ShippingKindReplay') {
     if (-not $ResumeTranscript) {
-        throw "-Test ResumeTranscript/ShippingKindResume needs -ResumeTranscript <path to transcript.json or its run folder>."
+        throw "-Test ResumeTranscript/ShippingKindResume/ShippingKindReplay needs -ResumeTranscript <path to transcript.json or its run folder>."
     }
     if (-not (Test-Path -LiteralPath $ResumeTranscript)) {
         throw "-ResumeTranscript '$ResumeTranscript' does not exist."
@@ -576,7 +588,14 @@ if ($currentTest -eq 'ShippingKindResume') {
 else {
     Remove-Item Env:\ROSLYNSENTINEL_MODELEVAL_RESUME_STEP -ErrorAction SilentlyContinue
 }
-if ($currentTest -in 'ResumeTranscript', 'ShippingKindResume') {
+if ($currentTest -eq 'ShippingKindReplay') {
+    # Always set so an A/B pair is never skewed by a value left in the shell; the replay runs one live turn, so no -ContinueTurns.
+    $env:ROSLYNSENTINEL_MODELEVAL_RESUME_LITERAL_CASE = $LiteralCase
+}
+else {
+    Remove-Item Env:\ROSLYNSENTINEL_MODELEVAL_RESUME_LITERAL_CASE -ErrorAction SilentlyContinue
+}
+if ($currentTest -in 'ResumeTranscript', 'ShippingKindResume', 'ShippingKindReplay') {
     $env:ROSLYNSENTINEL_MODELEVAL_RESUME_TRANSCRIPT = $ResumeTranscript
     $env:ROSLYNSENTINEL_MODELEVAL_RESUME_KEEP_TURNS = "$ResumeKeepTurns"
     $env:ROSLYNSENTINEL_MODELEVAL_RESUME_SAMPLES = "$Samples"

@@ -151,6 +151,11 @@ public static class TranscriptResume
         @"[A-Za-z]:(?:\\\\|\\|/)[^""\r\n<>|`]*?RoslynSentinelTests_[0-9a-fA-F-]+",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
+    // A whole quoted lowercase kind value; group 1 and 3 keep the quote style (plain " or JSON-escaped \").
+    private static readonly Regex QuotedShippingKindLiteralRegex = new(
+        @"(\\?"")(standard|express|overnight|pickup)(\\?"")",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     // The volatile keys were found by surveying recorded ReplaceSnippet/RenameSymbol/ReadFile/Build results of 10-chain runs
     // (toolCallId, changeId, resultId, duration, sizeBytes/sizeChars, workspaceVersion, fixture path); extend the list when
     // CountResultDrift flags a field that is not a wording change.
@@ -257,6 +262,15 @@ public static class TranscriptResume
     /// call's arguments and each result, so the model sees a history that matches the fresh fixture it will edit.
     /// </summary>
     public static IReadOnlyList<AgentTranscriptTurn> RewriteTurns(IReadOnlyList<AgentTranscriptTurn> turns, string newDirectory) =>
+        RewriteTurnsText(turns, text => RewriteFixtureDirectory(text, newDirectory));
+
+    /// <summary>
+    /// Copies of <paramref name="turns"/> with <paramref name="rewrite"/> applied to every text a model or tool produced: the
+    /// reasoning, the content, each call's arguments, each result and each trailing text. Ids, latencies and flags are kept.
+    /// <see cref="RewriteTurns"/> is this with the fixture-directory rewrite; <see cref="CapitalizeShippingKindLiterals"/> is another.
+    /// </summary>
+    public static IReadOnlyList<AgentTranscriptTurn> RewriteTurnsText(
+        IReadOnlyList<AgentTranscriptTurn> turns, Func<string?, string?> rewrite) =>
         turns.Select(turn => new AgentTranscriptTurn
         {
             TurnNumber = turn.TurnNumber,
@@ -266,8 +280,8 @@ public static class TranscriptResume
             ModelMessage = new AgentChatMessage
             {
                 Role = turn.ModelMessage.Role,
-                Content = RewriteFixtureDirectory(turn.ModelMessage.Content, newDirectory),
-                ReasoningContent = RewriteFixtureDirectory(turn.ModelMessage.ReasoningContent, newDirectory),
+                Content = rewrite(turn.ModelMessage.Content),
+                ReasoningContent = rewrite(turn.ModelMessage.ReasoningContent),
                 ToolCallId = turn.ModelMessage.ToolCallId,
                 TotalTokens = turn.ModelMessage.TotalTokens,
                 ToolCalls = turn.ModelMessage.ToolCalls
@@ -275,7 +289,7 @@ public static class TranscriptResume
                     {
                         Id = call.Id,
                         Name = call.Name,
-                        ArgumentsJson = RewriteFixtureDirectory(call.ArgumentsJson, newDirectory)!,
+                        ArgumentsJson = rewrite(call.ArgumentsJson)!,
                     })
                     .ToList(),
             },
@@ -283,17 +297,38 @@ public static class TranscriptResume
                 .Select(call => new AgentToolCallRecord
                 {
                     ToolName = call.ToolName,
-                    ArgumentsJson = RewriteFixtureDirectory(call.ArgumentsJson, newDirectory)!,
-                    ResultJson = RewriteFixtureDirectory(call.ResultJson, newDirectory)!,
+                    ArgumentsJson = rewrite(call.ArgumentsJson)!,
+                    ResultJson = rewrite(call.ResultJson)!,
                     IsError = call.IsError,
                     Latency = call.Latency,
                     StartedAt = call.StartedAt,
                     CompletedAt = call.CompletedAt,
                     ToolCallId = call.ToolCallId,
-                    TrailingText = RewriteFixtureDirectory(call.TrailingText, newDirectory),
+                    TrailingText = rewrite(call.TrailingText),
                 })
                 .ToList(),
         }).ToList();
+
+    /// <summary>
+    /// Capitalizes the four quoted ShippingKind values: "standard" becomes "Standard", and likewise "express", "overnight" and
+    /// "pickup", whether the quotes are plain or JSON-escaped (\"overnight\", as inside a saved tool result). Only a whole quoted word
+    /// matches, so the constant names (ShippingKinds.Overnight), prose and unrelated strings are untouched. Used by the stateless
+    /// replay's capitalized arm to test whether a value spelled exactly like its constant name stops the model misspelling the name.
+    /// </summary>
+    public static string? CapitalizeShippingKindLiterals(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return text;
+        }
+
+        return QuotedShippingKindLiteralRegex.Replace(
+            text,
+            match => match.Groups[1].Value
+                + char.ToUpperInvariant(match.Groups[2].Value[0])
+                + match.Groups[2].Value[1..]
+                + match.Groups[3].Value);
+    }
 
     /// <summary>
     /// A turn whose call was authored by the harness, not the model: the call itself is authored by the harness, only
