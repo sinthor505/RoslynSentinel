@@ -23,6 +23,8 @@ namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 /// ROSLYNSENTINEL_MODELEVAL_RESUME_LITERAL_CASE=Capitalized rewrites the quoted values "standard", "express", "overnight" and "pickup"
 /// in the kept history to "Standard", ... (<see cref="TranscriptResume.CapitalizeShippingKindLiterals"/>) so the value is spelled
 /// exactly like its constant name: the A/B arm for the hypothesis that the lowercase literal primes the misspelling.
+/// Each sample is cut as soon as the model has written a ShippingKinds.O... member (the decision is made, the rest of the turn is
+/// skipped); ROSLYNSENTINEL_MODELEVAL_REPLAY_EARLY_STOP=0 replays whole turns.
 /// It asserts nothing about the model: one results.csv row per sample plus a per-sample transcript.json that
 /// scripts/Get-ShippingKindTypoCounts.ps1 reads (the decision turn is found the same way as for a full run).
 /// </summary>
@@ -31,6 +33,9 @@ public class ShippingKindReplayTests
 {
     /// <summary>Original (default) keeps the history as recorded; Capitalized capitalizes the quoted kind values in it.</summary>
     public const string LiteralCaseVariable = "ROSLYNSENTINEL_MODELEVAL_RESUME_LITERAL_CASE";
+
+    /// <summary>Early stop is on by default; 0, false or off (case-insensitive) replays whole turns instead.</summary>
+    public const string EarlyStopVariable = "ROSLYNSENTINEL_MODELEVAL_REPLAY_EARLY_STOP";
 
     private const string CsvHeader = "sampleIndex,seconds,literalCase,typoInTurn,unknownNames,inReasoning,inContent,inCalls,firstToolName,stopReason";
 
@@ -41,7 +46,8 @@ public class ShippingKindReplayTests
         ["Standard", "Express", "Overnight", "Pickup", "SameDay", "IsKnown", "IsExpedited", "IsPickup", "All", "Normalize"];
 
     // Same names the typo script ignores: placeholders in prose, not misspellings.
-    private static readonly string[] PlaceholderNames = ["ConstantName", "Name", "Xxx", "Foo", "Member", "Constant"];
+    // "None", "AirFast" and "GroundPost" are CarrierSelector return values, not ShippingKinds members (~47 false positives per 200 samples).
+    private static readonly string[] PlaceholderNames = ["ConstantName", "Name", "Xxx", "Foo", "Member", "Constant", "None", "AirFast", "GroundPost"];
 
     private static readonly Regex DeclarationRegex = new(
         @"(?:const\s+string\s+|static\s+[\w<>\?\[\]]+\s+)([A-Za-z_]\w*)\s*(?:=|\()",
@@ -102,10 +108,12 @@ public class ShippingKindReplayTests
             "model-eval",
             TestContext.CurrentContext.Test.Name,
             DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
+        // TODO the replay test archives its run folder only at the end, so the evalqueue NoRunFolderMinutes/TimeLimit watchdogs kill long runs with no saved output
         Directory.CreateDirectory(runDirectory);
         var csvPath = Path.Combine(runDirectory, "results.csv");
         File.WriteAllText(csvPath, CsvHeader + "\r\n");
 
+        var earlyStop = ReadEarlyStop() ? new EarlyStopLoggerProvider() : null;
         var hostBuilder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder();
         hostBuilder.Services.AddLmStudioAgentClient(client =>
         {
@@ -113,6 +121,10 @@ public class ShippingKindReplayTests
             client.Timeout = TimeSpan.FromSeconds(Math.Max(LlmOptions.TimeoutSeconds * 4, 600));
         });
         hostBuilder.Logging.AddProvider(new FlushingFileLoggerProvider(Path.Combine(runDirectory, "agent.log")));
+        if (earlyStop is not null)
+        {
+            hostBuilder.Logging.AddProvider(earlyStop);
+        }
         using var appHost = hostBuilder.Build();
         var agentClient = appHost.Services.GetRequiredService<LmStudioAgentClient>();
 
@@ -136,12 +148,37 @@ public class ShippingKindReplayTests
                     wallClockCap: TimeSpan.FromMinutes(10),
                     logger: appHost.Services.GetRequiredService<ILogger<ModelAgentRunner>>(),
                     loopAssist: LoopAssistOptions.Off);
-                var result = await runner.RunAsync(systemPrompt, userPrompt, sampleDirectory, cancellationToken, seedTurns: seed);
-                stopwatch.Stop();
+                // This deviates from the normal turn flow on purpose: the replay only measures the decision turn, so the stream
+                // is cut as soon as the member name is written. Set ROSLYNSENTINEL_MODELEVAL_REPLAY_EARLY_STOP=0 to get whole turns.
+                using var sampleCts = earlyStop is null ? null : CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                if (earlyStop is not null && sampleCts is not null)
+                {
+                    earlyStop.Begin(sampleCts);
+                }
 
-                var liveTurn = result.Transcript.Turns.FirstOrDefault(t => t.TurnNumber > settings.KeepTurns);
-                var row = BuildRow(sampleIndex, stopwatch.Elapsed, literalCase, liveTurn, declared, result.StopReason.ToString());
-                if (liveTurn is not null)
+                ReplayRow row;
+                bool measuredSample;
+                try
+                {
+                    var result = await runner.RunAsync(systemPrompt, userPrompt, sampleDirectory, sampleCts?.Token ?? cancellationToken, seedTurns: seed);
+                    stopwatch.Stop();
+
+                    var liveTurn = result.Transcript.Turns.FirstOrDefault(t => t.TurnNumber > settings.KeepTurns);
+                    row = BuildRow(sampleIndex, stopwatch.Elapsed, literalCase, liveTurn, declared, result.StopReason.ToString());
+                    measuredSample = liveTurn is not null;
+                }
+                catch (OperationCanceledException) when (earlyStop is not null && earlyStop.Fired && !cancellationToken.IsCancellationRequested)
+                {
+                    stopwatch.Stop();
+                    row = BuildEarlyStopRow(sampleIndex, stopwatch.Elapsed, literalCase, earlyStop, declared);
+                    measuredSample = true;
+                }
+                finally
+                {
+                    earlyStop?.End();
+                }
+
+                if (measuredSample)
                 {
                     measured++;
                     if (row.TypoInTurn)
@@ -159,6 +196,27 @@ public class ShippingKindReplayTests
             TestContext.Out.WriteLine($"{withTypo} of {measured} measured sample(s) wrote a ShippingKinds member that does not exist (literal case {literalCase}).");
             ModelTestingResultsArchiver.ArchiveRunDirectory(runDirectory);
         }
+    }
+
+    /// <summary>Early stop is on unless ROSLYNSENTINEL_MODELEVAL_REPLAY_EARLY_STOP is 0, false or off.</summary>
+    private static bool ReadEarlyStop()
+    {
+        var raw = Environment.GetEnvironmentVariable(EarlyStopVariable)?.Trim();
+        return !(string.Equals(raw, "0", StringComparison.Ordinal)
+            || string.Equals(raw, "false", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(raw, "off", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Scores a sample that was cut at the decision: there is no transcript turn, so the streamed text is the evidence.</summary>
+    private static ReplayRow BuildEarlyStopRow(
+        int sampleIndex, TimeSpan elapsed, HistoryVariant literalCase, EarlyStopLoggerProvider earlyStop, HashSet<string> declared)
+    {
+        var unknown = Misspellings(earlyStop.ReasoningText, declared)
+            .Concat(Misspellings(earlyStop.ContentText, declared))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        var inReasoning = earlyStop.FiredInReasoning;
+        return new ReplayRow(sampleIndex, elapsed, literalCase, unknown, inReasoning, !inReasoning, false, "", "EarlyStopAtDecision");
     }
 
     private static HistoryVariant ReadLiteralCase()
@@ -268,6 +326,154 @@ public class ShippingKindReplayTests
             InCalls ? "true" : "false",
             FirstToolName,
             StopReason);
+    }
+
+    /// <summary>
+    /// Reads the LM Studio reasoning and content deltas from the logger ("LM Studio reasoning: {Delta}" and "LM Studio streaming: {Delta}")
+    /// and cancels the current sample once the accumulated text of a channel contains a ShippingKinds.O... member. Deltas arrive on an
+    /// HttpClient stream thread, so every buffer access is locked.
+    /// </summary>
+    private sealed class EarlyStopLoggerProvider : ILoggerProvider
+    {
+        private static readonly Regex StopRegex = new(
+            @"ShippingKinds\.O\w*[^\w]",
+            RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+        private readonly object _gate = new();
+        private readonly System.Text.StringBuilder _reasoning = new();
+        private readonly System.Text.StringBuilder _content = new();
+        private readonly EarlyStopLogger _logger;
+        private CancellationTokenSource? _target;
+        private bool _fired;
+        private bool _firedInReasoning;
+
+        public EarlyStopLoggerProvider()
+        {
+            _logger = new EarlyStopLogger(this);
+        }
+
+        public bool Fired
+        {
+            get { lock (_gate) { return _fired; } }
+        }
+
+        public bool FiredInReasoning
+        {
+            get { lock (_gate) { return _firedInReasoning; } }
+        }
+
+        public string ReasoningText
+        {
+            get { lock (_gate) { return _reasoning.ToString(); } }
+        }
+
+        public string ContentText
+        {
+            get { lock (_gate) { return _content.ToString(); } }
+        }
+
+        /// <summary>Resets the buffers and makes <paramref name="cts"/> the source to cancel when the decision is written.</summary>
+        public void Begin(CancellationTokenSource cts)
+        {
+            lock (_gate)
+            {
+                _reasoning.Clear();
+                _content.Clear();
+                _fired = false;
+                _firedInReasoning = false;
+                _target = cts;
+            }
+        }
+
+        /// <summary>Stops watching; the buffers stay readable until the next Begin.</summary>
+        public void End()
+        {
+            lock (_gate)
+            {
+                _target = null;
+            }
+        }
+
+        public ILogger CreateLogger(string categoryName) => _logger;
+
+        public void Dispose()
+        {
+        }
+
+        private void Append(bool reasoning, string delta)
+        {
+            lock (_gate)
+            {
+                var target = _target;
+                if (target is null || _fired)
+                {
+                    return;
+                }
+
+                var buffer = reasoning ? _reasoning : _content;
+                buffer.Append(delta);
+                if (!StopRegex.IsMatch(buffer.ToString()))
+                {
+                    return;
+                }
+
+                _fired = true;
+                _firedInReasoning = reasoning;
+                target.Cancel();
+            }
+        }
+
+        private sealed class EarlyStopLogger : ILogger
+        {
+            private readonly EarlyStopLoggerProvider _owner;
+
+            public EarlyStopLogger(EarlyStopLoggerProvider owner)
+            {
+                _owner = owner;
+            }
+
+            public IDisposable? BeginScope<TState>(TState state)
+                where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Information;
+
+            public void Log<TState>(
+                LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            {
+                if (state is not IReadOnlyList<KeyValuePair<string, object?>> values)
+                {
+                    return;
+                }
+
+                string? format = null;
+                string? delta = null;
+                foreach (var pair in values)
+                {
+                    if (pair.Key == "{OriginalFormat}")
+                    {
+                        format = pair.Value as string;
+                    }
+                    else if (pair.Key == "Delta")
+                    {
+                        delta = pair.Value?.ToString();
+                    }
+                }
+
+                if (format is null || delta is null)
+                {
+                    return;
+                }
+
+                if (format.StartsWith("LM Studio reasoning:", StringComparison.Ordinal))
+                {
+                    _owner.Append(true, delta);
+                }
+                else if (format.StartsWith("LM Studio streaming:", StringComparison.Ordinal))
+                {
+                    _owner.Append(false, delta);
+                }
+            }
+        }
     }
 
     /// <summary>Offers the tools the source run offered (rebuilt from its header) and answers every call with a placeholder.</summary>
