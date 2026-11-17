@@ -137,7 +137,10 @@
     for 5; the baseline for later changes) | ShippingKindStepUsingStatic
     (Model_RunsShippingKindStepPromptUsingStatic: the Final prompts, but the fixture already has
     `using static ContosoOrders.Core.ShippingKinds;` in the four target files and steps 4 and 5 ask for bare
-    constant names such as `case Overnight:`; compare steps 4 and 5 against ShippingKindStepFinal). Required. Accepts multiple values (e.g.
+    constant names such as `case Overnight:`; compare steps 4 and 5 against ShippingKindStepFinal) |
+    ShippingKindStepPriorityOvernight (Model_RunsShippingKindStepPromptPriorityOvernight: the Final prompts with
+    the constant Overnight renamed PriorityOvernight in goldens, prompts and check sources; its value stays
+    "overnight"; compare against ShippingKindStepFinal). Required. Accepts multiple values (e.g.
     -Test OrderPricingRefactor,OrderPricingRefactorChain4,OrderPricingRefactorChain5) to run
     each one in turn, in the order given, all under the same -HostAddress/-Model/-Repeats -
     this is the supported way to queue a multi-test overnight sequence: it reuses this script's
@@ -308,7 +311,7 @@ param(
     [string]$HostAddress,
 
     [Parameter(Position = 1, Mandatory)]
-    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'LargeResultPaging', 'LargeResultPagingReadFileOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor', 'OrderPricingRefactorChain4', 'OrderPricingRefactorChain5', 'OrderPricingRefactorChain6', 'OrderPricingRefactorChain7', 'OrderPricingRefactorChain8', 'OrderPricingRefactorChain9', 'OrderPricingRefactorChain10', 'ResumeTranscript', 'ScoreTranscript', 'Scenario', 'ShippingKindStep', 'ShippingKindStepV2', 'ShippingKindStepV3', 'ShippingKindStepV4', 'ShippingKindStepV5', 'ShippingKindStepV6', 'ShippingKindStepV7', 'ShippingKindStepV8', 'ShippingKindStepV9', 'ShippingKindStepV10', 'ShippingKindStepV11', 'ShippingKindStepV12', 'ShippingKindStepV13', 'ShippingKindStepV14', 'ShippingKindStepFinal', 'ShippingKindStepUsingStatic', 'ShippingKindResume', 'ShippingKindMappingProbe', 'ShippingKindReplay')]
+    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'LargeResultPaging', 'LargeResultPagingReadFileOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor', 'OrderPricingRefactorChain4', 'OrderPricingRefactorChain5', 'OrderPricingRefactorChain6', 'OrderPricingRefactorChain7', 'OrderPricingRefactorChain8', 'OrderPricingRefactorChain9', 'OrderPricingRefactorChain10', 'ResumeTranscript', 'ScoreTranscript', 'Scenario', 'ShippingKindStep', 'ShippingKindStepV2', 'ShippingKindStepV3', 'ShippingKindStepV4', 'ShippingKindStepV5', 'ShippingKindStepV6', 'ShippingKindStepV7', 'ShippingKindStepV8', 'ShippingKindStepV9', 'ShippingKindStepV10', 'ShippingKindStepV11', 'ShippingKindStepV12', 'ShippingKindStepV13', 'ShippingKindStepV14', 'ShippingKindStepFinal', 'ShippingKindStepUsingStatic', 'ShippingKindStepPriorityOvernight', 'ShippingKindResume', 'ShippingKindMappingProbe', 'ShippingKindReplay')]
     [string[]]$Test,
 
     [Parameter(Position = 2)]
@@ -437,6 +440,8 @@ $testNames = @{
     'ShippingKindStepFinal'         = 'Model_RunsShippingKindStepPromptFinal'
     # UsingStatic = Final, but the step 3 golden seeds `using static ContosoOrders.Core.ShippingKinds;` into the four target files and steps 4 and 5 ask for bare names; all six steps, run with -Step 4,5 to isolate the token effect.
     'ShippingKindStepUsingStatic'   = 'Model_RunsShippingKindStepPromptUsingStatic'
+    # PriorityOvernight = Final with the constant Overnight named PriorityOvernight everywhere (goldens, prompts, check sources; value stays "overnight"); all six steps. Tests whether the ".O" typo moves or disappears.
+    'ShippingKindStepPriorityOvernight' = 'Model_RunsShippingKindStepPromptPriorityOvernight'
     # Resume a saved ShippingKind transcript at turn -ResumeKeepTurns and resample the next turns; needs -ResumeTranscript and -ResumeStep.
     'ShippingKindResume'            = 'ResumeShippingKindStep_SamplesTheNextTurns'
     # One text turn with the step 4 files in the prompt and no tools: how often does the model misspell a constant it can see? Uses -Samples.

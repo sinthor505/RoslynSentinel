@@ -100,4 +100,84 @@ public class ShippingKindStepVariantTextTests
             Assert.That(prompt, Is.Not.EqualTo(ShippingKindStepGoldens.PromptForStepFinal(step)), $"step {step}");
         }
     }
+
+    [TestCase(0)]
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    [TestCase(5)]
+    [TestCase(6)]
+    public void PriorityOvernight_Goldens_NameTheConstantEverywhereAndKeepTheValue(int step)
+    {
+        var files = ShippingKindStepGoldens.FilesForStep(step, false, ShippingKindFixtureStyle.PriorityOvernight);
+
+        foreach (var (path, text) in files)
+        {
+            Assert.That(text, Does.Not.Match(@"\bOvernight\b"), path);
+        }
+
+        var allText = string.Join("\n", files.Values);
+        if (step == 2 || step == 3 || step == 6)
+        {
+            Assert.That(allText, Does.Contain("public const string PriorityOvernight = "));
+        }
+
+        if (step == 2 || step == 3)
+        {
+            Assert.That(allText, Does.Contain("PriorityOvernight = \"overnight\""));
+        }
+
+        if (step == 6)
+        {
+            Assert.That(allText, Does.Contain("PriorityOvernight = \"nextday\""));
+        }
+
+        if (step == 4)
+        {
+            Assert.That(allText, Does.Contain("case ShippingKinds.PriorityOvernight:"));
+            Assert.That(allText, Does.Contain("shipment.Kind == ShippingKinds.PriorityOvernight"));
+        }
+
+        if (step == 5)
+        {
+            Assert.That(allText, Does.Contain("kind == ShippingKinds.PriorityOvernight ? 1 : 2"));
+        }
+    }
+
+    [TestCase(0)]
+    [TestCase(1)]
+    [TestCase(4)]
+    [TestCase(5)]
+    public void PriorityOvernight_Seeds_AreUnchangedApartFromTheRename(int step)
+    {
+        var original = ShippingKindStepGoldens.FilesForStep(step, false);
+        var renamed = ShippingKindStepGoldens.FilesForStep(step, false, ShippingKindFixtureStyle.PriorityOvernight);
+
+        Assert.That(renamed.Keys, Is.EquivalentTo(original.Keys));
+        foreach (var (path, text) in original)
+        {
+            Assert.That(renamed[path], Is.EqualTo(text.Replace("Overnight", "PriorityOvernight", StringComparison.Ordinal)), path);
+        }
+    }
+
+    [Test]
+    public void PriorityOvernight_Prompts_AndContract_RenameTheConstantAndNothingElse()
+    {
+        for (var step = 1; step <= ShippingKindStepGoldens.LastStep; step++)
+        {
+            var prompt = ShippingKindStepGoldens.PromptForStepPriorityOvernight(step);
+            Assert.That(prompt, Does.Not.Match(@"\bOvernight\b"), $"step {step}");
+            Assert.That(prompt, Is.EqualTo(ShippingKindStepGoldens.PromptForStepFinal(step).Replace("Overnight", "PriorityOvernight", StringComparison.Ordinal)), $"step {step}");
+        }
+
+        Assert.That(ShippingKindStepGoldens.PromptForStepPriorityOvernight(2), Does.Contain("PriorityOvernight = \"overnight\""));
+        Assert.That(ShippingKindStepGoldens.PromptForStepPriorityOvernight(6), Does.Contain("PriorityOvernight = 'nextday'"));
+
+        var contract = ShippingKindStepGoldens.ContractChangedShippingKindsFor(ShippingKindFixtureStyle.PriorityOvernight);
+        Assert.That(contract, Does.Contain("PriorityOvernight = \"nextday\"").And.Not.Match(@"\bOvernight\b"));
+        Assert.That(
+            ShippingKindStepGoldens.ContractChangedShippingKindsFor(ShippingKindFixtureStyle.Default),
+            Is.EqualTo(ShippingKindStepGoldens.ContractChangedShippingKinds));
+    }
 }

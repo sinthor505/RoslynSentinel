@@ -311,9 +311,27 @@ internal static class ShippingKindStepGoldens
     private static string BareNames(string source) => source.Replace("ShippingKinds.", string.Empty, StringComparison.Ordinal);
 
     /// <summary>
+    /// Applies a style's text rename to golden, prompt or check-source text: PriorityOvernight turns every identifier Overnight into
+    /// PriorityOvernight (case-sensitive and whole word, so the value "overnight" and the word in prose such as 'express or overnight' stay).
+    /// Every other style returns the text unchanged.
+    /// </summary>
+    public static string ApplyStyle(string text, ShippingKindFixtureStyle style)
+    {
+        return style == ShippingKindFixtureStyle.PriorityOvernight
+            ? System.Text.RegularExpressions.Regex.Replace(text, @"\bOvernight\b", "PriorityOvernight")
+            : text;
+    }
+
+    /// <summary>
     /// The ShippingKinds.cs of step 6. The step 4 and 5 checks write it over the model's tree to prove no string literal or inline kind pair is left.
     /// </summary>
     public static string ContractChangedShippingKinds => Crlf(ShippingKindsV6);
+
+    /// <summary>
+    /// <see cref="ContractChangedShippingKinds"/> for a fixture style: with PriorityOvernight the constant has the style's name, so the
+    /// model's renamed references still compile against the rewritten contract.
+    /// </summary>
+    public static string ContractChangedShippingKindsFor(ShippingKindFixtureStyle style) => ApplyStyle(ContractChangedShippingKinds, style);
 
     public static IReadOnlyDictionary<string, string> FilesForStep(int step) => FilesForStep(step, withVisibleTests: false);
 
@@ -696,6 +714,15 @@ internal static class ShippingKindStepGoldens
         };
     }
 
+    /// <summary>
+    /// PriorityOvernight = the Final prompts with the constant Overnight named PriorityOvernight (see <see cref="ApplyStyle"/>). Use with
+    /// FilesForStep(step, false, ShippingKindFixtureStyle.PriorityOvernight) and ShippingKindStepChecks.CheckAsync(..., ShippingKindFixtureStyle.PriorityOvernight).
+    /// </summary>
+    public static string PromptForStepPriorityOvernight(int step)
+    {
+        return ApplyStyle(PromptForStepFinal(step), ShippingKindFixtureStyle.PriorityOvernight);
+    }
+
     public static IReadOnlyList<string> AllowedPathsForStep(int step)
     {
         return step switch
@@ -779,7 +806,9 @@ internal static class ShippingKindStepGoldens
                 throw new ArgumentOutOfRangeException(nameof(step));
         }
 
-        return files;
+        return style == ShippingKindFixtureStyle.PriorityOvernight
+            ? files.ToDictionary(entry => entry.Key, entry => ApplyStyle(entry.Value, style))
+            : files;
     }
 }
 /// <summary>
@@ -795,4 +824,10 @@ public enum ShippingKindFixtureStyle
     /// goldens use bare constant names, so the run isolates the token effect of a bare name versus a qualified one.
     /// </summary>
     UsingStatic,
+
+    /// <summary>
+    /// The constant ShippingKinds.Overnight is named PriorityOvernight everywhere it is declared or referenced (goldens, prompts, check
+    /// sources); its value stays "overnight". Tests whether a misspelling of the member name moves with the name or disappears.
+    /// </summary>
+    PriorityOvernight,
 }

@@ -9,6 +9,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// the methods share them, so they must not run in parallel.
 /// </summary>
 [TestFixture(ShippingKindFixtureStyle.UsingStatic)]
+[TestFixture(ShippingKindFixtureStyle.PriorityOvernight)]
 [Explicit("No model needed. Run after changing a ShippingKind golden or check: ShippingKindStepVariantGoldenTests")]
 public class ShippingKindStepVariantGoldenTests
 {
@@ -59,7 +60,8 @@ public class ShippingKindStepVariantGoldenTests
             _fixture!.SolutionDirectory,
             finalMessage,
             changedPaths,
-            TestContext.CurrentContext.CancellationToken);
+            TestContext.CurrentContext.CancellationToken,
+            _style);
 
         Assert.That(outcome, Is.EqualTo(ShippingKindStepOutcome.Pass), $"{_style} step {step}: {detail}");
     }
@@ -78,7 +80,8 @@ public class ShippingKindStepVariantGoldenTests
             _fixture!.SolutionDirectory,
             null,
             Array.Empty<string>(),
-            TestContext.CurrentContext.CancellationToken);
+            TestContext.CurrentContext.CancellationToken,
+            _style);
         TestContext.Out.WriteLine($"{_style}: step {step} check on step-{step - 1} golden: {outcome}: {detail}");
 
         Assert.That(

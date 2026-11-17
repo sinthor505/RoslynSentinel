@@ -14,7 +14,7 @@ internal enum ShippingKindStepOutcome
 
 internal static class ShippingKindStepChecks
 {
-    public static async Task<(ShippingKindStepOutcome Outcome, string Detail)> CheckAsync(int step, string solutionDirectory, string? finalMessage, IReadOnlyList<string> changedPaths, CancellationToken cancellationToken)
+    public static async Task<(ShippingKindStepOutcome Outcome, string Detail)> CheckAsync(int step, string solutionDirectory, string? finalMessage, IReadOnlyList<string> changedPaths, CancellationToken cancellationToken, ShippingKindFixtureStyle style = ShippingKindFixtureStyle.Default)
     {
         if (step == 1)
         {
@@ -96,7 +96,7 @@ internal static class ShippingKindStepChecks
         try
         {
             Directory.CreateDirectory(testDirectory);
-            await File.WriteAllTextAsync(testFile, NormalizeToCrlf(source), cancellationToken);
+            await File.WriteAllTextAsync(testFile, NormalizeToCrlf(ShippingKindStepGoldens.ApplyStyle(source, style)), cancellationToken);
             result = await DotnetTestRunner.RunAsync(testProject, cancellationToken);
         }
         catch (InvalidOperationException ex)
@@ -122,7 +122,7 @@ internal static class ShippingKindStepChecks
 
         if (step >= 4)
         {
-            var (contractOk, contractDetail) = await RunContractTestsAsync(step, solutionDirectory, cancellationToken);
+            var (contractOk, contractDetail) = await RunContractTestsAsync(step, solutionDirectory, style, cancellationToken);
             if (!contractOk)
             {
                 return (ShippingKindStepOutcome.CheckFailed, contractDetail);
@@ -454,7 +454,7 @@ public class ShippingKindContractStep5Tests
     /// <summary>
     /// Contract-change check for steps 4 to 6: the step 4 and 5 checks first write the step 6 ShippingKinds.cs (new values, an extra expedited kind SameDay) over the model's tree and run tests written only against the constants, so a leftover string literal or an inline kind comparison fails; step 6 runs the same tests on the model's own ShippingKinds.cs. The tree is restored afterwards.
     /// </summary>
-    private static async Task<(bool Ok, string Detail)> RunContractTestsAsync(int step, string solutionDirectory, CancellationToken cancellationToken)
+    private static async Task<(bool Ok, string Detail)> RunContractTestsAsync(int step, string solutionDirectory, ShippingKindFixtureStyle style, CancellationToken cancellationToken)
     {
         (string FileName, string Source)[] sources = step switch
         {
@@ -473,12 +473,12 @@ public class ShippingKindContractStep5Tests
             Directory.CreateDirectory(testDirectory);
             if (mutate)
             {
-                await File.WriteAllTextAsync(kindsPath, ShippingKindStepGoldens.ContractChangedShippingKinds, cancellationToken);
+                await File.WriteAllTextAsync(kindsPath, ShippingKindStepGoldens.ContractChangedShippingKindsFor(style), cancellationToken);
             }
 
             foreach (var (fileName, source) in sources)
             {
-                await File.WriteAllTextAsync(Path.Combine(testDirectory, fileName), NormalizeToCrlf(source), cancellationToken);
+                await File.WriteAllTextAsync(Path.Combine(testDirectory, fileName), NormalizeToCrlf(ShippingKindStepGoldens.ApplyStyle(source, style)), cancellationToken);
             }
 
             // Only the contract classes: the visible ShippingBehaviourTests.cs of variants V12/V13 hard-codes the old literal values and would fail under the rewritten constants.

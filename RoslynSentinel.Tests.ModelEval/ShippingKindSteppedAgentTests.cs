@@ -133,7 +133,8 @@ public class ShippingKindSteppedAgentTests
     }
 
     // withVisibleTests (V12/V13) seeds a visible shipping test file in the step-0 golden; every other variant keeps the original fixture so earlier results stay comparable.
-    // style UsingStatic seeds `using static ...ShippingKinds;` into the four target files from the step 3 golden on (see ShippingKindStepGoldens.FilesForStep).
+    // style UsingStatic seeds `using static ...ShippingKinds;` into the four target files from the step 3 golden on (see ShippingKindStepGoldens.FilesForStep);
+    // style PriorityOvernight renames the constant Overnight to PriorityOvernight in goldens and check sources (prompts: PromptForStepPriorityOvernight).
     private async Task RunStepAsync(int step, string prompt, bool withVisibleTests = false, ShippingKindFixtureStyle style = ShippingKindFixtureStyle.Default)
     {
         var cancellationToken = TestContext.CurrentContext.CancellationToken;
@@ -165,7 +166,7 @@ public class ShippingKindSteppedAgentTests
 
         var finalMessage = result.Transcript.FinalMessage();
         var (checkOutcome, checkDetail) = await ShippingKindStepChecks.CheckAsync(
-            step, _fixture.SolutionDirectory, finalMessage, changedPaths, cancellationToken);
+            step, _fixture.SolutionDirectory, finalMessage, changedPaths, cancellationToken, style);
 
         var outcome = checkOutcome;
         var detail = checkDetail;
@@ -374,5 +375,20 @@ public class ShippingKindSteppedAgentTests
     public async Task Model_RunsShippingKindStepPromptUsingStatic(int step)
     {
         await RunStepAsync(step, ShippingKindStepGoldens.PromptForStepUsingStatic(step), style: ShippingKindFixtureStyle.UsingStatic);
+    }
+
+    // The name must not contain "Model_CompletesShippingKindStep" because the baseline script filter is Name~ on that string.
+    // PriorityOvernight variant, all six steps: the Final prompts with the constant Overnight named PriorityOvernight everywhere (goldens,
+    // prompts, check sources; the value stays "overnight"). Tests whether the ".O" misspelling of the member name moves or disappears.
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    [TestCase(5)]
+    [TestCase(6)]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
+    public async Task Model_RunsShippingKindStepPromptPriorityOvernight(int step)
+    {
+        await RunStepAsync(step, ShippingKindStepGoldens.PromptForStepPriorityOvernight(step), style: ShippingKindFixtureStyle.PriorityOvernight);
     }
 }
