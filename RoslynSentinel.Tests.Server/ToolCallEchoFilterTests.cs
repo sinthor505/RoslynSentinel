@@ -113,8 +113,7 @@ public class ToolCallEchoFilterTests
     [TearDown]
     public async Task TearDown()
     {
-        // Static state: always leave the echo on for whatever test runs next.
-        ToolCallEchoOptions.Configure(["--echo-tool-args=true"]);
+        ToolCallEchoOptions.Configure(["--echo-tool-args=false"]); // static state: restore the default (off) for whatever test runs next
 
         await _client.DisposeAsync();
         await _host.StopAsync();
@@ -457,15 +456,15 @@ public class ToolCallEchoOptionsTests
     public void TearDown()
     {
         Environment.SetEnvironmentVariable(EnvVar, _originalEnv);
-        ToolCallEchoOptions.Configure(["--echo-tool-args=true"]);
+        ToolCallEchoOptions.Configure(["--echo-tool-args=false"]);
     }
 
     [Test]
-    public void Configure_Absent_LeavesItEnabled()
+    public void Configure_Absent_LeavesItDisabled()
     {
-        ToolCallEchoOptions.Configure(["--echo-tool-args=false"]);
+        ToolCallEchoOptions.Configure(["--echo-tool-args=true"]);
         ToolCallEchoOptions.Configure([]);
-        Assert.That(ToolCallEchoOptions.Enabled, Is.True);
+        Assert.That(ToolCallEchoOptions.Enabled, Is.False);
     }
 
     [TestCase("--echo-tool-args=false")]
@@ -473,6 +472,7 @@ public class ToolCallEchoOptionsTests
     [TestCase("--echo-tool-args=0")]
     public void Configure_InlineFalseOrZero_Disables(string arg)
     {
+        ToolCallEchoOptions.Configure(["--echo-tool-args=true"]);
         ToolCallEchoOptions.Configure([arg]);
         Assert.That(ToolCallEchoOptions.Enabled, Is.False);
     }
@@ -480,34 +480,46 @@ public class ToolCallEchoOptionsTests
     [Test]
     public void Configure_SpaceSeparatedForm_IsAccepted()
     {
-        ToolCallEchoOptions.Configure(["--echo-tool-args", "0"]);
-        Assert.That(ToolCallEchoOptions.Enabled, Is.False);
+        ToolCallEchoOptions.Configure(["--echo-tool-args=false"]);
+        ToolCallEchoOptions.Configure(["--echo-tool-args", "1"]);
+        Assert.That(ToolCallEchoOptions.Enabled, Is.True);
     }
 
     [TestCase("--echo-tool-args=true")]
+    [TestCase("--echo-tool-args=TRUE")]
     [TestCase("--echo-tool-args=1")]
-    [TestCase("--echo-tool-args=banana")]
-    public void Configure_AnythingElse_LeavesItEnabled(string arg)
+    public void Configure_TrueOrOne_Enables(string arg)
     {
         ToolCallEchoOptions.Configure(["--echo-tool-args=false"]);
         ToolCallEchoOptions.Configure([arg]);
         Assert.That(ToolCallEchoOptions.Enabled, Is.True);
     }
 
-    [Test]
-    public void Configure_EnvVarFalse_Disables_WhenNoArgGiven()
+    [TestCase("--echo-tool-args=banana")]
+    [TestCase("--echo-tool-args=yes")]
+    [TestCase("--echo-tool-args=")]
+    public void Configure_Banana_StaysDisabled(string arg)
     {
-        Environment.SetEnvironmentVariable(EnvVar, "false");
-        ToolCallEchoOptions.Configure([]);
+        ToolCallEchoOptions.Configure(["--echo-tool-args=true"]);
+        ToolCallEchoOptions.Configure([arg]);
         Assert.That(ToolCallEchoOptions.Enabled, Is.False);
+    }
+
+    [Test]
+    public void Configure_EnvVarTrue_Enables_WhenNoArgGiven()
+    {
+        ToolCallEchoOptions.Configure(["--echo-tool-args=false"]);
+        Environment.SetEnvironmentVariable(EnvVar, "true");
+        ToolCallEchoOptions.Configure([]);
+        Assert.That(ToolCallEchoOptions.Enabled, Is.True);
     }
 
     [Test]
     public void Configure_ArgWinsOverEnvVar()
     {
-        Environment.SetEnvironmentVariable(EnvVar, "false");
-        ToolCallEchoOptions.Configure(["--echo-tool-args=true"]);
-        Assert.That(ToolCallEchoOptions.Enabled, Is.True);
+        Environment.SetEnvironmentVariable(EnvVar, "true");
+        ToolCallEchoOptions.Configure(["--echo-tool-args=false"]);
+        Assert.That(ToolCallEchoOptions.Enabled, Is.False);
     }
 }
 /// <summary>

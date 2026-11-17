@@ -4,14 +4,14 @@ namespace RoslynSentinel.Common;
 /// Startup switch for the <c>toolCall</c> echo that the outermost call-tool filter stamps onto
 /// every tool response (tool name, a short call id, and the truncated arguments the caller sent).
 /// Populated once at startup via <see cref="Configure"/>: <c>--echo-tool-args</c> first, then the
-/// <c>ROSLYNSENTINEL_ECHO_TOOL_ARGS</c> environment variable. Default is on; the values
-/// <c>false</c> and <c>0</c> (case-insensitive) turn it off, anything else leaves it on. Read-only
+/// <c>ROSLYNSENTINEL_ECHO_TOOL_ARGS</c> environment variable. Default is off; the values
+/// <c>true</c> and <c>1</c> (case-insensitive) turn it on; anything else, including absent, leaves it off. Read-only
 /// after startup; the filter reads <see cref="Enabled"/> at call time and is a pure pass-through
 /// when it is false.
 /// </summary>
 public static class ToolCallEchoOptions
 {
-    public static bool Enabled { get; private set; } = true;
+    public static bool Enabled { get; private set; } = false;
 
     /// <summary>Parses --echo-tool-args (falling back to ROSLYNSENTINEL_ECHO_TOOL_ARGS) into <see cref="Enabled"/>. Call once at process startup, before DI is built.</summary>
     public static void Configure(string[] args)
@@ -21,11 +21,11 @@ public static class ToolCallEchoOptions
         Enabled = ParseEnabled(raw);
     }
 
-    /// <summary>True unless <paramref name="raw"/> is "false" or "0" (case-insensitive, whitespace-trimmed).</summary>
+    /// <summary>True only when <paramref name="raw"/>, trimmed, is "true" or "1" (case-insensitive). Default is off; the values true and 1 turn it on. Null, empty and anything else are off.</summary>
     public static bool ParseEnabled(string? raw)
     {
         var trimmed = raw?.Trim();
-        return !(string.Equals(trimmed, "false", StringComparison.OrdinalIgnoreCase) || trimmed == "0");
+        return string.Equals(trimmed, "true", StringComparison.OrdinalIgnoreCase) || trimmed == "1";
     }
 
     /// <summary>Reads a command-line flag's value, accepting both "--flag=value" and "--flag value" forms.</summary>

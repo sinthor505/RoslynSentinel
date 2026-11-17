@@ -1200,6 +1200,7 @@ public static class RoslynSentinelServiceExtensionsBasic
     /// truncated arguments as sent) onto the first text block of every response, so a transcript,
     /// log line or offloaded result can be tied back to the call that produced it. See
     /// <see cref="ToolCallEcho"/> and docs/current/plans/closed/plan_tool_call_echo.md.
+    /// The echo is off by default; the call id is assigned either way.
     /// <para>
     /// Must be registered right inside <see cref="AddAgentIdentityFilter"/>, ahead of every other filter: an earlier filter
     /// is further out, so this one post-processes after them and sees the final content of every path (argument-validation rejection, breaker refusals,
@@ -1215,7 +1216,21 @@ public static class RoslynSentinelServiceExtensionsBasic
             ModelContextProtocol.Protocol.CallToolResult>(
             async (context, cancellationToken) =>
             {
-                if (!RoslynSentinel.Common.ToolCallEchoOptions.Enabled)
+                string? toolCallId = null;
+                try
+                {
+                    toolCallId = ToolCallEcho.NewToolCallId();
+                    // The same id reaches the tool (ToolCallContext is set by the identity filter just outside this one), so a commit
+                    // trailer can carry the id the response echoes. Assigned even when the echo is off.
+                    RoslynSentinel.Common.ToolCallContext.Current?.AssignToolCallId(toolCallId);
+                }
+                catch (Exception ex)
+                {
+                    // A diagnostic aid must never break a call.
+                    Debug.WriteLine($"Tool call id assignment failed: {ex}");
+                }
+
+                if (!RoslynSentinel.Common.ToolCallEchoOptions.Enabled || toolCallId is null)
                 {
                     return await next(context, cancellationToken);
                 }
@@ -1223,10 +1238,6 @@ public static class RoslynSentinelServiceExtensionsBasic
                 System.Text.Json.Nodes.JsonObject? echo = null;
                 try
                 {
-                    var toolCallId = ToolCallEcho.NewToolCallId();
-                    // The same id reaches the tool (ToolCallContext is set by the identity filter just outside this one), so a commit
-                    // trailer can carry the id the response echoes.
-                    RoslynSentinel.Common.ToolCallContext.Current?.AssignToolCallId(toolCallId);
                     echo = ToolCallEcho.CreateEcho(
                         toolCallId, context.Params?.Name, context.Params?.Arguments);
                 }
