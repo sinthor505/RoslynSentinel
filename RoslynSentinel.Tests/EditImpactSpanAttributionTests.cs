@@ -264,7 +264,7 @@ public class EditImpactSpanAttributionTests
             ProposedChangeAction.apply,
             filePath: workspace.PathOf(PricingRelativePath),
             oldContent: "public class OrderPricingCalculator",
-            newContent: "public interface IPricingPolicyContract { }\n\n    public class StandardPricingCalculator : IPricingPolicyContract");
+            newContent: "public interface IPricingPolicyContract { }\n\n    public class OrderPricingCalculator : IPricingPolicyContract");
         await entered.Task.WaitAsync(TimeSpan.FromSeconds(30));
         Assert.That(siblingTask.IsCompleted, Is.False, "the sibling must still be in flight, with no rejection recorded yet");
 

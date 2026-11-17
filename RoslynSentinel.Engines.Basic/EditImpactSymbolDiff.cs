@@ -303,8 +303,15 @@ internal static class EditImpactSymbolDiff
         {
             ["a.cs"] = snippet,
             ["b.cs"] = "class __W {\n" + snippet + "\n}",
-            ["c.cs"] = "enum __E {\n" + snippet + "\n}",
         };
+        // The enum wrap is used only when it parses without errors: a tolerant enum parse turns a type use such as
+        // "IPricingPolicyContrct policy = null!;" into an enum member named IPricingPolicyContrct. A real enum-member list still parses cleanly.
+        var enumText = "enum __E {\n" + snippet + "\n}";
+        if (!CSharpSyntaxTree.ParseText(enumText).GetDiagnostics().Any(d => d.Severity == DiagnosticSeverity.Error))
+        {
+            texts["c.cs"] = enumText;
+        }
+
         var names = new HashSet<string>(StringComparer.Ordinal);
         foreach (var declaration in Collect(texts))
         {
