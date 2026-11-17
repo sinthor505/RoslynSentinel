@@ -192,6 +192,9 @@ public class WirePathRelativizeFilterTests
         {
             ["reason"] = "test read relative path",
             ["filePath"] = filePath,
+            // The probe file is padded past the inline limit for the offload test (SetUp), so read a small inline slice.
+            ["startLine"] = 1,
+            ["endLine"] = 20,
         });
 
         Assert.That(readResult.IsError, Is.Not.True, $"ReadFile must succeed with relative path. Got: {readText}");
