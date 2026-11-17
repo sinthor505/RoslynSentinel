@@ -213,6 +213,8 @@ public sealed class LmStudioAgentClient
                             ? existing
                             : reasoningBuilders[evt.ItemId] = new StringBuilder();
                         sb.Append(evt.Delta);
+                        // One line per delta (normally one token), as for the content channel: scripts/Find-TypoTokenStream.ps1 reads both.
+                        _logger.LogInformation("LM Studio reasoning: {Delta}", evt.Delta);
                         break;
                     }
                 case "response.output_text.delta":
