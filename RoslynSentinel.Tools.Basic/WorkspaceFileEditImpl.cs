@@ -1506,6 +1506,14 @@ public class WorkspaceFileEditImpl
                     List<ImpactVerdict>? liftVerdicts = null;
                     // Batch H5 R5: the model's own text, kept because a lift replaces snippetChanges with the merged set (see RenameLifter.MergedEditedSpansAsync).
                     var candidateChanges = snippetChanges;
+                    IReadOnlyList<Finding>? nearMissFindings = null;
+                    if (result.IsError && result.ValidationResult != null
+                        && await NearMissAutoCorrector.TryAutoCorrectAsync(_workspaceManager, snippetChanges, result.ValidationResult, "ReplaceSnippet", StaleReadPolicy.RefuseIfObservedStale, cancellationToken) is { } nearMissFix)
+                    {
+                        result = nearMissFix.ApplyResult;
+                        snippetChanges = new Dictionary<FilePathWrapper, string>(nearMissFix.CorrectedChanges);
+                        nearMissFindings = nearMissFix.Findings;
+                    }
                     if (result.IsError && result.ValidationResult != null && await TryLiftRenameAsync(snippetChanges, liftSpans, cancellationToken) is { } lift)
                     {
                         if (lift.Result is null)
@@ -1553,7 +1561,7 @@ public class WorkspaceFileEditImpl
                     }
                     var changeId = Guid.NewGuid().ToString("n")[..8];
                     // Batch H4 R1: remember the applied edit so an identical second call is a no-op (see AppliedEditMemory). A lifted edit wrote other files too, so it is not remembered.
-                    if (!result.IsError && liftNote is null)
+                    if (!result.IsError && liftNote is null && nearMissFindings is null)
                         _appliedEdits.Remember((string)targetPath, oldContent, newContent, changeId, reindent.InsertedTexts[0]);
                     var blobWrite = await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet", result, blobChangeId: changeId, cancellationToken: cancellationToken);
                     var summaryBody = liftNote is null ? result.Summary : $"{liftNote} {result.Summary}";
@@ -1567,7 +1575,7 @@ public class WorkspaceFileEditImpl
                     {
                         IsError = false,
                         SuccessData = new ReplaceSnippetResult(strippedResult, null, diffContent, blobWrite.Written ? changeId : null),
-                        Findings = WithLiftFinding(result.Findings, liftVerdicts)
+                        Findings = nearMissFindings is null ? WithLiftFinding(result.Findings, liftVerdicts) : WithLiftFinding(result.Findings, liftVerdicts).Concat(nearMissFindings).ToList()
                     };
                 }
                 catch (Exception ex)
@@ -1859,6 +1867,14 @@ public class WorkspaceFileEditImpl
             List<ImpactVerdict>? liftVerdicts = null;
             // Batch H5 R5: the model's own texts, kept because a lift replaces finalContents with the merged set (see RenameLifter.MergedEditedSpansAsync).
             var candidateContents = finalContents;
+            IReadOnlyList<Finding>? nearMissFindings = null;
+            if (result.IsError && result.ValidationResult != null
+                && await NearMissAutoCorrector.TryAutoCorrectAsync(_workspaceManager, finalContents, result.ValidationResult, "ReplaceSnippet", StaleReadPolicy.RefuseIfObservedStale, cancellationToken) is { } nearMissFix)
+            {
+                result = nearMissFix.ApplyResult;
+                finalContents = new Dictionary<FilePathWrapper, string>(nearMissFix.CorrectedChanges);
+                nearMissFindings = nearMissFix.Findings;
+            }
             if (result.IsError && result.ValidationResult != null && await TryLiftRenameAsync(finalContents, liftSpans, cancellationToken) is { } lift)
             {
                 if (lift.Result is null)
@@ -1916,7 +1932,7 @@ public class WorkspaceFileEditImpl
             {
                 IsError = false,
                 SuccessData = new ReplaceSnippetResult(strippedResult, null, diffContent, blobWrite.Written ? changeId : null),
-                Findings = WithLiftFinding(result.Findings, liftVerdicts)
+                Findings = nearMissFindings is null ? WithLiftFinding(result.Findings, liftVerdicts) : WithLiftFinding(result.Findings, liftVerdicts).Concat(nearMissFindings).ToList()
             };
         }
         catch (Exception ex)
