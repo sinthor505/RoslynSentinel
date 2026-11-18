@@ -45,6 +45,7 @@ namespace RoslynSentinel.Server.Advanced
             OrientationBreakerOptions.Configure(args);
             LoopLatchOptions.Configure(args);
             LiftRenamesOptions.Configure(args);
+            NearMissOptions.Configure(args);
             // TODO symbol member inventory untested (plan_error_policy_pointer arm I never reached a container); decide default after an eval that exercises containingType/filePath misses
             NotFoundInventoryOptions.Configure(args);
             ToolCallEchoOptions.Configure(args);
