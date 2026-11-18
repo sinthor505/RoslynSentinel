@@ -50,8 +50,11 @@ Evidence and data: `docs/current/findings/finding_overnight_token_path_slips.md`
 
 - **Classify first.** A near-miss of a known identifier (`Oovernight`, `Ownight`, `PrioritOvernight`)
   that persists, often with the model saying it is a typo, is a token-path slip: a sampling and
-  tokenization event, not a capability, reasoning or coherence failure. An invented member (`IsKnown`
-  that does not exist) or a logic error is a real capability failure and is analysed normally.
+  tokenization event, not a capability, reasoning or coherence failure. Confirm it in the token stream
+  before labelling (the first token after the qualifier differs from the standard split): `Overtime` and
+  `Oversight` were slips that read like reasoning errors in whole-word text. An invented member (a name
+  with no near match among the type's members) or a logic error is a real capability failure and is
+  analysed normally.
 - **More error text does not help after the fact.** The model usually knows the spelling and still cannot
   break out; errors that repeat the bad token feed it back. Environment fixes are sampler settings and
   recovery that needs no retyping, not longer hints.
