@@ -33,6 +33,15 @@
     "Sampled" is the probability of drawing ".O" under the sampler settings (-Temperature, -TopK, -TopP, -MinP; llama.cpp order
     top-k, top-p, min-p, temperature), computed from the returned top candidates, so it is an estimate.
 
+    Endpoints (-Endpoint): "responses" (default) sends everything to /v1/responses. LM Studio's /v1/responses IGNORES logit_bias
+    and repeat_penalty. "chat" sends the same conversation to /v1/chat/completions (system, user, then per kept turn an assistant
+    message with tool_calls and role "tool" messages, the live turn's reasoning, and a trailing assistant message holding the
+    prefix, which LM Studio continues). /v1/chat/completions HONOURS logit_bias; LM Studio documents these fields there: model,
+    top_p, top_k, messages, temperature, max_tokens, stream, stop, presence_penalty, frequency_penalty, logit_bias, repeat_penalty,
+    seed. -LogitBias and the -Sample* / -RepeatPenalty / -PresencePenalty fields are therefore accepted only with -Endpoint chat.
+    They apply to the sampled replies (-SampleCount) only: the one-token logprob requests report the raw, unbiased distribution.
+    Token ids on the Qwen3.5 models: "." = 13, ".O" = 8123.
+
 .PARAMETER Transcript
     transcript.json (or its folder) holding the kept turns and the live turn.
 
@@ -45,8 +54,30 @@
 .PARAMETER Model
     Model key. Default: the model loaded on the host (fails if none or several).
 
+.PARAMETER Endpoint
+    responses (default, behaves as before) or chat (/v1/chat/completions, needed for -LogitBias and the sampler fields).
+
+.PARAMETER LogitBias
+    Entries id=bias (e.g. '8123=-100','13=-3'; a comma list in one entry also works), sent as logit_bias {"8123": -100, "13": -3} on
+    the SAMPLE requests only; the one-token logprob requests stay unbiased. Needs -Endpoint chat.
+
+.PARAMETER SampleTemperature
+    Request field temperature for the sample requests, sent only when passed. Not the same as -Temperature, which only feeds the
+    computed "Sampled" estimate. Needs -Endpoint chat. Likewise -SampleTopK (top_k), -SampleTopP (top_p), -SampleMinP (min_p),
+    -RepeatPenalty (repeat_penalty) and -PresencePenalty (presence_penalty).
+
+.PARAMETER SampleTokens
+    max_tokens (max_output_tokens on responses) of each sampled reply. Default 3.
+
+.PARAMETER ChatReasoningAs
+    How -Endpoint chat carries an assistant turn's reasoning: field (reasoning_content on the assistant message) or think
+    (content = "<think>\n" + reasoning + "\n</think>\n\n" + text).
+
 .EXAMPLE
     pwsh scripts/Probe-OvernightLogprobs.ps1 -Transcript c:\tmp\replay-tiel-original\sample-02 -HostAddress 113
+
+.EXAMPLE
+    pwsh scripts/Probe-OvernightLogprobs.ps1 -Transcript c:\tmp\replay-tiel-original\sample-02 -HostAddress 85 -Variant Baseline -Endpoint chat -SampleCount 40 -LogitBias '13=-3','8123=-100' -RepeatPenalty 1.1
 #>
 [CmdletBinding()]
 param(
@@ -69,10 +100,35 @@ param(
     # Sampled-frequency check: send the first variant's decision request this many times with the server's own sampler settings
     # (no temperature, no logprobs, 3 tokens) and count how often the reply starts with ".O". Compares the logprob-implied rate with
     # what the sampling path actually draws on the same rendered prompt.
-    [int]$SampleCount = 0
+    [int]$SampleCount = 0,
+    [ValidateSet('responses', 'chat')][string]$Endpoint = 'responses',
+    # id=bias entries for the sample requests (chat endpoint only); see .PARAMETER LogitBias.
+    [string[]]$LogitBias,
+    # Request-side sampler fields of the sample loop, each sent only when passed (chat endpoint only). Not -Temperature/-TopK/-TopP/-MinP.
+    [double]$SampleTemperature,
+    [int]$SampleTopK,
+    [double]$SampleTopP,
+    [double]$SampleMinP,
+    [double]$RepeatPenalty,
+    [double]$PresencePenalty,
+    [int]$SampleTokens = 3,
+    # Reasoning carrier on the chat endpoint. Default 'think': measured on host 85 (qwen3.5-4b-mtp, 2026-11-17), Baseline vs the
+    # /v1/responses path: step5-qwen9b-slip (reasoning channel) P(.) 97.58 / P(.O) 2.13 for responses, 'field' and 'think' alike;
+    # tiel sample-02 (content channel) responses P(.) 2.85 / P(.O) 97.02, think 2.66 / 97.22 (diff 0.2 points), field 2.38 / 97.51
+    # (diff 0.5 points). 'think' is the closer one.
+    [ValidateSet('field', 'think')][string]$ChatReasoningAs = 'think'
 )
 
 $ErrorActionPreference = 'Stop'
+
+$samplerFields = [ordered]@{
+    temperature = 'SampleTemperature'; top_k = 'SampleTopK'; top_p = 'SampleTopP'; min_p = 'SampleMinP'
+    repeat_penalty = 'RepeatPenalty'; presence_penalty = 'PresencePenalty'
+}
+$passedChatOnly = @(@('LogitBias') + @($samplerFields.Values) | Where-Object { $PSBoundParameters.ContainsKey($_) })
+if ($Endpoint -eq 'responses' -and $passedChatOnly) {
+    throw "LM Studio's /v1/responses ignores logit_bias and the request-side sampler fields, so -$($passedChatOnly -join ', -') would have no effect there. Use -Endpoint chat (/v1/chat/completions honours logit_bias)."
+}
 
 if (-not $BaseUrl) {
     if (-not $HostAddress) { throw 'Pass -HostAddress (112, 113, 85) or -BaseUrl.' }
@@ -191,7 +247,62 @@ if ($ToolsMode -eq 'Inline' -and $tools) {
         "`n`nIf you choose to call a function ONLY reply in the following format with NO suffix:`n`n<tool_call>`n<function=example_function_name>`n<parameter=example_parameter_1>`nvalue_1`n</parameter>`n<parameter=example_parameter_2>`nThis is the value for the second parameter`nthat can span`nmultiple lines`n</parameter>`n</function>`n</tool_call>`n`n<IMPORTANT>`nReminder:`n- Function calls MUST follow the specified format: an inner <function=...></function> block must be nested within <tool_call></tool_call> XML tags`n- Required parameters MUST be specified`n- You may provide optional reasoning for your function call in natural language BEFORE the function call, but NOT after`n- If there is no function call available, answer the question like normal with your current knowledge and do not tell the user about function calls`n</IMPORTANT>"
 }
 
+# /v1/chat/completions twin of New-Input, item for item. Reasoning carrier ($ChatReasoningAs): 'field' puts it in the assistant
+# message's reasoning_content (the loaded template reads message.reasoning_content, chat_template.txt line 94), 'think' wraps it into
+# the content as "<think>\n...\n</think>\n\n" (the template splits that back out, lines 97-99). See the comment at the default of
+# -ChatReasoningAs for what was measured.
+function New-ChatMessages([string]$variant, [string]$assistantText) {
+    $messages = [System.Collections.Generic.List[object]]::new()
+    $system = (Convert-Text $t.SystemPrompt $variant 'system').Trim()
+    if ($toolBlock) { $system = $toolBlock + "`n`n" + $system }
+    $messages.Add(@{ role = 'system'; content = $system })
+    $messages.Add(@{ role = 'user'; content = (Convert-Text $t.UserPrompt $variant 'user') })
+    foreach ($turn in $turns[0..($KeepTurns - 1)]) {
+        $msg = $turn.ModelMessage
+        $a = @{ role = 'assistant'; content = [string](Convert-Text $msg.Content $variant 'content') }
+        if (-not $NoReasoningReplay -and $msg.ReasoningContent) {
+            $reasoning = Convert-Text $msg.ReasoningContent $variant 'reasoning'
+            if ($ChatReasoningAs -eq 'field') { $a.reasoning_content = $reasoning }
+            else { $a.content = "<think>`n" + $reasoning + "`n</think>`n`n" + $a.content }
+        }
+        $calls = foreach ($call in @($msg.ToolCalls)) {
+            @{ id = $call.Id; type = 'function'; function = @{ name = $call.Name; arguments = (Convert-Text $call.ArgumentsJson $variant 'arguments') } }
+        }
+        if ($calls) { $a.tool_calls = @($calls) }
+        $messages.Add($a)
+        foreach ($rec in @($turn.ToolCalls)) {
+            $messages.Add(@{ role = 'tool'; tool_call_id = $rec.ToolCallId; content = (Convert-Text $rec.ResultJson $variant 'result') })
+        }
+    }
+    if ($useChannel -eq 'content' -and -not $NoReasoningReplay -and $reasoningText) {
+        # The live turn's reasoning, then the content prefix: one assistant message when the reasoning rides in the content.
+        $liveReasoning = Convert-Text $reasoningText $variant 'reasoning'
+        if ($ChatReasoningAs -eq 'field') { $messages.Add(@{ role = 'assistant'; content = $assistantText; reasoning_content = $liveReasoning }); return , $messages.ToArray() }
+        $assistantText = "<think>`n" + $liveReasoning + "`n</think>`n`n" + $assistantText
+    }
+    $messages.Add(@{ role = 'assistant'; content = $assistantText })
+    return , $messages.ToArray()
+}
+
+# Body of a chat request; $extra holds the per-request fields (max_tokens, sampling fields, logit_bias).
+function New-ChatBody([string]$variant, [string]$assistantText, [hashtable]$extra) {
+    $body = @{ model = $Model; messages = (New-ChatMessages $variant $assistantText); stream = $false }
+    foreach ($k in $extra.Keys) { $body[$k] = $extra[$k] }
+    if ($ToolsMode -eq 'Native') {
+        $body.tools = @($tools | ForEach-Object { @{ type = 'function'; function = @{ name = $_.name; description = $_.description; parameters = $_.parameters } } })
+        $body.tool_choice = 'auto'
+    }
+    return $body
+}
+
 function Get-NextToken([string]$variant, [string]$assistantText) {
+    if ($Endpoint -eq 'chat') {
+        $body = New-ChatBody $variant $assistantText @{ max_tokens = 1; temperature = 0; logprobs = $true; top_logprobs = $TopLogprobs }
+        $r = Invoke-RestMethod -Uri "$BaseUrl/v1/chat/completions" -Method Post -ContentType 'application/json' -Body ($body | ConvertTo-Json -Depth 60 -Compress) -TimeoutSec 900
+        $tok = @($r.choices[0].logprobs.content) | Select-Object -First 1
+        if (-not $tok -or -not $tok.top_logprobs) { throw "The server returned no logprobs on /v1/chat/completions (finish_reason: $($r.choices[0].finish_reason))." }
+        return @($tok.top_logprobs | ForEach-Object { [pscustomobject]@{ Token = $_.token; P = [Math]::Exp($_.logprob) } })
+    }
     $body = @{
         model = $Model; input = (New-Input $variant $assistantText)
         max_output_tokens = 1; temperature = 0; top_logprobs = $TopLogprobs; include = @('message.output_text.logprobs')
@@ -258,20 +369,84 @@ if ($SampleCount -gt 0) {
     if ($useChannel -eq 'reasoning' -and -not $ReasoningAsText) { $p = "<think>`n" + $p }
     $counts = @{}
     $examples = @{}
+    $members = @{}
+    $sentFields = [ordered]@{}
+    $tokenLevel = $Endpoint -eq 'chat'
+    $chatExtra = @{ max_tokens = $SampleTokens }
+    if ($Endpoint -eq 'chat') {
+        foreach ($field in $samplerFields.Keys) {
+            if ($PSBoundParameters.ContainsKey($samplerFields[$field])) { $chatExtra[$field] = Get-Variable -Name $samplerFields[$field] -ValueOnly; $sentFields[$field] = $chatExtra[$field] }
+        }
+        if ($LogitBias) {
+            $bias = [ordered]@{}
+            # Split on commas and drop stray quotes: `pwsh -File ... -LogitBias '13=-3','8123=-100'` arrives as one string with the quotes.
+            foreach ($entry in @($LogitBias | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim().Trim('"', "'").Trim() } | Where-Object { $_ })) {
+                $kv = $entry -split '=', 2
+                $biasValue = 0.0
+                if ($kv.Count -ne 2 -or $kv[0].Trim() -notmatch '^\d+$' -or -not [double]::TryParse($kv[1].Trim(), [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$biasValue)) {
+                    throw "-LogitBias entry '$entry' is not id=bias (for example 8123=-100)."
+                }
+                $bias[$kv[0].Trim()] = $biasValue
+            }
+            $chatExtra.logit_bias = $bias
+        }
+        $chatExtra.logprobs = $true   # first sampled token; dropped below when the server refuses it
+    }
     for ($i = 1; $i -le $SampleCount; $i++) {
-        $body = @{ model = $Model; input = (New-Input $v $p); max_output_tokens = 3 }
-        if ($ToolsMode -eq 'Native') { $body.tools = @($tools); $body.tool_choice = 'auto' }
-        $r = Invoke-RestMethod -Uri "$BaseUrl/v1/responses" -Method Post -ContentType 'application/json' -Body ($body | ConvertTo-Json -Depth 60 -Compress) -TimeoutSec 900
-        $text = (($r.output | Where-Object { $_.type -eq 'message' } | Select-Object -First 1).content | Select-Object -First 1).text
+        $firstToken = $null
+        if ($Endpoint -eq 'chat') {
+            $body = New-ChatBody $v $p $chatExtra
+            $json = $body | ConvertTo-Json -Depth 60 -Compress
+            if ($i -eq 1) { Write-Verbose ('Sample request body: ' + $json) }
+            try {
+                $r = Invoke-RestMethod -Uri "$BaseUrl/v1/chat/completions" -Method Post -ContentType 'application/json' -Body $json -TimeoutSec 900
+            }
+            catch {
+                if (-not $chatExtra.logprobs) { throw }
+                # The server refused logprobs on a sample request: retry once without and classify by text.
+                $chatExtra.Remove('logprobs'); $tokenLevel = $false
+                $body = New-ChatBody $v $p $chatExtra
+                $r = Invoke-RestMethod -Uri "$BaseUrl/v1/chat/completions" -Method Post -ContentType 'application/json' -Body ($body | ConvertTo-Json -Depth 60 -Compress) -TimeoutSec 900
+            }
+            $text = [string]$r.choices[0].message.content
+            if ($tokenLevel) {
+                $firstToken = @($r.choices[0].logprobs.content) | Select-Object -First 1 | ForEach-Object token
+                if ($null -eq $firstToken) { $tokenLevel = $false }
+            }
+        }
+        else {
+            $body = @{ model = $Model; input = (New-Input $v $p); max_output_tokens = $SampleTokens }
+            if ($ToolsMode -eq 'Native') { $body.tools = @($tools); $body.tool_choice = 'auto' }
+            $r = Invoke-RestMethod -Uri "$BaseUrl/v1/responses" -Method Post -ContentType 'application/json' -Body ($body | ConvertTo-Json -Depth 60 -Compress) -TimeoutSec 900
+            $text = (($r.output | Where-Object { $_.type -eq 'message' } | Select-Object -First 1).content | Select-Object -First 1).text
+        }
         if ($null -eq $text) { $text = '' }
-        $class = if ($text.StartsWith('.Over', [StringComparison]::Ordinal)) { '.Over (correct path)' }
+        $class = if ($tokenLevel -and $null -ne $firstToken) {
+                if ($firstToken -ceq '.') { "first token '.' (bare dot)" } elseif ($firstToken -ceq '.O') { "first token '.O'" } else { "first token other [$firstToken]" }
+            }
+            elseif ($text.StartsWith('.Over', [StringComparison]::Ordinal)) { '.Over (correct path)' }
             elseif ($text.StartsWith('.O', [StringComparison]::Ordinal)) { '.O (typo path)' }
             elseif ($text.StartsWith('.', [StringComparison]::Ordinal)) { '. then other' }
             else { 'other' }
         $counts[$class] = 1 + [int]$counts[$class]
         if (-not $examples.ContainsKey($class)) { $examples[$class] = $text }
+        $member = [regex]::Match($text, '^\.?[A-Za-z]+')
+        $memberKey = if ($member.Success) { $member.Value } else { $text.Substring(0, [Math]::Min(16, $text.Length)) -replace "`n", '\n' }
+        $members[$memberKey] = 1 + [int]$members[$memberKey]
         if ($i % 25 -eq 0) { Write-Host "  $i/$SampleCount sampled" }
     }
-    "Sampled $SampleCount replies to the '$v' decision request with the server's sampler settings (temperature reported: $($r.temperature), top_p: $($r.top_p)):"
-    foreach ($k in $counts.Keys | Sort-Object) { '  {0,-22} {1,4}  ({2:P1})  e.g. [{3}]' -f $k, $counts[$k], ($counts[$k] / $SampleCount), ($examples[$k] -replace "`n", '\n') }
+    if ($Endpoint -eq 'chat') {
+        "Sampled $SampleCount replies via /v1/chat/completions to the '$v' decision request, max_tokens $SampleTokens$(if ($tokenLevel) { ', classified by first token (logprobs returned)' } else { '; the server returned no token logprobs, so the counts are text-level' }):"
+        $sent = @($sentFields.Keys | ForEach-Object { "$_=$($sentFields[$_])" })
+        if ($chatExtra.logit_bias) { $sent += 'logit_bias={' + (($chatExtra.logit_bias.Keys | ForEach-Object { "$_`: $($chatExtra.logit_bias[$_])" }) -join ', ') + '}' }
+        "Sent with the sample requests: $(if ($sent) { $sent -join ', ' } else { '(no sampler fields, no logit_bias: server defaults)' })"
+    }
+    else {
+        "Sampled $SampleCount replies to the '$v' decision request with the server's sampler settings (temperature reported: $($r.temperature), top_p: $($r.top_p)):"
+    }
+    foreach ($k in $counts.Keys | Sort-Object) { '  {0,-30} {1,4}  ({2:P1})  e.g. [{3}]' -f $k, $counts[$k], ($counts[$k] / $SampleCount), ($examples[$k] -replace "`n", '\n') }
+    if ($Endpoint -eq 'chat') {
+        'Top sampled members (regex ^\.?[A-Za-z]+, else first 16 characters):'
+        foreach ($m in $members.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 10) { '  {0,-18} {1,4}' -f $m.Key, $m.Value }
+    }
 }
