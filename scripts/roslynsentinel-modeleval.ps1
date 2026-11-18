@@ -544,7 +544,7 @@ if ($HostSampler) {
     Write-Host "    ROSLYNSENTINEL_LLM_HOST_SAMPLER=$HostSampler (declared, not verifiable; recorded in transcript.json Settings)" -ForegroundColor Cyan
 }
 if ($PSBoundParameters.ContainsKey('StreamTimeout')) {
-	Write-Host "    ROSLYNSENTINEL_LLM_STREAM_IDLE_TIMEOUT_SECONDS" -ForegroundColor Cyan
+	Write-Host "    ROSLYNSENTINEL_LLM_STREAM_IDLE_TIMEOUT_SECONDS=$StreamTimeout" -ForegroundColor Cyan
 }
 Write-Host "    --artifacts-path $artifactsPath" -ForegroundColor Cyan
 Write-Host ""
@@ -589,19 +589,11 @@ if ($HostSampler) {
 else {
     $env:ROSLYNSENTINEL_LLM_HOST_SAMPLER = $null
 }
-# TODO the next two blocks look wrong: the first keys on -MinimalTools and the second sets ROSLYNSENTINEL_LLM_TOP_P (not the
-# stream timeout) from -StreamTimeout, which resets TOP_P to $null whenever -StreamTimeout is absent, undoing -TopP above.
-if ($MinimalTools) {
+if ($PSBoundParameters.ContainsKey('StreamTimeout')) {
     $env:ROSLYNSENTINEL_LLM_STREAM_IDLE_TIMEOUT_SECONDS = $StreamTimeout
 }
 else {
     $env:ROSLYNSENTINEL_LLM_STREAM_IDLE_TIMEOUT_SECONDS = $null
-}
-if ($PSBoundParameters.ContainsKey('StreamTimeout')) {
-    $env:ROSLYNSENTINEL_LLM_TOP_P = $TopP
-}
-else {
-    $env:ROSLYNSENTINEL_LLM_TOP_P = $null
 }
 if ($currentTest -eq 'SizeThreshold') {
     $env:ROSLYNSENTINEL_MODELEVAL_SIZES = "$Size"

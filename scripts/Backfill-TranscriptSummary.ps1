@@ -21,9 +21,9 @@
         run records. TotalModelTime, TotalToolTime and AverageTurnDuration are exact sums over the recorded turns.
       - StopReason: when the transcript has none, it is recovered from the agent.log line "Agent run finished: <Reason> after"
         next to it and written as the enum's number (the runner's own format). No log line, or an unknown reason name, leaves it absent.
-      - Settings is added only with what can be recovered: the transcript's own Temperature/TopP (Source "sent", Verified true,
-        because the transcript itself recorded what was sent) and, when the transcript lacks them, a
-        "ROSLYNSENTINEL_LLM_TEMPERATURE=<v>" / "ROSLYNSENTINEL_LLM_TOP_P=<v>" line in agent.log (Source "sent", Verified false).
+      - Settings is added only with what can be recovered: the transcript's own Temperature/TopP and, when the transcript lacks
+        them, a "ROSLYNSENTINEL_LLM_TEMPERATURE=<v>" / "ROSLYNSENTINEL_LLM_TOP_P=<v>" line in agent.log. Both are Source "sent",
+        Verified false: Verified means the host echoed the value (as in the runner), which an old transcript cannot show.
         Nothing else is guessed; no Load block is written.
       - Property order is kept: Settings goes right after ContextLength (else ModelKey), StopReason just before Turns, Summary last.
       - The JSON is edited as System.Text.Json nodes and written with the runner's own options (indented, relaxed escaping), so
@@ -275,9 +275,9 @@ foreach ($file in $files) {
         }
 
         # Settings: only what can be recovered.
+        # Verified stays false: it means "the host echoed this value", which an old transcript cannot show.
         $temperature = $null; $topP = $null; $verified = $false
         if ($null -ne $root['Temperature'] -or $null -ne $root['TopP']) {
-            $verified = $true
             if ($null -ne $root['Temperature']) { $temperature = $root['Temperature'].GetValue[double]() }
             if ($null -ne $root['TopP']) { $topP = $root['TopP'].GetValue[double]() }
         }

@@ -99,4 +99,15 @@ public class LlmOptionsHostSamplerTests
         Assert.That(LlmOptions.HostSampler["topK"], Is.EqualTo(40.0));
         Assert.That(LlmOptions.HostSampler["minP"], Is.EqualTo(0.2));
     }
+
+    [Test]
+    public void Configure_FoldsLegacySamplerOptionsIntoHostSamplerAndHostSamplerWins()
+    {
+        LlmOptions.Configure(new[] { "--llm-host-sampler=topK=40", "--llm-top-k=10", "--llm-min-p=0.1", "--llm-repeat-penalty=1.0" });
+
+        Assert.That(LlmOptions.HostSampler, Has.Count.EqualTo(3));
+        Assert.That(LlmOptions.HostSampler["topK"], Is.EqualTo(40.0));
+        Assert.That(LlmOptions.HostSampler["minP"], Is.EqualTo(0.1));
+        Assert.That(LlmOptions.HostSampler["repeatPenalty"], Is.EqualTo(1.0));
+    }
 }

@@ -162,8 +162,14 @@ public static class LlmOptions
             ?? Environment.GetEnvironmentVariable("ROSLYNSENTINEL_LLM_REPEAT_PENALTY"));
         MinP = ParseNullableDouble(GetArgValue(args, "--llm-min-p")
             ?? Environment.GetEnvironmentVariable("ROSLYNSENTINEL_LLM_MIN_P"));
-        HostSampler = ParseHostSampler(GetArgValue(args, "--llm-host-sampler")
-            ?? Environment.GetEnvironmentVariable("ROSLYNSENTINEL_LLM_HOST_SAMPLER"));
+        var hostSampler = new Dictionary<string, double>(ParseHostSampler(GetArgValue(args, "--llm-host-sampler")
+            ?? Environment.GetEnvironmentVariable("ROSLYNSENTINEL_LLM_HOST_SAMPLER")));
+        // The older single-value options declare the same host-side values; fold them in so the transcript records one
+        // declared set. An explicit host-sampler entry wins on a clash.
+        if (TopK is { } topK) hostSampler.TryAdd("topK", topK);
+        if (MinP is { } minP) hostSampler.TryAdd("minP", minP);
+        if (RepeatPenalty is { } repeatPenalty) hostSampler.TryAdd("repeatPenalty", repeatPenalty);
+        HostSampler = hostSampler;
     }
 
     private static double? ParseNullableDouble(string? raw) =>
