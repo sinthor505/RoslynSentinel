@@ -31,6 +31,62 @@ public static class CompilerErrorLookupHelper
     private static readonly Regex AccessModifierRegex = new(@"\b(public|private|protected|internal)\b", RegexOptions.Compiled);
     private static readonly Regex Cs0737NotPublicRegex = new(@"'([^']+)' cannot implement an interface member because it is not public", RegexOptions.Compiled);
 
+    /// <summary>
+    /// Replacement text for a misspelled name when the near-miss name display is Hide.
+    /// </summary>
+    internal const string HiddenName = "(name omitted)";
+
+    /// <summary>
+    /// Returns the misspelled name a CS0117, CS1061 or CS0103 diagnostic reports, or null when the ID
+    /// is not one of these or the message does not match its pattern.
+    /// </summary>
+    internal static string? WrongNameOf(DiagnosticInfo diagnostic)
+    {
+        if (diagnostic.Id is "CS0117" or "CS1061")
+        {
+            var match = MissingMemberRegex.Match(diagnostic.Message);
+            return match.Success ? match.Groups[2].Value : null;
+        }
+
+        if (diagnostic.Id == "CS0103")
+        {
+            var match = Cs0103NameRegex.Match(diagnostic.Message);
+            return match.Success ? match.Groups[1].Value : null;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Replaces each whole-word, ordinal, case-sensitive occurrence of <paramref name="wrongName"/> in
+    /// <paramref name="text"/> with <see cref="HiddenName"/>. Returns <paramref name="text"/> unchanged
+    /// when <paramref name="wrongName"/> is empty.
+    /// </summary>
+    internal static string HideName(string text, string wrongName)
+    {
+        if (wrongName.Length == 0)
+        {
+            return text;
+        }
+
+        return Regex.Replace(text, @"\b" + Regex.Escape(wrongName) + @"\b", HiddenName);
+    }
+
+    /// <summary>
+    /// Safety net applied after the explicit rewording: under NearMissNameDisplay.Hide, removes the
+    /// misspelled name from the hint. Returns <paramref name="hint"/> unchanged otherwise.
+    /// </summary>
+    private static string HideNameInHint(DiagnosticInfo diagnostic, string hint)
+    {
+        if (RoslynSentinel.Common.NearMissOptions.NameDisplay != RoslynSentinel.Common.NearMissNameDisplay.Hide)
+        {
+            return hint;
+        }
+
+        var wrongName = WrongNameOf(diagnostic);
+        return string.IsNullOrEmpty(wrongName) ? hint : HideName(hint, wrongName);
+    }
+
     // TODO pass editedFilePaths to DescribeAsync at the remaining callers
     // isToolActive: whether a tool may be named to the caller (ActiveToolSurface.IsCallable); null names no tool, so existing callers keep today's text.
     public static async Task<string> DescribeAsync(
@@ -111,12 +167,12 @@ public static class CompilerErrorLookupHelper
     {
         if (diagnostic.Id == "CS0103")
         {
-            return await DescribeCs0103Async(diagnostic, symbolNavigationEngine, cancellationToken);
+            return HideNameInHint(diagnostic, await DescribeCs0103Async(diagnostic, symbolNavigationEngine, cancellationToken));
         }
 
         if (diagnostic.Id is "CS0117" or "CS1061")
         {
-            return await DescribeMissingMemberAsync(diagnostic, symbolNavigationEngine, cancellationToken, editedFilePaths);
+            return HideNameInHint(diagnostic, await DescribeMissingMemberAsync(diagnostic, symbolNavigationEngine, cancellationToken, editedFilePaths));
         }
 
         if (diagnostic.Id == "CS0122")
@@ -525,6 +581,7 @@ public static class CompilerErrorLookupHelper
 
         var typeName = match.Groups[1].Value;
         var memberName = match.Groups[2].Value;
+        var hide = RoslynSentinel.Common.NearMissOptions.NameDisplay == RoslynSentinel.Common.NearMissNameDisplay.Hide;
         var isExtensionCandidate = diagnostic.Id == "CS1061";
 
         // LocateSymbolAsync's containingType filter matches MinimallyQualifiedFormat (simple name,
@@ -559,7 +616,9 @@ public static class CompilerErrorLookupHelper
             // TODO FindExtensionMethods is named unconditionally; name it only when active (gated-tool rule)
             if (isExtensionCandidate)
             {
-                return $"  No member or extension method named '{memberName}' was found anywhere in the solution for type '{typeName}'. This is likely a typo, a member that needs to be added to '{typeName}', or an extension method whose defining namespace needs a `using` - check FindExtensionMethods if one is expected to exist."
+                return (hide
+                    ? $"  No member or extension method with that name was found anywhere in the solution for type '{typeName}'. This is likely a typo, a member that needs to be added to '{typeName}', or an extension method whose defining namespace needs a `using` - check FindExtensionMethods if one is expected to exist."
+                    : $"  No member or extension method named '{memberName}' was found anywhere in the solution for type '{typeName}'. This is likely a typo, a member that needs to be added to '{typeName}', or an extension method whose defining namespace needs a `using` - check FindExtensionMethods if one is expected to exist.")
                     + (IsEdited(diagnostic.FilePath.ToString()) ? " If this edit renames a use of an existing member, change the member's declaration in the same call." : string.Empty);
             }
 
@@ -601,7 +660,9 @@ public static class CompilerErrorLookupHelper
                     var spelling = closestName.Length <= 30
                         ? $" ({closestName.Length} letters: {string.Join("-", closestName.Select(ch => ch.ToString()))})"
                         : $" ({closestName.Length} letters)";
-                    closestClause = $" Closest existing member of '{typeName}': '{closestName}'. Your edit contains '{memberName}' ({memberName.Length} letters); the member is spelled '{closestName}'{spelling}.";
+                    closestClause = hide
+                        ? $" Closest existing member of '{typeName}': '{closestName}'{spelling}."
+                        : $" Closest existing member of '{typeName}': '{closestName}'. Your edit contains '{memberName}' ({memberName.Length} letters); the member is spelled '{closestName}'{spelling}.";
                 }
 
                 // Corrected line: the rejected source line with the misspelled member replaced by the closest one, so the correct spelling
@@ -617,8 +678,12 @@ public static class CompilerErrorLookupHelper
                 }
             }
 
-            var notFound = $"  No member named '{memberName}' was found anywhere in the solution.";
-            var likelyTypo = $"This is likely a typo, or '{memberName}' needs to be added to '{typeName}'.";
+            var notFound = hide
+                ? "  No member with that name was found anywhere in the solution."
+                : $"  No member named '{memberName}' was found anywhere in the solution.";
+            var likelyTypo = hide
+                ? $"This is likely a typo, or the member needs to be added to '{typeName}'."
+                : $"This is likely a typo, or '{memberName}' needs to be added to '{typeName}'.";
             var noCandidate = closestClause.Length > 0
                 ? notFound + closestClause + membersClause + " " + likelyTypo
                 : notFound + " " + likelyTypo + membersClause;
@@ -637,14 +702,20 @@ public static class CompilerErrorLookupHelper
             string.Equals(c.ContainingType, simpleTypeName, StringComparison.OrdinalIgnoreCase) && IsEdited(c.FilePath?.ToString()));
         if (editedOnNamedType is not null)
         {
-            return $"  '{memberName}' is declared in {Path.GetFileName(editedOnNamedType.FilePath?.ToString())}, which this edit changes. If the edit removes or renames '{memberName}', this file still uses the old name: change the declaration and every use in one call.";
+            return hide
+            ? $"  A member with that name is declared in {Path.GetFileName(editedOnNamedType.FilePath?.ToString())}, which this edit changes. If the edit removes or renames that member, this file still uses the old name: change the declaration and every use in one call."
+            : $"  '{memberName}' is declared in {Path.GetFileName(editedOnNamedType.FilePath?.ToString())}, which this edit changes. If the edit removes or renames '{memberName}', this file still uses the old name: change the declaration and every use in one call.";
         }
 
         bool IsEdited(string? path) => IsEditedPath(editedFilePaths, path);
 
         var explanation = onNamedType
-            ? $"  '{memberName}' exists on '{typeName}' but isn't accessible the way it was called (wrong overload, wrong accessibility, or a static/instance mismatch)."
-            : $"  '{memberName}' was not found on '{typeName}', but a member with that name exists elsewhere - likely the wrong receiver type, or '{memberName}' needs to be added to '{typeName}' instead. Candidates found:";
+            ? (hide
+                ? $"  A member with that name exists on '{typeName}' but isn't accessible the way it was called (wrong overload, wrong accessibility, or a static/instance mismatch)."
+                : $"  '{memberName}' exists on '{typeName}' but isn't accessible the way it was called (wrong overload, wrong accessibility, or a static/instance mismatch).")
+            : (hide
+                ? $"  No member with that name was found on '{typeName}', but one exists elsewhere - likely the wrong receiver type, or the member needs to be added to '{typeName}' instead. Candidates found:"
+                : $"  '{memberName}' was not found on '{typeName}', but a member with that name exists elsewhere - likely the wrong receiver type, or '{memberName}' needs to be added to '{typeName}' instead. Candidates found:");
 
         return explanation + "\n" + string.Join("\n", suggestions);
     }
