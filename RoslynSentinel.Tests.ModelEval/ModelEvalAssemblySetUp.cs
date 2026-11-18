@@ -34,6 +34,9 @@ public class ModelEvalAssemblySetUp
         // Reads ROSLYNSENTINEL_NOTFOUND_INVENTORY (on by default; 0 or false turns the symbol member inventory off; the file-miss folder list is always on; the stamp below carries +inventory while it is on).
         NotFoundInventoryOptions.Configure([]);
         LoopLatchOptions.Configure([]);
+        // Reads ROSLYNSENTINEL_NEAR_MISS_AUTOCORRECT / _NAME_DISPLAY (eval-only options; unset = off / show). Must run
+        // before the in-process server is built: the _meta filter is registered only when NearMissRecorder.IsActive.
+        NearMissOptions.Configure([]);
         // Reads ROSLYNSENTINEL_ERROR_POLICY_MODE / _FILE; unset leaves the policy Off. For Pointer/Inline with no file,
         // the harness defaults the file to ErrorPolicyFile.OutputPath (deviation from production startup, harness convenience only).
         ErrorPolicyOptions.Configure(ErrorPolicyFile.ResolveConfigureArgs(
