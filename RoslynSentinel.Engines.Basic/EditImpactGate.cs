@@ -31,13 +31,14 @@ public static class EditImpactGate
         {
             var impact = await AnalyzeAsync(workspaceManager, changes, report, activeToolSurface, removePaths, deletePaths, ct);
             // The detail is built even when nothing is attributable, so the shape never varies (same as a rejected ReplaceSnippet).
-            return (impact?.Text, BuildDetail(impact, report.Diagnostics));
+            var nearMisses = await DetectNearMissesAsync(workspaceManager, changes, report.Diagnostics, ct);
+            return (impact?.Text, BuildDetail(impact, report.Diagnostics, nearMisses: nearMisses));
         };
 
     /// <summary>
     /// The <c>errorData.structuredDetail</c> of a rejected edit, shared by every compile-gate site: one <see cref="EditImpactDetail"/> holding the verdicts
-    /// (<paramref name="liftVerdict"/> first when the edit was tried as a RenameSymbol, then the symbol-diff verdicts) and the compiler diagnostics as two
-    /// named lists. Both lists may be empty; the shape does not vary.
+    /// (<paramref name="liftVerdict"/> first when the edit was tried as a RenameSymbol, then the symbol-diff verdicts) and the compiler diagnostics, and the near-miss names when any were detected (null otherwise), as
+    /// named lists. The verdicts and diagnostics lists may be empty; the shape does not vary.
     /// The diagnostics list holds only those that no verdict's brokenUses already carries, so no diagnostic is on the wire twice.
     /// </summary>
     public static List<object> BuildDetail(EditImpactResult? impact, IReadOnlyList<DiagnosticInfo> diagnostics, IEnumerable<ImpactVerdict>? liftVerdicts = null, IReadOnlyList<NearMissName>? nearMisses = null)
@@ -72,7 +73,8 @@ public static class EditImpactGate
     {
         var impact = await AnalyzeAsync(workspaceManager, changes, report, activeToolSurface, cancellationToken: cancellationToken);
         var text = impact is null ? existingText : impact.Text + "\n" + existingText;
-        return new ResultError(ToolErrorCode.ValidationFailed, messagePrefix + text, StructuredDetail: BuildDetail(impact, report.Diagnostics));
+        var nearMisses = await DetectNearMissesAsync(workspaceManager, changes, report.Diagnostics, cancellationToken);
+        return new ResultError(ToolErrorCode.ValidationFailed, messagePrefix + text, StructuredDetail: BuildDetail(impact, report.Diagnostics, nearMisses: nearMisses));
     }
 
     /// <summary>The analyzer's report for a rejected edit, or null when no error in an unedited file can be attributed.</summary>
@@ -114,6 +116,29 @@ public static class EditImpactGate
         }
         // The impact text is an optional extra on a rejection that is already being reported: any analyzer or workspace
         // failure falls back to the existing text instead of masking the real compiler errors with a second error.
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Near-miss names for a rejected edit (a CS0117/CS1061 whose target has a close name in the committed baseline), for the
+    /// <c>nearMisses</c> list of <see cref="BuildDetail"/>. Null when there are none or the detection failed: the rejection is
+    /// already being reported, so a detector failure must not mask the real compiler errors.
+    /// </summary>
+    /// <remarks>A null or empty result means no near misses; the caller passes it through unchanged.</remarks>
+    public static async Task<IReadOnlyList<NearMissName>?> DetectNearMissesAsync(
+        IWorkspaceManager workspaceManager,
+        IReadOnlyDictionary<FilePathWrapper, string> changes,
+        IReadOnlyList<DiagnosticInfo> diagnostics,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var baseline = await workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+            return await NearMissDetector.DetectAsync(baseline, changes, diagnostics, cancellationToken);
+        }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return null;

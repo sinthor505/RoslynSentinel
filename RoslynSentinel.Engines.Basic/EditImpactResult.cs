@@ -108,7 +108,7 @@ public sealed record ImpactVerdict(
 
 /// <summary>
 /// The single item of <c>errorData.structuredDetail</c> on a rejected ReplaceSnippet (single and batch): the impact verdicts and the compiler diagnostics
-/// that rejected the edit, as two named lists instead of one mixed list. <c>structuredDetail</c> is a list of untyped items, so this is its only element.
+/// that rejected the edit, as named lists instead of one mixed list: the verdicts, the diagnostics and, when any were detected, the near-miss names (nearMisses is null otherwise). <c>structuredDetail</c> is a list of untyped items, so this is its only element.
 /// </summary>
 /// <param name="Verdicts">One <see cref="ImpactVerdict"/> per changed symbol (see <see cref="EditImpactResult.Verdicts"/>), the lift attempt first; empty when no impact analysis was attributable.</param>
 /// <param name="Diagnostics">The compile gate's diagnostics for the rejected edit.</param>

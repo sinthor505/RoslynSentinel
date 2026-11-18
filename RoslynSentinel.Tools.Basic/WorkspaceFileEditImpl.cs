@@ -1182,10 +1182,10 @@ public class WorkspaceFileEditImpl
 
     /// <summary>
     /// The <c>errorData.structuredDetail</c> of a rejected ReplaceSnippet, single and batch alike: one <see cref="EditImpactDetail"/> holding the verdicts
-    /// (the lift attempt first, then the symbol-diff verdicts) and the compiler diagnostics as two named lists. Both lists may be empty; the shape does not vary.
+    /// (the lift attempt first, then the symbol-diff verdicts) the compiler diagnostics as named lists, and the near-miss names (null when there are none). The lists may be empty; the shape does not vary.
     /// </summary>
-    private static List<object> RejectionDetail(EditImpactResult? impact, IEnumerable<ImpactVerdict>? liftVerdicts, IReadOnlyList<DiagnosticInfo> diagnostics)
-        => EditImpactGate.BuildDetail(impact, diagnostics, liftVerdicts);
+    private static List<object> RejectionDetail(EditImpactResult? impact, IEnumerable<ImpactVerdict>? liftVerdicts, IReadOnlyList<DiagnosticInfo> diagnostics, IReadOnlyList<NearMissName>? nearMisses = null)
+        => EditImpactGate.BuildDetail(impact, diagnostics, liftVerdicts, nearMisses);
 
     /// <summary>
     /// What other ReplaceSnippet edits say, for the impact analyzer's unapplied-name rule: full file path to newContent for every file except <paramref name="ownPaths"/>,
@@ -1234,6 +1234,7 @@ public class WorkspaceFileEditImpl
         var untouchedNote = impactNote
             ?? ValidateAndApplyHelper.DescribeUntouchedFileErrors(changedPaths, validation.Diagnostics.Select(d => d.FilePath.ToString()), "one ReplaceSnippet call with batchEdits, one item per file, each with its own filePath");
         var repeatNote = isRepeat ? RepeatedRejectionNote + (impactNote is null ? RepeatedRejectionChangeApproach : RepeatedRejectionFollowNextStep) + " " : "";
+        var nearMisses = await EditImpactGate.DetectNearMissesAsync(_workspaceManager, changes, validation.Diagnostics, cancellationToken);
         return new ResultError(ToolErrorCode.ValidationFailed,
             headline +
             repeatNote +
@@ -1242,7 +1243,7 @@ public class WorkspaceFileEditImpl
             (impactNote is null ? "Fix the issue(s) below and retry:\n" : "Compiler errors caused by this edit:\n") +
             "[COMPILER ERROR]\n" +
             await CompilerErrorLookupHelper.DescribeAsync(validation, _symbolNavigationEngine, cancellationToken, changedPaths, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable),
-            StructuredDetail: RejectionDetail(impact, liftVerdicts, validation.Diagnostics));
+            StructuredDetail: RejectionDetail(impact, liftVerdicts, validation.Diagnostics, nearMisses));
     }
 
     public async Task<SentinelCallToolResult<ReplaceSnippetResult>> ReplaceSnippet(
