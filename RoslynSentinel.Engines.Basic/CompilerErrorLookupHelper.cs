@@ -87,6 +87,111 @@ public static class CompilerErrorLookupHelper
         return string.IsNullOrEmpty(wrongName) ? hint : HideName(hint, wrongName);
     }
 
+    /// <summary>
+    /// Header text of a single or grouped diagnostic. Under NearMissNameDisplay.Hide the misspelled name is removed
+    /// from the message, the quoted source line and the expression line, and the corrected line (when one can be
+    /// built) replaces the quoted source line. Under Show, or for an ID that carries no misspelled name, the values
+    /// come back unchanged.
+    /// </summary>
+    private static async Task<(string Message, string? SourceLine, string? SpanText)> HeaderPartsAsync(
+        DiagnosticInfo diagnostic,
+        SymbolNavigationEngine symbolNavigationEngine,
+        CancellationToken cancellationToken)
+    {
+        var wrongName = WrongNameOf(diagnostic);
+        if (RoslynSentinel.Common.NearMissOptions.NameDisplay != RoslynSentinel.Common.NearMissNameDisplay.Hide
+            || string.IsNullOrEmpty(wrongName))
+        {
+            return (diagnostic.Message, diagnostic.SourceLine, diagnostic.SpanText);
+        }
+
+        var message = HideName(diagnostic.Message, wrongName);
+
+        string? sourceLine = diagnostic.SourceLine;
+        if (await FindCorrectedLineAsync(diagnostic, symbolNavigationEngine, cancellationToken) is { } correctedLine)
+        {
+            sourceLine = correctedLine;
+        }
+        else if (!string.IsNullOrEmpty(diagnostic.SourceLine))
+        {
+            sourceLine = HideName(diagnostic.SourceLine, wrongName);
+        }
+
+        // The original texts decide the omission, as in DescribeAsync: a span equal to its source line stays omitted.
+        string? spanText = string.IsNullOrEmpty(diagnostic.SpanText)
+            || string.Equals(diagnostic.SpanText, diagnostic.SourceLine, StringComparison.Ordinal)
+            ? null
+            : HideName(diagnostic.SpanText, wrongName);
+
+        return (message, sourceLine, spanText);
+    }
+
+    /// <summary>
+    /// The rejected source line with the misspelled name replaced by the closest existing name, or null when no name
+    /// is close, the line has no use of the name, the ID is not CS0117, CS1061 or CS0103, or the lookup fails.
+    /// </summary>
+    private static async Task<string?> FindCorrectedLineAsync(
+        DiagnosticInfo diagnostic,
+        SymbolNavigationEngine symbolNavigationEngine,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (diagnostic.Id is "CS0117" or "CS1061")
+            {
+                var match = MissingMemberRegex.Match(diagnostic.Message);
+                if (!match.Success)
+                {
+                    return null;
+                }
+
+                var memberName = match.Groups[2].Value;
+
+                // TODO share the member-name lookup with DescribeMissingMemberAsync
+                var simpleTypeName = match.Groups[1].Value.Split('.').Last().Split('<').First();
+                var typeMembers = await symbolNavigationEngine.LocateSymbolAsync(
+                    "", exactMatch: false, containingType: simpleTypeName, includeTests: false, cancellationToken: cancellationToken);
+                var memberNames = typeMembers
+                    .Where(c => string.Equals(c.ContainingType, simpleTypeName, StringComparison.OrdinalIgnoreCase)
+                        && c.Accessibility != "Private"
+                        && !c.SymbolName.StartsWith('<')
+                        && !c.SymbolName.StartsWith('.'))
+                    .Select(c => c.SymbolName)
+                    .Distinct()
+                    .ToList();
+
+                var closestMember = CorrectedLineHint.FindClosest(memberName, memberNames);
+                return closestMember == null
+                    ? null
+                    : CorrectedLineHint.RewriteLine(diagnostic.SourceLine, memberName, closestMember, diagnostic.StartColumn, memberAccess: true);
+            }
+
+            if (diagnostic.Id == "CS0103")
+            {
+                var match = Cs0103NameRegex.Match(diagnostic.Message);
+                if (!match.Success)
+                {
+                    return null;
+                }
+
+                var name = match.Groups[1].Value;
+                var namesInScope = await symbolNavigationEngine.GetNamesInScopeAsync(
+                    diagnostic.FilePath, diagnostic.StartLine, diagnostic.StartColumn, cancellationToken);
+                var closestName = CorrectedLineHint.FindClosest(name, namesInScope);
+                return closestName == null
+                    ? null
+                    : CorrectedLineHint.RewriteLine(diagnostic.SourceLine, name, closestName, diagnostic.StartColumn, memberAccess: false);
+            }
+
+            return null;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The corrected line is an extra; a lookup failure falls back to the hidden source line.
+            return null;
+        }
+    }
+
     // TODO pass editedFilePaths to DescribeAsync at the remaining callers
     // isToolActive: whether a tool may be named to the caller (ActiveToolSurface.IsCallable); null names no tool, so existing callers keep today's text.
     public static async Task<string> DescribeAsync(
@@ -130,7 +235,8 @@ public static class CompilerErrorLookupHelper
             var first = items[0];
             if (items.Count == 1)
             {
-                var single = $"{first.Id} at {first.FilePath}:{first.StartLine}: {first.Message}" + (string.IsNullOrEmpty(first.SourceLine) ? string.Empty : "\n    > " + first.SourceLine) + (string.IsNullOrEmpty(first.SpanText) || string.Equals(first.SpanText, first.SourceLine, StringComparison.Ordinal) ? string.Empty : "\n    Expression the error points at: '" + first.SpanText + "'");
+                var singleParts = await HeaderPartsAsync(first, symbolNavigationEngine, cancellationToken);
+                var single = $"{first.Id} at {first.FilePath}:{first.StartLine}: {singleParts.Message}" + (string.IsNullOrEmpty(singleParts.SourceLine) ? string.Empty : "\n    > " + singleParts.SourceLine) + (string.IsNullOrEmpty(singleParts.SpanText) || string.Equals(first.SpanText, first.SourceLine, StringComparison.Ordinal) ? string.Empty : "\n    Expression the error points at: '" + singleParts.SpanText + "'");
                 var singleHint = await HintAsync(first);
                 parts.Add(singleHint == null ? single : single + "\n" + singleHint);
                 continue;
@@ -139,7 +245,8 @@ public static class CompilerErrorLookupHelper
             var locations = items.Select(d => $"{d.FilePath}:{d.StartLine}").Distinct().ToList();
             var shown = string.Join(", ", locations.Take(MaxGroupedLocations));
             var more = locations.Count > MaxGroupedLocations ? $" (+{locations.Count - MaxGroupedLocations} more)" : string.Empty;
-            var header = $"{first.Id} (x{items.Count}): {first.Message} at: {shown}{more}" + (string.IsNullOrEmpty(first.SourceLine) ? string.Empty : "\n    > " + first.SourceLine) + (string.IsNullOrEmpty(first.SpanText) || string.Equals(first.SpanText, first.SourceLine, StringComparison.Ordinal) ? string.Empty : "\n    Expression the error points at: '" + first.SpanText + "'");
+            var headerParts = await HeaderPartsAsync(first, symbolNavigationEngine, cancellationToken);
+            var header = $"{first.Id} (x{items.Count}): {headerParts.Message} at: {shown}{more}" + (string.IsNullOrEmpty(headerParts.SourceLine) ? string.Empty : "\n    > " + headerParts.SourceLine) + (string.IsNullOrEmpty(headerParts.SpanText) || string.Equals(first.SpanText, first.SourceLine, StringComparison.Ordinal) ? string.Empty : "\n    Expression the error points at: '" + headerParts.SpanText + "'");
             var hint = await HintAsync(first);
             parts.Add(hint == null ? header : header + "\n" + hint);
         }
