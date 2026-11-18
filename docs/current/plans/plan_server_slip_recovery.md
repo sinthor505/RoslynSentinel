@@ -1,7 +1,11 @@
 # Plan: near-miss member detail on rejections, qualified enum members in outlines, then eval-only auto-correction
 
-**Status:** APPROVED 2026-11-18. Batched run, owner away; D3 and D4 settled (see Decision). Phase B
-(Steps 8-13, eval-only) follows Phase A.
+**Status:** IN PROGRESS 2026-11-18. Steps 1-3 done (a4056bc8, b44db0d1, e4bea9e3, 79337626). Batched run,
+owner away; D3 and D4 settled (see Decision). Phase B (Steps 8-13, eval-only) follows Phase A.
+
+**Name trap:** inside `RoslynSentinel.Engines.Basic`, `SymbolCandidate` resolves to an unrelated record in
+`SymbolNavigationEngine.cs`; the `Common` one (`SymbolNotFoundDetail.cs:13`) needs its namespace. Any step
+touching `NearMissName.Candidates` (4, 5, 6, 12) must use the `Common` type.
 
 ## Problem
 
@@ -72,6 +76,7 @@ Settled 2026-11-18 (implement-plan review; owner answers marked "owner"):
     ```
 - Done when: `Build` 0 errors.
 - Lane: implementer.
+- Done: a4056bc8
 
 ### Step 2 - Detector for CS0117 and CS1061 (text-neutral)
 - Files: `RoslynSentinel.Engines.Basic/NearMissDetector.cs`
@@ -103,6 +108,7 @@ Settled 2026-11-18 (implement-plan review; owner answers marked "owner"):
     detector; the mapping inside `SymbolNotFoundDetail` is private.
 - Done when: `Build` 0 errors; Step 3 tests pass.
 - Lane: implementer-senior (Roslyn binding judgment; within tier-1 size).
+- Done: b44db0d1 (also retyped `NearMissName.Candidates` to the `Common` `SymbolCandidate`); 79337626 (project lookup via `ProjectLookup.FindProject`, ratchet).
 
 ### Step 3 - Detector tests (text-neutral)
 - Files: `RoslynSentinel.Tests/NearMissDetectorTests.cs` (new)
@@ -120,6 +126,7 @@ Settled 2026-11-18 (implement-plan review; owner answers marked "owner"):
   - `DetectAsync_NoMemberDiagnostics_ReturnsEmptyAsync`
 - Done when: the dispatcher's `RunTest` on `NearMissDetectorTests` passes.
 - Lane: test-writer.
+- Done: e4bea9e3. Gaps left for Step 5: the tests use hand-built `DiagnosticInfo` positions and never assert `Candidates`; cover both in the wiring tests, which use real compile diagnostics.
 
 ### Step 4 - Wire the detector into the three gate sites (behaviour-changing)
 - Files: `RoslynSentinel.Engines.Basic/EditImpactGate.cs`, `RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs`
