@@ -91,8 +91,9 @@ public class NearMissRejectionTests
         var detail = DetailOf(result.ErrorData);
         AssertEnumMemberSlipNearMiss(detail);
 
-        // The wire form: a present nearMisses array with the near miss in it, under the camelCase naming the server uses.
-        var json = JsonSerializer.Serialize(result.ErrorData, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        // The wire form: the server marshals with McpJsonUtilities.DefaultOptions (SentinelToolFactory.cs:118), which is camelCase and
+        // WhenWritingNull, so a present nearMisses array is written in full.
+        var json = JsonSerializer.Serialize(result.ErrorData, ModelContextProtocol.McpJsonUtilities.DefaultOptions);
         Assert.That(json, Does.Contain("\"nearMisses\":[{"));
     }
 
@@ -143,5 +144,10 @@ public class NearMissRejectionTests
         var detail = DetailOf(result.ErrorData);
         Assert.That(detail.Diagnostics, Has.Some.Matches<DiagnosticInfo>(d => d!.Id == "CS0246"), "the rejection carries the CS0246 diagnostic");
         Assert.That(detail.NearMisses, Is.Null, "no member diagnostic, so the detector reports no near miss");
+
+        // The wire form omits a null nearMisses (McpJsonUtilities.DefaultOptions is WhenWritingNull); the diagnostics still ride along.
+        var json = JsonSerializer.Serialize(result.ErrorData, ModelContextProtocol.McpJsonUtilities.DefaultOptions);
+        Assert.That(json, Does.Contain("\"diagnostics\":[{"), "precondition: the detail is on the wire");
+        Assert.That(json, Does.Not.Contain("nearMisses"));
     }
 }
