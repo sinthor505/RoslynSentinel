@@ -164,6 +164,15 @@ public sealed class AgentTranscript
 
     public List<AgentTranscriptTurn> Turns { get; } = [];
 
+    /// <summary>
+    /// Run-level totals computed when the run ends, so intermediate writes omit it; null, and so omitted from the JSON, for transcripts written before this was recorded.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RunTotals? Summary
+    {
+        get; set;
+    }
+
     // Models that emit reasoning inline wrap it in think tags; an unclosed or bare tag is not an answer either.
     private static readonly System.Text.RegularExpressions.Regex ThinkTags = new(
         @"<think>[\s\S]*?</think>|</?think>",
@@ -281,6 +290,115 @@ public sealed class AgentToolCallRecord
     }
 }
 
+/// <summary>
+/// Run-level totals for one transcript, computed when the run ends. Nullable members are null when no turn reported it.
+/// </summary>
+public sealed class RunTotals
+{
+    /// <summary>Wall-clock duration of the whole run.</summary>
+    public TimeSpan TotalDuration
+    {
+        get; init;
+    }
+
+    /// <summary>Sum of the model latency across all turns.</summary>
+    public TimeSpan TotalModelTime
+    {
+        get; init;
+    }
+
+    /// <summary>Sum of the latency across all tool calls.</summary>
+    public TimeSpan TotalToolTime
+    {
+        get; init;
+    }
+
+    /// <summary>Number of model turns in the run.</summary>
+    public int TurnCount
+    {
+        get; init;
+    }
+
+    /// <summary>Number of tool calls in the run.</summary>
+    public int ToolCallCount
+    {
+        get; init;
+    }
+
+    /// <summary>Number of tool calls whose result was an error.</summary>
+    public int ToolErrorCount
+    {
+        get; init;
+    }
+
+    /// <summary>Total input tokens across turns, null when no turn reported it.</summary>
+    public int? InputTokens
+    {
+        get; init;
+    }
+
+    /// <summary>Total cached input tokens across turns, null when no turn reported it.</summary>
+    public int? CachedInputTokens
+    {
+        get; init;
+    }
+
+    /// <summary>Total new (uncached) input tokens across turns, null when no turn reported it.</summary>
+    public int? NewInputTokens
+    {
+        get; init;
+    }
+
+    /// <summary>Total output tokens across turns, null when no turn reported it.</summary>
+    public int? OutputTokens
+    {
+        get; init;
+    }
+
+    /// <summary>Total reasoning tokens across turns, null when no turn reported it.</summary>
+    public int? ReasoningTokens
+    {
+        get; init;
+    }
+
+    /// <summary>Mean output tokens per turn, null when no turn reported it.</summary>
+    public double? AverageOutputTokensPerTurn
+    {
+        get; init;
+    }
+
+    /// <summary>Mean reasoning tokens per turn, null when no turn reported it.</summary>
+    public double? AverageReasoningTokensPerTurn
+    {
+        get; init;
+    }
+
+    /// <summary>Mean wall-clock duration per turn.</summary>
+    public TimeSpan AverageTurnDuration
+    {
+        get; init;
+    }
+
+    /// <summary>Count of tool errors per error code.</summary>
+    public Dictionary<string, int> ToolErrorCodes { get; init; } = [];
+
+    /// <summary>Count of compiler errors per CS error code.</summary>
+    public Dictionary<string, int> CompilerErrorCodes { get; init; } = [];
+
+    /// <summary>Set true only by scripts/Backfill-TranscriptSummary.ps1; null otherwise.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Backfilled
+    {
+        get; init;
+    }
+
+    /// <summary>Builds the totals from the transcript's turns; totalDuration is the run's wall clock.</summary>
+    public static RunTotals FromTranscript(AgentTranscript transcript, TimeSpan totalDuration)
+    {
+        throw new NotImplementedException(); // TODO implement
+    }
+}
+
 /// <summary>Why the agent loop stopped.</summary>
 public enum AgentStopReason
 {
@@ -322,6 +440,12 @@ public enum AgentStopReason
 
     /// <summary>A caller-supplied target predicate held after a live turn's tool results were appended.</summary>
     TargetReached,
+
+    /// <summary>The run was cancelled, e.g. by an early-stop cancellation token; set when OperationCanceledException propagates out of the loop.</summary>
+    Cancelled,
+
+    /// <summary>An unhandled exception ended the run.</summary>
+    Exception,
 }
 
 /// <summary>
