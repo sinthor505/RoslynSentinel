@@ -40,7 +40,7 @@ public static class EditImpactGate
     /// named lists. Both lists may be empty; the shape does not vary.
     /// The diagnostics list holds only those that no verdict's brokenUses already carries, so no diagnostic is on the wire twice.
     /// </summary>
-    public static List<object> BuildDetail(EditImpactResult? impact, IReadOnlyList<DiagnosticInfo> diagnostics, IEnumerable<ImpactVerdict>? liftVerdicts = null)
+    public static List<object> BuildDetail(EditImpactResult? impact, IReadOnlyList<DiagnosticInfo> diagnostics, IEnumerable<ImpactVerdict>? liftVerdicts = null, IReadOnlyList<NearMissName>? nearMisses = null)
     {
         var verdicts = new List<ImpactVerdict>();
         if (liftVerdicts is not null)
@@ -51,7 +51,8 @@ public static class EditImpactGate
         foreach (var verdict in verdicts)
             carried.UnionWith(verdict.BrokenUses);
         var uncarried = diagnostics.Where(d => !carried.Contains(d)).ToList();
-        return [new EditImpactDetail(verdicts, uncarried)];
+        var nearMissList = nearMisses is { Count: > 0 } ? nearMisses : null;
+        return [new EditImpactDetail(verdicts, uncarried, nearMissList)];
     }
 
     /// <summary>

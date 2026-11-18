@@ -1,3 +1,5 @@
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Engines.Basic;
 
 /// <summary>How one declaration differs between the baseline and the candidate text of the edited files.</summary>
@@ -110,6 +112,32 @@ public sealed record ImpactVerdict(
 /// </summary>
 /// <param name="Verdicts">One <see cref="ImpactVerdict"/> per changed symbol (see <see cref="EditImpactResult.Verdicts"/>), the lift attempt first; empty when no impact analysis was attributable.</param>
 /// <param name="Diagnostics">The compile gate's diagnostics for the rejected edit.</param>
+/// <param name="NearMisses">Unresolved member names with a close existing name on their receiver type (see <see cref="NearMissName"/>); null or empty when none were detected.</param>
 public sealed record EditImpactDetail(
     IReadOnlyList<ImpactVerdict> Verdicts,
-    IReadOnlyList<DiagnosticInfo> Diagnostics);
+    IReadOnlyList<DiagnosticInfo> Diagnostics,
+    IReadOnlyList<NearMissName>? NearMisses = null);
+
+/// <summary>
+/// A compile diagnostic for an unresolved member name whose receiver type declares a close name. <see cref="Replacement"/> is the receiver as written plus
+/// the closest name (for example <c>ShippingKinds.Overnight</c>); the wrong name is deliberately not a field.
+/// </summary>
+/// <param name="DiagnosticId">The compiler diagnostic id, for example CS0117.</param>
+/// <param name="FilePath">File of the unresolved use.</param>
+/// <param name="Line">1-based line of the unresolved use.</param>
+/// <param name="Column">1-based column of the unresolved use.</param>
+/// <param name="ReceiverType">Type the member was looked up on, or null when unknown.</param>
+/// <param name="Replacement">The receiver as written plus the closest name.</param>
+/// <param name="CorrectedLine">The source line with the replacement applied, or null when it cannot be produced.</param>
+/// <param name="WrongNameDeclaredElsewhere">True when the unresolved name is declared on another type in the solution.</param>
+/// <param name="Candidates">The declared symbols considered as the candidate list.</param>
+public sealed record NearMissName(
+    string DiagnosticId,
+    string FilePath,
+    int Line,
+    int Column,
+    string? ReceiverType,
+    string Replacement,
+    string? CorrectedLine,
+    bool WrongNameDeclaredElsewhere,
+    IReadOnlyList<SymbolCandidate> Candidates);
