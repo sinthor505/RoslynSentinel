@@ -113,6 +113,25 @@ public class NearMissDetectorTests
         }
         """;
 
+    // `using static` brings the enum members into scope as bare names, so Overnight resolves unqualified and Oovernight is CS0103.
+    private const string BareNameCheckoutCommitted = """
+        using static ContosoOrders.Core.ShippingKinds;
+        namespace ContosoOrders.Core;
+        public class OrderCheckout
+        {
+            public ShippingKinds Pick() => Overnight;
+        }
+        """;
+
+    private const string BareNameCheckoutProposed = """
+        using static ContosoOrders.Core.ShippingKinds;
+        namespace ContosoOrders.Core;
+        public class OrderCheckout
+        {
+            public ShippingKinds Pick() => Oovernight;
+        }
+        """;
+
     [Test]
     public async Task DetectAsync_EnumMemberSlip_ReturnsQualifiedReplacementAndCorrectedLineAsync()
     {
@@ -187,7 +206,7 @@ public class NearMissDetectorTests
     [Test]
     public async Task DetectAsync_NoMemberDiagnostics_ReturnsEmptyAsync()
     {
-        // Only CS0103 and CS0246 are present, so the detector has no member diagnostic to bind.
+        // Only CS0246 and a CS0103 that is the Name of a member access (not a bare name) are present, so the detector has nothing to bind.
         using var workspace = InMemoryWorkspace.Create((ShippingKindsFile, ShippingKindsSource), (CheckoutFile, EnumCheckoutCommitted));
         var diagnostics = new[]
         {
@@ -198,6 +217,27 @@ public class NearMissDetectorTests
         var result = await RunDetectorAsync(workspace, CheckoutFile, EnumCheckoutProposed, diagnostics);
 
         Assert.That(result, Is.Empty);
+    }
+
+    [Test]
+    public async Task DetectAsync_Cs0103BareNameSlip_ReturnsTheNameInScopeAsync()
+    {
+        // The diagnostic is built by hand like the member ones (MemberError), not taken from a compile of the proposed text.
+        using var workspace = InMemoryWorkspace.Create((ShippingKindsFile, ShippingKindsSource), (CheckoutFile, BareNameCheckoutCommitted));
+        var diagnostic = MemberError(workspace, CheckoutFile, BareNameCheckoutProposed, "CS0103", "Oovernight");
+
+        var result = await RunDetectorAsync(workspace, CheckoutFile, BareNameCheckoutProposed, [diagnostic]);
+
+        Assert.That(result, Has.Count.EqualTo(1));
+        var item = result[0];
+        Assert.Multiple(() =>
+        {
+            Assert.That(item.ReceiverType, Is.Null);
+            Assert.That(item.Replacement, Is.EqualTo("Overnight"));
+            Assert.That(item.CorrectedLine, Does.Contain("Overnight"));
+            Assert.That(item.CorrectedLine, Does.Not.Contain("Oovernight"));
+            Assert.That(item.Candidates, Is.Not.Empty);
+        });
     }
 
     // Compile-gate style diagnostic for `wrongName` on SlipLine of `proposedText`. The column is where the name starts on that

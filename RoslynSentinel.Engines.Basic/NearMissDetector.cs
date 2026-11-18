@@ -20,13 +20,13 @@ public static class NearMissDetector
     /// <summary>
     /// Detects near-miss names for the compiler diagnostics of a rejected edit. <paramref name="baseline"/> is the committed solution,
     /// <paramref name="changes"/> the candidate text per file, and <paramref name="diagnostics"/> the compile gate's diagnostics.
-    /// Handles CS0117 and CS1061 on a member access (<c>Receiver.Name</c>). Returns empty, without touching the solution, when there is no such
+    /// Handles CS0117 and CS1061 on a member access (<c>Receiver.Name</c>) and CS0103 on a bare name (<c>case Name:</c>, with <c>ReceiverType</c> null and the replacement the name alone). Returns empty, without touching the solution, when there is no such
     /// diagnostic; skips diagnostics in files that are not documents of <paramref name="baseline"/> (a created file). Any failure other than
     /// cancellation yields an empty list, because a detector failure must never break the rejection it decorates.
     /// </summary>
     public static async Task<IReadOnlyList<NearMissName>> DetectAsync(Solution baseline, IReadOnlyDictionary<FilePathWrapper, string> changes, IReadOnlyList<DiagnosticInfo> diagnostics, CancellationToken cancellationToken)
     {
-        var memberDiagnostics = diagnostics.Where(d => d.Id is "CS0117" or "CS1061").ToList();
+        var memberDiagnostics = diagnostics.Where(d => d.Id is "CS0117" or "CS1061" or "CS0103").ToList();
         if (memberDiagnostics.Count == 0)
         {
             return [];
@@ -101,6 +101,50 @@ public static class NearMissDetector
             return null;
         }
 
+        // CS0103 is a bare name (case Oovernight:); CS0117 and CS1061 are the Name of a member access (Receiver.Oovernight).
+        var isBareName = diagnostic.Id == "CS0103";
+        var slip = isBareName
+            ? FindBareNameSlip(model, root, position)
+            : FindMemberAccessSlip(model, root, position, cancellationToken);
+        if (slip is null)
+        {
+            return null;
+        }
+
+        var (wrongName, receiverType, qualifier, members) = slip.Value;
+        var closest = CorrectedLineHint.FindClosest(wrongName, members.Select(m => m.Name));
+        if (closest is null)
+        {
+            return null;
+        }
+
+        var candidates = NameCandidates.Rank(wrongName, members, m => m.Name, MaxCandidates, strict: true)
+            .Select(r => r.Item with { Distance = r.Distance })
+            .ToList();
+        var correctedLine = CorrectedLineHint.RewriteLine(line.ToString(), wrongName, closest, diagnostic.StartColumn, memberAccess: !isBareName)?.Trim();
+
+        if (!declaredElsewhere.TryGetValue(wrongName, out var isDeclaredElsewhere))
+        {
+            isDeclaredElsewhere = await IsDeclaredAnywhereAsync(baseline, wrongName, cancellationToken);
+            declaredElsewhere[wrongName] = isDeclaredElsewhere;
+        }
+
+        return new NearMissName(
+            DiagnosticId: diagnostic.Id,
+            FilePath: diagnostic.FilePath.ToString(),
+            Line: diagnostic.StartLine,
+            Column: diagnostic.StartColumn,
+            ReceiverType: receiverType,
+            Replacement: qualifier + closest,
+            CorrectedLine: correctedLine,
+            WrongNameDeclaredElsewhere: isDeclaredElsewhere,
+            Candidates: candidates);
+    }
+
+    // CS0117/CS1061: binds the receiver of the member access whose Name covers the position and lists the members it exposes.
+    // Qualifier is the receiver text plus a dot, so Replacement reads as written (ShippingKinds.Overnight, order.Total).
+    private static (string WrongName, string? ReceiverType, string Qualifier, List<CommonSymbolCandidate> Members)? FindMemberAccessSlip(SemanticModel model, SyntaxNode root, int position, CancellationToken cancellationToken)
+    {
         var access = root.FindToken(position).Parent?.AncestorsAndSelf().OfType<MemberAccessExpressionSyntax>().FirstOrDefault(a => a.Name.Span.Contains(position));
         if (access is null)
         {
@@ -135,41 +179,42 @@ public static class NearMissDetector
         var symbols = isStatic
             ? model.LookupStaticMembers(lookupPosition, type)
             : model.LookupSymbols(lookupPosition, type, includeReducedExtensionMethods: true);
-        var members = symbols
+        return (wrongName, type.ToDisplayString(), access.Expression.ToString() + ".", ToCandidates(symbols));
+    }
+
+    // CS0103: the unresolved identifier at the position, with every name in scope there (locals, parameters, members of the enclosing
+    // and base types, types, and members imported by using static). Namespaces, labels, type parameters and aliases are left out: a
+    // bare-name slip is retyped as a value, member or type, and a namespace-shaped name would invite a wrong replacement.
+    private static (string WrongName, string? ReceiverType, string Qualifier, List<CommonSymbolCandidate> Members)? FindBareNameSlip(SemanticModel model, SyntaxNode root, int position)
+    {
+        var identifier = root.FindToken(position).Parent?.AncestorsAndSelf().OfType<IdentifierNameSyntax>().FirstOrDefault(n => n.Identifier.Span.Contains(position));
+        if (identifier is null)
+        {
+            return null;
+        }
+
+        // The Name of a member access is not a bare name (CS0117/CS1061 own that shape, and its scope is the receiver's members).
+        if (identifier.Parent is MemberAccessExpressionSyntax access && access.Name == identifier)
+        {
+            return null;
+        }
+
+        var wrongName = identifier.Identifier.ValueText;
+        if (wrongName.Length == 0)
+        {
+            return null;
+        }
+
+        return (wrongName, null, string.Empty, ToCandidates(model.LookupSymbols(identifier.SpanStart)));
+    }
+
+    private static List<CommonSymbolCandidate> ToCandidates(IEnumerable<ISymbol> symbols)
+        => symbols
             .Where(IsCandidateMember)
             .Select(ToCandidate)
             .OfType<CommonSymbolCandidate>()
             .DistinctBy(c => (c.Name, c.Container, c.Kind))
             .ToList();
-
-        var closest = CorrectedLineHint.FindClosest(wrongName, members.Select(m => m.Name));
-        if (closest is null)
-        {
-            return null;
-        }
-
-        var candidates = NameCandidates.Rank(wrongName, members, m => m.Name, MaxCandidates, strict: true)
-            .Select(r => r.Item with { Distance = r.Distance })
-            .ToList();
-        var correctedLine = CorrectedLineHint.RewriteLine(line.ToString(), wrongName, closest, diagnostic.StartColumn, memberAccess: true)?.Trim();
-
-        if (!declaredElsewhere.TryGetValue(wrongName, out var isDeclaredElsewhere))
-        {
-            isDeclaredElsewhere = await IsDeclaredAnywhereAsync(baseline, wrongName, cancellationToken);
-            declaredElsewhere[wrongName] = isDeclaredElsewhere;
-        }
-
-        return new NearMissName(
-            DiagnosticId: diagnostic.Id,
-            FilePath: diagnostic.FilePath.ToString(),
-            Line: diagnostic.StartLine,
-            Column: diagnostic.StartColumn,
-            ReceiverType: type.ToDisplayString(),
-            Replacement: access.Expression.ToString() + "." + closest,
-            CorrectedLine: correctedLine,
-            WrongNameDeclaredElsewhere: isDeclaredElsewhere,
-            Candidates: candidates);
-    }
 
     private static Document? FindDocument(Solution solution, DiagnosticInfo diagnostic)
     {
@@ -195,8 +240,9 @@ public static class NearMissDetector
         return false;
     }
 
-    // Keeps what a model can name after a dot: types, ordinary and extension methods, properties (not indexers), fields (enum members
-    // included) and events. Implicitly declared members, constructors, operators and accessors are dropped.
+    // Keeps what a model can name after a dot, or as a bare name: types, ordinary and extension methods, properties (not indexers), fields
+    // (enum members included), events, and for a bare name also locals and parameters. Implicitly declared symbols, constructors, operators
+    // and accessors are dropped.
     private static bool IsCandidateMember(ISymbol symbol)
     {
         if (symbol.IsImplicitlyDeclared)
@@ -208,7 +254,7 @@ public static class NearMissDetector
         {
             IMethodSymbol method => method.MethodKind is MethodKind.Ordinary or MethodKind.ReducedExtension,
             IPropertySymbol property => !property.IsIndexer,
-            IFieldSymbol or IEventSymbol or INamedTypeSymbol => true,
+            IFieldSymbol or IEventSymbol or INamedTypeSymbol or ILocalSymbol or IParameterSymbol => true,
             _ => false,
         };
     }
@@ -224,6 +270,8 @@ public static class NearMissDetector
             IPropertySymbol => "property",
             IFieldSymbol => "field",
             IEventSymbol => "event",
+            ILocalSymbol => "local",
+            IParameterSymbol => "parameter",
             _ => null,
         };
         if (kind is null)
