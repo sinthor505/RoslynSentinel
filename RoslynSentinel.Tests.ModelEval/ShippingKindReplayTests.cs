@@ -45,9 +45,8 @@ public class ShippingKindReplayTests
     private static readonly string[] FallbackMemberNames =
         ["Standard", "Express", "Overnight", "Pickup", "SameDay", "IsKnown", "IsExpedited", "IsPickup", "All", "Normalize"];
 
-    // Same names the typo script ignores: placeholders in prose, not misspellings.
-    // "None", "AirFast" and "GroundPost" are CarrierSelector return values, not ShippingKinds members (~47 false positives per 200 samples).
-    private static readonly string[] PlaceholderNames = ["ConstantName", "Name", "Xxx", "Foo", "Member", "Constant", "None", "AirFast", "GroundPost"];
+    // Prose placeholders only; every other unknown name is recorded raw. scripts/Get-ShippingKindTypoCounts.ps1 -ReplayResults classifies near miss vs invented, so typoInTurn means any unknown name.
+    private static readonly string[] PlaceholderNames = ["ConstantName", "Name", "Xxx", "Foo", "Member", "Constant"];
 
     private static readonly Regex DeclarationRegex = new(
         @"(?:const\s+string\s+|static\s+[\w<>\?\[\]]+\s+)([A-Za-z_]\w*)\s*(?:=|\()",

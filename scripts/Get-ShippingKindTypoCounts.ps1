@@ -13,8 +13,10 @@
     the whole run. A resume sample (ShippingKindResume) has the kept turns first, so the same rule picks its live turn.
 
     Real member names come from the ShippingKinds.cs read inside the same transcript (const string X, static T X(...)),
-    plus a built-in fallback list. A reference is a 'near' typo when its edit distance to a real name is 1-3, otherwise
-    'other'. Only the 'ShippingKinds.<Name>' form is checked, so a bare misspelling in prose is not counted.
+    plus a built-in fallback list. Each unknown name is classified against its closest real member M: 'near' (a slip of
+    M) when editDistance(name, M) <= max(1, floor(len(M)/3)), or when name and M share a case-sensitive prefix of at least
+    4 characters that covers at least half of the shorter one; otherwise 'invented' (a member that does not exist, e.g.
+    None, Let or Kind). Only the 'ShippingKinds.<Name>' form is checked, so a bare misspelling in prose is not counted.
 
     Transcripts are deduplicated by RunId (archived runs are copied under nested folders).
 
@@ -38,9 +40,19 @@
 .PARAMETER Csv
     Write one row per transcript to this CSV file.
 
+.PARAMETER ReplayResults
+    results.csv files of ShippingKindReplay runs (folders are searched recursively for results.csv; comma-separated
+    entries are accepted). Each row's unknownNames are classified against the fallback member list, and per file the
+    script prints the rows, the rows with a near miss, the rows with only invented names, and the near-miss names.
+    Transcripts are not scanned unless -Path is also given.
+
 .EXAMPLE
     pwsh scripts/Get-ShippingKindTypoCounts.ps1 -Step 4 -Model 'tiel*'
     Typo counts for the tiel-coder step 4 runs.
+
+.EXAMPLE
+    pwsh scripts/Get-ShippingKindTypoCounts.ps1 -ReplayResults ModelTestingResults\113\ShippingKindReplay_SamplesTheDecisionTurn
+    Near-miss and invented counts over the samples of a ShippingKindReplay run.
 
 .EXAMPLE
     pwsh scripts/Get-ShippingKindTypoCounts.ps1 -Path ModelTestingResults\113\ResumeShippingKindStep_SamplesTheNextTurns -Detail
@@ -53,13 +65,14 @@ param(
     [int]$Step,
     [int]$Turn,
     [switch]$Detail,
-    [string]$Csv
+    [string]$Csv,
+    [string[]]$ReplayResults
 )
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $pathGiven = [bool]$Path
-if (-not $Path) { $Path = @(Join-Path $repoRoot 'ModelTestingResults') }
+if (-not $Path -and -not $ReplayResults) { $Path = @(Join-Path $repoRoot 'ModelTestingResults') }
 
 $fallbackNames = @('Standard', 'Express', 'Overnight', 'Pickup', 'SameDay', 'IsKnown', 'IsExpedited', 'IsPickup', 'All', 'Normalize')
 $placeholderNames = @('ConstantName', 'Name', 'Xxx', 'Foo', 'Member', 'Constant')
@@ -77,6 +90,33 @@ function Get-EditDistance([string]$a, [string]$b) {
         }
     }
     return $d[$a.Length, $b.Length]
+}
+
+function Test-NearMember([string]$name, [string]$member, [int]$distance) {
+    # Near when the distance is within a third of the member's length (at least 1), or when the two share a
+    # case-sensitive prefix of 4+ characters covering at least half of the shorter name.
+    if ($distance -le [Math]::Max(1, [Math]::Floor($member.Length / 3))) { return $true }
+    $shared = 0
+    $limit = [Math]::Min($name.Length, $member.Length)
+    while ($shared -lt $limit -and $name[$shared] -ceq $member[$shared]) { $shared++ }
+    return ($shared -ge 4 -and ($shared * 2) -ge $limit)
+}
+
+function Get-NameClass([string]$name, [string[]]$members) {
+    # 'near' when the closest real member passes Test-NearMember, otherwise 'invented'.
+    $closest = $null
+    $best = [int]::MaxValue
+    foreach ($m in $members) {
+        $d = Get-EditDistance $name $m
+        if ($d -lt $best) { $best = $d; $closest = $m }
+    }
+    if ($null -ne $closest -and (Test-NearMember $name $closest $best)) { return 'near' }
+    return 'invented'
+}
+
+function Select-NameClass([string[]]$names, [string[]]$members, [string]$class) {
+    # Emits the names of the given class ('near' or 'invented'); callers wrap the call in @().
+    @($names | Where-Object { (Get-NameClass $_ $members) -eq $class })
 }
 
 function Get-Misspellings([string]$text, [System.Collections.Generic.HashSet[string]]$known) {
@@ -144,37 +184,74 @@ foreach ($file in Get-TranscriptFiles) {
         foreach ($call in @($turnItem.ToolCalls)) { if ([string]$call.ResultJson -match 'CS0117') { $cs0117++ } }
     }
 
-    $nearOf = { param($name) ($known | ForEach-Object { Get-EditDistance $name $_ } | Measure-Object -Minimum).Minimum }
+    $members = [string[]]@($known)
+    $decisionNames = @($reasonTypos) + @($contentTypos) + @($callTypos)
+    $runNear = @(Select-NameClass $runTypos $members 'near' | Sort-Object -Unique)
+    $runInvented = @(Select-NameClass $runTypos $members 'invented' | Sort-Object -Unique)
     $rows.Add([pscustomobject]@{
-            Model         = [string]$t.ModelKey
-            Folder        = $file.DirectoryName
-            RunId         = [string]$t.RunId
-            ReadTurn      = $readTurn
-            DecisionTurn  = $decisionTurn
-            TurnsInFile   = $turns.Count
-            ReasoningTypo = ($reasonTypos.Count -gt 0)
-            ContentTypo   = ($contentTypos.Count -gt 0)
-            CallTypo      = ($callTypos.Count -gt 0)
-            DecisionTypo  = (($reasonTypos.Count + $contentTypos.Count + $callTypos.Count) -gt 0)
-            RunTypo       = ($runTypos.Count -gt 0)
-            Cs0117Results = $cs0117
-            Misspellings  = (($runTypos | Sort-Object -Unique) -join ';')
-            DecisionTypos = ((@($reasonTypos) + @($contentTypos) + @($callTypos) | Sort-Object -Unique) -join ';')
-            Near          = (($runTypos | Sort-Object -Unique | ForEach-Object { $d = & $nearOf $_; if ($d -le 3) { $_ } }) -join ';')
+            Model            = [string]$t.ModelKey
+            Folder           = $file.DirectoryName
+            RunId            = [string]$t.RunId
+            ReadTurn         = $readTurn
+            DecisionTurn     = $decisionTurn
+            TurnsInFile      = $turns.Count
+            ReasoningNear    = (@(Select-NameClass $reasonTypos $members 'near').Count -gt 0)
+            ContentNear      = (@(Select-NameClass $contentTypos $members 'near').Count -gt 0)
+            CallNear         = (@(Select-NameClass $callTypos $members 'near').Count -gt 0)
+            DecisionNear     = (@(Select-NameClass $decisionNames $members 'near').Count -gt 0)
+            DecisionInvented = (@(Select-NameClass $decisionNames $members 'invented').Count -gt 0)
+            RunNear          = ($runNear.Count -gt 0)
+            RunInvented      = ($runInvented.Count -gt 0)
+            Cs0117Results    = $cs0117
+            Misspellings     = (($runTypos | Sort-Object -Unique) -join ';')
+            DecisionTypos    = (($decisionNames | Sort-Object -Unique) -join ';')
+            NearNames        = ($runNear -join ';')
+            InventedNames    = ($runInvented -join ';')
         })
 }
 
 if ($Csv) { $rows | Export-Csv -LiteralPath $Csv -NoTypeInformation -Encoding utf8 }
 
+if ($ReplayResults) {
+    # Replay results: classify each row's unknownNames against the fallback members (no transcript needed).
+    $replayEntries = @($ReplayResults | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    foreach ($entry in $replayEntries) {
+        if (-not (Test-Path -LiteralPath $entry)) { throw "Path not found: $entry" }
+        $csvFiles = if (Test-Path -LiteralPath $entry -PathType Container) {
+            @(Get-ChildItem -LiteralPath $entry -Recurse -Filter results.csv -File)
+        } else { @(Get-Item -LiteralPath $entry) }
+        foreach ($csvFile in $csvFiles) {
+            $replayRows = @(Import-Csv -LiteralPath $csvFile.FullName)
+            $nearRowCount = 0
+            $invRowCount = 0
+            $nearCounts = @{}
+            foreach ($replayRow in $replayRows) {
+                $names = @([string]$replayRow.unknownNames -split '[;,]' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+                $nearNames = @(Select-NameClass $names $fallbackNames 'near')
+                $invNames = @(Select-NameClass $names $fallbackNames 'invented')
+                if ($nearNames.Count -gt 0) { $nearRowCount++ } elseif ($invNames.Count -gt 0) { $invRowCount++ }
+                foreach ($n in $nearNames) { $nearCounts[$n] = 1 + [int]$nearCounts[$n] }
+            }
+            $csvFile.FullName
+            "  Rows:                             $($replayRows.Count)"
+            "  Rows with a near miss:            $nearRowCount"
+            "  Rows with only invented names:    $invRowCount"
+            $nearText = (($nearCounts.GetEnumerator() | Sort-Object Value -Descending | ForEach-Object { "$($_.Key) x$($_.Value)" }) -join ', ')
+            "  Near misses: $(if ($nearText) { $nearText } else { '-' })"
+            ''
+        }
+    }
+}
+
 if ($rows.Count -eq 0) {
-    'No matching transcripts.'
+    if (-not $ReplayResults) { 'No matching transcripts.' }
     foreach ($s in $skipped | Select-Object -First 10) { "SKIPPED: $s" }
     return
 }
 
 if ($Detail) {
     $rows | Sort-Object Model, Folder | ForEach-Object {
-        '{0} | turn {1} | reasoning={2} content={3} call={4} | run typos: {5} | CS0117 results: {6} | {7}' -f $_.Model, $_.DecisionTurn, $_.ReasoningTypo, $_.ContentTypo, $_.CallTypo, $(if ($_.Misspellings) { $_.Misspellings } else { '-' }), $_.Cs0117Results, (Split-Path -Leaf $_.Folder)
+        '{0} | turn {1} | near: reasoning={2} content={3} call={4} | run names: {5} | CS0117 results: {6} | {7}' -f $_.Model, $_.DecisionTurn, $_.ReasoningNear, $_.ContentNear, $_.CallNear, $(if ($_.Misspellings) { $_.Misspellings } else { '-' }), $_.Cs0117Results, (Split-Path -Leaf $_.Folder)
     }
     ''
 }
@@ -186,14 +263,18 @@ $rows | Group-Object Model | Sort-Object Name | ForEach-Object {
     "Model: $($_.Name)"
     "  Transcripts:                    $($g.Count)"
     "  With a decision turn:           $($withTurn.Count)"
-    "  Typo in decision turn:          $(& $pct @($withTurn | Where-Object DecisionTypo).Count $withTurn.Count)"
-    "    in reasoning:                 $(& $pct @($withTurn | Where-Object ReasoningTypo).Count $withTurn.Count)"
-    "    in message content:           $(& $pct @($withTurn | Where-Object ContentTypo).Count $withTurn.Count)"
-    "    in tool-call arguments:       $(& $pct @($withTurn | Where-Object CallTypo).Count $withTurn.Count)"
-    "  Typo anywhere in the run:       $(& $pct @($g | Where-Object RunTypo).Count $g.Count)"
-    "  Runs with a CS0117 result:      $(& $pct @($g | Where-Object { $_.Cs0117Results -gt 0 }).Count $g.Count)"
-    $hist = $g | ForEach-Object { $_.Misspellings -split ';' } | Where-Object { $_ } | Group-Object | Sort-Object Count -Descending | Select-Object -First 8
-    if ($hist) { "  Misspellings (runs): " + (($hist | ForEach-Object { "$($_.Name) x$($_.Count)" }) -join ', ') }
+    "  Slip (near miss) in decision turn: $(& $pct @($withTurn | Where-Object DecisionNear).Count $withTurn.Count)"
+    "  Invented member in decision turn:  $(& $pct @($withTurn | Where-Object DecisionInvented).Count $withTurn.Count)"
+    "    near miss in reasoning:          $(& $pct @($withTurn | Where-Object ReasoningNear).Count $withTurn.Count)"
+    "    near miss in message content:    $(& $pct @($withTurn | Where-Object ContentNear).Count $withTurn.Count)"
+    "    near miss in tool-call arguments: $(& $pct @($withTurn | Where-Object CallNear).Count $withTurn.Count)"
+    "  Slip (near miss) in run:           $(& $pct @($g | Where-Object RunNear).Count $g.Count)"
+    "  Invented member in run:            $(& $pct @($g | Where-Object RunInvented).Count $g.Count)"
+    "  Runs with a CS0117 result:         $(& $pct @($g | Where-Object { $_.Cs0117Results -gt 0 }).Count $g.Count)"
+    $nearHist = $g | ForEach-Object { $_.NearNames -split ';' } | Where-Object { $_ } | Group-Object | Sort-Object Count -Descending | Select-Object -First 8
+    if ($nearHist) { "  Near misses (runs): " + (($nearHist | ForEach-Object { "$($_.Name) x$($_.Count)" }) -join ', ') }
+    $invHist = $g | ForEach-Object { $_.InventedNames -split ';' } | Where-Object { $_ } | Group-Object | Sort-Object Count -Descending | Select-Object -First 8
+    if ($invHist) { "  Invented (runs): " + (($invHist | ForEach-Object { "$($_.Name) x$($_.Count)" }) -join ', ') }
     ''
 }
 foreach ($s in $skipped | Select-Object -First 10) { "SKIPPED: $s" }
