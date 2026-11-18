@@ -80,6 +80,15 @@ public class WholeFileWriteTools
             if (WriteRefusal.TryMap("WriteFile", result, out var refusal))
                 return new SentinelCallToolResult<object>() { IsError = true, ErrorData = refusal };
 
+            IReadOnlyList<Finding>? nearMissFindings = null;
+            if (result.IsError && result.ValidationResult != null
+                && await NearMissAutoCorrector.TryAutoCorrectAsync(_workspaceManager, changes, result.ValidationResult, "WriteFile", StaleReadPolicy.RefuseIfObservedStale, cancellationToken) is { } nearMissFix)
+            {
+                result = nearMissFix.ApplyResult;
+                changes = new Dictionary<FilePathWrapper, string>(nearMissFix.CorrectedChanges);
+                nearMissFindings = nearMissFix.Findings;
+            }
+
             if (result.IsError && result.ValidationResult != null)
             {
                 return new SentinelCallToolResult<object>()
@@ -107,7 +116,7 @@ public class WholeFileWriteTools
                 IsError = false,
                 SuccessData = strippedResult,
                 // chokepoint findings (EOL attribution) are lifted to the envelope
-                Findings = result.Findings ?? []
+                Findings = nearMissFindings is null ? (result.Findings ?? []) : (result.Findings ?? []).Concat(nearMissFindings).ToList()
             };
         }
         catch (Exception ex)
@@ -497,6 +506,15 @@ public class WholeFileWriteTools
                     var result = await _workspaceManager.ApplyProposedChangesAsync(normalizedChanges, retryCount, validateChanges: validateOnApply, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
                     if (WriteRefusal.TryMap("ApplyDiff", result, out var refusal))
                         return new SentinelCallToolResult<object>() { IsError = true, ErrorData = refusal };
+                    IReadOnlyList<Finding>? nearMissFindings = null;
+                    if (result.IsError && result.ValidationResult != null
+                        && await NearMissAutoCorrector.TryAutoCorrectAsync(_workspaceManager, normalizedChanges, result.ValidationResult, "ApplyDiff", StaleReadPolicy.RefuseIfObservedStale, cancellationToken) is { } nearMissFix)
+                    {
+                        result = nearMissFix.ApplyResult;
+                        normalizedChanges = new Dictionary<FilePathWrapper, string>(nearMissFix.CorrectedChanges);
+                        nearMissFindings = nearMissFix.Findings;
+                    }
+
                     if (result.IsError && result.ValidationResult != null)
                         return new SentinelCallToolResult<object>()
                         {
@@ -524,7 +542,7 @@ public class WholeFileWriteTools
                     {
                         IsError = false,
                         SuccessData = responseData,
-                        Findings = result.Findings ?? []
+                        Findings = nearMissFindings is null ? (result.Findings ?? []) : (result.Findings ?? []).Concat(nearMissFindings).ToList()
                     };
                 }
 
@@ -636,6 +654,15 @@ public class WholeFileWriteTools
                         // TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)
                         if (WriteRefusal.TryMap("ApplyDiff", result, out var refusal))
                             return new SentinelCallToolResult<object>() { IsError = true, ErrorData = refusal };
+                        IReadOnlyList<Finding>? nearMissFindings = null;
+                        if (result.IsError && result.ValidationResult != null
+                            && await NearMissAutoCorrector.TryAutoCorrectAsync(_workspaceManager, diffChanges, result.ValidationResult, "ApplyDiff", StaleReadPolicy.RefuseIfObservedStale, cancellationToken) is { } nearMissFix)
+                        {
+                            result = nearMissFix.ApplyResult;
+                            diffChanges = new Dictionary<FilePathWrapper, string>(nearMissFix.CorrectedChanges);
+                            nearMissFindings = nearMissFix.Findings;
+                        }
+
                         if (result.IsError && result.ValidationResult != null)
                             return new SentinelCallToolResult<object>()
                             {
@@ -651,7 +678,7 @@ public class WholeFileWriteTools
                         {
                             IsError = false,
                             SuccessData = diffResponseData,
-                            Findings = MergeDiffApplyFindings(result.Findings, diffReport)
+                            Findings = nearMissFindings is null ? MergeDiffApplyFindings(result.Findings, diffReport) : MergeDiffApplyFindings(result.Findings, diffReport).Concat(nearMissFindings).ToList()
                         };
                     }
                     catch (Exception ex)
@@ -775,6 +802,15 @@ public class WholeFileWriteTools
                     // TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)
                     if (WriteRefusal.TryMap("ApplyUnifiedDiff", result, out var refusal))
                         return new SentinelCallToolResult<object>() { IsError = true, ErrorData = refusal };
+                    IReadOnlyList<Finding>? nearMissFindings = null;
+                    if (result.IsError && result.ValidationResult != null
+                        && await NearMissAutoCorrector.TryAutoCorrectAsync(_workspaceManager, diffChanges, result.ValidationResult, "ApplyUnifiedDiff", StaleReadPolicy.RefuseIfObservedStale, cancellationToken) is { } nearMissFix)
+                    {
+                        result = nearMissFix.ApplyResult;
+                        diffChanges = new Dictionary<FilePathWrapper, string>(nearMissFix.CorrectedChanges);
+                        nearMissFindings = nearMissFix.Findings;
+                    }
+
                     if (result.IsError && result.ValidationResult != null)
                         return new SentinelCallToolResult<object>()
                         {
@@ -790,7 +826,7 @@ public class WholeFileWriteTools
                     {
                         IsError = false,
                         SuccessData = diffResponseData,
-                        Findings = MergeDiffApplyFindings(result.Findings, diffReport),
+                        Findings = nearMissFindings is null ? MergeDiffApplyFindings(result.Findings, diffReport) : MergeDiffApplyFindings(result.Findings, diffReport).Concat(nearMissFindings).ToList(),
                     };
                 }
                 catch (Exception ex)
