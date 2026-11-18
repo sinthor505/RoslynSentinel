@@ -74,6 +74,21 @@ public static class LlmOptions
     /// <summary>UI-ONLY -> see <see cref="TopK"/>'s remarks. Also not in LM Studio's own documented parameter list for either endpoint, unlike top_k/repeat_penalty.</summary>
     public static double? MinP { get; private set; }
 
+    /// <summary>
+    /// Sampler values the operator declares the model host applies but cannot be verified from its responses, read from
+    /// --llm-host-sampler / ROSLYNSENTINEL_LLM_HOST_SAMPLER as "topK=20;minP=0.1;repeatPenalty=1.0;presencePenalty=0"; keys are canonical camelCase names.
+    /// </summary>
+    public static IReadOnlyDictionary<string, double> HostSampler { get; private set; } = new Dictionary<string, double>();
+
+    /// <summary>
+    /// Parses the --llm-host-sampler format into canonical keys (topK, minP, repeatPenalty, presencePenalty, frequencyPenalty).
+    /// Unknown keys and malformed pairs are skipped.
+    /// </summary>
+    public static IReadOnlyDictionary<string, double> ParseHostSampler(string? raw)
+    {
+        throw new NotImplementedException(); // TODO implement
+    }
+
     /// <summary>Parses --llm-* args (falling back to ROSLYNSENTINEL_LLM_* env vars) into the static properties above. Call once at process startup, before DI is built.</summary>
     public static void Configure(string[] args)
     {

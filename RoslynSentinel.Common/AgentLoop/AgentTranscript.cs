@@ -118,6 +118,15 @@ public sealed class AgentTranscript
     }
 
     /// <summary>
+    /// Sampler and model-load settings for the run; null, and so omitted from the JSON, for transcripts written before this was recorded.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RunSettings? Settings
+    {
+        get; set;
+    }
+
+    /// <summary>
     /// Reasoning replay policy mode text, for example "pressure:0.7,pinned:3", "all" or "window:10". Null when the transcript predates this field; omitted from the JSON.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
