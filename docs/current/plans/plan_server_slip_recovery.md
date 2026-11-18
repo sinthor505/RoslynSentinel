@@ -1,6 +1,6 @@
 # Plan: near-miss member detail on rejections, qualified enum members in outlines, then eval-only auto-correction
 
-**Status:** IN PROGRESS 2026-11-18. Steps 1-3 done (a4056bc8, b44db0d1, e4bea9e3, 79337626). Batched run,
+**Status:** IN PROGRESS 2026-11-18. Steps 1-7 done (Phase A; a4056bc8, b44db0d1, e4bea9e3, 79337626, d262eefa, 40aa9065, c5407b17, 4f1954f8, 8888a4f2). Batched run,
 owner away; D3 and D4 settled (see Decision). Phase B (Steps 8-13, eval-only) follows Phase A.
 
 **Name trap:** inside `RoslynSentinel.Engines.Basic`, `SymbolCandidate` resolves to an unrelated record in
@@ -142,6 +142,7 @@ Settled 2026-11-18 (implement-plan review; owner answers marked "owner"):
   - `WorkspaceFileEditImpl.ComposeCompileRejectionAsync` (`WorkspaceFileEditImpl.cs:1224`), through `RejectionDetail` (`:1187`), which gains the same trailing parameter. It has 1 caller.
 - Done when: `Build` 0 errors; existing `EditImpactGateWiringTests` and `EditImpactSpanAttributionTests` still pass (dispatcher).
 - Lane: implementer.
+- Done: d262eefa (one `EditImpactGate.DetectNearMissesAsync` helper; a null `NearMisses` is omitted on the wire, pinned in Step 5 with the MCP SDK `DefaultOptions`).
 
 ### Step 5 - Wiring tests (behaviour-changing coverage)
 - Files: `RoslynSentinel.Tests/NearMissRejectionTests.cs` (new)
@@ -155,6 +156,7 @@ Settled 2026-11-18 (implement-plan review; owner answers marked "owner"):
   - `ReplaceSnippet_UnrelatedCompileError_HasNoNearMissesAsync`, which asserts `NearMisses` is null.
 - Done when: the dispatcher's `RunTest` on `NearMissRejectionTests` passes.
 - Lane: test-writer.
+- Done: 40aa9065, c5407b17 (4 tests, real rejection diagnostics, Candidates asserted).
 
 ### Step 6 - CS0103 in the detector (behaviour-changing, additive)
 - Files: `RoslynSentinel.Engines.Basic/NearMissDetector.cs`, `RoslynSentinel.Tests/NearMissDetectorTests.cs`
@@ -166,6 +168,7 @@ Settled 2026-11-18 (implement-plan review; owner answers marked "owner"):
   alone. Add `DetectAsync_Cs0103BareNameSlip_ReturnsTheNameInScopeAsync`.
 - Done when: `Build` 0 errors; `NearMissDetectorTests` passes.
 - Lane: implementer (code) then test-writer (test), or implementer-senior for both.
+- Done: 4f1954f8 (senior). Decisions: locals and parameters are candidates (kinds "local"/"parameter"); a CS0103 that is the `Name` of a member access is left to CS0117/CS1061. The new test builds its diagnostic by hand like the file's other tests.
 
 ### Step 7 - Qualified enum members in the outline walk (behaviour-changing; D3 settled)
 - Files: `RoslynSentinel.Tools.Basic/WorkspaceReadNavigationImpl.cs`, `RoslynSentinel.Tests/OutlineEnumMemberTests.cs` (new)
@@ -186,6 +189,7 @@ Settled 2026-11-18 (implement-plan review; owner answers marked "owner"):
     `ListAll_EnumMemberBareNameFilter_StillFindsQualifiedRowAsync`.
 - Done when: `Build` 0 errors; `OutlineEnumMemberTests` passes.
 - Lane: implementer.
+- Done: 8888a4f2. Check result: `ReadFile(memberName: "ReadSource.Committed")` was NotFound although its own not-found text lists qualified names; `Member(view)` and `ReadFile` share `SymbolNavigationEngine.GetMemberSourceAsync`, which now splits `Type.Member` when the dotted name matches nothing. `Member(replace/remove)` and other bare-name resolvers (`SyntaxTargetResolver.ResolveCandidates`, 47 callers) still take the bare name only (`// TODO` at the split). The test file is `RoslynSentinel.Tests.Tools.Basic/OutlineEnumMemberTests.cs` (the `RoslynSentinel.Tests` project does not reference `Tools.Basic`). `Search(mode: enum member)` is backed by `ListAll`, so its rows are qualified too, which contradicts the Out of scope bullet (owner question). No `GetMemberSourceAsync` test yet.
 
 Phase B below is an evaluation feature. Every option it adds defaults to today's behaviour.
 
