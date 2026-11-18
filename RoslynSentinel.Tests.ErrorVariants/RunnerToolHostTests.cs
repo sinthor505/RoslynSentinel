@@ -207,6 +207,54 @@ public class RunnerToolHostTests
         Assert.That(result.StopReason, Is.EqualTo(AgentStopReason.ModelFinished), "two unlisted calls, a listed call, then two more unlisted calls never reach the limit of three in a row");
     }
 
+    [Test]
+    public async Task NormalRun_WritesSummaryAsLastBlock()
+    {
+        var host = new FakeToolHost(
+            "Summarised",
+            new CallToolResult
+            {
+                Content = [new TextContentBlock { Text = "{\"ok\":true}" }],
+            });
+        var model = new ScriptedModelHandler(
+            ScriptedModelHandler.FunctionCallSse("Summarised", "{}"),
+            ScriptedModelHandler.FinalMessageSse("done"));
+        var runner = NewRunner(model, host);
+
+        var result = await runner.RunAsync("system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken);
+
+        using var document = JsonDocument.Parse(File.ReadAllText(result.TranscriptPath));
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Transcript.Summary, Is.Not.Null);
+            Assert.That(result.Transcript.Summary!.TurnCount, Is.EqualTo(2));
+            Assert.That(result.Transcript.Summary.ToolCallCount, Is.EqualTo(1));
+            Assert.That(document.RootElement.EnumerateObject().Last().Name, Is.EqualTo("Summary"), "Summary is the last top-level block of transcript.json");
+        });
+    }
+
+    [Test]
+    public async Task CancelledMidTurn_StillWritesTranscriptWithCancelledStopReason()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var host = new CancellingToolHost("Cancelling", cancellation);
+        var model = new ScriptedModelHandler(
+            ScriptedModelHandler.FunctionCallSse("Cancelling", "{}"),
+            ScriptedModelHandler.FinalMessageSse("must never be requested"));
+        var runner = NewRunner(model, host);
+
+        await Assert.CatchAsync<OperationCanceledException>(() => runner.RunAsync("system", "user", _runDirectory, cancellation.Token));
+
+        var transcriptPath = Path.Combine(_runDirectory, "transcript.json");
+        Assert.That(File.Exists(transcriptPath), Is.True, "the cancelled run still leaves transcript.json behind");
+        using var document = JsonDocument.Parse(File.ReadAllText(transcriptPath));
+        Assert.Multiple(() =>
+        {
+            Assert.That(document.RootElement.GetProperty("StopReason").GetInt32(), Is.EqualTo((int)AgentStopReason.Cancelled));
+            Assert.That(document.RootElement.TryGetProperty("Summary", out _), Is.True, "the abnormal end still carries the Summary block");
+        });
+    }
+
     private static ModelAgentRunner NewRunner(ScriptedModelHandler model, IAgentToolHost host, int turnCap = 5)
     {
         LlmOptions.Configure(["--llm-model", "runnertoolhost-test-model"]);
@@ -256,6 +304,39 @@ public class RunnerToolHostTests
             LastToolName = toolName;
             LastArguments = arguments;
             return Task.FromResult(result);
+        }
+    }
+
+    /// <summary>
+    /// Lists one tool; calling it cancels the run's token and then returns a normal result, so the loop's next
+    /// awaited step is the one that observes the cancellation.
+    /// </summary>
+    private sealed class CancellingToolHost(string toolName, CancellationTokenSource cancellation) : IAgentToolHost
+    {
+        public Task<IReadOnlyList<AgentToolDefinition>> ListToolsAsync(CancellationToken cancellationToken)
+        {
+            IReadOnlyList<AgentToolDefinition> tools =
+            [
+                new AgentToolDefinition
+                {
+                    Name = toolName,
+                    Description = "Test tool that cancels the run when called.",
+                    ParametersSchema = JsonSerializer.SerializeToElement(new { type = "object", properties = new { } }),
+                },
+            ];
+            return Task.FromResult(tools);
+        }
+
+        public Task<CallToolResult> CallToolAsync(
+            string toolName,
+            IReadOnlyDictionary<string, object?> arguments,
+            CancellationToken cancellationToken)
+        {
+            cancellation.Cancel();
+            return Task.FromResult(new CallToolResult
+            {
+                Content = [new TextContentBlock { Text = "{\"ok\":true}" }],
+            });
         }
     }
 }

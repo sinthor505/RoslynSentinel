@@ -204,6 +204,30 @@ public sealed class ModelAgentRunner
         IReadOnlyList<AgentTranscriptTurn>? seedTurns = null,
         Func<CancellationToken, Task<bool>>? targetReached = null)
     {
+        var progress = new RunProgress();
+        try
+        {
+            return await RunCoreAsync(systemPrompt, userPrompt, transcriptDirectory, cancellationToken, runId, seedTurns, targetReached, progress);
+        }
+        catch (Exception ex)
+        {
+            await RecordAbnormalEndAsync(ex, progress, transcriptDirectory);
+            throw;
+        }
+    }
+
+    // Split from RunAsync so an exception or cancellation out of the loop is still recorded in transcript.json
+    // without reindenting the loop body.
+    private async Task<AgentRunResult> RunCoreAsync(
+        string systemPrompt,
+        string userPrompt,
+        string transcriptDirectory,
+        CancellationToken cancellationToken,
+        string? runId,
+        IReadOnlyList<AgentTranscriptTurn>? seedTurns,
+        Func<CancellationToken, Task<bool>>? targetReached,
+        RunProgress progress)
+    {
         runId ??= DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff");
 
         var toolDefinitions = (await _toolHost.ListToolsAsync(cancellationToken)).ToList();
@@ -263,6 +287,8 @@ public sealed class ModelAgentRunner
 
         await WriteTranscriptAsync(transcript, transcriptDirectory, cancellationToken);
         var overallStopwatch = Stopwatch.StartNew();
+        progress.Transcript = transcript;
+        progress.Stopwatch = overallStopwatch;
         var stopReason = AgentStopReason.TurnCapExceeded;
         var turnNumber = 0;
         if (seedTurns is { Count: > 0 })
@@ -684,6 +710,7 @@ public sealed class ModelAgentRunner
         _logger.LogInformation("Agent run finished: {StopReason} after {TurnCount} turn(s), {Elapsed}.{AssistOutcome}", stopReason, turnNumber, overallStopwatch.Elapsed, assistOutcome);
 
         transcript.StopReason = stopReason;
+        transcript.Summary = RunTotals.FromTranscript(transcript, overallStopwatch.Elapsed);
         var transcriptPath = await WriteTranscriptAsync(transcript, transcriptDirectory, cancellationToken);
 
         return new AgentRunResult
@@ -988,5 +1015,48 @@ public sealed class ModelAgentRunner
         var json = JsonSerializer.Serialize(transcript, TranscriptFileOptions);
         await File.WriteAllTextAsync(path, json, cancellationToken);
         return path;
+    }
+
+    /// <summary>
+    /// What <c>RunCoreAsync</c> has built so far, so the <c>RunAsync</c> wrapper can record an abnormal end
+    /// (exception or cancellation) in transcript.json. Both fields stay null until the loop has started.
+    /// </summary>
+    private sealed class RunProgress
+    {
+        public AgentTranscript? Transcript
+        {
+            get; set;
+        }
+
+        public Stopwatch? Stopwatch
+        {
+            get; set;
+        }
+    }
+
+    /// <summary>
+    /// Records an abnormal end (exception or cancellation) in transcript.json when the loop built a transcript before
+    /// it stopped. The write is best-effort: a failed write is logged and never replaces the original exception.
+    /// </summary>
+    private async Task RecordAbnormalEndAsync(Exception ex, RunProgress progress, string transcriptDirectory)
+    {
+        var transcript = progress.Transcript;
+        if (transcript is null)
+        {
+            return;
+        }
+
+        transcript.StopReason = ex is OperationCanceledException ? AgentStopReason.Cancelled : AgentStopReason.Exception;
+        var elapsed = progress.Stopwatch?.Elapsed ?? TimeSpan.Zero;
+        _logger.LogInformation("Agent run finished: {StopReason} after {TurnCount} turn(s), {Elapsed}.", transcript.StopReason, transcript.Turns.Count, elapsed);
+        try
+        {
+            transcript.Summary = RunTotals.FromTranscript(transcript, elapsed);
+            await WriteTranscriptAsync(transcript, transcriptDirectory, CancellationToken.None);
+        }
+        catch (Exception writeEx)
+        {
+            _logger.LogWarning(writeEx, "Run {RunId}: could not write the final transcript after {StopReason}.", transcript.RunId, transcript.StopReason);
+        }
     }
 }
