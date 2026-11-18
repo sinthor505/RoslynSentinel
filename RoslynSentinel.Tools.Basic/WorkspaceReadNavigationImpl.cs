@@ -573,8 +573,12 @@ public class WorkspaceReadNavigationImpl
                     break;
                 case EnumMemberDeclarationSyntax enumMember:
                     kind = "enum member";
-                    name = enumMember.Identifier.Text;
-                    container = (enumMember.Parent as EnumDeclarationSyntax)?.Identifier.Text;
+                    // The type is part of the name so the model never retypes the member alone.
+                    var parentEnum = enumMember.Parent as EnumDeclarationSyntax;
+                    name = parentEnum is null
+                        ? enumMember.Identifier.Text
+                        : $"{parentEnum.Identifier.Text}.{enumMember.Identifier.Text}";
+                    container = parentEnum?.Identifier.Text;
                     break;
                 case ConstructorDeclarationSyntax ctor:
                     kind = "constructor";
@@ -664,9 +668,13 @@ public class WorkspaceReadNavigationImpl
 
                         if (!string.IsNullOrEmpty(nameFilter))
                         {
+                            // Enum member rows are qualified (Type.Member); a bare member name also matches the part after the last '.'.
+                            var bareName = item.Kind == "enum member" ? item.Name.Substring(item.Name.LastIndexOf('.') + 1) : item.Name;
                             var matches = nameFilters.Any(f => exactMatch
                                 ? string.Equals(item.Name, f, StringComparison.OrdinalIgnoreCase)
-                                : item.Name.Contains(f, StringComparison.OrdinalIgnoreCase));
+                                    || string.Equals(bareName, f, StringComparison.OrdinalIgnoreCase)
+                                : item.Name.Contains(f, StringComparison.OrdinalIgnoreCase)
+                                    || bareName.Contains(f, StringComparison.OrdinalIgnoreCase));
                             if (!matches)
                             {
                                 continue;

@@ -3109,6 +3109,18 @@ public class SymbolNavigationEngine
             throw new ToolInvalidArgumentException($"Cannot read '{filePath}': syntax root or source text is unavailable; the file did not parse.");
         }
 
+        // Outline and ListAll print enum members as Type.Member; accept that form here by splitting it into
+        // container + bare name when the dotted text names nothing itself and the part after the dot does.
+        // TODO Member(replace/remove) and other memberName consumers still take the bare enum member name only (qualified form accepted for view/ReadFile only)
+        var dotIndex = memberName.IndexOf('.');
+        if (dotIndex > 0 && dotIndex == memberName.LastIndexOf('.') && dotIndex < memberName.Length - 1
+            && SyntaxTargetResolver.ResolveCandidates(root, sourceText, memberName, cancellationToken).Count == 0
+            && SyntaxTargetResolver.ResolveCandidates(root, sourceText, memberName.Substring(dotIndex + 1), cancellationToken).Count > 0)
+        {
+            containerName ??= memberName.Substring(0, dotIndex);
+            memberName = memberName.Substring(dotIndex + 1);
+        }
+
         var allNameCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, memberName, cancellationToken);
         var typeNameCandidates = allNameCandidates
             .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
