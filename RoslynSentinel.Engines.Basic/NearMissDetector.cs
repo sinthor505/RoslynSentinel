@@ -175,7 +175,8 @@ public static class NearMissDetector
     {
         // A file linked into several projects has several document ids: prefer the one in the diagnostic's project, else the first.
         var ids = solution.GetDocumentIdsWithFilePath(diagnostic.FilePath);
-        var id = ids.FirstOrDefault(i => diagnostic.Project is not null && string.Equals(solution.GetProject(i.ProjectId)?.Name, diagnostic.Project, StringComparison.Ordinal))
+        var project = ProjectLookup.FindProject(solution, diagnostic.Project);
+        var id = ids.FirstOrDefault(i => project is not null && i.ProjectId == project.Id)
                  ?? ids.FirstOrDefault();
         return id is null ? null : solution.GetDocument(id);
     }
