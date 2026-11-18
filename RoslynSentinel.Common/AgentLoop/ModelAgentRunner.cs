@@ -59,7 +59,9 @@ public sealed class ModelAgentRunner
     /// <summary>
     /// True when the backend's reported running total grew far more than the content added since the last accepted
     /// report can explain. LM Studio has reported one request's input at about twice the real prompt (10-chain batch Y
-    /// run 4, T3), which would otherwise trip the context warning and the context-exhausted check. A shrinking total is
+    /// run 4, T3), which would otherwise trip the context warning and the context-exhausted check. Probable upstream
+    /// cause: https://github.com/lmstudio-ai/lmstudio-bug-tracker/issues/2559 (/v1/responses sums usage across internal
+    /// generation passes); see docs/current/references/reference_lmstudio_usage_reporting_bugs.md. A shrinking total is
     /// never implausible: the reasoning replay window and loop-assist collapsing both shorten the prompt.
     /// </summary>
     internal static bool IsUsageJumpImplausible(int previousTotal, int reportedTotal, int estimatedGrowthTokens) =>

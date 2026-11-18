@@ -116,6 +116,9 @@ runs) against the server log within a few hundred ms.
 - **`scripts/triage_trx.py`** / **`scripts/trx_show.py`** — triage `.trx` files; don't hand-parse XML.
 - **`results.csv` row count** is the tell for a silently-crashed testhost (exit 0, repeats
   dropped) — check row count against expected repeat count before trusting the file.
+- **Per-turn token counts are backend-reported and can be wrong** (LM Studio, see
+  `docs/current/references/reference_lmstudio_usage_reporting_bugs.md`). Report a one-turn
+  `InputTokens` spike that falls back next turn as a suspected usage misreport, with both turns' numbers.
 
 ## Log scale — know this before you open anything
 

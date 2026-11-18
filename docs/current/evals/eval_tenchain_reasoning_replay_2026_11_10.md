@@ -895,6 +895,10 @@ pattern appears once more in this test's results: run `113\20261112-031134-405` 
 full-window check for turns with no tool calls used the same count, so an inflated report on a final turn could have
 ended a run as ContextExhausted. Fixed in fd169537: a reported jump larger than twice the estimated added content plus
 4000 tokens (`ModelAgentRunner.IsUsageJumpImplausible`) is logged and replaced by the estimate for both checks.
+Probable upstream cause (hypothesis, 2026-11-18): [lmstudio-bug-tracker #2559](https://github.com/lmstudio-ai/lmstudio-bug-tracker/issues/2559),
+where `/v1/responses` runs one request as several generation passes and sums the usage across them. #2535 and #2569 are
+the `/v1/messages` cached-token double count and do not apply to the harness. See
+[reference_lmstudio_usage_reporting_bugs.md](../references/reference_lmstudio_usage_reporting_bugs.md).
 
 **Identical-success stop measured live (resume run).** Job `20261113-005825-001`, folder
 `ModelTestingResults\113\ResumeFromTranscript_SamplesTheNextTurns\20261113-005840-986`: `qwen3.5-9b-mtp` at a49ab3ec, a

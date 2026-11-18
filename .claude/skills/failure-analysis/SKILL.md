@@ -68,3 +68,10 @@ Evidence and data: `docs/current/findings/finding_overnight_token_path_slips.md`
   `/v1/responses` ignores `repeat_penalty` and `logit_bias`, the client's `-Temperature` overrides the
   preset, LM Studio echoes only temperature and top_p, and the eval queue dedupes reruns (sampler A/B
   arms need `-Force`). Eval preset: repeat 1.0, presence 0, top-p 0.9-0.95, min-p 0.05-0.1.
+
+## Backend-reported token usage
+
+LM Studio misreports usage (`docs/current/references/reference_lmstudio_usage_reporting_bugs.md`). A
+one-turn `InputTokens` spike that falls back next turn, a context warning or a `ContextExhausted` stop
+is a hypothesis until checked against the estimated prompt and the next turn's `CachedInputTokens`;
+blame the backend report before blaming context growth or the model.
