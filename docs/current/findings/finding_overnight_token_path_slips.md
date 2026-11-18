@@ -1,6 +1,7 @@
 # Finding: qwen-family models misspell ShippingKinds.Overnight through a token-path slip, not a reasoning error
 
-**Status:** OPEN 2026-11-17. Mechanism established and sampler settings decided; the recovery design and a fine-stepped eval variant are open (TODO.md).
+**Status:** OPEN 2026-11-17, updated 2026-11-18 (overnight batch: temperature, qualified-name and presence arms). Mechanism
+established and sampler settings decided; the recovery design and a fine-stepped eval variant are open (TODO.md).
 
 ## Context
 
@@ -31,7 +32,9 @@ RoslynSentinel.Tests.ModelEval) asks the model to replace shipping-kind string l
   ShippingKinds.Overnight:" 14 times, wrote "I made a typo: Oovernight instead of Overnight" from turn 4
   and "I keep producing the typo ... a persistent issue with my text generation" later, and still sent
   `Oovernight` in all 16 later edit calls. All three tiel slips in the preset runs failed on the wall
-  clock.
+  clock. The first recovery seen came on 2026-11-18: tiel step 5 run
+  `ModelTestingResults/113/Model_RunsShippingKindStepPromptFinal(5)/20261118-140429-519` slipped and still passed
+  (8 turns); the other slip that night (step 4, `20261118-141631-323`) failed at the 30-minute cap.
 - **The rename moved the slip.** In the PriorityOvernight variant (566014bd) one 9b run wrote
   `ShippingKinds.PrioritOvernight`: `[inds][.P][rior][it][Over][night]` against the correct
   `[.Priority][Over][night]`; `.P` is the prefix of `.Pickup` (`[.P][ick][up]`).
@@ -64,8 +67,10 @@ RoslynSentinel.Tests.ModelEval) asks the model to replace shipping-kind string l
    P(.O) 2.13%; 9b in its own slip context P(.O) 0.58%. In tiel's reasoning `.O` must sometimes hold
    >= 20% of `.` (it survives min-p 0.2, below).
 3. **Penalties lift `.O`.** A bare `.` (list numbering `1.`, sentence ends) often sits in the last 64
-   tokens, and then repeat_penalty > 1 lowers `.` and raises `.O` (presence_penalty > 0 acts the same
-   way in principle; its one arm, 1/1000, is too small to show it). Where no bare `.` is in the window
+   tokens, and then repeat_penalty > 1 lowers `.` and raises `.O`. presence_penalty acts the same way
+   (measured 2026-11-18 per request on the 4b, below: presence 0 / 1 / 2 gave 0.2% / 0.9% / 4.7% `.O`
+   with no top-p/min-p cut, matching a logit estimate from the raw probabilities; min-p 0.1 removed it
+   in that context). Where no bare `.` is in the window
    the penalty has nothing to act on: the 4b in its own step-4 context (dash lists) gave 0/1000 at a raw
    P(.O) of 3.07%, against 22/1000 in the 9b slip context at 2.13% (both on the preset whose values were
    never read on 85, so uncontrolled).
@@ -114,6 +119,59 @@ Full runs, ShippingKindStepFinal steps 4+5, preset rp 1.0, presence 0, top-p 0.9
 Other: gemma-4-e4b 0 slips in 355 uses (same `[.][Over][night]` split); 4b full runs x30 on 85
 0 slips in 431 uses, 176/180 steps pass.
 
+### Overnight batch 2026-11-18 (session roslynsentinel-13, commit 2c2bf105)
+
+All three hosts on preset temp 0.6, top-k 20, top-p 0.9, min-p 0.1, repeat 1.0, presence 0, ctx 60k; replays with
+early stop; `-Temperature` sent per request where stated (LM Studio echo confirmed it in transcript.json).
+
+Replays (first write of the name, per sample; folders under `ModelTestingResults/<host>/ShippingKindReplay_SamplesTheDecisionTurn/`):
+
+| Model, point | Arm | Slips | Folder |
+| --- | --- | --- | --- |
+| tiel step 4 Original | preset | 24 / 400 (6.0%) | 113/20261118-074200-674 |
+| tiel step 4 Original | temp 0.4 | 5 / 400 (1.25%) | 113/20261118-083431-610 |
+| tiel step 4 Original | temp 0.3 | 4 / 400 (1.0%) | 113/20261118-092302-306 |
+| tiel step 4 QualifiedResult | preset | **0 / 400** | 113/20261118-101119-844 |
+| 9b step 5 slip point | temp 0.8 | 1 / 394 (`Overtight`) | 112/20261118-074206-682 |
+| 4b in the 9b slip context | preset | 0 / 928 Overnight slips | 85/20261118-081702-369 |
+
+- tiel preset 24/400 agrees with 9/200 on 2026-11-17 (pooled 33/600, 5.5%). Temp 0.4 against preset: one-sided Fisher
+  p about 0.0002; 0.3 against 0.4 is not distinguishable. Temperature is the only variable in these three arms.
+- QualifiedResult (`TranscriptResume.AddQualifiedShippingKindMembers`) prepends a `qualifiedMembers` field listing
+  `ShippingKinds.Standard/.Express/.Overnight/.Pickup` to the saved ShippingKinds.cs read result. Seeing the qualified
+  form once before the first write removed the slip (0/400 against 24/400, p < 1e-6; the earlier 0/13 at rp 1.1 agrees).
+- The 4b replay's 6 `typoInTurn` rows are not Overnight slips (see the note under the full-run table).
+
+Per-request probes, 4b on 85, 9b slip context, `-Endpoint chat`, 2000 samples each, temp 0.6, top-k 20, repeat 1.0
+(outputs in `c:\tmp\probe85\`):
+
+| presence | top-p | min-p | `.O` first tokens |
+| --- | --- | --- | --- |
+| 0 | 1.0 | 0 | 3 (0.2%) |
+| 1.0 | 1.0 | 0 | 17 (0.9%) |
+| 2.0 | 1.0 | 0 | 94 (4.7%) |
+| 1.0 | 0.9 | 0.1 | 0 |
+
+This also shows `presence_penalty` is honoured per request on `/v1/chat/completions`.
+
+Full runs, ShippingKindStepFinal steps 4+5, preset (tiel with `-StepWallClockMinutes 30`):
+
+| Model | Steps passed | Overnight slips (first write) |
+| --- | --- | --- |
+| tiel x15 | 28 / 30 | 2 (`Oovernight`; step 4 failed at the cap, step 5 recovered and passed) |
+| 9b x30 | 60 / 60 | 1 (`Ownight`) |
+| 4b x30 | 57 / 60 | 0 (3 step 5 failures: `DeliveryEstimator.cs` does not call `IsExpedited`) |
+
+The other tiel failure (step 5, `20261118-120715-515`) was not a slip and not a wrong result: turn 3's first attempt
+streamed 330 placeholder tool calls (322 identical `ReadFile({"reason":"...","filePath":"..."})`) for 21 minutes until the
+stream errored (likely the 16384 output-token cap); the client's one retry produced the two correct edits, which ran
+after the 30-minute cap had passed, so the run reads NotConverged with "state check would have been Pass". It is the only
+such turn in 8,624 scanned agent.logs. `Get-ShippingKindTypoCounts.ps1` counts every unknown `ShippingKinds.<Name>` as a
+typo: invented members copied from `CarrierSelector` literals (None, AirFast, GroundPost), prose run-ons
+("ShippingKinds.Let me"), so its headline rates overstate slips (9b step 5 showed 8/29 against 1 real slip). The 4b
+replay's 6 rows are near misses of the helper `Normalize` (Normalized, Normalizes) and prose (`ShippingKinds.Kind`,
+`ShippingKinds.Has`), none of Overnight.
+
 Limits of this evidence:
 
 - The penalty effect is measured on the 4b (321/3000 against 0/1000). It is not measured on the 9b: its
@@ -123,7 +181,9 @@ Limits of this evidence:
   1/24 (p about 0.08); QualifiedResult against Original, 0/13 against 10/48 (p about 0.07); presence 1.0
   against 0, 1/1000 against 0/10000 (p about 0.09).
 - The tiel sampler arms changed top-p and min-p together (and temperature differs from the first two
-  rows), so no single cut is isolated. No arm varied temperature alone.
+  rows), so no single cut is isolated. The 2026-11-18 tiel arms varied temperature alone (0.6 / 0.4 / 0.3).
+- The temperature and QualifiedResult effects are measured at one replay point of one model (tiel step 4). Whether
+  temp 0.4 lowers pass rates was not measured.
 
 ## Why it matters
 
@@ -145,7 +205,8 @@ Decided:
    9b). Tighter cuts helped tiel (4.5% at top-p 0.9 / min-p 0.1, 1.0% at top-p 0.8 / min-p 0.2), but
    those arms moved both cuts together, so which one matters is open. A run that passes `-Temperature`
    (0.8 in these batches) overrides the preset's 0.6, so the temperature part of the preset only applies
-   to runs that do not pass it.
+   to runs that do not pass it. Temperature 0.4 cut tiel's slips from 6.0% to 1.25% (2026-11-18); a tiel
+   preset of 0.4 is a candidate once its effect on pass rates is checked.
 2. **Evaluation rules** for model-eval analysis are in the `failure-analysis` skill (section "Token-path
    slips").
 3. **Harness and tool fixes landed** during the investigation: replay early stop at the decision
@@ -157,7 +218,10 @@ Decided:
 Open (TODO.md):
 
 4. **Recovery that needs no retyping:** errors that give position and corrected line without echoing the
-   bad name, retry by reference, optional strict auto-apply.
+   bad name, retry by reference, optional strict auto-apply. **Prevention before the first write** is now the
+   strongest measured lever: a tool result that shows the qualified names (`ShippingKinds.Overnight`) took tiel
+   from 24/400 to 0/400 (2026-11-18). Candidate: read and outline results for a type list its members in
+   qualified form, so the model copies `[.][Over][night]` from context instead of composing it.
 5. **Fine-stepped eval variant** for finer replay points.
 6. A targeted logit ban works (above) but only where the intended identifier is known, and
    `/v1/responses` (the eval client endpoint) ignores `logit_bias` and `repeat_penalty`; not pursued.
@@ -165,11 +229,10 @@ Open (TODO.md):
    on defaults, a model loaded on demand can skip its preset), and "repeat penalty off for code" was
    already a recorded result months earlier (MEMORY_CLOSED: "Repeat Penalty A/B test results", "LM Studio
    sampling params for code"), so a written rule has not held. Options: the eval client sends the sampler
-   per request on `/v1/chat/completions` (repeat_penalty verified honoured there; min_p not verified), or
-   the harness reads the effective sampler per run and records or refuses a mismatch.
-8. **Lower-temperature arm (not run).** The slip is a sampling event, so temperature 0.3-0.4 at the slip
-   points is the cheapest untested lever; the size of the effect is unknown because the reasoning-channel
-   probability of `.O` cannot be read.
+   per request on `/v1/chat/completions` (repeat_penalty and presence_penalty verified honoured there;
+   min_p not verified), or the harness reads the effective sampler per run and records or refuses a mismatch.
+8. **Lower-temperature arm (run 2026-11-18).** tiel step 4: 6.0% at 0.6, 1.25% at 0.4, 1.0% at 0.3. Open: the
+   effect on pass rates and on other models and replay points.
 
 Tools for the next investigation: agent.log `LM Studio reasoning:` / `LM Studio streaming:` delta lines;
 `scripts/Find-TypoTokenStream.ps1` (TODO: labels a typo with the channel of the turn's last delta);
