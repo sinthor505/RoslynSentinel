@@ -51,6 +51,12 @@ public sealed class LmStudioAgentClient
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
+    /// <summary>Consecutive byte-identical tool calls (same name and arguments) in one streamed response that count as a runaway.</summary>
+    public const int StreamRunawayIdenticalCallLimit = 3;
+
+    /// <summary>Tool calls in one streamed response above which the response counts as a runaway; other runs peak at 4.</summary>
+    public const int StreamRunawayToolCallLimit = 24;
+
     /// <param name="httpClient">Pre-configured client whose BaseAddress points at the LM Studio /v1/ root.</param>
     /// <param name="model">
     /// The LM Studio model name this client targets. Required and per-instance, deliberately NOT read
@@ -154,6 +160,11 @@ public sealed class LmStudioAgentClient
                 ex, "LM Studio call failed ({Reason}); retrying once before giving up.", ex.Message);
             return await CompleteOnceAsync(messages, tools, maxTokens, replayPolicy, cancellationToken);
         }
+        catch (StreamRunawayException ex)
+        {
+            _logger.LogWarning(ex, "LM Studio stream ran away ({Reason}); retrying once before giving up.", ex.Message);
+            return await CompleteOnceAsync(messages, tools, maxTokens, replayPolicy, cancellationToken);
+        }
     }
 
     private async Task<AgentChatMessage> CompleteOnceAsync(
@@ -207,6 +218,10 @@ public sealed class LmStudioAgentClient
         TimeSpan? completedAt = null;
         var reasoningBuilders = new Dictionary<string, StringBuilder>();
         var messageBuilders = new Dictionary<string, StringBuilder>();
+        // Runaway guard state for this one response (see the response.output_item.done branch).
+        var toolCallCount = 0;
+        var identicalCallStreak = 0;
+        string? previousCallKey = null;
 
         await foreach (var (eventType, data) in ReadServerSentEventsAsync(reader, cancellationToken))
         {
@@ -245,6 +260,31 @@ public sealed class LmStudioAgentClient
                         {
                             _logger.LogInformation(
                                 "LM Studio streaming: tool call {Tool}({Args})", evt.Item.Name, evt.Item.Arguments);
+
+                            toolCallCount++;
+                            var callKey = evt.Item.Name + "\n" + evt.Item.Arguments;
+                            identicalCallStreak = callKey == previousCallKey ? identicalCallStreak + 1 : 1;
+                            previousCallKey = callKey;
+
+                            string? runawayReason = null;
+                            if (IsPlaceholderArguments(evt.Item.Arguments))
+                            {
+                                runawayReason = $"Streamed response degenerated: placeholder arguments in {evt.Item.Name} call ({evt.Item.Arguments}); stream aborted.";
+                            }
+                            else if (identicalCallStreak >= StreamRunawayIdenticalCallLimit)
+                            {
+                                runawayReason = $"Streamed response degenerated: {identicalCallStreak} identical {evt.Item.Name} calls in a row ({evt.Item.Arguments}); stream aborted.";
+                            }
+                            else if (toolCallCount > StreamRunawayToolCallLimit)
+                            {
+                                runawayReason = $"Streamed response degenerated: {toolCallCount} tool calls in one response, last {evt.Item.Name} ({evt.Item.Arguments}); stream aborted.";
+                            }
+
+                            if (runawayReason is not null)
+                            {
+                                _logger.LogWarning("LM Studio stream runaway: {Reason}", runawayReason);
+                                throw new StreamRunawayException(runawayReason);
+                            }
                         }
                         break;
                     }
@@ -560,6 +600,41 @@ public sealed class LmStudioAgentClient
     /// </summary>
     private static bool IsGenerationEvent(string eventType) =>
         eventType == "response.output_item.added" || eventType.EndsWith(".delta", StringComparison.Ordinal);
+
+    /// <summary>
+    /// True when a streamed tool call's arguments are a degenerate placeholder: a non-empty JSON object whose every
+    /// value is a string made only of dots and whitespace (at least two dots), e.g. {"reason":"...","filePath":"..."}.
+    /// Unparseable JSON is not a placeholder; the malformed-call handling owns that case.
+    /// </summary>
+    private static bool IsPlaceholderArguments(string? argumentsJson)
+    {
+        if (string.IsNullOrWhiteSpace(argumentsJson))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(argumentsJson);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            var properties = document.RootElement.EnumerateObject().ToList();
+            return properties.Count > 0 && properties.All(property =>
+                property.Value.ValueKind == JsonValueKind.String && IsDotPlaceholder(property.Value.GetString()));
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsDotPlaceholder(string? value) =>
+        value is not null
+        && value.Count(c => c == '.') >= 2
+        && value.All(c => c == '.' || char.IsWhiteSpace(c));
 
     /// <summary>
     /// The fewest recent assistant turns that get their reasoning replayed; the window holds between this many and
@@ -954,6 +1029,13 @@ public sealed class StreamIdleTimeoutException(string message) : Exception(messa
 
 /// <summary>Thrown when LM Studio answers HTTP 500 with "Context size has been exceeded"; not retried because the same prompt overflows again.</summary>
 public sealed class ContextSizeExceededException(string message) : Exception(message);
+
+/// <summary>
+/// Thrown when a streamed response degenerates into placeholder or repeated tool calls, so the stream is aborted
+/// early instead of running to the token cap. Deliberately NOT an <see cref="InvalidOperationException"/>, so
+/// <c>CompleteAsync</c>'s generic retry filter does not catch it; it has its own single retry.
+/// </summary>
+public sealed class StreamRunawayException(string message) : Exception(message);
 
 /// <summary>One message in the running conversation the harness maintains itself (not tied to the wire format).</summary>
 public sealed class AgentChatMessage

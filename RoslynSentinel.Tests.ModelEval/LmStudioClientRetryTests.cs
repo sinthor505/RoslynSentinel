@@ -61,6 +61,79 @@ public class LmStudioClientRetryTests
         Assert.That(handler.ChatRequests, Is.EqualTo(2));
     }
 
+    private const string PlaceholderArguments = "{\"reason\":\"...\",\"filePath\":\"...\"}";
+
+    private const string RealArguments = "{\"filePath\":\"a.cs\"}";
+
+    [Test]
+    public async Task PlaceholderToolCall_RetriesOnce_ThenThrowsStreamRunaway()
+    {
+        var handler = new CountingHandler(_ => SseResponse(FunctionCallEvent("ReadFile", PlaceholderArguments)));
+        var client = NewClient(handler);
+
+        await Assert.ThrowsAsync<StreamRunawayException>(() => client.CompleteAsync(
+            [new AgentChatMessage { Role = "user", Content = "hi" }],
+            [],
+            256));
+
+        Assert.That(handler.ChatRequests, Is.EqualTo(2));
+    }
+
+    [Test]
+    public async Task ThreeIdenticalToolCalls_ThenGoodResponse_ReturnsGoodResponse()
+    {
+        var attempt = 0;
+        var handler = new CountingHandler(_ => ++attempt == 1
+            ? SseResponse(
+                FunctionCallEvent("ReadFile", RealArguments),
+                FunctionCallEvent("ReadFile", RealArguments),
+                FunctionCallEvent("ReadFile", RealArguments))
+            : SseResponse(CompletedMessageEvent("done")));
+        var client = NewClient(handler);
+
+        var result = await client.CompleteAsync(
+            [new AgentChatMessage { Role = "user", Content = "hi" }],
+            [],
+            256);
+
+        Assert.That(result.Content, Is.EqualTo("done"));
+        Assert.That(handler.ChatRequests, Is.EqualTo(2));
+    }
+
+    [Test]
+    public async Task TwoIdenticalToolCalls_AreNotARunaway()
+    {
+        var handler = new CountingHandler(_ => SseResponse(
+            FunctionCallEvent("ReadFile", RealArguments),
+            FunctionCallEvent("ReadFile", RealArguments),
+            CompletedMessageEvent("done")));
+        var client = NewClient(handler);
+
+        var result = await client.CompleteAsync(
+            [new AgentChatMessage { Role = "user", Content = "hi" }],
+            [],
+            256);
+
+        Assert.That(result.Content, Is.EqualTo("done"));
+        Assert.That(handler.ChatRequests, Is.EqualTo(1));
+    }
+
+    private static HttpResponseMessage SseResponse(params string[] events) =>
+        new(HttpStatusCode.OK)
+        {
+            Content = new StringContent(string.Concat(events), Encoding.UTF8, "text/event-stream"),
+        };
+
+    private static string FunctionCallEvent(string name, string argumentsJson) =>
+        "event: response.output_item.done\n" +
+        "data: {\"item\":{\"type\":\"function_call\",\"call_id\":\"call\",\"name\":\"" + name +
+        "\",\"arguments\":\"" + argumentsJson.Replace("\"", "\\\"") + "\"}}\n\n";
+
+    private static string CompletedMessageEvent(string text) =>
+        "event: response.completed\n" +
+        "data: {\"response\":{\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"" +
+        text + "\"}]}]}}\n\n";
+
     private static HttpResponseMessage ErrorResponse(string body) =>
         new(HttpStatusCode.InternalServerError)
         {
