@@ -203,6 +203,13 @@
     documented fields on /v1/chat/completions (a different endpoint this harness doesn't use).
     Set these by hand in LM Studio's sampling panel for the loaded model instead.
 
+.PARAMETER HostSampler
+    Sampler values you set by hand in LM Studio that the harness cannot send or verify, as
+    "topK=20;minP=0.1;repeatPenalty=1.0;presencePenalty=0" (keys: topK, minP, repeatPenalty,
+    presencePenalty, frequencyPenalty). Exported as ROSLYNSENTINEL_LLM_HOST_SAMPLER and recorded
+    in transcript.json Settings.Sampler as Source "declared", Verified false. It changes nothing
+    about the request; it only documents what the host was configured with.
+
 .PARAMETER StreamTimeout
 	How many seconds to wait before assuming the model has failed to generating streaming tokens.
 
@@ -334,7 +341,9 @@ param(
     [double]$RepeatPenalty,
 
     [double]$MinP,
-	
+
+    [string]$HostSampler,
+
 	[double]$StreamTimeout,
 
     [string]$ResumeTranscript,
@@ -531,6 +540,9 @@ if ($PSBoundParameters.ContainsKey('TopP')) {
 if ($PSBoundParameters.ContainsKey('TopK') -or $PSBoundParameters.ContainsKey('RepeatPenalty') -or $PSBoundParameters.ContainsKey('MinP')) {
     Write-Warning "TopK/RepeatPenalty/MinP CANNOT be sent or verified via this harness's /v1/responses endpoint - confirmed 2026-09-05 that LM Studio silently drops these three there (a repeat_penalty A/B test at 1.0 vs 1.8 produced byte-identical output), even though they ARE real, documented params on /v1/chat/completions. Set them by hand in LM Studio's sampling panel for the loaded model; this script cannot do it for you or confirm the UI value matches."
 }
+if ($HostSampler) {
+    Write-Host "    ROSLYNSENTINEL_LLM_HOST_SAMPLER=$HostSampler (declared, not verifiable; recorded in transcript.json Settings)" -ForegroundColor Cyan
+}
 if ($PSBoundParameters.ContainsKey('StreamTimeout')) {
 	Write-Host "    ROSLYNSENTINEL_LLM_STREAM_IDLE_TIMEOUT_SECONDS" -ForegroundColor Cyan
 }
@@ -570,6 +582,15 @@ if ($PSBoundParameters.ContainsKey('TopP')) {
 else {
     $env:ROSLYNSENTINEL_LLM_TOP_P = $null
 }
+# Always set or cleared so a stale value from the shell cannot leak into the transcript's Settings block.
+if ($HostSampler) {
+    $env:ROSLYNSENTINEL_LLM_HOST_SAMPLER = $HostSampler
+}
+else {
+    $env:ROSLYNSENTINEL_LLM_HOST_SAMPLER = $null
+}
+# TODO the next two blocks look wrong: the first keys on -MinimalTools and the second sets ROSLYNSENTINEL_LLM_TOP_P (not the
+# stream timeout) from -StreamTimeout, which resets TOP_P to $null whenever -StreamTimeout is absent, undoing -TopP above.
 if ($MinimalTools) {
     $env:ROSLYNSENTINEL_LLM_STREAM_IDLE_TIMEOUT_SECONDS = $StreamTimeout
 }
