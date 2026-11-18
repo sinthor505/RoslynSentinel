@@ -161,7 +161,7 @@ Open (TODO.md):
 5. **Fine-stepped eval variant** for finer replay points.
 6. A targeted logit ban works (above) but only where the intended identifier is known, and
    `/v1/responses` (the eval client endpoint) ignores `logit_bias` and `repeat_penalty`; not pursued.
-7. **Sampler enforcement (not yet in TODO.md).** The preset has reverted unnoticed before (host 113 ran
+7. **Sampler enforcement (TODO.md P2).** The preset has reverted unnoticed before (host 113 ran
    on defaults, a model loaded on demand can skip its preset), and "repeat penalty off for code" was
    already a recorded result months earlier (MEMORY_CLOSED: "Repeat Penalty A/B test results", "LM Studio
    sampling params for code"), so a written rule has not held. Options: the eval client sends the sampler
