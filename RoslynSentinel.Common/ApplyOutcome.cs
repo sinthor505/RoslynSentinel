@@ -30,7 +30,7 @@ namespace RoslynSentinel.Common;
 /// is the visible signature of a whole-file reformat.
 /// </param>
 /// <param name="Findings">
-/// Non-fatal observations from the write chokepoint, copied from <c>ApplyChangesResult.Findings</c> on a successful apply. Null on error, on a dry run, and when there are none.
+/// Non-fatal observations from the write chokepoint, copied from <c>ApplyChangesResult.Findings</c> on a successful apply. Null on error, on a dry run, and when there are none. The one exception is an evaluation-only near-miss correction (<see cref="NearMissCorrection"/>): its findings are added after the apply's own, and are also present on a dry run that would have been corrected.
 /// </param>
 public record ApplyOutcome(
     string? ChangeId,

@@ -66,6 +66,186 @@ public static class NearMissDetector
         }
     }
 
+    /// <summary>
+    /// EVALUATION feature (see <see cref="NearMissOptions"/>): builds the corrected changeset for a rejected edit when the strict rule holds, otherwise null.
+    /// Pure: it reads only its arguments (and <see cref="NearMissOptions.NameDisplay"/> when <paramref name="nameDisplay"/> is null). The rule, all required:
+    /// (1) every error diagnostic of the report is covered by one item of <paramref name="nearMisses"/> (same id, file, line and column; warnings are ignored),
+    /// so any other error means no correction; (2) each item has exactly one distinct candidate name within <see cref="CorrectedLineHint"/>'s distance limit;
+    /// (3) no item has <see cref="NearMissName.WrongNameDeclaredElsewhere"/>; (4, checked by the caller, which re-validates the result) the corrected changes
+    /// compile clean. The wrong name is read from <paramref name="changes"/> at each item's line and column, and must agree with
+    /// <see cref="CompilerErrorLookupHelper.WrongNameOf"/> when that can parse the message. Only the wrong-name token is replaced (not the receiver).
+    /// The returned spans are positions in the proposed text of <paramref name="changes"/> (see <see cref="NearMissCorrection.CorrectionSpans"/>).
+    /// </summary>
+    /// <param name="changes">The proposed text per file that the compile gate rejected. Not modified.</param>
+    /// <param name="diagnostics">The compile gate's diagnostics for those changes.</param>
+    /// <param name="nearMisses">The items from <see cref="DetectAsync"/> for the same changes and diagnostics.</param>
+    /// <param name="operationName">The tool name written into each <see cref="NearMissSubstitution"/>.</param>
+    /// <param name="nameDisplay">Wording of the findings: show names the substitution, hide states only the corrected line. Null reads <see cref="NearMissOptions.NameDisplay"/>.</param>
+    public static NearMissCorrection? BuildCorrection(
+        IReadOnlyDictionary<FilePathWrapper, string> changes,
+        IReadOnlyList<DiagnosticInfo> diagnostics,
+        IReadOnlyList<NearMissName> nearMisses,
+        string operationName,
+        NearMissNameDisplay? nameDisplay = null)
+    {
+        var errors = diagnostics.Where(d => d.Severity == "Error").ToList();
+        if (errors.Count == 0 || nearMisses.Count == 0)
+        {
+            return null;
+        }
+
+        var display = nameDisplay ?? NearMissOptions.NameDisplay;
+        var slips = new List<(FilePathWrapper Key, int Offset, string Wrong, string Closest, NearMissName Item)>();
+        foreach (var error in errors)
+        {
+            // Rule 1 (an uncovered error), rule 3 (declared elsewhere) and rule 2 (not exactly one name in range) each mean no correction at all.
+            var item = nearMisses.FirstOrDefault(n => IsItemFor(n, error));
+            if (item is null || item.WrongNameDeclaredElsewhere)
+            {
+                return null;
+            }
+
+            var located = LocateWrongName(changes, item, error);
+            if (located is null)
+            {
+                return null;
+            }
+
+            var (key, offset, wrong) = located.Value;
+            var names = item.Candidates.Select(c => c.Name).ToList();
+            var closest = CorrectedLineHint.CountWithinLimit(wrong, names) == 1 ? CorrectedLineHint.FindClosest(wrong, names) : null;
+            if (closest is null)
+            {
+                return null;
+            }
+
+            // Two diagnostics at one token (a duplicate report) are one replacement.
+            if (!slips.Any(s => s.Key.Equals(key) && s.Offset == offset))
+            {
+                slips.Add((key, offset, wrong, closest, item));
+            }
+        }
+
+        var corrected = changes.ToDictionary(entry => entry.Key, entry => entry.Value);
+        var spans = new Dictionary<FilePathWrapper, IReadOnlyList<TextChange>>();
+        foreach (var file in slips.GroupBy(s => s.Key))
+        {
+            IReadOnlyList<TextChange> edits = file.OrderBy(s => s.Offset).Select(s => new TextChange(new TextSpan(s.Offset, s.Wrong.Length), s.Closest)).ToList();
+            spans[file.Key] = edits;
+            corrected[file.Key] = CollateralChangeGuard.ApplyEdits(changes[file.Key], edits);
+        }
+
+        var substitutions = new List<NearMissSubstitution>();
+        var findings = new List<Finding>();
+        foreach (var slip in slips)
+        {
+            var correctedLine = LineOf(corrected[slip.Key], slip.Item.Line);
+            var location = $"{Path.GetFileName((string)slip.Key)}:{slip.Item.Line}";
+            substitutions.Add(new NearMissSubstitution(operationName, slip.Item.FilePath, slip.Item.Line, slip.Wrong, slip.Closest, slip.Item.DiagnosticId, 1, DisplayModeOf(display), Applied: true));
+            findings.Add(new Finding("NearMiss", display == NearMissNameDisplay.Hide
+                ? $"Corrected a misspelled name at {location}. Corrected line: {correctedLine}"
+                : $"Corrected a misspelled name at {location}: '{slip.Wrong}' -> '{slip.Closest}'. Corrected line: {correctedLine}", FindingSeverity.Caution));
+        }
+
+        return new NearMissCorrection(corrected, spans, substitutions, findings);
+    }
+
+    /// <summary>
+    /// EVALUATION feature: records each item of a rejection that was NOT corrected (the rejection text carried its hint) through
+    /// <see cref="NearMissRecorder"/> with Applied false. The caller that builds the rejection calls this once per rejection with the same
+    /// <paramref name="changes"/> and items it passed to <see cref="DetectAsync"/>; a recorded item is never one that
+    /// <see cref="BuildCorrection"/> applied, because an applied correction is not a rejection. A no-op unless <see cref="NearMissRecorder.IsActive"/>.
+    /// An item whose token cannot be located in <paramref name="changes"/> is skipped.
+    /// </summary>
+    public static void RecordAmbiguous(IReadOnlyDictionary<FilePathWrapper, string> changes, IReadOnlyList<NearMissName> nearMisses, string operationName, NearMissNameDisplay? nameDisplay = null)
+    {
+        if (!NearMissRecorder.IsActive)
+        {
+            return;
+        }
+
+        var display = nameDisplay ?? NearMissOptions.NameDisplay;
+        foreach (var item in nearMisses)
+        {
+            var located = LocateWrongName(changes, item, null);
+            if (located is null)
+            {
+                continue;
+            }
+
+            var wrong = located.Value.Wrong;
+            var names = item.Candidates.Select(c => c.Name).ToList();
+            var closest = CorrectedLineHint.FindClosest(wrong, names) ?? item.Replacement;
+            NearMissRecorder.Record(new NearMissSubstitution(operationName, item.FilePath, item.Line, wrong, closest, item.DiagnosticId, CorrectedLineHint.CountWithinLimit(wrong, names), DisplayModeOf(display), Applied: false));
+        }
+    }
+
+    private static string DisplayModeOf(NearMissNameDisplay display) => display == NearMissNameDisplay.Hide ? "hide" : "show";
+
+    // An item is the near miss of a diagnostic when both name the same id and position (the detector builds one item per member diagnostic).
+    private static bool IsItemFor(NearMissName item, DiagnosticInfo diagnostic)
+        => item.DiagnosticId == diagnostic.Id
+           && item.Line == diagnostic.StartLine
+           && item.Column == diagnostic.StartColumn
+           && string.Equals(item.FilePath, diagnostic.FilePath.ToString(), StringComparison.OrdinalIgnoreCase);
+
+    // Finds the identifier token at the item's line and column in the proposed text. Null when the file is not in the changes, the position is outside
+    // the text or not the start of an identifier, or the diagnostic's own message names a different identifier (then the position is not trustworthy).
+    private static (FilePathWrapper Key, int Offset, string Wrong)? LocateWrongName(IReadOnlyDictionary<FilePathWrapper, string> changes, NearMissName item, DiagnosticInfo? diagnostic)
+    {
+        FilePathWrapper? key = null;
+        foreach (var candidate in changes.Keys)
+        {
+            if (string.Equals((string)candidate, item.FilePath, StringComparison.OrdinalIgnoreCase))
+            {
+                key = candidate;
+                break;
+            }
+        }
+
+        if (key is null || item.Line < 1 || item.Column < 1)
+        {
+            return null;
+        }
+
+        var text = SourceText.From(changes[key.Value]);
+        if (item.Line > text.Lines.Count)
+        {
+            return null;
+        }
+
+        var line = text.Lines[item.Line - 1];
+        var offset = line.Start + item.Column - 1;
+        if (offset >= line.End || !(char.IsLetter(text[offset]) || text[offset] == '_'))
+        {
+            return null;
+        }
+
+        // The column must be the start of the token, not the middle of a longer name or an @-escaped identifier.
+        if (offset > line.Start && (char.IsLetterOrDigit(text[offset - 1]) || text[offset - 1] is '_' or '@'))
+        {
+            return null;
+        }
+
+        var end = offset;
+        while (end < line.End && (char.IsLetterOrDigit(text[end]) || text[end] == '_'))
+        {
+            end++;
+        }
+
+        var wrong = text.ToString(TextSpan.FromBounds(offset, end));
+        var reported = diagnostic is null ? null : CompilerErrorLookupHelper.WrongNameOf(diagnostic);
+        return reported is not null && !string.Equals(reported, wrong, StringComparison.Ordinal) ? null : (key.Value, offset, wrong);
+    }
+
+    // The trimmed text of a 1-based line, capped so a finding never quotes a long line.
+    private static string LineOf(string text, int line)
+    {
+        var source = SourceText.From(text);
+        var value = line >= 1 && line <= source.Lines.Count ? source.Lines[line - 1].ToString().Trim() : string.Empty;
+        return value.Length > 200 ? value[..200] + "..." : value;
+    }
+
     private static async Task<NearMissName?> DetectOneAsync(Solution baseline, Solution forked, DiagnosticInfo diagnostic, Dictionary<string, bool> declaredElsewhere, CancellationToken cancellationToken)
     {
         // A diagnostic in a file that is not a baseline document (a CreateFile target) is out of scope.

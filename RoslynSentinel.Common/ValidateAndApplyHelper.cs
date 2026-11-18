@@ -101,7 +101,12 @@ public static class ValidateAndApplyHelper
         Func<DiagnosticReport, CancellationToken, Task<(string? Text, IReadOnlyList<object>? StructuredDetail)>>? describeEditImpact = null,
         // Records the call's EditEffects (ToolCallContext.Current?.RecordEffect). Runs only for a real apply that passed the compile gate,
         // immediately before the write chokepoint, which commits the effects only if the write stands (never on a dry run or a refusal).
-        Action? recordEffects = null)
+        Action? recordEffects = null,
+        // EVALUATION (NearMissOptions.AutoCorrect): builds a corrected changeset for a rejected compile gate (NearMissDetector.BuildCorrection in
+        // Engines.Basic; Common cannot call an engine) or returns null for no correction. The helper re-validates the corrected changes and, when
+        // expectedEdits is set, re-checks them for collateral change; a correction that fails either is dropped and the normal rejection stands.
+        // A correction that lands is surfaced as findings on the success outcome (dry run included) and recorded as applied only on a real write.
+        Func<DiagnosticReport, CancellationToken, Task<NearMissCorrection?>>? tryAutoCorrect = null)
     {
         // The pre-images feed the per-file changed-line counts and the collateral-change tripwire below.
         // EOL conversion is done by the chokepoint (PersistentWorkspaceManager.ApplyProposedChangesAsync).
@@ -174,7 +179,18 @@ public static class ValidateAndApplyHelper
             return new ApplyOutcome(null, ToolErrorMapper.ToResultError(ex, workspaceManager, $"{operationName} pre-validate"), dryRun);
         }
 
-        if (validation.IsError)
+        // Eval-only auto-correction. `changes` is reassigned to the corrected COPY on success; the caller's dictionary is never mutated.
+        NearMissCorrection? correction = null;
+        if (validation.IsError && tryAutoCorrect != null)
+        {
+            correction = await TryAutoCorrectAsync(validationEngine, logger, operationName, tryAutoCorrect, validation, changes, expectedEdits, allRemovePaths, cancellationToken);
+            if (correction != null)
+            {
+                changes = correction.CorrectedChanges;
+            }
+        }
+
+        if (correction is null && validation.IsError)
         {
             var detail = validation.Diagnostics;
             var (impactText, impactDetail) = describeEditImpact != null ? await describeEditImpact(validation, cancellationToken) : (null, null);
@@ -202,7 +218,8 @@ public static class ValidateAndApplyHelper
         {
             var previewDiff = returnDiff ? await BuildDiffAsync(workspaceManager, changes, cancellationToken) : null;
             return new ApplyOutcome(null, null, true, previewDiff,
-                LineChanges: ComputeLineChanges(changes, deletePaths, p => beforeTexts.GetValueOrDefault(p)));
+                LineChanges: ComputeLineChanges(changes, deletePaths, p => beforeTexts.GetValueOrDefault(p)),
+                Findings: MergeFindings(null, correction?.Findings));
         }
 
         recordEffects?.Invoke();
@@ -226,6 +243,13 @@ public static class ValidateAndApplyHelper
                 : applyResult.FailedFiles.Keys.Select(k => k.ToString());
             var refusalFindings = EditAttributionFindings.ForCurrentCaller(workspaceManager, refusedPaths);
             return new ApplyOutcome(null, applyError with { Findings = refusalFindings.Count > 0 ? refusalFindings.ToList() : null }, false);
+        }
+
+        // The write stands, so each substitution of the correction is recorded as applied (a dry run or a refused write records nothing).
+        var successFindings = MergeFindings(applyResult.Findings, correction?.Findings);
+        foreach (var substitution in correction?.Substitutions ?? [])
+        {
+            NearMissRecorder.Record(substitution);
         }
 
         var changeId = Guid.NewGuid().ToString("n")[..8];
@@ -256,7 +280,7 @@ public static class ValidateAndApplyHelper
             ((IUnrecoverableBreaker)workspaceManager).Trip(operationName, changeId, reason);
 
             // No changeId: one UndoLastApply cannot resolve is worse than none.
-            return new ApplyOutcome(null, null, false, appliedDiff, reason, LineChanges: lineChanges, Findings: applyResult.Findings);
+            return new ApplyOutcome(null, null, false, appliedDiff, reason, LineChanges: lineChanges, Findings: successFindings);
         }
 
         // Nothing was written, so no changeId should be issued either. Previously one was minted
@@ -275,10 +299,79 @@ public static class ValidateAndApplyHelper
                 $"{operationName} produced no file changes, so nothing was written and there is " +
                 "nothing to undo. If you expected a change, the operation matched no target - or " +
                 "its refactoring feature is disabled on this server (see the Features tool).",
-                LineChanges: lineChanges, Findings: applyResult.Findings);
+                LineChanges: lineChanges, Findings: successFindings);
         }
 
-        return new ApplyOutcome(changeId, null, false, appliedDiff, LineChanges: lineChanges, Findings: applyResult.Findings);
+        return new ApplyOutcome(changeId, null, false, appliedDiff, LineChanges: lineChanges, Findings: successFindings);
+    }
+
+    // The apply's own findings followed by the correction's; the existing list unchanged (null stays null) when there is no correction.
+    private static List<Finding>? MergeFindings(List<Finding>? existing, IReadOnlyList<Finding>? correctionFindings)
+    {
+        if (correctionFindings is null || correctionFindings.Count == 0)
+        {
+            return existing;
+        }
+
+        var merged = existing is null ? [] : new List<Finding>(existing);
+        merged.AddRange(correctionFindings);
+        return merged;
+    }
+
+    /// <summary>
+    /// Asks <paramref name="tryAutoCorrect"/> for a corrected changeset for the rejected report and returns it only when it can be trusted: it covers
+    /// exactly the files of <paramref name="changes"/>, its spans explain every difference from the proposed text when <paramref name="expectedEdits"/>
+    /// is set (the spans are in proposed-text positions, so the check runs on the proposed text as the pre-image, after the check that already
+    /// explained it), and it validates clean. Any failure other than cancellation returns null, so the caller builds the normal rejection from the original report.
+    /// </summary>
+    private static async Task<NearMissCorrection?> TryAutoCorrectAsync(
+        ValidationEngine validationEngine,
+        ILogger logger,
+        string operationName,
+        Func<DiagnosticReport, CancellationToken, Task<NearMissCorrection?>> tryAutoCorrect,
+        DiagnosticReport rejected,
+        Dictionary<FilePathWrapper, string> changes,
+        IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>>? expectedEdits,
+        IReadOnlyCollection<FilePathWrapper>? removePaths,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var correction = await tryAutoCorrect(rejected, cancellationToken);
+            if (correction is null)
+            {
+                return null;
+            }
+
+            var corrected = correction.CorrectedChanges;
+            if (corrected.Count != changes.Count || changes.Keys.Any(k => !corrected.ContainsKey(k)))
+            {
+                logger.LogWarning("{OperationName}: near-miss correction dropped, it does not cover the files of the proposed change", operationName);
+                return null;
+            }
+
+            if (expectedEdits != null)
+            {
+                foreach (var (key, proposed) in changes)
+                {
+                    IReadOnlyList<TextChange> spans = correction.CorrectionSpans.TryGetValue(key, out var declared) ? declared : [];
+                    if (CollateralChangeGuard.Check((string)key, proposed, corrected[key], spans) != null)
+                    {
+                        logger.LogWarning("{OperationName}: near-miss correction dropped, its spans do not explain the corrected text of a file", operationName);
+                        return null;
+                    }
+                }
+            }
+
+            var revalidated = await validationEngine.ValidateChangesAsync(corrected, removePaths, cancellationToken);
+            return revalidated.IsError ? null : correction;
+        }
+        // The correction is an optional extra on a rejection that is about to be reported: a failure of it must not replace that rejection.
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "{OperationName}: near-miss correction failed, reporting the original rejection", operationName);
+            return null;
+        }
     }
 
     /// <summary>The name the written files are detached under: the payload lands at <c>successData.changedFiles</c> in the result store.</summary>

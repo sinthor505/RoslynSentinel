@@ -29,16 +29,39 @@ public static class CorrectedLineHint
             return null;
         }
 
-        var limit = Math.Min(MaxDistanceCap, wanted.Length / 2);
-        var ordered = names
-            .Where(n => n.Length > 0 && (char.IsLetter(n[0]) || n[0] == '_') && !string.Equals(n, wanted, StringComparison.Ordinal))
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(n => n, StringComparer.Ordinal)
-            .ToList();
+        var limit = LimitFor(wanted);
+        var ordered = EligibleNames(wanted, names);
 
         var closest = NameCandidates.Rank(wanted, ordered, n => n, cap: 1, strict: true);
         return closest.Count > 0 && closest[0].Distance <= limit ? closest[0].Item : null;
     }
+
+    /// <summary>
+    /// Counts the distinct names in <paramref name="names"/> that <see cref="FindClosest"/> would accept as the closest name on its own, that is, the
+    /// ones within the same distance limit and the same strict similarity rule. 1 means the correction is unambiguous; 2 or more means several names
+    /// are in range and <see cref="FindClosest"/> only breaks the tie by distance and ordinal order. 0 for a blank <paramref name="wanted"/>.
+    /// </summary>
+    internal static int CountWithinLimit(string wanted, IEnumerable<string> names)
+    {
+        if (string.IsNullOrWhiteSpace(wanted))
+        {
+            return 0;
+        }
+
+        var limit = LimitFor(wanted);
+        var eligible = EligibleNames(wanted, names);
+        return NameCandidates.Rank(wanted, eligible, n => n, cap: eligible.Count, strict: true).Count(r => r.Distance <= limit);
+    }
+
+    private static int LimitFor(string wanted) => Math.Min(MaxDistanceCap, wanted.Length / 2);
+
+    // Names that may be suggested: identifier-shaped, not the wanted name itself, distinct, in ordinal order so ties do not depend on enumeration order.
+    private static List<string> EligibleNames(string wanted, IEnumerable<string> names)
+        => names
+            .Where(n => n.Length > 0 && (char.IsLetter(n[0]) || n[0] == '_') && !string.Equals(n, wanted, StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToList();
 
     /// <summary>
     /// Returns <paramref name="sourceLine"/> with the misspelled identifier replaced by <paramref name="closestName"/>, or
