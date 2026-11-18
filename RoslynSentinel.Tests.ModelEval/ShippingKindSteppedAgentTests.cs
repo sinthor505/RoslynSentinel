@@ -179,8 +179,18 @@ public class ShippingKindSteppedAgentTests
         var detail = checkDetail;
         if (!result.Converged)
         {
-            outcome = ShippingKindStepOutcome.NotConverged;
-            detail = $"Stopped: {result.StopReason}. State check would have been {checkOutcome}: {checkDetail}";
+            // Separated from NotConverged so a run whose work already passed the check is not labelled as an unfinished task.
+            if (checkOutcome == ShippingKindStepOutcome.Pass
+                && result.StopReason is AgentStopReason.WallClockCapExceeded or AgentStopReason.TurnCapExceeded)
+            {
+                outcome = ShippingKindStepOutcome.PassedAfterCap;
+                detail = $"Stopped: {result.StopReason} after the work already passed the step check: {checkDetail}";
+            }
+            else
+            {
+                outcome = ShippingKindStepOutcome.NotConverged;
+                detail = $"Stopped: {result.StopReason}. State check would have been {checkOutcome}: {checkDetail}";
+            }
         }
         else if (checkOutcome != ShippingKindStepOutcome.Pass
             && (StopMarker.IsLeading(finalMessage) || StopMarker.ContainsAnywhere(finalMessage)))

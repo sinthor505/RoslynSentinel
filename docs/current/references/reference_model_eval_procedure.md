@@ -342,7 +342,8 @@ A bare pass/fail sends the analyst back into transcripts to learn what happened.
   (find literals, add `ShippingKinds` constants, add helpers, migrate two files, migrate two more, then change the
   constant values and add an expedited `SameDay` kind). Each of the six steps is a fresh conversation (`ShippingKindSteppedAgentTests.Model_CompletesShippingKindStep(k)`)
   that starts from a golden git tag `step-(k-1)`, never from the model's earlier output.
-  Outcome per step: `Pass`, `OutOfScopeEdit`, `CheckFailed`, `BuildBroken`, `Blocked`, `NotConverged`.
+  Outcome per step: `Pass`, `OutOfScopeEdit`, `CheckFailed`, `BuildBroken`, `Blocked`, `PassedAfterCap` (the tree passed
+  the check but the run hit the turn or wall-clock cap; still a failed test), `NotConverged`.
   Caps per step: 25 turns, 15 minutes wall clock; `-StepWallClockMinutes N` raises the wall clock for slow models (tiel),
   and the evalqueue `-TimeLimitMinutes` must cover all steps of one run plus the build.
 - All six: `.\scripts\roslynsentinel-modeleval.ps1 -Test ShippingKindStep -Model <key>` (queue it on a

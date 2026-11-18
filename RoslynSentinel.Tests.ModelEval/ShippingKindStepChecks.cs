@@ -9,6 +9,10 @@ internal enum ShippingKindStepOutcome
     CheckFailed,
     BuildBroken,
     Blocked,
+    /// <summary>
+    /// The tree passed the step's check, but the run stopped on the turn cap or wall-clock cap instead of the model finishing. Correct but over budget; still a failed test.
+    /// </summary>
+    PassedAfterCap,
     NotConverged
 }
 
