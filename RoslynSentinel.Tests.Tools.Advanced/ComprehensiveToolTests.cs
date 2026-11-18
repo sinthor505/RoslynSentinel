@@ -192,8 +192,8 @@ public class ComprehensiveToolTests
         Assert.That(!result.IsError, Is.True);
         var items = ((FileOutlineResult)result.SuccessData!).Symbols;
         Assert.That(items.Select(i => (i.Kind, i.Name)), Contains.Item(("enum", "Status")));
-        Assert.That(items.Select(i => (i.Kind, i.Name)), Contains.Item(("enum member", "Pending")));
-        Assert.That(items.Select(i => (i.Kind, i.Name)), Contains.Item(("enum member", "Shipped")));
+        Assert.That(items.Select(i => (i.Kind, i.Name)), Contains.Item(("enum member", "Status.Pending")));
+        Assert.That(items.Select(i => (i.Kind, i.Name)), Contains.Item(("enum member", "Status.Shipped")));
     }
 
     private void SetSource(string source, string fileName)
@@ -217,7 +217,7 @@ public class ComprehensiveToolTests
         Assert.That(entries.Select(e => (e.Kind, e.Name)), Contains.Item(("class", "Order")));
         Assert.That(entries.Select(e => (e.Kind, e.Name)), Contains.Item(("method", "Ship")));
         Assert.That(entries.Select(e => (e.Kind, e.Name)), Contains.Item(("enum", "Status")));
-        Assert.That(entries.Select(e => (e.Kind, e.Name)), Contains.Item(("enum member", "Pending")));
+        Assert.That(entries.Select(e => (e.Kind, e.Name)), Contains.Item(("enum member", "Status.Pending")));
         Assert.That(entries.Select(e => e.FilePath.ToString()), Has.Some.Contains("Order.cs"));
         Assert.That(entries.Select(e => e.FilePath.ToString()), Has.Some.Contains("Status.cs"));
     }
@@ -249,7 +249,7 @@ public class ComprehensiveToolTests
         Assert.That(!result.IsError, Is.True);
         var entries = (List<SolutionSymbolEntry>)result.SuccessData!;
         Assert.That(entries, Has.Count.EqualTo(2));
-        Assert.That(entries.Select(e => e.Name), Is.EquivalentTo(new[] { "Pending", "Shipped" }));
+        Assert.That(entries.Select(e => e.Name), Is.EquivalentTo(new[] { "Status.Pending", "Status.Shipped" }));
     }
 
     [Test]

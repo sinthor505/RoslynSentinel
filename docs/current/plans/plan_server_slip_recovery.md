@@ -1,6 +1,6 @@
 # Plan: near-miss member detail on rejections, qualified enum members in outlines, then eval-only auto-correction
 
-**Status:** IN PROGRESS 2026-11-18. Steps 1-7 done (Phase A; a4056bc8, b44db0d1, e4bea9e3, 79337626, d262eefa, 40aa9065, c5407b17, 4f1954f8, 8888a4f2). Batched run,
+**Status:** IN PROGRESS 2026-11-18. Steps 1-12 done (see each step); Step 13 (live eval) left. Batched run,
 owner away; D3 and D4 settled (see Decision). Phase B (Steps 8-13, eval-only) follows Phase A.
 
 **Name trap:** inside `RoslynSentinel.Engines.Basic`, `SymbolCandidate` resolves to an unrelated record in
@@ -205,6 +205,7 @@ Phase B below is an evaluation feature. Every option it adds defaults to today's
   Report whether `_meta` survives, and whether `LmStudioAgentClient` sends it to the model (it must not).
 - Done when: a yes/no with file:line evidence. If no, Step 11 uses the fallback in Risks.
 - Lane: explore-tier2.
+- Done: yes, `_meta` reaches the harness (`Result.cs:23` in the SDK clone, `McpClientToolHost.cs:26-33`) and not the model (`ModelAgentRunner.cs:930-975`, `LmStudioAgentClient.cs:718-726`); nothing wrote it before Step 11.
 
 ### Step 9 - Options skeleton (text-neutral; D4 settled)
 - Files: `RoslynSentinel.Common/NearMissOptions.cs` (new), `RoslynSentinel.Server.Advanced/ServerStdio.cs`, `RoslynSentinel.Server.Advanced/ServerHttp.cs`
@@ -220,6 +221,7 @@ Phase B below is an evaluation feature. Every option it adds defaults to today's
   The XML doc of each states it is an evaluation option and not meant for production use.
 - Done when: `Build` 0 errors.
 - Lane: implementer.
+- Done: 7161f4e2
 
 ### Step 10 - Display toggle in the rejection text (behaviour-changing only under `hide`)
 - Files: `RoslynSentinel.Engines.Basic/CompilerErrorLookupHelper.cs`, `RoslynSentinel.Tests/NearMissDisplayTests.cs` (new)
@@ -244,6 +246,7 @@ Phase B below is an evaluation feature. Every option it adds defaults to today's
   - `Hide_Cs0117Rejection_ShowsTheCorrectedLineInsteadOfTheSourceLineAsync`
 - Done when: `Build` 0 errors; `NearMissDisplayTests` passes.
 - Lane: implementer (code) then test-writer (tests).
+- Done: 495d3235, 746ad569, 41096cb5
 
 ### Step 11 - Redact structured diagnostics under `hide` and record substitutions (behaviour-changing under the options)
 - Files: `RoslynSentinel.Engines.Basic/EditImpactGate.cs`, plus the `_meta` writer per Step 8
@@ -255,6 +258,7 @@ Phase B below is an evaluation feature. Every option it adds defaults to today's
   justification is written when Step 8 settles the channel.
 - Done when: `Build` 0 errors; a test asserts the `_meta` record (or the fallback field) for one substitution.
 - Lane: implementer-senior.
+- Done: 44938082 (redaction), fc459ddf (`NearMissSubstitution`, `NearMissRecorder`, `_meta` filter, `Meta` on `AgentToolCallRecord`). The recorder is active only with `AutoCorrect` on or `NameDisplay` hide. Two sinks still show the wrong name under hide (TODO in `BuildDetail`): `ImpactVerdict.BrokenUses` (unedited files) and `EditImpactAnalyzer.SourceLineOf`.
 
 ### Step 12 - Eval-only auto-correction (behaviour-changing only with `NearMissAutoCorrect`)
 - Files: `RoslynSentinel.Engines.Basic/NearMissDetector.cs` (correction builder), `RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs`,
@@ -271,7 +275,8 @@ Phase B below is an evaluation feature. Every option it adds defaults to today's
     - `WrongNameDeclaredElsewhere == false`;
     - the corrected changeset validates clean through `ValidationEngine.ValidateChangesAsync`.
   - Otherwise reject with the Step 10 hint.
-  - The corrected text must pass ReplaceSnippet's collateral-change check (`expectedEdits`, `ValidateAndApplyHelper.cs:120-150`): add the correction spans to the expected edits.
+  - The corrected text must pass the collateral-change check. As built, `ReplaceSnippet` has no `expectedEdits` (only `MoveMember` does); the correction passes `CollateralChangeGuard.Check` between the proposed and corrected text over the correction spans (`NearMissCorrection.SpansExplainCorrectedText`, shared with `ValidateAndApplyHelper`).
+  - Wired as built: `ReplaceSnippet` (single and batch), `WriteFile`, `ApplyDiff`, `ApplyUnifiedDiff`. The `tryAutoCorrect` delegate in `ValidateAndApplyHelper` has no caller yet, so `Member`, `MethodSignature`, `MoveMember` and the refactorings are not wired (TODO in code).
 - Done when: `Build` 0 errors. Tests in `RoslynSentinel.Tests/NearMissAutoCorrectTests.cs` (new), all `Async`:
   - `AutoCorrectOn_UniqueNearMiss_AppliesTheCorrectedLine`
   - `AutoCorrectOn_TwoCandidatesInRange_RejectsWithQualifiedCandidates`
@@ -279,6 +284,7 @@ Phase B below is an evaluation feature. Every option it adds defaults to today's
   - `AutoCorrectOn_WrongNameDeclaredOnAnotherType_Rejects`
   - `AutoCorrectOff_UniqueNearMiss_RejectsAsToday`
 - Lane: implementer-senior (12a), implementer (12b), test-writer (tests).
+- Done: 215a2136, 655c327a, 2e1e16bb, 9a142b98, c8bfa495, d74c43e6. Tests in `NearMissAutoCorrectTests` (the five plus a hide-mode one); stub sweep of `NearMissDetector.cs` clean.
 
 ### Step 13 - Stub sweep and live check
 - Files: none (checks)
@@ -298,8 +304,8 @@ Phase B below is an evaluation feature. Every option it adds defaults to today's
   becomes the default.
 - Fix ids or any apply-by-reference mechanism (dropped 2026-11-18; see the proposal's alternatives).
 - Auto-correction as a production feature.
-- Qualified names for static members of non-enum types, and in `Search(mode: enum member)` rows (bare
-  `name` plus `container` today).
+- Qualified names for static members of non-enum types. (`Search(mode: enum member)` rows turned out to
+  share the outline walk and are qualified too after Step 7; accepted 2026-11-18, consistent with D3.)
 - All harness work ([proposal_harness_slip_rollback_and_resample.md](../proposals/proposal_harness_slip_rollback_and_resample.md)).
 
 ## Risks and open decisions
