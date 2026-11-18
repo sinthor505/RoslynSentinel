@@ -1,7 +1,7 @@
 # Plan: near-miss member detail on rejections, qualified enum members in outlines, then eval-only auto-correction
 
-**Status:** DRAFT 2026-11-18. Phase A (Steps 1-7) is ready to run once D3 is settled; Phase B (Steps 8-13,
-eval-only) waits on D4 and the `_meta` check in Step 8.
+**Status:** APPROVED 2026-11-18. Batched run, owner away; D3 and D4 settled (see Decision). Phase B
+(Steps 8-13, eval-only) follows Phase A.
 
 ## Problem
 
@@ -22,6 +22,18 @@ The server already computes the closest name and corrected line, but only as tex
   - Two server options: auto-correction (strict rule) and a show/hide display toggle for the wrong name.
   - Every substitution is logged to the server log and in the result's `_meta`, so the transcript records it.
   - No fix ids, no store, no new tool.
+
+Settled 2026-11-18 (implement-plan review; owner answers marked "owner"):
+- D3 (owner): qualify enum members in the shared `ExtractOutlineEntries` walk, so `ListAll` rows and its
+  `nameFilter` matching change too. Step 7 updates `ListAll` accordingly.
+- D4 (owner): the eval options live in a new class modelled on `RoslynSentinel.Common/LiftRenamesOptions.cs`
+  (startup `Configure`, env fallback, `AsyncLocal` `OverrideForCurrentContext`), wired where
+  `ServerStdio.cs` and `ServerHttp.cs` call `Configure(args)`; not in `LlmOptions`.
+- Owner is away for the run; mode is Batched.
+- Review fixes (no owner input needed): the detector's catch excludes `OperationCanceledException`
+  (as `EditImpactGate.AnalyzeAsync` does); `CreateFile` and `WriteFile` to a new path are out of scope
+  (the detector skips non-baseline documents by design); the wrong name must also be redacted from
+  every place Step 10 lists.
 
 ## Execution rules
 
@@ -85,8 +97,10 @@ The server already computes the closest name and corrected line, but only as tex
      - `CorrectedLine` = `CorrectedLineHint.RewriteLine(sourceLine, wrongName, closest, startColumn, memberAccess: true)` (`:51`).
      - `ReceiverType` = `type.ToDisplayString()`.
      - `WrongNameDeclaredElsewhere`: true when any project's compilation in `baseline` reports `ContainsSymbolsWithName(wrongName, SymbolFilter.Member)`.
-  6. Wrap the body in a catch that returns empty. A detector failure must never break a rejection; log
-     nothing here, because the engine has no logger.
+  6. Wrap the body in a catch that returns empty, except `OperationCanceledException`, which propagates.
+     A detector failure must never break a rejection; log nothing here, because the engine has no logger.
+  - Map each `ISymbol` to a `SymbolCandidate` (`Kind`, `Container`) with a small private helper in the
+    detector; the mapping inside `SymbolNotFoundDetail` is private.
 - Done when: `Build` 0 errors; Step 3 tests pass.
 - Lane: implementer-senior (Roslyn binding judgment; within tier-1 size).
 
@@ -94,9 +108,10 @@ The server already computes the closest name and corrected line, but only as tex
 - Files: `RoslynSentinel.Tests/NearMissDetectorTests.cs` (new)
 - Depends on: 2. It can be written against the Step 1 signature in parallel with Step 4.
 - Effect: none (tests).
-- Change: build each fixture with an in-memory `AdhocWorkspace` solution, the way
-  `CompilerErrorLookupHelperTests` (`RoslynSentinel.Tests/CompilerErrorLookupHelperTests.cs`) builds its
-  fixtures. Tests:
+- Change: build each fixture with the `InMemoryWorkspace` pattern of `EditImpactGateWiringTests`; an
+  `AdhocWorkspace` project has no metadata references, so the CS1061 instance test would need them added.
+  `CompilerErrorLookupHelperTests` builds fixtures through `_workspaceManager` and
+  `CompileAndGetErrorsAsync` (`:24-47`); its `ShippingKindsSource` (`:485`) is reusable. Tests:
   - `DetectAsync_EnumMemberSlip_ReturnsQualifiedReplacementAndCorrectedLineAsync`: `ShippingKinds.Oovernight` returns one item with `Replacement == "ShippingKinds.Overnight"`, a `CorrectedLine` containing `ShippingKinds.Overnight`, and `WrongNameDeclaredElsewhere == false`.
   - `DetectAsync_InstanceMemberSlip_Cs1061_ReturnsTheClosestInstanceMemberAsync`
   - `DetectAsync_NoCloseName_ReturnsEmptyAsync`
@@ -113,7 +128,8 @@ The server already computes the closest name and corrected line, but only as tex
   `errorData.structuredDetail[0].nearMisses`; message text is unchanged.
 - Change: in each site, get `baseline = await workspaceManager.GetSolutionAsync(ReadSource.Committed, ct)`,
   call `NearMissDetector.DetectAsync(baseline, changes, report.Diagnostics, ct)` and pass the result to
-  `BuildDetail`. The sites:
+  `BuildDetail`. Put the get-baseline, detect and swallow-non-cancel-errors sequence in one helper in
+  `EditImpactGate` and call it from all three sites. The sites:
   - `EditImpactGate.Describer` (`EditImpactGate.cs:24-35`)
   - `EditImpactGate.RejectionAsync` (`:62-75`)
   - `WorkspaceFileEditImpl.ComposeCompileRejectionAsync` (`WorkspaceFileEditImpl.cs:1224`), through `RejectionDetail` (`:1187`), which gains the same trailing parameter. It has 1 caller.
@@ -144,16 +160,23 @@ The server already computes the closest name and corrected line, but only as tex
 - Done when: `Build` 0 errors; `NearMissDetectorTests` passes.
 - Lane: implementer (code) then test-writer (test), or implementer-senior for both.
 
-### Step 7 - Qualified enum members in GetFileOutline (behaviour-changing; needs D3)
+### Step 7 - Qualified enum members in the outline walk (behaviour-changing; D3 settled)
 - Files: `RoslynSentinel.Tools.Basic/WorkspaceReadNavigationImpl.cs`, `RoslynSentinel.Tests/OutlineEnumMemberTests.cs` (new)
-- Depends on: D3 settled. Independent of Steps 1-6, so it can pair with any of them.
-- Effect: behaviour-changing. Outline rows for enum members change, depending on the D3 option.
-- Change: in `ExtractOutlineEntries`, the enum-member case (`WorkspaceReadNavigationImpl.cs:574-578`)
-  sets `name = enumMember.Identifier.Text`. Under D3 option (a) it becomes
-  `$"{enumDeclaration.Identifier.Text}.{enumMember.Identifier.Text}"`. `OutlineItem`
-  (`RoslynSentinel.Common/OutlineItem.cs:4`) has 1 construction site (`:597`), and no test pins
-  enum-member outline rows (targeted search, 2026-11-18). Add
-  `GetFileOutline_EnumMembers_AreListedQualifiedAsync`.
+- Depends on: none. Independent of Steps 1-6, so it can pair with any of them.
+- Effect: behaviour-changing. Enum-member rows in `GetFileOutline` and `ListAll` become `Type.Member`.
+- Change:
+  - First, a read-only check: do `Member(memberName:)` and `ReadFile(memberName:)` accept `Type.Member` for
+    an enum member? If either does not, report it and make the resolver accept the qualified form in this step.
+  - In `ExtractOutlineEntries`, the enum-member case (about `WorkspaceReadNavigationImpl.cs:573-577`)
+    sets `name = enumMember.Identifier.Text`; it becomes
+    `$"{enumDeclaration.Identifier.Text}.{enumMember.Identifier.Text}"`. `OutlineItem`
+    (`RoslynSentinel.Common/OutlineItem.cs:4`) has 1 construction site (about `:596`).
+  - `ExtractOutlineEntries` also feeds `ListAll` (about `:658`), which matches `nameFilter` against
+    `item.Name` and emits `SolutionSymbolEntry.Name`. Update it so `nameFilter: Overnight` and
+    `exactMatch: true` still find the member (match the member part as well as the qualified name).
+  - No test pins enum-member outline or `ListAll` rows (review, 2026-11-18). Add
+    `GetFileOutline_EnumMembers_AreListedQualifiedAsync` and
+    `ListAll_EnumMemberBareNameFilter_StillFindsQualifiedRowAsync`.
 - Done when: `Build` 0 errors; `OutlineEnumMemberTests` passes.
 - Lane: implementer.
 
@@ -172,12 +195,14 @@ Phase B below is an evaluation feature. Every option it adds defaults to today's
 - Done when: a yes/no with file:line evidence. If no, Step 11 uses the fallback in Risks.
 - Lane: explore-tier2.
 
-### Step 9 - Options skeleton (text-neutral; needs D4)
-- Files: `RoslynSentinel.Common/LlmOptions.cs` (or the D4 home)
-- Depends on: D4
+### Step 9 - Options skeleton (text-neutral; D4 settled)
+- Files: `RoslynSentinel.Common/NearMissOptions.cs` (new), `RoslynSentinel.Server.Advanced/ServerStdio.cs`, `RoslynSentinel.Server.Advanced/ServerHttp.cs`
+- Depends on: none
 - Effect: text-neutral. Both options default to today's behaviour.
-- Change: add two options following the `LlmOptions.MinimalToolSchema` pattern (`LlmOptions.cs:37`, parsed
-  at `:150` from `--llm-minimal-tools` with an env fallback):
+- Change: add a static `NearMissOptions` modelled on `LiftRenamesOptions` (startup `Configure(args)`, env
+  fallback, `AsyncLocal` `OverrideForCurrentContext` for tests), called beside the existing `Configure(args)`
+  calls (`ServerStdio.cs:43-47`, `ServerHttp.cs:31-35`). Flag parsing follows `--llm-minimal-tools`
+  (`LlmOptions.cs:150`). Options:
   - `NearMissAutoCorrect` (bool, default false): `--near-miss-autocorrect`, env `ROSLYNSENTINEL_NEAR_MISS_AUTOCORRECT`.
   - `NearMissNameDisplay` (enum `show` | `hide`, default `show`): `--near-miss-name-display`, env `ROSLYNSENTINEL_NEAR_MISS_NAME_DISPLAY`.
 
@@ -193,6 +218,11 @@ Phase B below is an evaluation feature. Every option it adds defaults to today's
   - The CS0117 hint sentence (`CompilerErrorLookupHelper.cs:604`, `"Your edit contains '{memberName}' ({memberName.Length} letters)..."`) drops the wrong name and keeps the qualified candidates and corrected line (`:611`, `:614`).
   - The diagnostic header line built by `DescribeAsync` (`:36`, `{first.Id} at {file}:{line}: {first.Message}`) redacts the wrong name from `Message`.
   - The source line quoted under the diagnostic is replaced by the corrected line when one exists.
+
+  The review found more text in `DescribeMissingMemberAsync` that repeats the wrong name; under `hide` these
+  change too: `notFound` and `likelyTypo` (about `:626-627`), the extension-candidate text (about `:562`),
+  `editedOnNamedType` and `explanation` (about `:636-641`), and the `SpanText` line ("Expression the error
+  points at"). Step 11 redacts the `structuredDetail` counterparts (`Message`, `SourceLine`, `SpanText`).
 
   The CS0103 sentence (`:407`) already omits the name. Candidates are rendered as written in the code
   (`ShippingKinds.Overnight`), with the full namespace only when two candidate types share a simple name.
@@ -263,14 +293,11 @@ Phase B below is an evaluation feature. Every option it adds defaults to today's
 
 ## Risks and open decisions
 
-- **D3, outline shape.** Options:
-  - (a) Qualified `Name` for enum members. Measured lever; verify that member-resolving tools such as `Member(memberName:)` and `ReadFile(memberName:)` accept `Type.Member`, or a model copying the outline row gets a not-found.
-  - (b) Bare `Name` plus a new `QualifiedName` field: safer, more tokens.
-
-  Recommendation: (a), with the member-resolution check as part of Step 7.
-- **D4, options home.** `LlmOptions` is the only startup-flag pattern found, and nothing in the product
-  reads it today. Recommendation: use the same pattern, in a new eval options class beside it, so the
-  eval-only options are visibly separate.
+- **D3, settled 2026-11-18 (owner):** qualified `Name` for enum members in the shared walk; Step 7 checks
+  that `Member(memberName:)` and `ReadFile(memberName:)` accept `Type.Member`, and updates `ListAll`.
+- **D4, settled 2026-11-18 (owner):** new `NearMissOptions` modelled on `LiftRenamesOptions`.
+- **New-file targets:** `CreateFile` and `WriteFile` to a new path get no near-miss items (not baseline
+  documents). Out of scope.
 - **`_meta` fallback.** If Step 8 finds that `_meta` does not reach the harness, add a result field
   (`nearMissSubstitutions`) that `ModelAgentRunner` strips before building `ModelFacingToolContent`
   (`ModelAgentRunner.cs:978`). Third-party clients would then show it to their model, which is
