@@ -200,4 +200,89 @@ public class NearMissDisplayTests
         Assert.That(description.Contains(WrongName, StringComparison.Ordinal), Is.False,
             "under Hide the wrong name must not appear anywhere in the rejection text. Actual text:\n" + description);
     }
+
+    private const string ContosoShippingKindsPath = "ContosoOrders.Core/ShippingKinds.cs";
+
+    private const string ContosoCheckoutPath = "ContosoOrders.Core/OrderCheckout.cs";
+
+    private const string ContosoShippingKindsSource = """
+        namespace ContosoOrders.Core;
+
+        public enum ShippingKinds
+        {
+            Standard,
+            Overnight,
+            TwoDay,
+        }
+        """;
+
+    private const string ContosoCheckoutSource = """
+        namespace ContosoOrders.Core;
+
+        public class OrderCheckout
+        {
+            public ShippingKinds Pick() => ShippingKinds.Overnight;
+        }
+        """;
+
+    /// <summary>
+    /// Drives a real rejected ReplaceSnippet (the ShippingKinds.Oovernight slip, CS0117) through the compile gate and returns
+    /// <c>structuredDetail[0]</c> serialized as the server marshals it (McpJsonUtilities.DefaultOptions).
+    /// </summary>
+    private static async Task<string> RejectedReplaceSnippetStructuredDetailJsonAsync()
+    {
+        using var workspace = RoslynSentinel.Tests.Fakes.InMemoryWorkspace.Create(
+            (ContosoShippingKindsPath, ContosoShippingKindsSource),
+            (ContosoCheckoutPath, ContosoCheckoutSource));
+
+        var result = await Battery.Basic.TestTools.WorkspaceTools(workspace.Manager).ReplaceSnippetTool(
+            reason: "introduce the enum member slip on the return expression",
+            ProposedChangeAction.apply,
+            filePath: workspace.PathOf(ContosoCheckoutPath),
+            oldContent: "public ShippingKinds Pick() => ShippingKinds.Overnight;",
+            newContent: $"public ShippingKinds Pick() => ShippingKinds.{WrongName};");
+
+        Assert.That(result.IsError, Is.True, "the unresolved enum member must be rejected by the compile gate");
+        var first = result.ErrorData?.StructuredDetail?.FirstOrDefault();
+        Assert.That(first, Is.Not.Null, "errorData.structuredDetail[0] must be present");
+        return System.Text.Json.JsonSerializer.Serialize(first, ModelContextProtocol.McpJsonUtilities.DefaultOptions);
+    }
+
+    [Test]
+    public async Task Hide_ReplaceSnippetRejection_StructuredDetailNeverContainsTheWrongNameAsync()
+    {
+        using var _ = NearMissOptions.OverrideForCurrentContext(autoCorrect: false, nameDisplay: NearMissNameDisplay.Hide);
+
+        var json = await RejectedReplaceSnippetStructuredDetailJsonAsync();
+
+        Assert.That(json.Contains(WrongName, StringComparison.Ordinal), Is.False,
+            "under Hide the wrong name must not appear anywhere in structuredDetail[0]. Actual JSON:\n" + json);
+
+        using var document = System.Text.Json.JsonDocument.Parse(json);
+        var nearMisses = document.RootElement.GetProperty("nearMisses");
+        Assert.That(nearMisses.GetArrayLength(), Is.EqualTo(1));
+        Assert.That(nearMisses[0].GetProperty("replacement").GetString(), Is.EqualTo(CorrectName),
+            "the correction must still travel in nearMisses");
+
+        var diagnostic = document.RootElement.GetProperty("diagnostics").EnumerateArray()
+            .Single(d => d.GetProperty("id").GetString() == "CS0117");
+        Assert.That(diagnostic.GetProperty("message").GetString(), Does.Contain("(name omitted)"));
+        Assert.That(diagnostic.GetProperty("sourceLine").GetString(), Does.Contain(CorrectName),
+            "the quoted source line must be the corrected line. Actual JSON:\n" + json);
+    }
+
+    [Test]
+    public async Task Show_ReplaceSnippetRejection_StructuredDetailKeepsTheDiagnosticTextAsync()
+    {
+        using var _ = NearMissOptions.OverrideForCurrentContext(autoCorrect: false, nameDisplay: NearMissNameDisplay.Show);
+
+        var json = await RejectedReplaceSnippetStructuredDetailJsonAsync();
+
+        using var document = System.Text.Json.JsonDocument.Parse(json);
+        var diagnostic = document.RootElement.GetProperty("diagnostics").EnumerateArray()
+            .Single(d => d.GetProperty("id").GetString() == "CS0117");
+        Assert.That(diagnostic.GetProperty("message").GetString(), Does.Contain(WrongName),
+            "under Show the diagnostic message keeps the wrong name. Actual JSON:\n" + json);
+        Assert.That(document.RootElement.GetProperty("nearMisses")[0].GetProperty("replacement").GetString(), Is.EqualTo(CorrectName));
+    }
 }

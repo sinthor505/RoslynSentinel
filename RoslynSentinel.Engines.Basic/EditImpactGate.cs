@@ -51,9 +51,46 @@ public static class EditImpactGate
         var carried = new HashSet<DiagnosticInfo>();
         foreach (var verdict in verdicts)
             carried.UnionWith(verdict.BrokenUses);
-        var uncarried = diagnostics.Where(d => !carried.Contains(d)).ToList();
+        IReadOnlyList<DiagnosticInfo> uncarried = diagnostics.Where(d => !carried.Contains(d)).ToList();
         var nearMissList = nearMisses is { Count: > 0 } ? nearMisses : null;
+        // TODO the diagnostics inside verdicts[].BrokenUses and the analyzer text (EditImpactAnalyzer.SourceLineOf) are not redacted under Hide; they describe errors in unedited files, not the slipped name
+        if (NearMissOptions.NameDisplay == NearMissNameDisplay.Hide)
+            uncarried = RedactWrongNames(uncarried, nearMissList);
         return [new EditImpactDetail(verdicts, uncarried, nearMissList)];
+    }
+
+    /// <summary>
+    /// Under <see cref="NearMissNameDisplay.Hide"/>, the diagnostics with the misspelled name (CS0117, CS1061, CS0103) with that name
+    /// removed from <see cref="DiagnosticInfo.Message"/>, <see cref="DiagnosticInfo.SourceLine"/> and <see cref="DiagnosticInfo.SpanText"/>;
+    /// the source line is the matching near-miss's corrected line (same file, line and column) when there is one. Other diagnostics are returned as they are.
+    /// </summary>
+    private static List<DiagnosticInfo> RedactWrongNames(IReadOnlyList<DiagnosticInfo> diagnostics, IReadOnlyList<NearMissName>? nearMisses)
+    {
+        var redacted = new List<DiagnosticInfo>(diagnostics.Count);
+        foreach (var diagnostic in diagnostics)
+        {
+            var wrongName = CompilerErrorLookupHelper.WrongNameOf(diagnostic);
+            if (string.IsNullOrEmpty(wrongName))
+            {
+                redacted.Add(diagnostic);
+                continue;
+            }
+
+            var path = diagnostic.FilePath.ToString();
+            var correctedLine = nearMisses?
+                .FirstOrDefault(n => n.Line == diagnostic.StartLine
+                    && n.Column == diagnostic.StartColumn
+                    && string.Equals(n.FilePath, path, StringComparison.OrdinalIgnoreCase))
+                ?.CorrectedLine;
+            redacted.Add(diagnostic with
+            {
+                Message = CompilerErrorLookupHelper.HideName(diagnostic.Message, wrongName),
+                SourceLine = correctedLine ?? (diagnostic.SourceLine is null ? null : CompilerErrorLookupHelper.HideName(diagnostic.SourceLine, wrongName)),
+                SpanText = diagnostic.SpanText is null ? null : CompilerErrorLookupHelper.HideName(diagnostic.SpanText, wrongName),
+            });
+        }
+
+        return redacted;
     }
 
     /// <summary>
