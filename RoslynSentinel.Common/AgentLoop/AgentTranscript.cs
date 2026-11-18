@@ -392,10 +392,101 @@ public sealed class RunTotals
         get; init;
     }
 
-    /// <summary>Builds the totals from the transcript's turns; totalDuration is the run's wall clock.</summary>
+    /// <summary>Matches a compiler diagnostic id such as CS0103 inside a tool result.</summary>
+    private static readonly System.Text.RegularExpressions.Regex CompilerCodePattern = new(@"\bCS\d{4}\b", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// Builds the totals from the transcript's turns; totalDuration is the run's wall clock.
+    /// Mirrors the logic in scripts/Backfill-TranscriptSummary.ps1; keep the two in step.
+    /// </summary>
     public static RunTotals FromTranscript(AgentTranscript transcript, TimeSpan totalDuration)
     {
-        throw new NotImplementedException(); // TODO implement
+        var turns = transcript.Turns;
+        var calls = turns.SelectMany(turn => turn.ToolCalls).ToList();
+
+        var toolErrorCodes = new Dictionary<string, int>();
+        var compilerErrorCodes = new Dictionary<string, int>();
+        foreach (var failed in calls.Where(call => call.IsError))
+        {
+            var errorCode = ToolErrorCodeOf(failed.ResultJson);
+            toolErrorCodes[errorCode] = toolErrorCodes.GetValueOrDefault(errorCode) + 1;
+            foreach (var code in CompilerCodePattern.Matches(failed.ResultJson).Select(match => match.Value).Distinct())
+            {
+                compilerErrorCodes[code] = compilerErrorCodes.GetValueOrDefault(code) + 1;
+            }
+        }
+
+        var messages = turns.Select(turn => turn.ModelMessage).ToList();
+        var inputTokens = SumOrNull(messages.Select(message => message.InputTokens));
+        var cachedInputTokens = SumOrNull(messages.Select(message => message.CachedInputTokens));
+        var outputTokens = SumOrNull(messages.Select(message => message.OutputTokens));
+        var reasoningTokens = SumOrNull(messages.Select(message => message.ReasoningTokens));
+
+        var totalModelTime = turns.Select(turn => turn.ModelLatency).Aggregate(TimeSpan.Zero, (sum, latency) => sum + latency);
+        var totalToolTime = calls.Select(call => call.Latency).Aggregate(TimeSpan.Zero, (sum, latency) => sum + latency);
+        var averageTurnDuration = turns.Count == 0
+            ? TimeSpan.Zero
+            : TimeSpan.FromTicks((totalModelTime + totalToolTime).Ticks / turns.Count);
+
+        return new RunTotals
+        {
+            TotalDuration = totalDuration,
+            TotalModelTime = totalModelTime,
+            TotalToolTime = totalToolTime,
+            TurnCount = turns.Count,
+            ToolCallCount = calls.Count,
+            ToolErrorCount = calls.Count(call => call.IsError),
+            InputTokens = inputTokens,
+            CachedInputTokens = cachedInputTokens,
+            NewInputTokens = inputTokens is int input ? input - (cachedInputTokens ?? 0) : null,
+            OutputTokens = outputTokens,
+            ReasoningTokens = reasoningTokens,
+            AverageOutputTokensPerTurn = AverageOver(outputTokens, messages.Count(message => message.OutputTokens is not null)),
+            AverageReasoningTokensPerTurn = AverageOver(reasoningTokens, messages.Count(message => message.ReasoningTokens is not null)),
+            AverageTurnDuration = averageTurnDuration,
+            ToolErrorCodes = toolErrorCodes,
+            CompilerErrorCodes = compilerErrorCodes,
+        };
+
+        // Sum of the non-null values, or null when every value is null.
+        static int? SumOrNull(IEnumerable<int?> values)
+        {
+            int? total = null;
+            foreach (var value in values)
+            {
+                if (value is int number)
+                {
+                    total = (total ?? 0) + number;
+                }
+            }
+            return total;
+        }
+
+        static double? AverageOver(int? total, int count) =>
+            total is int sum && count > 0 ? (double)sum / count : null;
+
+        // Reads root.errorData.errorCode from a tool result; "unknown" when the result is not JSON or lacks a string code.
+        static string ToolErrorCodeOf(string resultJson)
+        {
+            try
+            {
+                using var document = System.Text.Json.JsonDocument.Parse(resultJson);
+                var root = document.RootElement;
+                if (root.ValueKind == System.Text.Json.JsonValueKind.Object
+                    && root.TryGetProperty("errorData", out var errorData)
+                    && errorData.ValueKind == System.Text.Json.JsonValueKind.Object
+                    && errorData.TryGetProperty("errorCode", out var errorCode)
+                    && errorCode.ValueKind == System.Text.Json.JsonValueKind.String)
+                {
+                    return errorCode.GetString() ?? "unknown";
+                }
+                return "unknown";
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                return "unknown";
+            }
+        }
     }
 }
 
