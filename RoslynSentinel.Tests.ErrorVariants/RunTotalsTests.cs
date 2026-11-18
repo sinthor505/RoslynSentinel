@@ -177,7 +177,7 @@ public sealed class RunTotalsTests
     [Test]
     public void Deserialize_ReadsABackfilledSummaryBlock()
     {
-        const string literal = """{"RunId":"r","SystemPrompt":"","UserPrompt":"","Tools":[],"Turns":[],"Summary":{"TotalDuration":"00:08:01.9352293","TotalModelTime":"00:07:49.9342781","TotalToolTime":"00:00:11.7415288","TurnCount":22,"ToolCallCount":24,"ToolErrorCount":1,"InputTokens":452507,"CachedInputTokens":441439,"NewInputTokens":11068,"OutputTokens":3915,"ReasoningTokens":3021,"AverageOutputTokensPerTurn":177.95454545454547,"AverageReasoningTokensPerTurn":137.3181818181818,"AverageTurnDuration":"00:00:21.8943548","ToolErrorCodes":{"ValidationFailed":1},"CompilerErrorCodes":{"CS1061":1},"Backfilled":true}""";
+        const string literal = """{"RunId":"r","SystemPrompt":"","UserPrompt":"","Tools":[],"Turns":[],"Summary":{"TotalDuration":"00:08:01.9352293","TotalModelTime":"00:07:49.9342781","TotalToolTime":"00:00:11.7415288","TurnCount":22,"ToolCallCount":24,"ToolErrorCount":1,"InputTokens":452507,"CachedInputTokens":441439,"NewInputTokens":11068,"OutputTokens":3915,"ReasoningTokens":3021,"AverageOutputTokensPerTurn":177.95454545454547,"AverageReasoningTokensPerTurn":137.3181818181818,"AverageTurnDuration":"00:00:21.8943548","ToolErrorCodes":{"ValidationFailed":1},"CompilerErrorCodes":{"CS1061":1},"Backfilled":true}}""";
 
         var transcript = JsonSerializer.Deserialize<AgentTranscript>(literal);
 
