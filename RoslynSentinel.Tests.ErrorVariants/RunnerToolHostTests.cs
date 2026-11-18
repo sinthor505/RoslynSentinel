@@ -255,9 +255,86 @@ public class RunnerToolHostTests
         });
     }
 
-    private static ModelAgentRunner NewRunner(ScriptedModelHandler model, IAgentToolHost host, int turnCap = 5)
+    [Test]
+    public async Task Settings_RecordReportedSamplerAndLoadConfig()
     {
-        LlmOptions.Configure(["--llm-model", "runnertoolhost-test-model"]);
+        var host = new FakeToolHost(
+            "Unused",
+            new CallToolResult
+            {
+                Content = [new TextContentBlock { Text = "{}" }],
+            });
+        var model = new ScriptedModelHandler(ScriptedModelHandler.FinalMessageSse("done", 0.7, 0.9, 0.0, 0.0))
+        {
+            ModelsJson = ScriptedModelHandler.LoadedModelsJsonWithConfig("runnertoolhost-test-model", 70144, true, true, 1),
+        };
+        var runner = NewRunner(model, host);
+
+        var result = await runner.RunAsync("system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken);
+
+        var settings = result.Transcript.Settings ?? throw new InvalidOperationException("Transcript.Settings was not written");
+        using var document = JsonDocument.Parse(File.ReadAllText(result.TranscriptPath));
+        var topLevelNames = document.RootElement.EnumerateObject().Select(property => property.Name).ToList();
+        Assert.Multiple(() =>
+        {
+            Assert.That(settings!.Sampler.Temperature!.Value, Is.EqualTo(0.7));
+            Assert.That(settings.Sampler.Temperature.Verified, Is.True);
+            Assert.That(settings.Sampler.Temperature.Source, Is.EqualTo(SamplerValue.SourceReported));
+            Assert.That(settings.Sampler.TopP!.Value, Is.EqualTo(0.9));
+            Assert.That(settings.Sampler.TopP.Source, Is.EqualTo(SamplerValue.SourceReported));
+            Assert.That(settings.Sampler.PresencePenalty!.Value, Is.EqualTo(0.0));
+            Assert.That(settings.Sampler.PresencePenalty.Source, Is.EqualTo(SamplerValue.SourceReported));
+            Assert.That(settings.Sampler.FrequencyPenalty!.Value, Is.EqualTo(0.0));
+            Assert.That(settings.Sampler.FrequencyPenalty.Source, Is.EqualTo(SamplerValue.SourceReported));
+            Assert.That(settings.Sampler.TopK, Is.Null);
+            Assert.That(settings.Load!.ContextLength, Is.EqualTo(70144));
+            Assert.That(settings.Load.FlashAttention, Is.True);
+            Assert.That(settings.Load.SpeculativeDraftMtp, Is.True);
+            Assert.That(settings.Load.Parallel, Is.EqualTo(1));
+            Assert.That(settings.Load.BaseUrl, Is.EqualTo("http://localhost/v1"));
+            Assert.That(topLevelNames.IndexOf("Settings"), Is.EqualTo(topLevelNames.IndexOf("ContextLength") + 1), "Settings follows ContextLength in transcript.json");
+            Assert.That(topLevelNames.IndexOf("Turns"), Is.GreaterThan(topLevelNames.IndexOf("Settings")), "Settings precedes Turns in transcript.json");
+        });
+    }
+
+    [Test]
+    public async Task Settings_RecordDeclaredHostSamplerAsUnverified()
+    {
+        var host = new FakeToolHost(
+            "Unused",
+            new CallToolResult
+            {
+                Content = [new TextContentBlock { Text = "{}" }],
+            });
+        var model = new ScriptedModelHandler(ScriptedModelHandler.FinalMessageSse("done", 0.7, 0.9, 0.0, 0.0));
+        var runner = NewRunner(model, host, hostSampler: "topK=20;minP=0.1");
+
+        var result = await runner.RunAsync("system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken);
+
+        var settings = result.Transcript.Settings;
+        Assert.That(settings, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(settings!.Sampler.TopK!.Value, Is.EqualTo(20));
+            Assert.That(settings.Sampler.TopK.Verified, Is.False);
+            Assert.That(settings.Sampler.TopK.Source, Is.EqualTo(SamplerValue.SourceDeclared));
+            Assert.That(settings.Sampler.MinP!.Value, Is.EqualTo(0.1));
+            Assert.That(settings.Sampler.MinP.Verified, Is.False);
+            Assert.That(settings.Sampler.MinP.Source, Is.EqualTo(SamplerValue.SourceDeclared));
+            Assert.That(settings.Sampler.RepeatPenalty, Is.Null);
+        });
+    }
+
+    private static ModelAgentRunner NewRunner(ScriptedModelHandler model, IAgentToolHost host, int turnCap = 5, string? hostSampler = null)
+    {
+        if (hostSampler is null)
+        {
+            LlmOptions.Configure(["--llm-model", "runnertoolhost-test-model"]);
+        }
+        else
+        {
+            LlmOptions.Configure(["--llm-model", "runnertoolhost-test-model", "--llm-host-sampler=" + hostSampler]);
+        }
         var httpClient = new HttpClient(model)
         {
             BaseAddress = new Uri("http://localhost/v1/"),
