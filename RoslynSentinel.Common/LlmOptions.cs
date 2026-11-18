@@ -86,7 +86,41 @@ public static class LlmOptions
     /// </summary>
     public static IReadOnlyDictionary<string, double> ParseHostSampler(string? raw)
     {
-        throw new NotImplementedException(); // TODO implement
+        var result = new Dictionary<string, double>(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return result;
+        }
+
+        foreach (var segment in raw.Split(';'))
+        {
+            var equals = segment.IndexOf('=');
+            if (equals < 0)
+            {
+                continue;
+            }
+
+            var key = segment[..equals].Trim();
+            string? canonical = null;
+            foreach (var name in new[] { "topK", "minP", "repeatPenalty", "presencePenalty", "frequencyPenalty" })
+            {
+                if (string.Equals(key, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    canonical = name;
+                    break;
+                }
+            }
+
+            if (canonical is null
+                || !double.TryParse(segment[(equals + 1)..].Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var value))
+            {
+                continue;
+            }
+
+            result[canonical] = value;
+        }
+
+        return result;
     }
 
     /// <summary>Parses --llm-* args (falling back to ROSLYNSENTINEL_LLM_* env vars) into the static properties above. Call once at process startup, before DI is built.</summary>
@@ -128,6 +162,8 @@ public static class LlmOptions
             ?? Environment.GetEnvironmentVariable("ROSLYNSENTINEL_LLM_REPEAT_PENALTY"));
         MinP = ParseNullableDouble(GetArgValue(args, "--llm-min-p")
             ?? Environment.GetEnvironmentVariable("ROSLYNSENTINEL_LLM_MIN_P"));
+        HostSampler = ParseHostSampler(GetArgValue(args, "--llm-host-sampler")
+            ?? Environment.GetEnvironmentVariable("ROSLYNSENTINEL_LLM_HOST_SAMPLER"));
     }
 
     private static double? ParseNullableDouble(string? raw) =>
