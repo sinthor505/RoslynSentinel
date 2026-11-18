@@ -18,7 +18,8 @@
         (keep the two in step) and carries "Backfilled": true.
       - DURATIONS: TotalDuration is the first turn's StartedAt to the last turn's CompletedAt. It MISSES setup time (tool listing,
         seeding, context-length lookup) and any time after the last turn, so it is slightly shorter than the live wall clock a new
-        run records. TotalModelTime, TotalToolTime and AverageTurnDuration are exact sums over the recorded turns.
+        run records. Old transcripts whose turns have no StartedAt/CompletedAt get TotalModelTime + TotalToolTime instead,
+        which also misses harness time between turns. TotalModelTime, TotalToolTime and AverageTurnDuration are exact sums over the recorded turns.
       - StopReason: when the transcript has none, it is recovered from the agent.log line "Agent run finished: <Reason> after"
         next to it and written as the enum's number (the runner's own format). No log line, or an unknown reason name, leaves it absent.
       - Settings is added only with what can be recovered: the transcript's own Temperature/TopP and, when the transcript lacks
@@ -132,6 +133,7 @@ function Convert-CountsToNode($table) {
 }
 
 function Get-TimeSpan($node) {
+    if ($null -eq $node) { return [TimeSpan]::Zero }
     return [TimeSpan]::Parse($node.GetValue[string](), $Invariant)
 }
 
@@ -179,8 +181,9 @@ function New-Summary($turns) {
     $averageReasoning = if ($null -ne $reasoningTokens -and $reasoningReported -gt 0) { [double]$reasoningTokens / $reasoningReported } else { $null }
     $averageTurnTicks = if ($turnCount -eq 0) { [long]0 } else { [long][Math]::Truncate(($modelTicks + $toolTicks) / $turnCount) }
 
-    $totalDuration = [TimeSpan]::Zero
-    if ($turnCount -gt 0) {
+    # Transcripts written before turns carried StartedAt/CompletedAt (before about 2026-09) fall back to model + tool time.
+    $totalDuration = [TimeSpan]::FromTicks($modelTicks + $toolTicks)
+    if ($turnCount -gt 0 -and $null -ne $turns[0]['StartedAt'] -and $null -ne $turns[$turnCount - 1]['CompletedAt']) {
         $first = [DateTimeOffset]::Parse($turns[0]['StartedAt'].GetValue[string](), $Invariant)
         $last = [DateTimeOffset]::Parse($turns[$turnCount - 1]['CompletedAt'].GetValue[string](), $Invariant)
         $totalDuration = $last - $first
