@@ -532,6 +532,9 @@ public enum AgentStopReason
     /// </summary>
     ContextExhausted,
 
+    /// <summary>The model's streamed response degenerated into placeholder or repeated tool calls on two attempts; no call from it was executed; not a genuine finish.</summary>
+    StreamRunaway,
+
     /// <summary>The model sent tool-call markup as text instead of a tool call on two consecutive turns (the first got a nudge); nothing was parsed.</summary>
     MalformedToolCall,
 

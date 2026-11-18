@@ -363,10 +363,31 @@ public sealed class ModelAgentRunner
                 _logger.LogInformation("Turn {Turn}: projected prompt {Projected} reached {Fraction:P0} of the {ContextLength}-token context; dropped reasoning of the oldest unpinned turns (total dropped {Dropped}).", turnNumber, projectedPromptTokens, ReasoningReplayPolicy.PressureFraction, contextLength, replayPolicy.DroppedTurns);
                 (transcript.ReasoningDropTurns ??= new List<int>()).Add(turnNumber);
             }
+            // The wall-clock cap is checked only at the top of the loop, so a model call started just under the cap could run
+            // far past it; this per-call linked source is the only bound on the in-flight request.
+            using var callCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            var remaining = _wallClockCap - overallStopwatch.Elapsed;
+            callCts.CancelAfter(remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero);
             AgentChatMessage modelMessage;
             try
             {
-                modelMessage = await _llm.CompleteAsync(replayMessages, toolDefinitions, _maxTokensPerTurn, cancellationToken, replayPolicy);
+                modelMessage = await _llm.CompleteAsync(replayMessages, toolDefinitions, _maxTokensPerTurn, callCts.Token, replayPolicy);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && callCts.IsCancellationRequested)
+            {
+                stopReason = AgentStopReason.WallClockCapExceeded;
+                _logger.LogWarning("Turn {Turn}: wall-clock cap ({Cap}) reached during the model call; request cancelled, stopping.", turnNumber, _wallClockCap);
+                break;
+            }
+            catch (StreamRunawayException ex)
+            {
+                // The discarded response is not added to messages or transcript turns; no tool was executed.
+                stopReason = AgentStopReason.StreamRunaway;
+                _logger.LogWarning(
+                    ex,
+                    "Turn {Turn}: the model's streamed response ran away twice (placeholder or repeated tool calls); no call was executed, stopping.",
+                    turnNumber);
+                break;
             }
             catch (ContextSizeExceededException ex)
             {
