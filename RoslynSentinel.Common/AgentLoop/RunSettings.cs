@@ -99,7 +99,16 @@ public sealed class SamplerSettings
     /// <summary>A SamplerSettings holding the values the host echoed in a response; Verified=true, Source=reported; a null argument leaves that member null.</summary>
     public static SamplerSettings FromReported(double? temperature, double? topP, double? presencePenalty, double? frequencyPenalty)
     {
-        throw new NotImplementedException(); // TODO implement
+        return new SamplerSettings
+        {
+            Temperature = Reported(temperature),
+            TopP = Reported(topP),
+            PresencePenalty = Reported(presencePenalty),
+            FrequencyPenalty = Reported(frequencyPenalty),
+        };
+
+        static SamplerValue? Reported(double? value) =>
+            value is null ? null : new SamplerValue { Value = value.Value, Verified = true, Source = SamplerValue.SourceReported };
     }
 }
 
@@ -145,7 +154,94 @@ public sealed class ModelLoadSettings
     /// <summary>Reads the loaded instance's config of the model whose key equals modelKey from an LM Studio GET /api/v1/models body; never null; only BaseUrl is set when the json is null, invalid, or lacks that model or a loaded instance.</summary>
     public static ModelLoadSettings FromModelsJson(string? modelsJson, string modelKey, string baseUrl)
     {
-        throw new NotImplementedException(); // TODO implement
+        var empty = new ModelLoadSettings { BaseUrl = baseUrl };
+        if (string.IsNullOrWhiteSpace(modelsJson))
+        {
+            return empty;
+        }
+
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(modelsJson);
+            var root = document.RootElement;
+            if (root.ValueKind != System.Text.Json.JsonValueKind.Object
+                || !root.TryGetProperty("models", out var models)
+                || models.ValueKind != System.Text.Json.JsonValueKind.Array)
+            {
+                return empty;
+            }
+
+            foreach (var model in models.EnumerateArray())
+            {
+                if (model.ValueKind != System.Text.Json.JsonValueKind.Object
+                    || !model.TryGetProperty("key", out var key)
+                    || key.ValueKind != System.Text.Json.JsonValueKind.String
+                    || key.GetString() != modelKey)
+                {
+                    continue;
+                }
+
+                var config = FindLoadedConfig(model, modelKey);
+                return config is { } c ? ReadConfig(c, baseUrl) : empty;
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return empty;
+        }
+
+        return empty;
+
+        static System.Text.Json.JsonElement? FindLoadedConfig(System.Text.Json.JsonElement model, string modelKey)
+        {
+            if (!model.TryGetProperty("loaded_instances", out var instances) || instances.ValueKind != System.Text.Json.JsonValueKind.Array)
+            {
+                return null;
+            }
+
+            System.Text.Json.JsonElement? fallback = null;
+            foreach (var instance in instances.EnumerateArray())
+            {
+                if (instance.ValueKind != System.Text.Json.JsonValueKind.Object
+                    || !instance.TryGetProperty("config", out var config)
+                    || config.ValueKind != System.Text.Json.JsonValueKind.Object)
+                {
+                    continue;
+                }
+
+                if (instance.TryGetProperty("id", out var id)
+                    && id.ValueKind == System.Text.Json.JsonValueKind.String
+                    && id.GetString() == modelKey)
+                {
+                    return config;
+                }
+
+                fallback ??= config;
+            }
+
+            return fallback;
+        }
+
+        static ModelLoadSettings ReadConfig(System.Text.Json.JsonElement config, string baseUrl)
+        {
+            return new ModelLoadSettings
+            {
+                BaseUrl = baseUrl,
+                ContextLength = TryInt(config, "context_length"),
+                FlashAttention = TryBool(config, "flash_attention"),
+                SpeculativeDraftMtp = TryBool(config, "speculative_draft_mtp"),
+                Parallel = TryInt(config, "parallel"),
+            };
+
+            static int? TryInt(System.Text.Json.JsonElement element, string name) =>
+                element.TryGetProperty(name, out var value) && value.TryGetInt32(out var number) ? number : null;
+
+            static bool? TryBool(System.Text.Json.JsonElement element, string name) =>
+                element.TryGetProperty(name, out var value)
+                    && (value.ValueKind == System.Text.Json.JsonValueKind.True || value.ValueKind == System.Text.Json.JsonValueKind.False)
+                    ? value.GetBoolean()
+                    : null;
+        }
     }
 }
 
@@ -170,6 +266,45 @@ public sealed class RunSettings
     /// <summary>Assembles the transcript's settings block from what the client sent, what the operator declared, what the host reported and the model load config.</summary>
     public static RunSettings Build(double? sentTemperature, double? sentTopP, IReadOnlyDictionary<string, double> declaredSampler, SamplerSettings? reported, ModelLoadSettings? load)
     {
-        throw new NotImplementedException(); // TODO implement
+        return new RunSettings
+        {
+            Sampler = new SamplerSettings
+            {
+                Temperature = SentOrReported(reported?.Temperature, sentTemperature),
+                TopP = SentOrReported(reported?.TopP, sentTopP),
+                PresencePenalty = reported?.PresencePenalty ?? DeclaredValue(declaredSampler, "presencePenalty"),
+                FrequencyPenalty = reported?.FrequencyPenalty ?? DeclaredValue(declaredSampler, "frequencyPenalty"),
+                TopK = DeclaredValue(declaredSampler, "topK"),
+                MinP = DeclaredValue(declaredSampler, "minP"),
+                RepeatPenalty = DeclaredValue(declaredSampler, "repeatPenalty"),
+            },
+            Load = load,
+        };
+
+        static SamplerValue? SentOrReported(SamplerValue? reportedValue, double? sent)
+        {
+            if (reportedValue is not null)
+            {
+                return new SamplerValue
+                {
+                    Value = reportedValue.Value,
+                    Verified = true,
+                    Source = SamplerValue.SourceReported,
+                    SentValue = sent,
+                };
+            }
+
+            if (sent is not null)
+            {
+                return new SamplerValue { Value = sent.Value, Verified = false, Source = SamplerValue.SourceSent };
+            }
+
+            return null;
+        }
+
+        static SamplerValue? DeclaredValue(IReadOnlyDictionary<string, double> declared, string key) =>
+            declared.TryGetValue(key, out var value)
+                ? new SamplerValue { Value = value, Verified = false, Source = SamplerValue.SourceDeclared }
+                : null;
     }
 }
