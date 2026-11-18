@@ -275,6 +275,12 @@
     scenario's own cap applies; a positive value sets ROSLYNSENTINEL_MODELEVAL_TURN_CAP, and the script clears the variable
     otherwise so one left in the shell cannot skew a run.
 
+.PARAMETER StepWallClockMinutes
+    ShippingKindStep* only: wall-clock cap per step in minutes (default 0 = unset, the test's 15 minutes apply). A positive value
+    sets ROSLYNSENTINEL_MODELEVAL_STEP_WALL_CLOCK_MINUTES; the script clears the variable otherwise. For slow models (tiel) that
+    sometimes exceed 15 minutes; the cap is printed in step-<k>.outcome.txt. Raise the evalqueue -TimeLimitMinutes to match
+    (it covers every step of one run plus the build).
+
 .PARAMETER ReasoningWindow
     Every test: which assistant turns replay their reasoning (ReasoningReplayPolicy, created by ModelAgentRunner).
     Default -1 = unset: the pressure policy - replay all reasoning until the projected prompt reaches 70% of the model's
@@ -373,6 +379,9 @@ param(
     [string]$Scenario,
 
     [int]$TurnCap = 0,
+
+    [ValidateRange(0, 600)]
+    [double]$StepWallClockMinutes = 0,
 
     [ValidateRange(-1, 1000)]
     [int]$ReasoningWindow = -1,
@@ -588,6 +597,14 @@ if ($HostSampler) {
 }
 else {
     $env:ROSLYNSENTINEL_LLM_HOST_SAMPLER = $null
+}
+# Always set or cleared (never left from the shell) so a stale cap cannot skew a run.
+if ($StepWallClockMinutes -gt 0) {
+    $env:ROSLYNSENTINEL_MODELEVAL_STEP_WALL_CLOCK_MINUTES = "$StepWallClockMinutes"
+    Write-Host "    ROSLYNSENTINEL_MODELEVAL_STEP_WALL_CLOCK_MINUTES=$StepWallClockMinutes" -ForegroundColor Cyan
+}
+else {
+    Remove-Item Env:\ROSLYNSENTINEL_MODELEVAL_STEP_WALL_CLOCK_MINUTES -ErrorAction SilentlyContinue
 }
 if ($PSBoundParameters.ContainsKey('StreamTimeout')) {
     $env:ROSLYNSENTINEL_LLM_STREAM_IDLE_TIMEOUT_SECONDS = $StreamTimeout

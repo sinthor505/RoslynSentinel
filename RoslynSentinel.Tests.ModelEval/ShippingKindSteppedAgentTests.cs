@@ -148,8 +148,15 @@ public class ShippingKindSteppedAgentTests
         var workspaceManager = _host.Services.GetRequiredService<IWorkspaceManager>();
         await workspaceManager.LoadSolutionAsync(_fixture.SolutionPath, cancellationToken);
 
+        // ROSLYNSENTINEL_MODELEVAL_STEP_WALL_CLOCK_MINUTES (modeleval -StepWallClockMinutes) raises the 15-minute cap for slow models;
+        // a raised cap passes slow-but-correct runs that 15 minutes would fail, so the cap is printed in step-<k>.outcome.txt.
+        var wallClockCap = TimeSpan.FromMinutes(
+            double.TryParse(Environment.GetEnvironmentVariable("ROSLYNSENTINEL_MODELEVAL_STEP_WALL_CLOCK_MINUTES"),
+                System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var capMinutes) && capMinutes > 0
+                ? capMinutes
+                : 15);
         var runner = new ModelAgentRunner(
-            _agentClient, _mcpClient, repeatedFailureLimit: 10, maxTokensPerTurn: 16384, turnCap: 25, wallClockCap: TimeSpan.FromMinutes(15),
+            _agentClient, _mcpClient, repeatedFailureLimit: 10, maxTokensPerTurn: 16384, turnCap: 25, wallClockCap: wallClockCap,
             logger: _host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
         var stopwatch = Stopwatch.StartNew();
         var result = await runner.RunAsync(
@@ -183,7 +190,7 @@ public class ShippingKindSteppedAgentTests
         }
 
         var summary =
-            $"Step {step}: outcome={outcome}, turns={result.TurnCount}, wallTime={stopwatch.Elapsed:hh\\:mm\\:ss}, stopReason={result.StopReason}. {detail}";
+            $"Step {step}: outcome={outcome}, turns={result.TurnCount}, wallTime={stopwatch.Elapsed:hh\\:mm\\:ss}, wallClockCap={wallClockCap.TotalMinutes}m, stopReason={result.StopReason}. {detail}";
         TestContext.Out.WriteLine(summary);
         File.WriteAllText(Path.Combine(_runDirectory, $"step-{step}.outcome.txt"), summary + "\r\n");
 
