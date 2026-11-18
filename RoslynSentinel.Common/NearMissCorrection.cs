@@ -20,4 +20,30 @@ public sealed record NearMissCorrection(
     Dictionary<FilePathWrapper, string> CorrectedChanges,
     IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>> CorrectionSpans,
     IReadOnlyList<NearMissSubstitution> Substitutions,
-    IReadOnlyList<Finding> Findings);
+    IReadOnlyList<Finding> Findings)
+{
+    /// <summary>
+    /// True when, for every file of <paramref name="proposed"/>, <see cref="CorrectionSpans"/> explain every difference between the proposed text and
+    /// <see cref="CorrectedChanges"/> (<see cref="CollateralChangeGuard.Check"/> with the proposed text as the pre-image, since the spans are in proposed-text
+    /// positions). False when a file of <paramref name="proposed"/> has no corrected text or a difference is not explained.
+    /// The one collateral check of a near-miss correction, shared by <see cref="ValidateAndApplyHelper"/> and the engine's whole-file auto-correct.
+    /// </summary>
+    public bool SpansExplainCorrectedText(IReadOnlyDictionary<FilePathWrapper, string> proposed)
+    {
+        foreach (var (key, proposedText) in proposed)
+        {
+            if (!CorrectedChanges.TryGetValue(key, out var correctedText))
+            {
+                return false;
+            }
+
+            IReadOnlyList<TextChange> spans = CorrectionSpans.TryGetValue(key, out var declared) ? declared : [];
+            if (CollateralChangeGuard.Check((string)key, proposedText, correctedText, spans) != null)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+}

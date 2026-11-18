@@ -350,17 +350,10 @@ public static class ValidateAndApplyHelper
                 return null;
             }
 
-            if (expectedEdits != null)
+            if (expectedEdits != null && !correction.SpansExplainCorrectedText(changes))
             {
-                foreach (var (key, proposed) in changes)
-                {
-                    IReadOnlyList<TextChange> spans = correction.CorrectionSpans.TryGetValue(key, out var declared) ? declared : [];
-                    if (CollateralChangeGuard.Check((string)key, proposed, corrected[key], spans) != null)
-                    {
-                        logger.LogWarning("{OperationName}: near-miss correction dropped, its spans do not explain the corrected text of a file", operationName);
-                        return null;
-                    }
-                }
+                logger.LogWarning("{OperationName}: near-miss correction dropped, its spans do not explain the corrected text of a file", operationName);
+                return null;
             }
 
             var revalidated = await validationEngine.ValidateChangesAsync(corrected, removePaths, cancellationToken);
