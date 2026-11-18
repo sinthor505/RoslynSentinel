@@ -439,6 +439,7 @@ public sealed class ResultOverrideTests
         CompletedAt = Now.AddSeconds(1),
         ToolCallId = "call-" + Guid.NewGuid().ToString("N")[..8],
         TrailingText = "recorded trailing",
+        Meta = new System.Text.Json.Nodes.JsonObject { ["recorded"] = "meta" },
     };
 
     private static AgentTranscriptTurn MakeTurn(int turnNumber, params AgentToolCallRecord[] calls) => new()

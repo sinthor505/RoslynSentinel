@@ -297,6 +297,16 @@ public sealed class AgentToolCallRecord
     {
         get; init;
     }
+
+    /// <summary>
+    /// The result's MCP <c>_meta</c> object as the server sent it (for example <c>nearMissSubstitutions</c>); null, and so omitted from the JSON, when the result
+    /// carried none. Harness-side evidence only: it is never part of the model-facing tool message (see ModelAgentRunner.ModelFacingToolContent).
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public System.Text.Json.Nodes.JsonObject? Meta
+    {
+        get; init;
+    }
 }
 
 /// <summary>

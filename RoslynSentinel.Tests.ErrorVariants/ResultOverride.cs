@@ -308,5 +308,6 @@ public static class ResultOverride
         CompletedAt = call.CompletedAt,
         ToolCallId = call.ToolCallId,
         TrailingText = trailingText,
+        Meta = call.Meta,
     };
 }

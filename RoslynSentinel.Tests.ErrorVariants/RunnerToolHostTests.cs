@@ -96,6 +96,35 @@ public class RunnerToolHostTests
     }
 
     [Test]
+    public async Task ResultWithMeta_IsRecordedOnTheCall_AndNeverShownToTheModel()
+    {
+        var host = new FakeToolHost(
+            "WithMeta",
+            new CallToolResult
+            {
+                Content = [new TextContentBlock { Text = "{\"ok\":true}" }],
+                Meta = new System.Text.Json.Nodes.JsonObject
+                {
+                    ["nearMissSubstitutions"] = new System.Text.Json.Nodes.JsonArray(new System.Text.Json.Nodes.JsonObject { ["from"] = "Oovernight" }),
+                },
+            });
+        var model = new ScriptedModelHandler(
+            ScriptedModelHandler.FunctionCallSse("WithMeta", "{}"),
+            ScriptedModelHandler.FinalMessageSse("done"));
+        var runner = NewRunner(model, host);
+
+        var result = await runner.RunAsync("system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken);
+
+        var record = result.Transcript.Turns[0].ToolCalls.Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That(record.Meta?["nearMissSubstitutions"]?[0]?["from"]?.GetValue<string>(), Is.EqualTo("Oovernight"), "the call record keeps the server's _meta");
+            Assert.That(ScriptedModelHandler.ToolOutput(model.Requests[1]), Is.EqualTo("{\"ok\":true}"), "the model-facing tool message is the content only");
+            Assert.That(JsonSerializer.Serialize(model.Requests[1]), Does.Not.Contain("Oovernight"), "the wrong name never reaches the model request");
+        });
+    }
+
+    [Test]
     public async Task ErrorResult_IsErrorTrue_IsRecorded()
     {
         var host = new FakeToolHost(

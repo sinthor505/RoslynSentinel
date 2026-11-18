@@ -545,7 +545,7 @@ public sealed class ModelAgentRunner
                     turnNumber, toolCall.Name,
                     FormatForAgentLog(turnNumber, callIndexInTurn, toolCall.Name, "args", toolCall.ArgumentsJson, transcriptDirectory));
 
-                var (resultJson, isError, latency, callStartedAt, callCompletedAt, trailingText) = await ExecuteToolCallAsync(toolCall, cancellationToken);
+                var (resultJson, isError, latency, callStartedAt, callCompletedAt, trailingText, meta) = await ExecuteToolCallAsync(toolCall, cancellationToken);
                 turnRecord.ToolCalls.Add(new AgentToolCallRecord
                 {
                     ToolName = toolCall.Name,
@@ -557,6 +557,7 @@ public sealed class ModelAgentRunner
                     CompletedAt = callCompletedAt,
                     ToolCallId = toolCall.Id,
                     TrailingText = string.IsNullOrEmpty(trailingText) ? null : trailingText,
+                    Meta = meta,
                 });
 
                 var loggedResult = FormatForAgentLog(turnNumber, callIndexInTurn, toolCall.Name, "result", resultJson, transcriptDirectory);
@@ -928,7 +929,7 @@ public sealed class ModelAgentRunner
         return null;
     }
 
-    private async Task<(string ResultJson, bool IsError, TimeSpan Latency, DateTimeOffset StartedAt, DateTimeOffset CompletedAt, string TrailingText)> ExecuteToolCallAsync(
+    private async Task<(string ResultJson, bool IsError, TimeSpan Latency, DateTimeOffset StartedAt, DateTimeOffset CompletedAt, string TrailingText, System.Text.Json.Nodes.JsonObject? Meta)> ExecuteToolCallAsync(
         AgentToolCall toolCall, CancellationToken cancellationToken)
     {
         var startedAt = DateTimeOffset.Now;
@@ -941,7 +942,7 @@ public sealed class ModelAgentRunner
         catch (JsonException ex)
         {
             stopwatch.Stop();
-            return ($$"""{"isError":true,"error":"Malformed tool-call arguments JSON: {{JsonEncode(ex.Message)}}"}""", true, stopwatch.Elapsed, startedAt, DateTimeOffset.Now, string.Empty);
+            return ($$"""{"isError":true,"error":"Malformed tool-call arguments JSON: {{JsonEncode(ex.Message)}}"}""", true, stopwatch.Elapsed, startedAt, DateTimeOffset.Now, string.Empty, null);
         }
 
         CallToolResult result;
@@ -952,7 +953,7 @@ public sealed class ModelAgentRunner
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             stopwatch.Stop();
-            return ($$"""{"isError":true,"error":"MCP call threw: {{JsonEncode(ex.Message)}}"}""", true, stopwatch.Elapsed, startedAt, DateTimeOffset.Now, string.Empty);
+            return ($$"""{"isError":true,"error":"MCP call threw: {{JsonEncode(ex.Message)}}"}""", true, stopwatch.Elapsed, startedAt, DateTimeOffset.Now, string.Empty, null);
         }
 
         stopwatch.Stop();
@@ -971,7 +972,8 @@ public sealed class ModelAgentRunner
         // server-side via a CallToolFilter, but the harness still checks both defensively rather
         // than trusting either alone.
         var isError = result.IsError == true || BodyReportsFailure(text);
-        return (text, isError, stopwatch.Elapsed, startedAt, completedAt, trailingText);
+        // Meta is read-only evidence for the transcript; ModelFacingToolContent never sees it.
+        return (text, isError, stopwatch.Elapsed, startedAt, completedAt, trailingText, result.Meta?.DeepClone() as System.Text.Json.Nodes.JsonObject);
     }
 
     /// <summary>The tool-result text the model sees: the first block as ResultJson, then any trailing blocks appended after a blank line.</summary>

@@ -181,6 +181,14 @@ public static class RoslynSentinelServiceExtensionsBasic
         ("OrientationBreaker", AddOrientationBreakerFilter),
         ("UnrecoverableBreaker", AddUnrecoverableBreakerFilter),
         };
+        if (NearMissRecorder.IsActive)
+        {
+            // Directly inside ToolTelemetry (third), so AgentIdentity, ToolCallEcho and ToolTelemetry keep positions 0-2 and every filter that can
+            // rebuild a result (LoopLatch refusal, WorkspaceNotLoaded's failure handler) is inside it. Absent when both near-miss options are at their
+            // defaults, so the default build is byte-identical to one without this filter.
+            registrations.Insert(registrations.FindIndex(r => r.Name == "ToolTelemetry") + 1, ("NearMissRecord", AddNearMissRecordFilter));
+        }
+
         if (ErrorPolicyOptions.Mode != ErrorPolicyMode.Off)
         {
             // Sits directly outside WorkspaceNotLoaded so it sees thrown errors (already mapped to text by the filter inside it)
@@ -189,6 +197,23 @@ public static class RoslynSentinelServiceExtensionsBasic
         }
 
         return [.. registrations];
+    }
+
+    /// <summary>
+    /// Registers the near-miss record filter (<see cref="NearMissRecordFilter"/>): opens a <see cref="NearMissRecorder"/> scope for the call and writes
+    /// the records made during it into <c>result._meta.nearMissSubstitutions</c>. An EVALUATION aid, registered only when
+    /// <see cref="NearMissRecorder.IsActive"/> (see <see cref="BuildCallToolFilterRegistrations"/>).
+    /// </summary>
+    private static void AddNearMissRecordFilter(IMcpRequestFilterBuilder filters)
+    {
+        filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
+            ModelContextProtocol.Protocol.CallToolRequestParams,
+            ModelContextProtocol.Protocol.CallToolResult>(
+            (context, cancellationToken) =>
+            {
+                var logger = context.Server.Services?.GetService<ILoggerFactory>()?.CreateLogger("NearMissRecordFilter");
+                return NearMissRecordFilter.InvokeAsync(logger, () => next(context, cancellationToken));
+            }));
     }
 
     /// <summary>
