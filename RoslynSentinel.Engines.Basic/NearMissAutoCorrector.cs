@@ -50,6 +50,7 @@ public static class NearMissAutoCorrector
         StaleReadPolicy staleReadPolicy,
         CancellationToken cancellationToken = default)
     {
+        // TODO ambiguous near-miss hints are recorded (NearMissDetector.RecordAmbiguous) only with AutoCorrect on; record them for the hide-only arm too if the eval needs them, and CreateFile/WriteFile to a new path get no near-miss items (not baseline documents)
         if (!NearMissOptions.AutoCorrect || !rejectedReport.Diagnostics.Any(d => d.Severity == "Error" && d.Id is "CS0117" or "CS1061" or "CS0103"))
         {
             return null;
