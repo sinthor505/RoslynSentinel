@@ -43,3 +43,25 @@ one. For any failed or inefficient model action, trace to source:
    A cause not traced to source is a hypothesis - label it as one.
 
 Check the literal error's named identifier against the actual source before theorising.
+
+## Token-path slips (misspelled identifiers, repeated identical failures)
+
+Evidence and data: `docs/current/findings/finding_overnight_token_path_slips.md`.
+
+- **Classify first.** A near-miss of a known identifier (`Oovernight`, `Ownight`, `PrioritOvernight`)
+  that persists, often with the model saying it is a typo, is a token-path slip: a sampling and
+  tokenization event, not a capability, reasoning or coherence failure. An invented member (`IsKnown`
+  that does not exist) or a logic error is a real capability failure and is analysed normally.
+- **More error text does not help after the fact.** The model usually knows the spelling and still cannot
+  break out; errors that repeat the bad token feed it back. Environment fixes are sampler settings and
+  recovery that needs no retyping, not longer hints.
+- **Read the stream.** For persistent tool struggles or wrong symbol names, review the agent.log
+  `LM Studio reasoning:` / `LM Studio streaming:` deltas (`scripts/Find-TypoTokenStream.ps1`) and
+  tokenize the name; whole words hide the awkward token path.
+- **Measure the first write, at scale.** Slips are 1-10% per first write and propagate afterwards, so a
+  20-run arm cannot separate a fix from variance. Use the early-stop `ShippingKindReplay` (200+ samples)
+  and a significance test before crediting a server or prompt change.
+- **Record the effective sampler for every run.** A model loaded on demand can skip its saved preset,
+  `/v1/responses` ignores `repeat_penalty` and `logit_bias`, the client's `-Temperature` overrides the
+  preset, LM Studio echoes only temperature and top_p, and the eval queue dedupes reruns (sampler A/B
+  arms need `-Force`). Eval preset: repeat 1.0, presence 0, top-p 0.9-0.95, min-p 0.05-0.1.
