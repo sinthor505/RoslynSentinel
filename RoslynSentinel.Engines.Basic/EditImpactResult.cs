@@ -140,4 +140,5 @@ public sealed record NearMissName(
     string Replacement,
     string? CorrectedLine,
     bool WrongNameDeclaredElsewhere,
-    IReadOnlyList<SymbolCandidate> Candidates);
+    // Fully qualified: RoslynSentinel.Engines.Basic declares an unrelated SymbolCandidate (SymbolNavigationEngine.cs) that shadows the Common one.
+    IReadOnlyList<RoslynSentinel.Common.SymbolCandidate> Candidates);
