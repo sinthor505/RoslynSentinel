@@ -5,6 +5,8 @@ using System.Text.Json.Serialization;
 
 using Microsoft.Extensions.Logging;
 
+using RoslynSentinel.Common.AgentLoop;
+
 namespace RoslynSentinel.Common;
 
 /// <summary>
@@ -33,6 +35,15 @@ public sealed class LmStudioAgentClient
     private readonly Task _loadedModelStatusCheck;
     private readonly SemaphoreSlim _contextLengthLock = new(1, 1);
     private int _cachedContextLength;
+    private ModelLoadSettings? _cachedLoadSettings;
+
+    private SamplerSettings? _reportedSampler;
+
+    /// <summary>
+    /// The sampler values LM Studio echoed in the FIRST completed response of this client; null until a response
+    /// that echoed at least one of temperature/top_p/presence_penalty/frequency_penalty arrives.
+    /// </summary>
+    public SamplerSettings? ReportedSampler => _reportedSampler;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -297,6 +308,18 @@ public sealed class LmStudioAgentClient
                 requestedTopP, actualTopP);
         }
 
+        if (_reportedSampler is null)
+        {
+            var echoed = SamplerSettings.FromReported(
+                completedResponse.Temperature, completedResponse.TopP,
+                completedResponse.PresencePenalty, completedResponse.FrequencyPenalty);
+            if (echoed.Temperature is not null || echoed.TopP is not null
+                || echoed.PresencePenalty is not null || echoed.FrequencyPenalty is not null)
+            {
+                _reportedSampler = echoed;
+            }
+        }
+
         var reasoningText = string.Concat(reasoningBuilders.Values.Select(sb => sb.ToString()));
         var messageText = completedResponse.Output
             .Where(o => o.Type == "message")
@@ -403,6 +426,61 @@ public sealed class LmStudioAgentClient
         {
             _logger.LogWarning(ex, "Failed to fetch context size from LM Studio; skipping cumulative context-size tracking.");
             return -1;
+        }
+    }
+
+    /// <summary>
+    /// LM Studio's /api/v1/models loaded-instance config for this client's model. Resolved once and cached under
+    /// <c>_contextLengthLock</c>; a failed lookup is cached too, as BaseUrl-only settings, so a down server does not
+    /// add a failed HTTP call to every completion.
+    /// </summary>
+    public async Task<ModelLoadSettings> GetLoadSettingsAsync(CancellationToken cancellationToken)
+    {
+        if (_cachedLoadSettings is not null)
+        {
+            return _cachedLoadSettings;
+        }
+
+        await _contextLengthLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (_cachedLoadSettings is not null)
+            {
+                return _cachedLoadSettings;
+            }
+
+            _cachedLoadSettings = await FetchLoadSettingsAsync(cancellationToken);
+            return _cachedLoadSettings;
+        }
+        finally
+        {
+            _contextLengthLock.Release();
+        }
+    }
+
+    private async Task<ModelLoadSettings> FetchLoadSettingsAsync(CancellationToken cancellationToken)
+    {
+        var baseUrl = _httpClient.BaseAddress!.ToString().TrimEnd('/');
+        try
+        {
+            var modelsUrl = new Uri(_httpClient.BaseAddress!, "../api/v1/models");
+            using var response = await _httpClient.GetAsync(modelsUrl, cancellationToken);
+            var responseText = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning(
+                    "Could not fetch load settings from LM Studio ({StatusCode}); recording the base URL only. Body: {Body}",
+                    response.StatusCode, responseText);
+                return ModelLoadSettings.FromModelsJson(null, _model, baseUrl);
+            }
+
+            return ModelLoadSettings.FromModelsJson(responseText, _model, baseUrl);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Failed to fetch load settings from LM Studio; recording the base URL only.");
+            return ModelLoadSettings.FromModelsJson(null, _model, baseUrl);
         }
     }
 
@@ -748,6 +826,17 @@ public sealed class LmStudioAgentClient
         }
         [JsonPropertyName("top_p")]
         public double? TopP
+        {
+            get; set;
+        }
+
+        [JsonPropertyName("presence_penalty")]
+        public double? PresencePenalty
+        {
+            get; set;
+        }
+        [JsonPropertyName("frequency_penalty")]
+        public double? FrequencyPenalty
         {
             get; set;
         }

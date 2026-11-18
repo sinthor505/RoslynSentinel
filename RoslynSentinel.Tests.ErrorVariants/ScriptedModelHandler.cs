@@ -35,6 +35,35 @@ internal sealed class ScriptedModelHandler(params string[] responses) : HttpMess
             data = Array.Empty<object>(),
         });
 
+    /// <summary>A GET body in the shape of LM Studio's /api/v1/models: the model with one loaded instance carrying its load config.</summary>
+    internal static string LoadedModelsJsonWithConfig(string modelKey, int contextLength, bool flashAttention, bool speculativeDraftMtp, int parallel) =>
+        JsonSerializer.Serialize(new
+        {
+            models = new[]
+            {
+                new
+                {
+                    key = modelKey,
+                    loaded_instances = new[]
+                    {
+                        new
+                        {
+                            id = modelKey,
+                            config = new
+                            {
+                                context_length = contextLength,
+                                flash_attention = flashAttention,
+                                speculative_draft_mtp = speculativeDraftMtp,
+                                parallel,
+                                eval_batch_size = 512,
+                            },
+                        },
+                    },
+                },
+            },
+            data = new[] { new { id = modelKey, loaded_context_length = contextLength } },
+        });
+
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         if (FailWith is not null)
@@ -88,24 +117,46 @@ internal sealed class ScriptedModelHandler(params string[] responses) : HttpMess
         return $"event: response.completed\ndata: {payload}\n\n";
     }
 
-    /// <summary>One response.completed event carrying a plain assistant message and no tool call.</summary>
-    internal static string FinalMessageSse(string text)
+    /// <summary>
+    /// One response.completed event carrying a plain assistant message and no tool call. The optional sampler
+    /// arguments, when given, are echoed in the response object the way LM Studio echoes the values it used.
+    /// </summary>
+    internal static string FinalMessageSse(
+        string text,
+        double? temperature = null,
+        double? topP = null,
+        double? presencePenalty = null,
+        double? frequencyPenalty = null)
     {
-        var payload = JsonSerializer.Serialize(new
+        var response = new Dictionary<string, object?>
         {
-            response = new
+            ["output"] = new[]
             {
-                output = new[]
+                new
                 {
-                    new
-                    {
-                        type = "message",
-                        content = new[] { new { type = "output_text", text } },
-                    },
+                    type = "message",
+                    content = new[] { new { type = "output_text", text } },
                 },
             },
-        });
+        };
+        if (temperature is not null)
+        {
+            response["temperature"] = temperature;
+        }
+        if (topP is not null)
+        {
+            response["top_p"] = topP;
+        }
+        if (presencePenalty is not null)
+        {
+            response["presence_penalty"] = presencePenalty;
+        }
+        if (frequencyPenalty is not null)
+        {
+            response["frequency_penalty"] = frequencyPenalty;
+        }
 
+        var payload = JsonSerializer.Serialize(new { response });
         return $"event: response.completed\ndata: {payload}\n\n";
     }
 
