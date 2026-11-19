@@ -18,6 +18,12 @@ namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 /// never run as part of an ordinary full-suite pass - this preflight is a safety net for when they
 /// ARE run explicitly without a live server up, not the primary gate.
 /// </para>
+/// <para>
+/// Sampler source for every fixture in this assembly: only temperature and top-p are sent per request
+/// (<c>LlmOptions.Temperature</c>/<c>TopP</c>; no test sets them itself). Top-k, min-p and the penalties come
+/// from LM Studio's preset, or its defaults after a fresh model load, because /v1/responses ignores them if
+/// sent. Only one model fits per host.
+/// </para>
 /// </summary>
 [SetUpFixture]
 public class ModelEvalAssemblySetUp

@@ -20,6 +20,8 @@ namespace RoslynSentinel.Tests.ErrorVariants;
 /// Reads the model host, model key and sampling from <see cref="LlmOptions"/> (call <see cref="LlmOptions.Configure"/> first).
 /// A problem with one cell (unreadable transcript, settings mismatch, model host down, runner failure) becomes a harness-error row
 /// with no exception; only a bad configuration (a source or variant spec that resolves to nothing) throws, before any row is written.
+/// Sampler: only temperature and top-p are sent per request (LlmOptions.Temperature/TopP; no test sets them
+/// itself); top-k, min-p and the penalties come from LM Studio's preset or its post-load defaults.
 /// </remarks>
 public static class ErrorVariantReplay
 {

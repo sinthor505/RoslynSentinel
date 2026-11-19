@@ -47,7 +47,8 @@ public static class LlmOptions
     /// whatever <c>temperature</c> value is sent in the same response body field, and a same-prompt
     /// A/B test showed genuinely different generations at 0.0 vs default. See
     /// <see cref="TopK"/>/<see cref="RepeatPenalty"/>/<see cref="MinP"/> for the three sampling
-    /// params that do NOT work this way.
+    /// params that do NOT work this way. Temperature and <see cref="TopP"/> are the only sampler values sent per
+    /// request; no test sets them itself, so a model-eval run uses what the env vars (or LM Studio) give it.
     /// </summary>
     public static double? Temperature { get; private set; }
 

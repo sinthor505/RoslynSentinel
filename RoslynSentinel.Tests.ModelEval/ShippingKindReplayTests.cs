@@ -27,6 +27,11 @@ namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 /// skipped); ROSLYNSENTINEL_MODELEVAL_REPLAY_EARLY_STOP=0 replays whole turns.
 /// It asserts nothing about the model: one results.csv row per sample plus a per-sample transcript.json that
 /// scripts/Get-ShippingKindTypoCounts.ps1 reads (the decision turn is found the same way as for a full run).
+/// <para>
+/// Sampler: only temperature and top-p are sent per request (<c>LlmOptions.Temperature</c>/<c>TopP</c>; no test
+/// sets them itself). Top-k, min-p and the penalties come from LM Studio's preset, or its defaults after a
+/// fresh model load, because /v1/responses ignores them if sent.
+/// </para>
 /// </summary>
 [TestFixture]
 public class ShippingKindReplayTests
