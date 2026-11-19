@@ -1,7 +1,8 @@
 # Plan: near-miss member detail on rejections, qualified enum members in outlines, then eval-only auto-correction
 
-**Status:** IN PROGRESS 2026-11-18. Steps 1-12 done (see each step); Step 13 (live eval) left. Batched run,
-owner away; D3 and D4 settled (see Decision). Phase B (Steps 8-13, eval-only) follows Phase A.
+**Status:** IMPLEMENTED 2026-11-19. Steps 1-13 done (hashes under each step; harness fix 0797212a, sampler comments
+eabac51d). Last full run 0 failures (fff004a0). Live results in the Step 13 entry and in
+[finding_overnight_token_path_slips.md](../../findings/finding_overnight_token_path_slips.md).
 
 **Name trap:** inside `RoslynSentinel.Engines.Basic`, `SymbolCandidate` resolves to an unrelated record in
 `SymbolNavigationEngine.cs`; the `Common` one (`SymbolNotFoundDetail.cs:13`) needs its namespace. Any step
@@ -12,8 +13,8 @@ touching `NearMissName.Candidates` (4, 5, 6, 12) must use the `Common` type.
 After a token-path slip (`ShippingKinds.Oovernight`), every recovery path the server offers ends with the
 model retyping the name, which is the operation that fails (tiel: 14 correct hints, 16 repeated typos).
 The server already computes the closest name and corrected line, but only as text. Evidence and design:
-[proposal_server_slip_recovery.md](../proposals/proposal_server_slip_recovery.md); harness consumer:
-[proposal_harness_slip_rollback_and_resample.md](../proposals/proposal_harness_slip_rollback_and_resample.md).
+[proposal_server_slip_recovery.md](../../proposals/closed/proposal_server_slip_recovery.md); harness consumer:
+[proposal_harness_slip_rollback_and_resample.md](../../proposals/proposal_harness_slip_rollback_and_resample.md).
 
 ## Decision
 
@@ -297,6 +298,15 @@ Phase B below is an evaluation feature. Every option it adds defaults to today's
   - Report slipped runs in five classes: assisted pass (substitution applied); pass after retyping; failed after a substitution (e.g. a later snippet that still contains the typo); failed with a near-miss hint; failed with no near-miss item (detector gap). Report non-slipped runs separately.
 - Done when: no stubs; each arm is reported in those classes.
 - Lane: dispatcher (search); modeleval-runner (live run).
+- Done: stub sweep clean; the live run first stopped on a harness gap (`ModelEvalAssemblySetUp` never called
+  `NearMissOptions.Configure`; fixed in 0797212a). Then 86 jobs, all on 0797212a. tiel (0.6/0.9, 5 runs per arm):
+  slipped runs 0 / 3 / 1 / 3 for arms 1-4; qwen (1.0/1.0, 15 per arm): 1 slip in 60 runs. Classes seen: assisted
+  pass (auto-correct on: 4 of 4 tiel slips, 1 qwen slip), failed with a near-miss hint (2, tiel arm 2),
+  pass after retyping (1). No class 3 or 5. Auto-correct works; hints and hide mode do not break a retype loop (the
+  model re-sends its own previous call). Details: the finding's "Server-side recovery eval 2026-11-19" section.
+- Follow-ups (TODO.md "Slip recovery follow-ups"): near-miss items for `CreateFile` and the other unwired tools;
+  snippet-miss result echoes the model's wrong `oldContent`; hide-only arm still records nothing for ambiguous
+  items (decided: no); defaults-sampler arm not run.
 
 ## Out of scope
 
@@ -306,7 +316,7 @@ Phase B below is an evaluation feature. Every option it adds defaults to today's
 - Auto-correction as a production feature.
 - Qualified names for static members of non-enum types. (`Search(mode: enum member)` rows turned out to
   share the outline walk and are qualified too after Step 7; accepted 2026-11-18, consistent with D3.)
-- All harness work ([proposal_harness_slip_rollback_and_resample.md](../proposals/proposal_harness_slip_rollback_and_resample.md)).
+- All harness work ([proposal_harness_slip_rollback_and_resample.md](../../proposals/proposal_harness_slip_rollback_and_resample.md)).
 
 ## Risks and open decisions
 

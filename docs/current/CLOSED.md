@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Token-path slip recovery, server part - resolved (2026-11-19)
+
+Token-path slip recovery, server part (2026-11-17) - [proposal](proposals/closed/proposal_server_slip_recovery.md) and [plan](plans/closed/plan_server_slip_recovery.md): server-side near-miss detail on rejections, qualified enum members in outlines, eval-only auto-correct and name-display options; built and measured live 2026-11-19 ([finding](findings/finding_overnight_token_path_slips.md))
+
+Evidence: a4056bc8..0797212a, eabac51d (plan_server_slip_recovery; live eval 2026-11-19)
+
 ## Member(replace) accepts several declarations (option 2) - resolved (2026-11-15)
 
 `Member(replace)` accepts several declarations (option 2) (2026-11-14) - replace one target plus add the rest after it, only when exactly one declaration matches the target by name and parameter types; option 1 shipped and its measurement was inconclusive (no run used the new path), so first run a targeted scenario that forces the "method plus helper" shape. Input: `docs/current/proposals/proposal_member_accepts_multiple_declarations.md` (Option 2, "Measurement of option 1"); one replace rejection seen in the baseline, ShippingKind step 3 run `20261114-102311-129` turn 2.

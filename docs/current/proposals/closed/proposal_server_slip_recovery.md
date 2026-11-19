@@ -1,13 +1,14 @@
 # Server prevents near-miss member names and, as an eval-only option, auto-corrects unambiguous ones
 
-**Status:** PROPOSED 2026-11-18. Phase B scope settled with the owner (eval feature, no fix ids); plan in
-[plan_server_slip_recovery.md](../plans/plan_server_slip_recovery.md).
+**Status:** IMPLEMENTED 2026-11-19 (eval-only scope, no fix ids; plan Steps 1-13 done, see
+[plan_server_slip_recovery.md](../../plans/closed/plan_server_slip_recovery.md)). Live results: auto-correct
+recovered every slip it saw, hints did not.
 
 ## Motivation
 
 Weak models sometimes write a near-miss member name, a token-path slip such as `ShippingKinds.Oovernight`
 for `ShippingKinds.Overnight` (evidence in
-[finding_overnight_token_path_slips.md](../findings/finding_overnight_token_path_slips.md)). Once a model
+[finding_overnight_token_path_slips.md](../../findings/finding_overnight_token_path_slips.md)). Once a model
 has slipped it usually cannot retype the name correctly, even when it knows the spelling. Tiel received
 the correct name 14 times, said it had made a typo, and still sent `Oovernight` in 16 later edit calls
 (`ModelTestingResults/113/Model_RunsShippingKindStepPromptFinal(4)/20261117-214637-592`). Every recovery
@@ -42,7 +43,7 @@ the file that differs from the file. So:
   task, and the display toggle measures whether repeating the wrong name matters.
 
 The harness side, for clients we own, is
-[proposal_harness_slip_rollback_and_resample.md](proposal_harness_slip_rollback_and_resample.md).
+[proposal_harness_slip_rollback_and_resample.md](../proposal_harness_slip_rollback_and_resample.md).
 
 ## Proposal
 
@@ -168,8 +169,8 @@ The default (`show`) keeps today's behaviour.
 
 ## Related
 
-- [proposal_harness_slip_rollback_and_resample.md](proposal_harness_slip_rollback_and_resample.md)
-- [finding_overnight_token_path_slips.md](../findings/finding_overnight_token_path_slips.md) - open item 4.
-- [plan_error_codes_follow_cause.md](../plans/plan_error_codes_follow_cause.md) - error code work in progress.
+- [proposal_harness_slip_rollback_and_resample.md](../proposal_harness_slip_rollback_and_resample.md)
+- [finding_overnight_token_path_slips.md](../../findings/finding_overnight_token_path_slips.md) - open item 4.
+- [plan_error_codes_follow_cause.md](../../plans/plan_error_codes_follow_cause.md) - error code work in progress.
 - TODO.md "Token-path slip recovery design".
 - Memory: project_token_path_slips_eval_rules.

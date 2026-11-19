@@ -1,7 +1,7 @@
 # Harness discards a turn whose tool call fails on a near-miss member name, and resamples it
 
 **Status:** PROPOSED 2026-11-18. Awaiting review; depends on the server signal in
-[proposal_server_slip_recovery.md](proposal_server_slip_recovery.md).
+[proposal_server_slip_recovery.md](closed/proposal_server_slip_recovery.md).
 
 Scope (owner decision 2026-11-18): an evaluation feature. In production, the sampler preset makes slips
 rare, and a stuck run is cheaper to revert and re-run than to add more crutches.
@@ -91,7 +91,7 @@ template, so the hint cannot introduce a slip of its own.
 ### Server substitution records
 
 When the server's eval-only auto-correction option is on
-([proposal_server_slip_recovery.md](proposal_server_slip_recovery.md), parts 3 and 5), each substitution
+([proposal_server_slip_recovery.md](closed/proposal_server_slip_recovery.md), parts 3 and 5), each substitution
 comes back as a record in the tool result's `_meta` (tool, file, line, from, to, diagnostic id, candidate
 count, display mode). The harness:
 
@@ -152,7 +152,7 @@ and skip the injection.
 
 ## Related
 
-- [proposal_server_slip_recovery.md](proposal_server_slip_recovery.md) - the signal this consumes, and
+- [proposal_server_slip_recovery.md](closed/proposal_server_slip_recovery.md) - the signal this consumes, and
   recovery for clients we do not own.
 - [finding_overnight_token_path_slips.md](../findings/finding_overnight_token_path_slips.md) - evidence,
   open items 4 and 6.

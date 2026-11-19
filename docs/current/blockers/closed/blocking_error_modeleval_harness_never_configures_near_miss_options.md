@@ -4,7 +4,7 @@
 
 ## What was being attempted
 
-Step 13 (live check) of `docs/current/plans/plan_server_slip_recovery.md`: run `ShippingKindStep` through
+Step 13 (live check) of `docs/current/plans/closed/plan_server_slip_recovery.md`: run `ShippingKindStep` through
 `scripts/roslynsentinel-evalqueue.ps1` on tiel (host 113) in four arms of the new `NearMissOptions`
 (autocorrect off/on x name display show/hide). The options were to be passed as environment variables
 `ROSLYNSENTINEL_NEAR_MISS_AUTOCORRECT=true|false` and `ROSLYNSENTINEL_NEAR_MISS_NAME_DISPLAY=show|hide`.

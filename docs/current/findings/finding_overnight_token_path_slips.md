@@ -1,7 +1,8 @@
 # Finding: qwen-family models misspell ShippingKinds.Overnight through a token-path slip, not a reasoning error
 
 **Status:** OPEN 2026-11-17, updated 2026-11-18 (overnight batch: temperature, qualified-name and presence arms). Mechanism
-established and sampler settings decided; the recovery design and a fine-stepped eval variant are open (TODO.md).
+established and sampler settings decided; server-side recovery built and measured 2026-11-19; the harness-side
+recovery and a fine-stepped eval variant are open (TODO.md).
 
 ## Context
 
@@ -185,6 +186,33 @@ Limits of this evidence:
 - The temperature and QualifiedResult effects are measured at one replay point of one model (tiel step 4). Whether
   temp 0.4 lowers pass rates was not measured.
 
+### Server-side recovery eval 2026-11-19 (plan_server_slip_recovery, Step 13)
+
+ShippingKindStep, four arms of the eval-only `NearMissOptions` (auto-correct off/on x name display show/hide),
+commit 0797212a. tiel at host preset (temp 0.6, top-p 0.9), 5 runs per arm; qwen3.5-9b-mtp at temp 1.0 / top-p 1.0,
+15 runs per arm (plus 6 earlier runs at 0.6/0.9, not pooled).
+
+| Model | Arm | Runs | Slipped runs | Classes |
+| --- | --- | --- | --- | --- |
+| tiel | 1 off+show | 5 | 0 | none |
+| tiel | 2 off+hide | 5 | 3 | 2 failed with a near-miss hint (NotConverged), 1 pass after retyping |
+| tiel | 3 on+show | 5 | 1 | 1 assisted pass |
+| tiel | 4 on+hide | 5 | 3 | 3 assisted passes |
+| qwen 1.0/1.0 | 1-4 | 15 each | 1 (arm 3, `Overtight`) | 1 assisted pass |
+
+- **Auto-correct recovered 4 of 4 tiel slips and the 1 qwen slip.** Off, 1 of 3 tiel slips recovered, and the other
+  two never converged (10 and 11 rejections). No run was "failed after a substitution" or "failed with no near-miss item".
+- **A hint does not break the retype loop.** In the two failures the rejection stated the closest member, its letters,
+  and the corrected line in code form (`case ShippingKinds.Overnight:`), yet the model re-sent its previous call
+  byte for byte. Its own earlier call, with the wrong name, was the stronger pattern in context (the self-propagation
+  of root cause 4). Hide mode cannot remove that, because the wrong name is in the model's own call.
+- **qwen barely slips even at 1.0/1.0** (1 in 60 runs), so it is a poor model for this arm.
+- `_meta` `nearMissSubstitutions` records appear under auto-correct on and never reach the model; hide mode never
+  named the wrong name in a compile rejection.
+- **Gaps seen:** `CreateFile` rejections carry the hint text but no `nearMisses` item (the model fell back to it
+  after `ReplaceSnippet` failed); a `ReplaceSnippet` snippet-miss result echoes the model's `oldContent`, wrong name
+  included.
+
 ## Why it matters
 
 - These are not capability, reasoning or coherence failures; they look like them in whole-word logs
@@ -218,7 +246,9 @@ Decided:
 Open (TODO.md):
 
 4. **Recovery that needs no retyping:** errors that give position and corrected line without echoing the
-   bad name, retry by reference, optional strict auto-apply. **Prevention before the first write** is now the
+   bad name, retry by reference, optional strict auto-apply. Built and measured 2026-11-19 (section above):
+   the eval-only auto-correct recovers slips; hints and hiding the name do not break a retype loop; retry by
+   reference was dropped. **Prevention before the first write** is now the
    strongest measured lever: a tool result that shows the qualified names (`ShippingKinds.Overnight`) took tiel
    from 24/400 to 0/400 (2026-11-18). Candidate: read and outline results for a type list its members in
    qualified form, so the model copies `[.][Over][night]` from context instead of composing it.
