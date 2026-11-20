@@ -211,17 +211,33 @@ runs jobs one at a time per host and shows every session what is running and wai
 - `-Model`, `-Session` (first line of `ListAgents`) and `-Purpose` are required.
 - `wait` prints each job's state, results folder (`ModelTestingResults\<host>\<TestName>\<timestamp>\`)
   and log. Exit code 0 = all passed, 1 = a run finished with failing tests, 2 = anything else.
-- A request that matches an existing job (same commit, same uncommitted source changes, host, model,
-  test, arguments and `ROSLYNSENTINEL_*` variables) attaches to it and returns its results instead of
-  running again. `-Force` runs it anyway (more samples).
-- The run tests the working tree as it is when the job starts. If the commit or uncommitted source
-  files (`*.cs`, project and solution files) changed since submit, the job ends `TreeChanged` without
-  running; resubmit, or pass `-OnTreeChange RunAnyway` at submit.
+- `-Commit <rev>` (default `HEAD`) pins the job to one full commit sha. A repo with uncommitted source
+  changes (`*.cs`, project and solution files) is refused unless `-Commit` is given; the refusal lists the
+  first dirty paths. Commit them first, or pass `-Commit HEAD` to test the committed tree. Uncommitted
+  changes are not testable through the queue. Uncommitted `scripts/*.ps1` changes only produce a warning:
+  the job runs the committed scripts.
+- A request that matches an existing job (same pinned commit, host, model, test, arguments and
+  `ROSLYNSENTINEL_*` variables) attaches to it and returns its results instead of running again.
+  `-Force` runs it anyway (more samples).
+- Each job runs from its own checkout of its commit, so later edits and commits do not change a queued
+  job. There is one checkout per sha under `C:\rs-eval` (override `ROSLYNSENTINEL_EVALQUEUE_CHECKOUTS_ROOT`;
+  the short root keeps run paths under MAX_PATH). The job runs that checkout's own scripts. Results stay
+  central under `<devRepo>\ModelTestingResults`. After each job the worker removes checkouts that no Queued,
+  Building or Running job on any host needs, that are older than 24 hours and that are not among the newest 5.
 - `ROSLYNSENTINEL_*` variables set in the submitting shell (for example `ROSLYNSENTINEL_LIFT_RENAMES`)
-  are recorded with the job and applied to its run.
+  are recorded with the job and applied to its run. `ROSLYNSENTINEL_RESULTS_ROOT` and
+  `ROSLYNSENTINEL_EVALQUEUE_*` are never recorded.
 - `-Priority 1..9` (default 5) orders the queue; a running job is never interrupted.
-- States: `Finished` (`passed` true/false), `Cancelled`, `TimedOut` (`-TimeLimitMinutes`, default 40),
-  `Crashed` (no run folder: build failure or testhost crash; read the log), `TreeChanged`.
+- States: `Queued`, `Building` (the worker pre-builds the checkout before the time limit starts; cancellable),
+  `Running`, `Finished` (`passed` true/false), `Cancelled`, `TimedOut` (`-TimeLimitMinutes`, default 40;
+  a pre-build still running at that limit is killed and ends `BuildFailed`; a cancel during `Building` kills
+  the build at once; a checkout without `RoslynSentinel.Tests.ModelEval.csproj` skips the default pre-build,
+  logged in the worker log, unless `-PreBuildScript` is given),
+  `Crashed` (no run folder: testhost crash, a stuck SetUp or the worker stopped; read the log),
+  `BuildFailed` (the pre-build failed; the reason holds the end of its log), `TreeChanged` (legacy jobs only).
+- Legacy, for jobs queued before pinning existed (they have no pinned commit and run from the working
+  tree): if the commit or uncommitted source files changed since submit, the job ends `TreeChanged` without
+  running. Resubmit it to get a pinned run. `-OnTreeChange` is ignored for pinned jobs and slated for removal.
 - If the host stops answering, the queue pauses and the jobs stay queued.
 - Queue files: `%LOCALAPPDATA%\RoslynSentinel\evalqueue\<host>\` (`jobs\`, `logs\`, `worker.log`).
   Tests: `pwsh -NoProfile -File scripts\roslynsentinel-evalqueue.Tests.ps1`.

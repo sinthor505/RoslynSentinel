@@ -14,8 +14,9 @@
               -EvalArgs '-Samples 10 -ContinueTurns 3'. Prints each job id, its place and estimated start.
               The job is pinned to one commit (-Commit <rev>, default HEAD of the repo) and runs from its own
               checkout of that commit, so later edits and commits in the repo do not affect it. A repo with
-              uncommitted source changes is refused unless -Commit is given: commit first, or pass
-              -Commit HEAD to test the committed tree. A request that matches an existing job (same
+              uncommitted source changes is refused unless -Commit is given; the refusal lists the first dirty
+              paths. Commit them first, or pass -Commit HEAD to test the committed tree: uncommitted changes
+              are not testable through the queue. A request that matches an existing job (same
               commit, host, model, test, arguments and ROSLYNSENTINEL_* variables) attaches to that job
               instead of queuing a second run; -Force queues it anyway.
       status  Shows the running job, the queue in order and recent jobs. -HostAddress limits it to one host.
@@ -34,19 +35,29 @@
       minutes if it does not, leaving the jobs queued.
 
     What a job tests
-      submit resolves -Commit to a full sha and creates (or reuses) a checkout of that commit outside the
-      repo (root C:\rs-eval, override ROSLYNSENTINEL_EVALQUEUE_CHECKOUTS_ROOT). The job runs that
-      checkout's own copy of the eval script. When the job's turn comes the worker pre-builds the eval
-      project there (state Building) and only then starts the run, so a cold build does not count against
-      -TimeLimitMinutes. Results are written under <repo>\ModelTestingResults (the worker sets
-      ROSLYNSENTINEL_RESULTS_ROOT for the run), not inside the checkout. After each job the worker removes
-      checkouts that no queued or running job needs, are older than 24 hours and are not among the newest 5.
+      submit resolves -Commit to a full sha and creates the checkout of that commit at once, so a bad rev
+      fails the submit. There is one checkout per sha, shared by every job for that commit, outside the
+      repo: root C:\rs-eval (override ROSLYNSENTINEL_EVALQUEUE_CHECKOUTS_ROOT; the short root keeps run paths
+      under MAX_PATH). The job runs that checkout's own scripts, so only committed scripts run; uncommitted
+      scripts\*.ps1 changes produce a warning at submit, not a refusal.
+      When the job's turn comes the worker pre-builds the eval project in the checkout (state Building,
+      outside the queue lock and outside -TimeLimitMinutes; a failed build ends the job as BuildFailed).
+      A build still running after the job's -TimeLimitMinutes is killed and the job ends BuildFailed; a
+      cancel during Building kills the build at once. A checkout without
+      RoslynSentinel.Tests.ModelEval\RoslynSentinel.Tests.ModelEval.csproj skips the default pre-build (the
+      worker log says so) unless -PreBuildScript is given.
+      Results are not written into the checkout: the worker sets ROSLYNSENTINEL_RESULTS_ROOT to
+      <repo>\ModelTestingResults for the run, using the job's own repo, so results stay central and
+      checkouts can be removed without losing them. After each job the worker removes checkouts that no
+      Queued, Building or Running job on any host needs, that are older than 24 hours and that are not among
+      the newest 5.
       ROSLYNSENTINEL_* variables set in the submitting shell are recorded with the job and applied to its
-      run; the worker's own are not inherited.
-      Legacy: a job file without a pinned commit (queued before pinning existed) still builds from the working
-      tree; submit records the commit and a fingerprint of its uncommitted source changes and, if they differ
-      when the job's turn comes, the job ends as TreeChanged (-OnTreeChange RunAnyway runs it anyway).
-      -OnTreeChange has no effect on pinned jobs.
+      run. ROSLYNSENTINEL_RESULTS_ROOT and the ROSLYNSENTINEL_EVALQUEUE_* settings are never recorded, and the
+      worker's own ROSLYNSENTINEL_* variables are not inherited by the run.
+      Legacy (applies only to jobs queued before pinning existed, which have no pinned commit): such a job
+      still builds from the working tree. Submit recorded its commit and a fingerprint of its uncommitted
+      source changes; if they differ when the job's turn comes, the job ends as TreeChanged. -OnTreeChange
+      is ignored for pinned jobs and is slated for removal.
 
     Job states
       Queued, Building (the worker is pre-building the checkout; cancellable), Running, Finished (the run
