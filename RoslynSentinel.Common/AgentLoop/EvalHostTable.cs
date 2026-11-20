@@ -194,7 +194,7 @@ public static class EvalHostTable
 
     private static string Normalise(string url) => url.Trim().TrimEnd('/');
 
-    // Same rule as ModelTestingResultsArchiver.DeriveHostSuffix: ASCII letters and digits kept, others '_', trimmed.
+    // Same rule as the former per-project host-suffix archiver helpers: ASCII letters and digits kept, others '_', trimmed.
     private static string SanitiseUrl(string baseUrl)
     {
         var sanitised = new string(baseUrl.Select(c => IsAsciiLetterOrDigit(c) ? c : '_').ToArray()).Trim('_');

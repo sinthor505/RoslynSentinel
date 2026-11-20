@@ -71,7 +71,8 @@ public static class ErrorVariantReplay
             Timeout = TimeSpan.FromSeconds(Math.Max(LlmOptions.TimeoutSeconds * 4, 600)),
         };
 
-        var modelError = await CheckModelLoadedAsync(http, ModelsUrl(LlmOptions.BaseUrl), modelKey, cancellationToken);
+        var backend = EvalHostTable.BackendFor(LlmOptions.BaseUrl);
+        var modelError = await CheckModelLoadedAsync(http, ModelsUrl(LlmOptions.BaseUrl, backend), modelKey, cancellationToken, backend);
 
         // Built only when the check passed, so a down host or a missing model never sees a model request.
         var llm = modelError is null
@@ -389,10 +390,11 @@ public static class ErrorVariantReplay
     }
 
     /// <summary>
-    /// Checks LM Studio's native model list once: the configured model key must be listed and have a loaded instance.
+    /// Checks the host's model list once: the configured model key must be listed and have a loaded instance.
+    /// backend picks the list format: LM Studio's native /api/v1/models (default) or llama-server's /models (data[]).
     /// Returns null when it does, otherwise a fact-only description of what was found. Never throws (except cancellation).
     /// </summary>
-    internal static async Task<string?> CheckModelLoadedAsync(HttpClient http, string modelsUrl, string? modelKey, CancellationToken cancellationToken)
+    internal static async Task<string?> CheckModelLoadedAsync(HttpClient http, string modelsUrl, string? modelKey, CancellationToken cancellationToken, string backend = EvalHostTable.BackendLmStudio)
     {
         if (string.IsNullOrWhiteSpace(modelKey))
         {
@@ -408,6 +410,24 @@ public static class ErrorVariantReplay
             if (!response.IsSuccessStatusCode)
             {
                 return $"GET {modelsUrl} answered {(int)response.StatusCode} {response.StatusCode}.";
+            }
+
+            if (backend == EvalHostTable.BackendLlamaServer)
+            {
+                var listed = LlamaServerModels.Parse(body);
+                if (LlamaServerModels.FindLoaded(listed, modelKey) is not null
+                    || (listed.Count > 0 && listed.All(m => m.Loaded is null)))
+                {
+                    return null;
+                }
+
+                var entry = LlamaServerModels.FindListed(listed, modelKey);
+                if (entry is null)
+                {
+                    return $"model '{modelKey}' is not in the host's model list ({listed.Count} model(s) listed).";
+                }
+
+                return entry.Loaded is null ? null : $"model '{modelKey}' is known to the host but has no loaded instance.";
             }
 
             using var doc = JsonDocument.Parse(body);
@@ -639,10 +659,15 @@ public static class ErrorVariantReplay
                 $"Variant '{variant.Id}' uses {ResultOverride.SolutionToken} but neither prompt of the source transcript names a RoslynSentinelTests_<guid> fixture directory.");
     }
 
-    /// <summary>LM Studio's native model list for a /v1 base URL, as LmStudioAgentClient derives it.</summary>
-    private static string ModelsUrl(string baseUrl)
+    /// <summary>The model list URL for a /v1 base URL: llama-server's /models, else LM Studio's native /api/v1/models as LmStudioAgentClient derives it.</summary>
+    private static string ModelsUrl(string baseUrl, string backend)
     {
         var trimmed = baseUrl.TrimEnd('/');
+        if (backend == EvalHostTable.BackendLlamaServer)
+        {
+            return trimmed + "/models";
+        }
+
         var root = trimmed.EndsWith("/v1", StringComparison.OrdinalIgnoreCase) ? trimmed[..^"/v1".Length] : trimmed;
         return root + "/api/v1/models";
     }
