@@ -129,6 +129,23 @@ try {
     $out = Invoke-Queue 'cancel' @{ Id = $sharedId; Session = 's2' }
     Assert-That ((Get-JobById $sharedId).state -eq 'Cancelled') 'Cancel: job is cancelled when the last session withdraws'
 
+    # --- ids across hosts ------------------------------------------------------------------------------------
+    New-Queue
+    $onA = @((Submit @{ Test = 'Quick' }).queued)[0]
+    $onB = @((Submit @{ Test = 'Quick'; HostAddress = 'stub2' }).queued)[0]
+    Assert-That ($onA.id -ne $onB.id) 'Ids: jobs on two hosts get different ids'
+    # Ids from before the queue-wide rule repeat across hosts: plant a copy of A's job file under host B.
+    $planted = Get-Content -LiteralPath (Join-Path $script:queueRoot "stub\jobs\$($onA.id).json") -Raw | ConvertFrom-Json
+    $planted.suffix = 'stub2'
+    $planted | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $script:queueRoot "stub2\jobs\$($onA.id).json") -Encoding utf8
+    $out = Invoke-Queue 'cancel' @{ Id = $onA.id; Session = 's1' }
+    Assert-That ($script:lastExit -eq 2 -and "$out" -match [regex]::Escape("stub/$($onA.id)") -and "$out" -match [regex]::Escape("stub2/$($onA.id)")) 'Ids: a duplicate id is refused and both <host>/<id> forms are listed'
+    $out = Invoke-Queue 'cancel' @{ Id = "stub/$($onA.id)"; Session = 's1' }
+    $byHost = @{}
+    # status -Json returns one entry per host; Get-AllJobs reads only the first, so read every host's jobs here.
+    @((Invoke-Queue 'status' @{ Json = $true }).jobs) | Where-Object { $_.id -eq $onA.id } | ForEach-Object { $byHost[$_.suffix] = $_.state }
+    Assert-That ($byHost['stub'] -eq 'Cancelled' -and $byHost['stub2'] -eq 'Queued') 'Ids: <host>/<id> picks the exact host folder (stub, not stub2)'
+
     # --- worker: outcomes, priority order, env, eval args -------------------------------------------------
     New-Queue
     $env:ROSLYNSENTINEL_TEST_FLAG = 'submitter'

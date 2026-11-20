@@ -290,15 +290,28 @@ function Get-QueuedInOrder($Jobs) {
 }
 
 function Find-JobFile([string]$IdText) {
+    # "<host>/<id>" limits the lookup to one host folder: an exact folder name (for example http___192_168_1_113_8888_v1
+    # or 113) wins, otherwise folders whose name contains <host>. Ids allocated before 2026-11-20 are unique per host only.
+    $hostText = $null
+    if ($IdText -match '^(?<host>[^/\\]+)[/\\](?<id>[^/\\]+)$') { $hostText = $Matches['host']; $IdText = $Matches['id'] }
     $hits = @()
     if (Test-Path -LiteralPath $QueueRoot) {
-        $hits = @(Get-ChildItem -LiteralPath $QueueRoot -Directory | ForEach-Object {
+        $dirs = @(Get-ChildItem -LiteralPath $QueueRoot -Directory)
+        if ($hostText) {
+            $exact = @($dirs | Where-Object { $_.Name -eq $hostText })
+            $dirs = if ($exact.Count -gt 0) { $exact } else { @($dirs | Where-Object { $_.Name -like "*$hostText*" }) }
+        }
+        $hits = @($dirs | ForEach-Object {
                 $jobsDir = Join-Path $_.FullName 'jobs'
                 if (Test-Path -LiteralPath $jobsDir) { Get-ChildItem -LiteralPath $jobsDir -Filter "*$IdText*.json" -File }
             })
     }
-    if ($hits.Count -eq 0) { Stop-EvalQueue "No job id contains '$IdText' under $QueueRoot. Run 'status' to list job ids." }
-    if ($hits.Count -gt 1) { Stop-EvalQueue "'$IdText' matches $($hits.Count) jobs ($(($hits | ForEach-Object BaseName) -join ', ')). Pass the full id." }
+    $where = if ($hostText) { "host folders matching '$hostText' under $QueueRoot" } else { $QueueRoot }
+    if ($hits.Count -eq 0) { Stop-EvalQueue "No job id contains '$IdText' in $where. Run 'status' to list job ids." }
+    if ($hits.Count -gt 1) {
+        $named = ($hits | ForEach-Object { "$(Split-Path (Split-Path $_.FullName -Parent) -Parent | Split-Path -Leaf)/$($_.BaseName)" }) -join ', '
+        Stop-EvalQueue "'$IdText' matches $($hits.Count) jobs: $named. Pass the full id, or <host folder>/<id> as listed."
+    }
     return $hits[0]
 }
 
@@ -534,7 +547,13 @@ function Invoke-Submit {
         $queued = @()
         $attached = @()
         $stamp = [datetime]::UtcNow.ToString('yyyyMMdd-HHmmss')
-        $sequence = @($jobs | Where-Object { $_.id -like "$stamp-*" }).Count
+        # Count this second's ids in every host folder, not just this one: wait and cancel look an id up across all
+        # hosts, so an id must be unique queue-wide. Submits to two hosts hold different locks, so two submits in the
+        # same second can still race; Find-JobFile accepts <host>/<id> for that case and for ids from before this rule.
+        $sequence = @(Get-ChildItem -LiteralPath $QueueRoot -Directory | ForEach-Object {
+                $jobsDir = Join-Path $_.FullName 'jobs'
+                if (Test-Path -LiteralPath $jobsDir) { Get-ChildItem -LiteralPath $jobsDir -Filter "$stamp-*.json" -File }
+            }).Count
         foreach ($testName in $Test) {
             $argsKey = Get-Hash "$($hostInfo.Suffix)|$Model|$testName|$argsText|$envText|$($RepoRoot.ToLowerInvariant())|$pinnedSha"
             for ($index = 1; $index -le $Repeats; $index++) {

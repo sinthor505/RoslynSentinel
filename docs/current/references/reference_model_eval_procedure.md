@@ -211,6 +211,9 @@ runs jobs one at a time per host and shows every session what is running and wai
 - `-Model`, `-Session` (first line of `ListAgents`) and `-Purpose` are required.
 - `wait` prints each job's state, results folder (`ModelTestingResults\<host>\<TestName>\<timestamp>\`)
   and log. Exit code 0 = all passed, 1 = a run finished with failing tests, 2 = anything else.
+- Job ids are unique across hosts from 2026-11-20 on; older ids can repeat on two hosts. `wait` and `cancel`
+  accept `<host folder>/<id>` (for example `http___192_168_1_113_8888_v1/20261120-072518-001`, or `113/<id>` for
+  an alias host); a duplicate id is refused with the `<host folder>/<id>` forms listed.
 - `-Commit <rev>` (default `HEAD`) pins the job to one full commit sha. A repo with uncommitted source
   changes (`*.cs`, project and solution files) is refused unless `-Commit` is given; the refusal lists the
   first dirty paths. Commit them first, or pass `-Commit HEAD` to test the committed tree. Uncommitted
