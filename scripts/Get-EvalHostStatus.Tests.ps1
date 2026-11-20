@@ -165,7 +165,8 @@ try {
     Assert-That (($null -ne $qLlama.Queue) -and ($qLlama.Queue.QueuedCount -eq 1) -and ($queued.Count -eq 1)) 'queue row: queued count 1 on the m1 endpoint folder (host-leaf fallback)'
     Assert-That (($queued.Count -eq 1) -and ($queued[0].Id -eq $jobId) -and (@($queued[0].Sessions) -contains 'status-test-s1')) 'queue row: the queued job id and its session are shown'
     Assert-That (($qLlama.Queue.WorkerAlive -eq $false) -and (@($qLlama.Queue.Active).Count -eq 0)) 'queue row: no worker, nothing building or running'
-    Assert-That ($null -eq $qLms.Queue) 'queue row: the LM Studio endpoint has no folder, so queue is null'
+    # The queue is per machine (Step 11): the LM Studio endpoint of machine m1 shows the same machine queue.
+    Assert-That (($null -ne $qLms.Queue) -and ($qLms.Queue.QueuedCount -eq 1)) 'queue row: the other endpoint of machine m1 shows the machine queue (queued count 1)'
 
     $qPlain = Invoke-Status @('-TablePath', $tablePath, '-QueueRoot', $queueRoot, '-TimeoutSec', '3')
     Assert-That (($qPlain.Code -eq 0) -and ($qPlain.Text -match [regex]::Escape($jobId)) -and ($qPlain.Text -match 'queued 1') -and ($qPlain.Text -match 'Machine m1:')) 'default queue output: machine line and table name the queued job and its count'

@@ -9,13 +9,13 @@
     -SkipQueue is given. The queue read is what 'status' always does: it marks Building/Running jobs whose worker has
     gone as Crashed.
 
-    Queue folders are one per endpoint (named by the endpoint's suffix). Snapshots are grouped by machine: the
-    snapshot's 'machine' field when the queue script emits it, otherwise the entry whose suffix equals the folder name,
-    otherwise the folder name itself.
+    Queue folders are one per machine. Snapshots are grouped by machine: the snapshot's 'machine' field when the queue
+    script emits it, otherwise the entry whose suffix equals the folder name, otherwise the folder name itself. Every
+    endpoint row shows the queue state of its machine, so two endpoints of one machine show the same queue.
 
     Output: one row per endpoint with machine, alias, backend, baseUrl, default, reachable, loaded (ids with state
-    true; empty when the host reports no state), contextLength (of the first loaded entry), error and queue (that
-    endpoint's queue folder, or null when it has none). -Json prints the rows as a JSON array. Default output is a
+    true; empty when the host reports no state), contextLength (of the first loaded entry), error and queue (the queue
+    state of its machine: workerAlive, Active jobs, QueuedCount and Queued, or null when the machine has no queue folder). -Json prints the rows as a JSON array. Default output is a
     table plus one line per machine for its queue.
 
     Exit code: 0 whether or not hosts answer; 2 when a -Machine key is not in the table.
@@ -152,6 +152,25 @@ if (-not $SkipQueue -and -not $queueError) {
     }
 }
 
+# The queue state of one machine: every snapshot folder that maps to it (the machine's own folder and any legacy
+# folder of the same machine) merged into one view. Folder is the machine's own folder when there is one.
+function Get-MachineQueueView([string]$Machine) {
+    $views = @($queueViews | Where-Object { $_.Machine -eq $Machine })
+    if ($views.Count -eq 0) { return $null }
+    $ordered = @($views | Where-Object { $_.Folder -eq $Machine }) + @($views | Where-Object { $_.Folder -ne $Machine })
+    $queued = @($views | ForEach-Object { $_.Queued })
+    [pscustomobject]@{
+        Folder        = $ordered[0].Folder
+        Machine       = $Machine
+        Error         = $null
+        WorkerAlive   = [bool](@($views | Where-Object { $_.WorkerAlive }).Count -gt 0)
+        WorkerWaiting = [bool](@($views | Where-Object { $_.WorkerWaiting }).Count -gt 0)
+        Active        = @($views | ForEach-Object { $_.Active })
+        QueuedCount   = $queued.Count
+        Queued        = $queued
+    }
+}
+
 # ---- rows: one per endpoint ----
 $rows = @(foreach ($e in $entries) {
     $res = $probeByAlias[$e.Alias]
@@ -163,7 +182,7 @@ $rows = @(foreach ($e in $entries) {
         $queue = [pscustomobject]@{ Error = $queueError }
     }
     else {
-        $queue = $queueViews | Where-Object { $_.Folder -eq $e.Suffix } | Select-Object -First 1
+        $queue = Get-MachineQueueView $e.Machine
     }
     [pscustomobject]@{
         Machine       = $e.Machine

@@ -20,6 +20,12 @@
               commit, host, model, test, arguments and ROSLYNSENTINEL_* variables) attaches to that job
               instead of queuing a second run; -Force queues it anyway.
       status  Shows the running job, the queue in order and recent jobs. -HostAddress limits it to one machine.
+              -Session <name> keeps only the jobs that session is on; -ActiveOnly keeps Queued, Building and
+              Running jobs and drops the recent-jobs lines. Both also filter -Json: machines with no matching job
+              are left out. Without either switch the output is unchanged.
+      hosts   Eval host status: every endpoint of scripts\eval-hosts.json with reachability, loaded models and the
+              queue state of its machine (scripts\Get-EvalHostStatus.ps1; -Json, -QueueRoot and -HostTablePath are
+              passed through). Exit code 0.
       wait    -Id <id>[,<id>...]. Blocks until those jobs end, then prints state, results folder and log.
               Run it in the background to be woken when the run is done.
               Exit code: 0 all passed, 1 a run finished with failing tests, 2 anything else.
@@ -77,6 +83,8 @@
       Every job the worker ends (Finished, Crashed, TimedOut, Cancelled, BuildFailed, Refused, TreeChanged) gets
       one row in ModelTestingResults\<suffix>\runs.csv under its results base (scripts\roslynsentinel-evalruns.ps1).
       A job cancelled while still Queued has no worker and gets no row.
+      Columns: jobId, machine, host, baseUrl, backend, test, model, sessions ('+' joined), purpose, pinnedCommit,
+      state, passed, startedUtc, endedUtc, durationSeconds, reason, runFolders (';' joined).
 
 .PARAMETER HostAddress
     A table entry alias (for example 85u or 112lms), a machine key (112, 113, 85: the machine's default
@@ -91,6 +99,13 @@
 
 .PARAMETER Session
     Your session name (first line of ListAgents). Shown in status; only this session can cancel the job.
+    Checked at submit against live sessions (a warning, never a refusal). status: keeps only the jobs of this session.
+
+.PARAMETER ActiveOnly
+    status only: keep Queued, Building and Running jobs and drop the recent-jobs lines.
+
+.PARAMETER SessionsDir
+    Test seam: folder of the Claude Code session files (name, pid) read at submit. Default: ~/.claude/sessions.
 
 .PARAMETER Purpose
     One sentence saying why the run is wanted. Shown to other sessions in status.
@@ -147,7 +162,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0, Mandatory)]
-    [ValidateSet('submit', 'status', 'wait', 'cancel', 'start', 'worker')]
+    [ValidateSet('submit', 'status', 'wait', 'cancel', 'start', 'worker', 'hosts')]
     [string]$Command,
 
     [string]$HostAddress,
@@ -172,7 +187,9 @@ param(
     [string]$RepoRoot,
     [string]$EvalScript,
     [string]$HostTablePath,
-    [switch]$SkipHostCheck
+    [switch]$SkipHostCheck,
+    [switch]$ActiveOnly,
+    [string]$SessionsDir
 )
 
 $ErrorActionPreference = 'Stop'
@@ -197,6 +214,7 @@ if (-not $EvalScript) { $EvalScript = Join-Path $PSScriptRoot 'roslynsentinel-mo
 if (-not $QueueRoot) { $QueueRoot = $env:ROSLYNSENTINEL_EVALQUEUE_ROOT }
 if (-not $QueueRoot) { $QueueRoot = Join-Path $env:LOCALAPPDATA 'RoslynSentinel\evalqueue' }
 $QueueRoot = [System.IO.Path]::GetFullPath($QueueRoot).TrimEnd('\')
+if (-not $SessionsDir) { $SessionsDir = Join-Path $HOME '.claude\sessions' }
 # 'pwsh -File ... -Id a,b' passes the single string 'a,b'; an in-process '&' call passes an array. Accept both.
 if ($Id) { $Id = @($Id | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ }) }
 
@@ -539,11 +557,31 @@ function Write-JobDetail($Job) {
 # submit
 # ---------------------------------------------------------------------------------------------------
 
+# Names of the live Claude Code sessions: the name of each file in $SessionsDir whose pid is still running.
+# Fail-soft: a file that cannot be read or parsed contributes nothing; a missing folder gives an empty list.
+function Get-LiveSessionNames {
+    if (-not (Test-Path -LiteralPath $SessionsDir -PathType Container)) { return @() }
+    $names = @()
+    foreach ($file in @(Get-ChildItem -LiteralPath $SessionsDir -Filter '*.json' -File -ErrorAction SilentlyContinue)) {
+        try {
+            $info = Get-Content -LiteralPath $file.FullName -Raw -ErrorAction Stop | ConvertFrom-Json
+            if ($info.name -and $info.pid -and (Get-Process -Id ([int]$info.pid) -ErrorAction SilentlyContinue)) { $names += [string]$info.name }
+        }
+        catch { continue }
+    }
+    return @($names | Select-Object -Unique)
+}
+
 function Invoke-Submit {
     foreach ($required in @('HostAddress', 'Test', 'Model', 'Session', 'Purpose')) {
         if (-not (Get-Variable -Name $required -ValueOnly)) {
             Stop-EvalQueue "submit needs -$required. Example: submit -HostAddress 113 -Test LiteralSteps -Model <model key> -Session <your session name> -Purpose '<why>'."
         }
+    }
+    # A session name that no live Claude Code session carries is most likely a typo: warn, never refuse.
+    $liveNames = @(Get-LiveSessionNames)
+    if ($liveNames.Count -gt 0 -and $Session -notin $liveNames) {
+        Write-Warning "Session '$Session' is not one of the live sessions ($($liveNames -join ', ')). The job is queued anyway; check the name with ListAgents."
     }
     # Pin the job to one commit. Uncommitted changes cannot be tested through the queue: the job runs from a
     # checkout of the commit, never from the working tree.
@@ -751,13 +789,32 @@ function Get-HostSnapshot([string]$HostDir) {
     }
 }
 
+# status filters. -Session keeps a job whose sessions include the name (or whose older 'session' string is it);
+# -ActiveOnly keeps the jobs that have not ended.
+function Test-StatusJob($Job) {
+    if ($Session -and -not ((@($Job.sessions) -contains $Session) -or ([string]$Job.session -eq $Session))) { return $false }
+    if ($ActiveOnly -and $Job.state -notin @('Queued', 'Building', 'Running')) { return $false }
+    return $true
+}
+
 function Invoke-Status {
     $hostDirs = @()
     if ($HostAddress) { $hostDirs = @(Get-HostDir (Resolve-EvalHost $HostAddress)) }
     elseif (Test-Path -LiteralPath $QueueRoot) { $hostDirs = @(Get-ChildItem -LiteralPath $QueueRoot -Directory | ForEach-Object FullName) }
-    $snapshots = @(foreach ($dir in $hostDirs) { Get-HostSnapshot $dir })
+    $allSnapshots = @(foreach ($dir in $hostDirs) { Get-HostSnapshot $dir })
+    $snapshots = $allSnapshots
+    if ($Session -or $ActiveOnly) {
+        # A machine with no matching job is left out; the others keep only their matching jobs.
+        $snapshots = @(foreach ($snapshot in $allSnapshots) {
+                $kept = @($snapshot.jobs | Where-Object { Test-StatusJob $_ })
+                if ($kept.Count -gt 0) {
+                    [pscustomobject]@{ host = $snapshot.host; machine = $snapshot.machine; workerAlive = $snapshot.workerAlive; worker = $snapshot.worker; jobs = $kept }
+                }
+            })
+    }
     if ($Json) { ConvertTo-Json -InputObject $snapshots -Depth 7; return }
-    if ($snapshots.Count -eq 0) { Write-Output "No eval queue exists yet under $QueueRoot (nothing has been submitted)."; return }
+    if ($allSnapshots.Count -eq 0) { Write-Output "No eval queue exists yet under $QueueRoot (nothing has been submitted)."; return }
+    if ($snapshots.Count -eq 0) { Write-Output 'no matching jobs'; return }
     foreach ($snapshot in $snapshots) {
         $jobs = @($snapshot.jobs)
         $queued = Get-QueuedInOrder $jobs
@@ -777,10 +834,21 @@ function Invoke-Status {
         foreach ($job in @($jobs | Where-Object { $_.state -in @('Building', 'Running') })) { Write-Output (Format-JobLine $job $schedule $jobs); $shown++ }
         foreach ($job in $queued) { Write-Output (Format-JobLine $job $schedule $jobs); $shown++ }
         if ($shown -eq 0) { Write-Output '  nothing running or queued' }
-        foreach ($job in @($jobs | Where-Object { $_.state -in $terminalStates } | Select-Object -Last 5)) {
-            Write-Output (Format-JobLine $job $schedule $jobs)
+        if (-not $ActiveOnly) {
+            foreach ($job in @($jobs | Where-Object { $_.state -in $terminalStates } | Select-Object -Last 5)) {
+                Write-Output (Format-JobLine $job $schedule $jobs)
+            }
         }
     }
+}
+
+# 'hosts' does the work in Get-EvalHostStatus.ps1, which reads the queue with 'status -Json' in a child process.
+# That child runs 'status', never 'hosts', so there is no loop.
+function Invoke-Hosts {
+    $hostArgs = @{ QueueRoot = $QueueRoot }
+    if ($HostTablePath) { $hostArgs['TablePath'] = $HostTablePath }
+    if ($Json) { $hostArgs['Json'] = $true }
+    & (Join-Path $PSScriptRoot 'Get-EvalHostStatus.ps1') @hostArgs
 }
 
 function Invoke-Start {
@@ -1285,6 +1353,7 @@ try {
     switch ($Command) {
         'submit' { Invoke-Submit }
         'status' { Invoke-Status }
+        'hosts' { Invoke-Hosts }
         'wait' { Invoke-Wait }
         'cancel' { Invoke-Cancel }
         'start' { Invoke-Start }
