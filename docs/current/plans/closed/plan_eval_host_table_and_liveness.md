@@ -1,10 +1,10 @@
 # Plan: one eval-host table, a host liveness probe, a per-machine queue key and a run index
 
-**Status:** IN PROGRESS 2026-11-20. Steps 1-10 and 12 done (04fab1df, 986f1b29, 9737c57d, 1ea220f7, 68ed4226, af39ed7b, 6f5d36bb, 56c553b2, 0b330595, b7e9b306, 9ab2182d); Steps 11, 13-15 wait for H3 (idle queues).
+**Status:** IMPLEMENTED 2026-11-20. 04fab1df, 986f1b29, 9737c57d, 1ea220f7, 68ed4226, af39ed7b, 6f5d36bb, 56c553b2, 0b330595, b7e9b306, 9ab2182d, dffc3440, 30432fdd, de228ee0, 8ccccff0. Live check at 8ccccff0: PROBE/REFUSE/BARE/LIVE/SKIP/PAUSE OK; SERIAL and ROUTER untested live (Risks 2).
 
 ## Problem
 
-Implements [proposal_eval_host_table_and_liveness.md](../proposals/proposal_eval_host_table_and_liveness.md);
+Implements [proposal_eval_host_table_and_liveness.md](../../proposals/closed/proposal_eval_host_table_and_liveness.md);
 read its Motivation for the full case. Evidence below was re-verified against source on 2026-11-20
 (after 83ca88dc / d46c368a changed `roslynsentinel-evalqueue.ps1`); where the proposal's anchor was off,
 the corrected one is given. `evalqueue.ps1` anchors are HEAD-based as first read; another session's uncommitted
@@ -560,6 +560,7 @@ Step 12 (docs) is H1 and may move to any earlier slot; if it does, Step 11 runs 
 - Lane: `implementer` (2 files, about 5 edits, 1 acceptance).
 
 ### Step 11 - Queue keyed by machine, with harness and tests (queue-touching; worktree; H3)
+- Done: dffc3440 (built on branch plan/eval-host-queue, fast-forwarded to master at H3)
 - Files: `scripts/roslynsentinel-evalqueue.ps1`, `scripts/roslynsentinel-evalqueue.TestHarness.ps1` (new,
   dot-sourced by Steps 11, 13 and 14), `scripts/roslynsentinel-evalqueue.Hosts.Tests.ps1` (new). 3 files, about 26
   edits (about 24 coupled queue edits plus 2 writes). The existing `roslynsentinel-evalqueue.Tests.ps1` is not edited.
@@ -652,6 +653,7 @@ Step 12 (docs) is H1 and may move to any earlier slot; if it does, Step 11 runs 
 - Lane: `implementer` (3 files, about 12 edits, 1 acceptance).
 
 ### Step 13 - Worker preflight, `Refused` state and index call site, with tests (queue-touching; worktree; H3)
+- Done: 30432fdd (TreeChanged jobs are indexed too)
 - Files: `scripts/roslynsentinel-evalqueue.ps1`, `scripts/roslynsentinel-evalqueue.Preflight.Tests.ps1` (new,
   dot-sources the Step 11 harness). 2 files, about 10 edits (borderline for tier 1; see the lane line).
 - Depends on: 5, 11. Pairs with: none (same file as Steps 11 and 14). Hold point: H3, fresh worktree off the commit of
@@ -693,6 +695,7 @@ Step 12 (docs) is H1 and may move to any earlier slot; if it does, Step 11 runs 
   into a `test-writer` dispatch in the same worktree; the commit is still one.
 
 ### Step 14 - Hosts command, status filters, session warning, with tests (queue-touching; worktree; H3)
+- Done: de228ee0 (plus one Get-EvalHostStatus.Tests assertion for machine-keyed rows); docs notes removed 8ccccff0
 - Files: `scripts/roslynsentinel-evalqueue.ps1`, `scripts/roslynsentinel-evalqueue.Visibility.Tests.ps1` (new,
   dot-sources the Step 11 harness). 2 files, about 11 edits.
 - Depends on: 4, 13. Pairs with: none (same file as Step 13). Hold point: H3, fresh worktree off the commit of Step 13.
@@ -722,6 +725,12 @@ Step 12 (docs) is H1 and may move to any earlier slot; if it does, Step 11 runs 
 - Lane: `implementer` (2 files, about 11 edits, 1 acceptance).
 
 ### Step 15 - LIVE verification and closing (dispatcher; no implementer)
+- Done 2026-11-20 at 8ccccff0: PROBE-OK, PROBE-TIMEOUT-OK (LM Studio :1234 down on all three, 5 s timeout, 11 s total);
+  LIVE-OK (job 20261120-104053-001, 6/6 passed, ContextLength 70000, runs.csv row with pinned commit, no load-status
+  warnings); REFUSE-OK (20261120-104052-001); BARE-OK (bare 85 attached to the 85u job); SKIP-OK (85u job 104203 ran
+  while dead 85lms job 104202 stayed Queued); PAUSE-OK (worker "waiting: the host has not answered", job kept Queued,
+  then cancelled). SERIAL skipped (LM Studio unreachable); ROUTER skipped (owner away; risks a VRAM swap). Stub sweep
+  empty, leftovers gone, Build 0 errors; full default-project run at 71520aed 0 failures; 7 Pester scripts green on master.
 - Files: none changed except `docs/current/plans/plan_eval_host_table_and_liveness.md` (Status) and the `ProjectDoc`
   moves. Needs the owner's hosts and one short model run; use `evalqueue` (not a direct `modeleval.ps1` run) and a
   loaded model per `Get-EvalHostStatus.ps1 -Json`.

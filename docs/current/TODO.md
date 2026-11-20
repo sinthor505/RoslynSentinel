@@ -13,7 +13,6 @@ Blocking or in-flight slices.
 Committed, not started.
 
 
-- [OPEN] Eval host table, liveness probe and run index (2026-11-20) - one `scripts/eval-hosts.json` (LM Studio :1234 and Unsloth :8888 on 85/112/113, backend field) read by every eval script and both archivers; `Get-EvalHostStatus.ps1` plus `evalqueue hosts` report reachability, loaded model and queue owner in one call; queue keyed by machine so two endpoints cannot load one GPU; worker appends `runs.csv` (job, session, commit, model, folders); `status -Session/-ActiveOnly`; owner agreed direction, write the plan in a fresh session - [proposal](proposals/proposal_eval_host_table_and_liveness.md)
 
 - [OPEN] Retire the unpinned evalqueue path (2026-11-20) - once no job file without `pinnedCommit` remains in any queue folder, remove the legacy fingerprint/`TreeChanged` dispatch path and the deprecated `-OnTreeChange` parameter (code `# TODO remove the unpinned path` in `scripts/roslynsentinel-evalqueue.ps1`); Small - [plan](plans/closed/plan_pinned_eval_checkouts.md)
 

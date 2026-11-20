@@ -1,6 +1,6 @@
 # One eval-host table, a host liveness probe, a per-machine queue key and a run index
 
-**Status:** PROPOSED 2026-11-20. Owner agreed the direction (host table, liveness probe, runs.csv index); needs a plan in a fresh session.
+**Status:** IMPLEMENTED 2026-11-20 by plans/closed/plan_eval_host_table_and_liveness.md (8ccccff0). Open questions settled in that plan's Decision section.
 
 ## Motivation
 
@@ -102,7 +102,7 @@ moving result folders.
 
 ## Related
 
-- [plan_pinned_eval_checkouts.md](../plans/closed/plan_pinned_eval_checkouts.md) (pinned checkouts, `ROSLYNSENTINEL_RESULTS_ROOT`)
-- [reference_model_eval_procedure.md](../references/reference_model_eval_procedure.md)
-- [reference_autonomous_run_conventions.md](../references/reference_autonomous_run_conventions.md)
+- [plan_pinned_eval_checkouts.md](../../plans/closed/plan_pinned_eval_checkouts.md) (pinned checkouts, `ROSLYNSENTINEL_RESULTS_ROOT`)
+- [reference_model_eval_procedure.md](../../references/reference_model_eval_procedure.md)
+- [reference_autonomous_run_conventions.md](../../references/reference_autonomous_run_conventions.md)
 - `reference_lmstudio_loaded_models_endpoint.md`

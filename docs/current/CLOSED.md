@@ -8,6 +8,18 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Eval host table, liveness probe and run index - resolved (2026-11-20)
+
+Eval host table, liveness probe and run index (2026-11-20) - one `scripts/eval-hosts.json` (LM Studio :1234 and Unsloth :8888 on 85/112/113, backend field) read by every eval script and both archivers; `Get-EvalHostStatus.ps1` plus `evalqueue hosts` report reachability, loaded model and queue owner in one call; queue keyed by machine so two endpoints cannot load one GPU; worker appends `runs.csv` (job, session, commit, model, folders); `status -Session/-ActiveOnly`; owner agreed direction, write the plan in a fresh session - [proposal](proposals/closed/proposal_eval_host_table_and_liveness.md)
+
+Evidence: IMPLEMENTED 2026-11-20 by plans/closed/plan_eval_host_table_and_liveness.md (8ccccff0). Open questions settled in that plan's Decision section.
+
+## Plan: one eval-host table, a host liveness probe, a per-machine queue key and a run index - resolved (2026-11-20)
+
+Plan: one eval-host table, a host liveness probe, a per-machine queue key and a run index - [doc](plans/closed/plan_eval_host_table_and_liveness.md)
+
+Evidence: IMPLEMENTED 2026-11-20. 04fab1df, 986f1b29, 9737c57d, 1ea220f7, 68ed4226, af39ed7b, 6f5d36bb, 56c553b2, 0b330595, b7e9b306, 9ab2182d, dffc3440, 30432fdd, de228ee0, 8ccccff0. Live check at 8ccccff0: PROBE/REFUSE/BARE/LIVE/SKIP/PAUSE OK; SERIAL and ROUTER untested live (Risks 2).
+
 ## Pinned eval checkouts - resolved (2026-11-20)
 
 Pinned eval checkouts (2026-11-19) - evalqueue pins each job to a commit at submit and runs it from its own checkout outside the repo, results kept central, TreeChanged retired migration-first; built 2026-11-19/20 - [plan](plans/closed/plan_pinned_eval_checkouts.md)
