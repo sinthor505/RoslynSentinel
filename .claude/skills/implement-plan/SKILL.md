@@ -27,7 +27,8 @@ CLAUDE.md applies throughout.
     a new `[McpServerToolType]` (live check only via `LaunchTestInstance` this session), live-window steps;
   - size: fits implementer tier D1 or S0 (`.claude/implementer-tiers.json`), or needs `implementer-senior`;
   - parallel-ready (the "Steps" comment in `templates/plan.md`): real prerequisites, disjoint files for
-    pairs, text-neutral vs behaviour-changing; propose the two-lane slice map and the text-neutral-first order;
+    pairs, text-neutral vs behaviour-changing; propose the two-lane slice map and the text-neutral-first order,
+    pairing each separate test step with the following independent slice (`dispatch-implementer`, "Pipeline");
   - new code: a contract-skeleton first step and a closing stub sweep (`plan-writer` skill, section 2);
   - open questions, each with options and a recommendation.
   Also: another plan or session that needs a baseline before this plan's behaviour changes (an A/B eval)?

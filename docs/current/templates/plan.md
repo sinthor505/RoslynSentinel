@@ -20,6 +20,8 @@
      - Slices meant to run as a pair touch disjoint files. A large file with many sites gets a prep slice that adds
        shared factories, so the sites become one mechanical sweep rather than many sequential slices.
      - New tests go in per-slice test files; update shared pinned assertions in one slice.
+     - A separate test step depends only on the slice it tests and pairs with the next independent slice
+       ("Pairs with: Step N+1"), so tests for one slice are written while the next is implemented.
      - Mark each slice text-neutral (new members with no callers, consumer fixes) or behaviour-changing (wire text,
        output shape) and schedule text-neutral slices first, so a hold (another plan's A/B baseline, a review)
        does not idle the run. Name any cross-plan baseline dependency in Risks.

@@ -90,6 +90,11 @@ Implementers never run tests; dispatchers run them in the background so no slice
 - **Code and its tests in one dispatch** when the test file fits in the tier's `Files:` limit: list the
   test file and name the tests to add/invert in `Symbols:`. A separate `test-writer` dispatch only when
   the tests would exceed the limit or need new fixture design.
+- **Pipeline a separate test dispatch.** Once slice N is committed, pair its `test-writer` with the next
+  independent implementation slice N+1 (the test project and the source project are disjoint, preferably
+  different projects), not one after the other. Condition: N+1 does not change the behaviour N's tests
+  pin (schedule text-neutral slices first). Also split tests off a slice when that turns a lone dispatch
+  into such a pair: two agents roughly double throughput, one combined agent stays sequential.
 - **Implementer acceptance is a clean `Build` only** (0 errors). Its report lists the test classes it
   added or touched (plus any tests the slice inverts). Write `Acceptance: clean Build` in the brief.
 - **Per slice, the dispatcher** (orchestrator, or the main session in Direct mode) commits the green
