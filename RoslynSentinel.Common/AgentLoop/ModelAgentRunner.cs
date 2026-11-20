@@ -65,7 +65,7 @@ public sealed class ModelAgentRunner
     /// never implausible: the reasoning replay window and loop-assist collapsing both shorten the prompt.
     /// </summary>
     internal static bool IsUsageJumpImplausible(int previousTotal, int reportedTotal, int estimatedGrowthTokens) =>
-        previousTotal > 0 && reportedTotal - previousTotal > 2 * estimatedGrowthTokens + UsageJumpSlackTokens;
+        previousTotal > 0 && reportedTotal - previousTotal > (2 * estimatedGrowthTokens) + UsageJumpSlackTokens;
 
     /// <summary>Chars-based token estimate of one message: text, reasoning and tool-call names and arguments.</summary>
     internal static int EstimateMessageTokens(AgentChatMessage message)

@@ -272,7 +272,7 @@ public class RunnerToolHostTests
             ScriptedModelHandler.FinalMessageSse("must never be requested"));
         var runner = NewRunner(model, host);
 
-        await Assert.CatchAsync<OperationCanceledException>(() => runner.RunAsync("system", "user", _runDirectory, cancellation.Token));
+        await Assert.CatchAsync<OperationCanceledException>(async () => await runner.RunAsync("system", "user", _runDirectory, cancellation.Token));
 
         var transcriptPath = Path.Combine(_runDirectory, "transcript.json");
         Assert.That(File.Exists(transcriptPath), Is.True, "the cancelled run still leaves transcript.json behind");
@@ -384,9 +384,15 @@ public class RunnerToolHostTests
     /// <summary>In-memory tool host: lists one tool and returns a fixed raw result, recording the last call it saw.</summary>
     private sealed class FakeToolHost(string toolName, CallToolResult result) : IAgentToolHost
     {
-        public string? LastToolName { get; private set; }
+        public string? LastToolName
+        {
+            get; private set;
+        }
 
-        public IReadOnlyDictionary<string, object?>? LastArguments { get; private set; }
+        public IReadOnlyDictionary<string, object?>? LastArguments
+        {
+            get; private set;
+        }
 
         public Task<IReadOnlyList<AgentToolDefinition>> ListToolsAsync(CancellationToken cancellationToken)
         {

@@ -1,7 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Engines.Advanced;
-using RoslynSentinel.Engines.Basic;
 
 #pragma warning disable CS8618
 
@@ -671,7 +670,7 @@ public class AsyncBatchEngineFlagOutcomeTests
         Assert.That(result.Uplifted.Select(u => u.CallerAsyncMethod), Is.All.EqualTo("RunAsync"));
 
         var onDisk = File.ReadAllText(Path.Combine(_tempDir, "TripService.cs")).Replace("\r\n", "\n");
-        Assert.That(System.Text.RegularExpressions.Regex.Matches(onDisk, @"async Task<int> RunAsync\(").Count, Is.EqualTo(2),
+        Assert.That(System.Text.RegularExpressions.Regex.Count(onDisk, @"async Task<int> RunAsync\("), Is.EqualTo(2),
             "Each caller class must gain its own RunAsync overload.");
         Assert.That(onDisk, Does.Contain("await service.LoadTripsAsync(1, cancellationToken)"));
         Assert.That(onDisk, Does.Contain("await service.LoadTripsAsync(2, cancellationToken)"));
@@ -882,7 +881,7 @@ public class AsyncBatchEngineFlagOutcomeTests
                 }
             }
             """.Replace("\r\n", "\n")), "The other class's GetTripsAsync must be untouched.");
-        Assert.That(System.Text.RegularExpressions.Regex.Matches(onDisk, @"Task<int> GetTripsAsync\(").Count, Is.EqualTo(2),
+        Assert.That(System.Text.RegularExpressions.Regex.Count(onDisk, @"Task<int> GetTripsAsync\("), Is.EqualTo(2),
             "TripService must gain its own GetTripsAsync.");
     }
 
@@ -923,7 +922,7 @@ public class AsyncBatchEngineFlagOutcomeTests
         Assert.That(result.Skipped, Is.Empty, string.Join("; ", result.Skipped.Select(s => s.Reason)));
         Assert.That(result.Applied, Has.Count.EqualTo(2));
         var onDisk = File.ReadAllText(Path.Combine(_tempDir, "TripService.cs")).Replace("\r\n", "\n");
-        Assert.That(System.Text.RegularExpressions.Regex.Matches(onDisk, @"async Task<int> GetTripsAsync\(").Count, Is.EqualTo(2),
+        Assert.That(System.Text.RegularExpressions.Regex.Count(onDisk, @"async Task<int> GetTripsAsync\("), Is.EqualTo(2),
             "Each class must gain its own GetTripsAsync overload.");
     }
 
@@ -976,7 +975,7 @@ public class AsyncBatchEngineFlagOutcomeTests
         Assert.That(result.Skipped, Is.Empty, string.Join("; ", result.Skipped.Select(s => s.Reason)));
         Assert.That(result.Applied, Has.Count.EqualTo(2));
         var onDisk = File.ReadAllText(Path.Combine(_tempDir, "TripService.cs")).Replace("\r\n", "\n");
-        Assert.That(System.Text.RegularExpressions.Regex.Matches(onDisk, @"GetTripsAsync\(int companyId, CancellationToken cancellationToken = default\)").Count, Is.EqualTo(2),
+        Assert.That(System.Text.RegularExpressions.Regex.Count(onDisk, @"GetTripsAsync\(int companyId, CancellationToken cancellationToken = default\)"), Is.EqualTo(2),
             "Both classes' GetTripsAsync must gain a CancellationToken parameter.");
     }
 }

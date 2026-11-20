@@ -27,10 +27,12 @@ public sealed class LmStudioAgentClient
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<LmStudioAgentClient> _logger;
-    private readonly string _model;
 
     /// <summary>The LM Studio model key this client targets (the per-instance value passed to the constructor).</summary>
-    public string Model => _model;
+    public string Model
+    {
+        get;
+    }
 
     /// <summary>
     /// The backend of the host this client talks to, from <see cref="EvalHostTable.BackendFor(string)"/>:
@@ -38,20 +40,24 @@ public sealed class LmStudioAgentClient
     /// instance, not read from the static <see cref="LlmOptions.BaseUrl"/>, so clients aimed at different hosts
     /// in one process each keep their own answer.
     /// </summary>
-    public string Backend { get; }
+    public string Backend
+    {
+        get;
+    }
 
     private readonly Task _loadedModelStatusCheck;
     private readonly SemaphoreSlim _contextLengthLock = new(1, 1);
     private int _cachedContextLength;
     private ModelLoadSettings? _cachedLoadSettings;
 
-    private SamplerSettings? _reportedSampler;
-
     /// <summary>
     /// The sampler values LM Studio echoed in the FIRST completed response of this client; null until a response
     /// that echoed at least one of temperature/top_p/presence_penalty/frequency_penalty arrives.
     /// </summary>
-    public SamplerSettings? ReportedSampler => _reportedSampler;
+    public SamplerSettings? ReportedSampler
+    {
+        get; private set;
+    }
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -77,7 +83,7 @@ public sealed class LmStudioAgentClient
     {
         _httpClient = httpClient;
         _logger = logger;
-        _model = string.IsNullOrWhiteSpace(model)
+        Model = string.IsNullOrWhiteSpace(model)
             ? throw new ArgumentException(
                 "model must be a non-empty LM Studio model name (the name of the loaded model, as shown by LM Studio).",
                 nameof(model))
@@ -87,7 +93,7 @@ public sealed class LmStudioAgentClient
             ? EvalHostTable.BackendFor(baseAddress.ToString())
             : EvalHostTable.BackendLmStudio;
 
-        _logger.LogInformation("LM Studio agent client targeting model {Model} at {BaseAddress}", _model, httpClient.BaseAddress);
+        _logger.LogInformation("LM Studio agent client targeting model {Model} at {BaseAddress}", Model, httpClient.BaseAddress);
         _loadedModelStatusCheck = LogLoadedModelStatusAsync();
     }
 
@@ -119,28 +125,28 @@ public sealed class LmStudioAgentClient
                 }
 
                 var models = LlamaServerModels.Parse(listedText);
-                var listedEntry = LlamaServerModels.FindListed(models, _model);
-                if (LlamaServerModels.FindLoaded(models, _model) is not null)
+                var listedEntry = LlamaServerModels.FindListed(models, Model);
+                if (LlamaServerModels.FindLoaded(models, Model) is not null)
                 {
-                    _logger.LogInformation("Confirmed {Model} is loaded on llama-server.", _model);
+                    _logger.LogInformation("Confirmed {Model} is loaded on llama-server.", Model);
                 }
                 else if (listedEntry is { Loaded: false })
                 {
                     _logger.LogWarning(
                         "Configured model {Model} is listed by llama-server but not loaded - requests will fail until it is loaded.",
-                        _model);
+                        Model);
                 }
                 else if (listedEntry is { Loaded: null })
                 {
                     _logger.LogInformation(
                         "Configured model {Model} is listed by llama-server, which reports no load state for it.",
-                        _model);
+                        Model);
                 }
                 else
                 {
                     _logger.LogWarning(
                         "Configured model {Model} was not found in llama-server's model list at all - check ROSLYNSENTINEL_LLM_MODEL/--llm-model for a typo.",
-                        _model);
+                        Model);
                 }
 
                 return;
@@ -162,23 +168,23 @@ public sealed class LmStudioAgentClient
             using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             var match = doc.RootElement.GetProperty("models").EnumerateArray()
                 .FirstOrDefault(m => string.Equals(
-                    m.TryGetProperty("key", out var k) ? k.GetString() : null, _model, StringComparison.Ordinal));
+                    m.TryGetProperty("key", out var k) ? k.GetString() : null, Model, StringComparison.Ordinal));
 
             if (match.ValueKind != JsonValueKind.Object)
             {
                 _logger.LogWarning(
                     "Configured model {Model} was not found in LM Studio's model list at all - check ROSLYNSENTINEL_LLM_MODEL/--llm-model for a typo.",
-                    _model);
+                    Model);
             }
             else if (!match.TryGetProperty("loaded_instances", out var instances) || instances.GetArrayLength() == 0)
             {
                 _logger.LogWarning(
                     "Configured model {Model} is known to LM Studio but has no loaded instance - requests will fail or LM Studio will need to load it on demand.",
-                    _model);
+                    Model);
             }
             else
             {
-                _logger.LogInformation("Confirmed {Model} has a loaded instance on LM Studio.", _model);
+                _logger.LogInformation("Confirmed {Model} has a loaded instance on LM Studio.", Model);
             }
         }
         catch (Exception ex)
@@ -230,7 +236,7 @@ public sealed class LmStudioAgentClient
 
         var requestBody = new ResponsesRequest
         {
-            Model = _model,
+            Model = Model,
             Input = BuildInputItems(messages, replayPolicy),
             Tools = tools.Count > 0 ? tools.Select(ToWireTool).ToList() : null,
             ToolChoice = tools.Count > 0 ? "auto" : null,
@@ -400,7 +406,7 @@ public sealed class LmStudioAgentClient
                 requestedTopP, actualTopP);
         }
 
-        if (_reportedSampler is null)
+        if (ReportedSampler is null)
         {
             var echoed = SamplerSettings.FromReported(
                 completedResponse.Temperature, completedResponse.TopP,
@@ -408,7 +414,7 @@ public sealed class LmStudioAgentClient
             if (echoed.Temperature is not null || echoed.TopP is not null
                 || echoed.PresencePenalty is not null || echoed.FrequencyPenalty is not null)
             {
-                _reportedSampler = echoed;
+                ReportedSampler = echoed;
             }
         }
 
@@ -503,8 +509,8 @@ public sealed class LmStudioAgentClient
                 }
 
                 var models = LlamaServerModels.Parse(listedText);
-                var entry = LlamaServerModels.FindLoaded(models, _model);
-                if (entry is null && LlamaServerModels.FindListed(models, _model) is { Loaded: null } unknownState)
+                var entry = LlamaServerModels.FindLoaded(models, Model);
+                if (entry is null && LlamaServerModels.FindListed(models, Model) is { Loaded: null } unknownState)
                 {
                     entry = unknownState;
                 }
@@ -516,7 +522,7 @@ public sealed class LmStudioAgentClient
 
                 _logger.LogWarning(
                     "llama-server's /v1/models response had no context_length for model '{Model}'; skipping cumulative context-size tracking.",
-                    _model);
+                    Model);
                 return -1;
             }
 
@@ -533,7 +539,7 @@ public sealed class LmStudioAgentClient
             }
 
             var parsed = JsonSerializer.Deserialize<LmStudioModelsResponse>(responseText, JsonOptions);
-            var match = parsed?.Data?.FirstOrDefault(m => string.Equals(m.Id, _model, StringComparison.Ordinal));
+            var match = parsed?.Data?.FirstOrDefault(m => string.Equals(m.Id, Model, StringComparison.Ordinal));
             if (match?.LoadedContextLength is int contextLength and > 0)
             {
                 return contextLength;
@@ -541,7 +547,7 @@ public sealed class LmStudioAgentClient
 
             _logger.LogWarning(
                 "LM Studio's /api/v0/models response had no loaded_context_length for model '{Model}'; skipping cumulative context-size tracking.",
-                _model);
+                Model);
             return -1;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -604,15 +610,15 @@ public sealed class LmStudioAgentClient
                 _logger.LogWarning(
                     "Could not fetch load settings from LM Studio ({StatusCode}); recording the base URL only. Body: {Body}",
                     response.StatusCode, responseText);
-                return ModelLoadSettings.FromModelsJson(null, _model, baseUrl);
+                return ModelLoadSettings.FromModelsJson(null, Model, baseUrl);
             }
 
-            return ModelLoadSettings.FromModelsJson(responseText, _model, baseUrl);
+            return ModelLoadSettings.FromModelsJson(responseText, Model, baseUrl);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogWarning(ex, "Failed to fetch load settings from LM Studio; recording the base URL only.");
-            return ModelLoadSettings.FromModelsJson(null, _model, baseUrl);
+            return ModelLoadSettings.FromModelsJson(null, Model, baseUrl);
         }
     }
 
@@ -750,7 +756,7 @@ public sealed class LmStudioAgentClient
     /// <see cref="ReasoningDroppedTurns(int)"/> for a block of <paramref name="window"/> turns; 0 replays every turn's reasoning.
     /// </summary>
     internal static int ReasoningDroppedTurns(int assistantTurns, int window) =>
-        window <= 0 ? 0 : Math.Max(0, (assistantTurns / window - 1) * window);
+        window <= 0 ? 0 : Math.Max(0, ((assistantTurns / window) - 1) * window);
 
     /// <summary>
     /// Overrides <see cref="ReasoningReplayTurns"/> for experiments: a non-negative integer, 0 = replay all reasoning.

@@ -3,7 +3,6 @@ using System.Text.Json;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 
-using RoslynSentinel.Common;
 using RoslynSentinel.Common.SnippetMatching;
 using RoslynSentinel.Engines.Basic;
 
@@ -420,7 +419,7 @@ public class WorkspaceFileEditImpl
                     {
                         continue;
                     }
-                    revertDeltas[revertPath.Absolute] = FileLineChange.Compute(revertPath.Absolute, File.ReadAllText(revertPath.Absolute), restoredText);
+                    revertDeltas[revertPath.Absolute] = FileLineChange.Compute(revertPath.Absolute, await File.ReadAllTextAsync(revertPath.Absolute, cancellationToken), restoredText);
                 }
 
                 // exactRestore: this writes back a pre-image the server captured itself, so it bypasses the

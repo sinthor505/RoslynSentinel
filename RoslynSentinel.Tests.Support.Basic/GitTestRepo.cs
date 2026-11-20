@@ -77,6 +77,8 @@ public static class GitTestRepo
         RunGitRaw(workingDirectory, DefaultTimeout, args);
 
     /// <summary>Runs git and returns exit code, stdout and stderr regardless of the exit code; throws TimeoutException (process killed) past <paramref name="timeout"/> or when the pipes do not reach EOF after exit.</summary>
+    // Surpress error AsyncFixer04 because we want to read stdout/stderr on dedicated threads to avoid deadlocks in parallel test fixtures.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("AsyncFixer", "AsyncFixer04")]
     public static (int ExitCode, string StdOut, string StdErr) RunGitRaw(string workingDirectory, TimeSpan timeout, params string[] args)
     {
         var psi = new ProcessStartInfo("git")
