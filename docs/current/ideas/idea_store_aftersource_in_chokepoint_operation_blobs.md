@@ -1,6 +1,6 @@
 # Idea: Store AfterSource in chokepoint operation blobs
 
-**Status:** NOT DESIGNED 2026-11-09. Owner decision during the `plan_stale_read_guard_followups` review: record the idea, do not schedule it; unimplemented.
+**Status:** READY 2026-11-20 (todo review; see Decisions at the end). Recorded 2026-11-09 during the `plan_stale_read_guard_followups` review; unimplemented.
 
 ## What happened
 
@@ -100,3 +100,22 @@ be pulled into it.
   this was decided against as the data source.
 - [proposal_cross_session_write_journal.md](../proposals/proposal_cross_session_write_journal.md) -
   would consume the stored after text.
+
+## Decisions (todo review 2026-11-20)
+
+- **Question:** Build AfterSource, replace it with a cheaper ledger-hash undo guard, or park?
+- **Choice:** Build slices 1-2. Primary goal (owner): an exact per-operation after-edit snapshot readable
+  on its own, without replaying the edit sequence; undo safety is the side benefit.
+- **Settled open questions:**
+  - Step 0: check `OperationBlobWriter` retention/size before slice 1; if there is no cap, report it
+    before writing doubled blobs.
+  - Undo over a later edit: `UndoLastApply` **refuses** (same shape as `UndoConcurrentEditConflict`,
+    `Tools.Basic/WorkspaceFileEditImpl.cs:501-566`, which today only catches a different agent via the
+    in-memory ledger).
+  - Comparison rule: disk text vs `AfterSource` after the EOL pre-pass normalisation.
+  - No-op writes: omitted from the map; deletes: `AfterSource` null.
+  - Slice 3 (Asyncify/`AsyncBatchEngine` self-built sites): not in scope; leave `// TODO` at each.
+- **Why not the hash guard:** it gives undo safety only, no history, which is the owner's goal.
+- **Acceptance:** after an apply, the blob's `AfterSource` equals the disk text; apply, then edit the
+  same file (same agent, and a raw disk edit), then `UndoLastApply` is refused; an untouched file
+  still undoes; blob tests updated for the larger blob.

@@ -920,3 +920,12 @@ Open items carry options and a recommendation (the planner's, not a decision). I
 - **Why:** Trial data in this repo is clean (319 taken, 1 declined CR-byte rule dropped in d8b112e6, 0 fallbacks/errors, audit exit 0 with `-SkipFsck`) but D.2 (two setups, 10+ taken in the second) is unmet and D.3 (fsck) was not run; D.1 is met once 2026-11-14 UTC has taken lines.
 - **Acceptance:** D.1-D.5 hold and the audit with fsck exits 0.
 - **Outcome (2026-11-14):** acceptance met (Step 14 table); Step 19 flipped the default in 9deef607.
+
+## Decisions (todo review 2026-11-20)
+
+### Git(commit) hook rejection and commit-route audit labels (TODO.md "Git(commit) hook rejection")
+
+- **Question:** Fix (a) the hook-rejection misreport, (b) the audit script labels, or both?
+- **Choice:** Both. (a) `GitImpl.CommitAsync` (`Tools.Basic/GitImpl.cs:3680-3686`, CLI path) reports `NothingToCommit` with the "Stage changes first" hint whenever `NothingStagedAsync` (index-only, :2505) is true after a non-zero `git commit` exit; it must first recognise a hook rejection from git's stderr/exit and return a distinct hook-rejected code carrying the hook output. (b) `scripts/Test-CommitRouteLog.ps1`: on a non-zero `git fsck` (:322-331) retry with `-c core.commitGraph=false`; pass = `warn:fsck-commit-graph` (hint: `git commit-graph write`), fail = `fail:fsck-corrupt`; the commit-less first line (:292) becomes `unchecked:no-commit-fields`.
+- **Why:** (a) sends a model to `Git(stage)` for a hook problem; (b) labelled a harmless stale commit-graph (2026-11-14) as corruption. No fix landed since 2026-11-14 (verified 2026-11-20).
+- **Acceptance:** (a) a test with a rejecting commit-msg hook gets the hook-rejected code and the hook's message, not `NothingToCommit`; (b) a log run with a stale commit-graph prints `warn:fsck-commit-graph` and exits 0.
