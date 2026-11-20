@@ -1,6 +1,6 @@
 # Plan: evalqueue runs each job from a pinned commit in its own checkout outside the repo
 
-**Status:** APPROVED 2026-11-19. Queue jobs pin a commit at submit and build and run from a shared clone under C:\rs-eval, with results written centrally; implementation waits for the held modeleval/queue-test edits to be committed.
+**Status:** IN PROGRESS 2026-11-19. Steps 1-3 done (737a0f87, 4a08cca2, f7a9a31c).
 
 ## Problem
 
@@ -121,6 +121,7 @@ This replaces `TreeChanged` and `-OnTreeChange RunAnyway`").
 - Done when: `Build` 0 errors; `pwsh -NoProfile -File scripts/roslynsentinel-evalqueue.Tests.ps1` exits 0
   (the archive cases still pass); a manual `modeleval.ps1` run is not required (Step 6 covers it).
 - Lane: `implementer` (3 files, about 5 edits).
+- Done: 737a0f87
 
 ### Step 2 - Checkout helper script
 - Files: `scripts/roslynsentinel-evalcheckout.ps1` (new)
@@ -133,6 +134,8 @@ This replaces `TreeChanged` and `-OnTreeChange RunAnyway`").
   - `Invoke-EvalCheckoutSweep -CheckoutRoot <string> -KeepShas <string[]> -MinimumAge <timespan> -KeepNewest <int>` -> removes unreferenced published checkouts past the age (by `lastused`), `*.<token>` partials older than the age; never a path outside the root (`Test-PathUnderRoot`).
 - Done when: `pwsh -NoProfile -Command ". ./scripts/roslynsentinel-evalcheckout.ps1"` exits 0 with no output; Step 3 tests pass.
 - Lane: `implementer-senior` (new script, concurrency-sensitive publish).
+- Done: 4a08cca2. For Step 4: `Get-EvalCheckout` needs a full 40-char SHA; `Invoke-EvalCheckoutSweep`
+  returns `$null` when nothing is removed (wrap in `@()`); a checkout with an open handle is skipped with a warning.
 
 ### Step 3 - Checkout-function tests and test-harness groundwork
 - Files: `scripts/roslynsentinel-evalqueue.Tests.ps1`
@@ -148,6 +151,7 @@ This replaces `TreeChanged` and `-OnTreeChange RunAnyway`").
   one and an old partial. Keep the archive block (222-247) untouched.
 - Done when: `pwsh -NoProfile -File scripts/roslynsentinel-evalqueue.Tests.ps1` exits 0.
 - Lane: `test-writer` (PowerShell assert script, not NUnit; brief it with the file's `Assert-That` pattern).
+- Done: f7a9a31c (the stub's `marker=` output is not asserted yet; Step 5 case (a) does).
 
 ### Step 4 - Submit pins the job, worker runs it (two slices, one commit)
 - Files: `scripts/roslynsentinel-evalqueue.ps1`
