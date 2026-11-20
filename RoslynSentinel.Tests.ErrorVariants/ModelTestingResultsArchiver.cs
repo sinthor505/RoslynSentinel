@@ -2,11 +2,7 @@ using RoslynSentinel.Common.AgentLoop;
 
 namespace RoslynSentinel.Tests.ErrorVariants;
 
-// Deliberate copy of RoslynSentinel.Tests.ModelEval/ModelTestingResultsArchiver.cs: this project may not reference ModelEval,
-// and the archiver is a test-project helper, not library code, so it does not belong in Common.
-// Differences from the original: namespace, and DeriveHostSuffix also maps 192.168.10.85 to "85"
-// (the alias roslynsentinel-modeleval.ps1 has for that host) so runs on it land in ModelTestingResults\85\.
-// TODO unify with Tests.ModelEval/ModelTestingResultsArchiver.cs once a shared home exists
+// Deliberate copy of Tests.ModelEval's archiver; the host suffix comes from RoslynSentinel.Common.AgentLoop.EvalHostTable (owns the rule, reads scripts/eval-hosts.json).
 
 /// <summary>
 /// Copies a finished run's directory (transcripts, variants.csv) into the repo's
@@ -32,7 +28,7 @@ internal static class ModelTestingResultsArchiver
             WriteTestResult(runDirectory);
 
             var resultsBase = ResolveResultsBase();
-            var suffix = DeriveHostSuffix(RoslynSentinel.Common.LlmOptions.BaseUrl);
+            var suffix = EvalHostTable.DeriveSuffix(RoslynSentinel.Common.LlmOptions.BaseUrl);
 
             // runDirectory always looks like <work-dir>\model-eval\<...>\<timestamp>; keep everything after "model-eval\".
             var marker = Path.Combine("model-eval") + Path.DirectorySeparatorChar;
@@ -82,29 +78,6 @@ internal static class ModelTestingResultsArchiver
         }
 
         File.WriteAllLines(Path.Combine(runDirectory, "test-result.txt"), lines);
-    }
-
-    // Mirrors roslynsentinel-modeleval.ps1's $knownHosts alias table and its fallback
-    // sanitize-the-URL-into-a-suffix logic, so an archive lands in the same ModelTestingResults\<suffix>\ tree.
-    private static string DeriveHostSuffix(string baseUrl)
-    {
-        if (baseUrl.Contains("192.168.1.112", StringComparison.OrdinalIgnoreCase))
-        {
-            return "112";
-        }
-
-        if (baseUrl.Contains("192.168.1.113", StringComparison.OrdinalIgnoreCase))
-        {
-            return "113";
-        }
-
-        if (baseUrl.Contains("192.168.10.85", StringComparison.OrdinalIgnoreCase))
-        {
-            return "85";
-        }
-
-        var sanitized = new string(baseUrl.Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray()).Trim('_');
-        return string.IsNullOrEmpty(sanitized) ? "unknown-host" : sanitized;
     }
 
     private static void CopyDirectoryRecursive(string sourceDir, string destinationDir)
