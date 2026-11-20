@@ -1,7 +1,7 @@
 #requires -Version 7.0
 <#
 .SYNOPSIS
-    Queue for live-model eval runs: one run at a time per LM Studio host, shared by every session on
+    Queue for live-model eval runs: one run at a time per machine, shared by every session on
     this box. The front door for starting a model-eval run when other sessions may want the same host.
 
 .DESCRIPTION
@@ -19,7 +19,7 @@
               are not testable through the queue. A request that matches an existing job (same
               commit, host, model, test, arguments and ROSLYNSENTINEL_* variables) attaches to that job
               instead of queuing a second run; -Force queues it anyway.
-      status  Shows the running job, the queue in order and recent jobs. -HostAddress limits it to one host.
+      status  Shows the running job, the queue in order and recent jobs. -HostAddress limits it to one machine.
       wait    -Id <id>[,<id>...]. Blocks until those jobs end, then prints state, results folder and log.
               Run it in the background to be woken when the run is done.
               Exit code: 0 all passed, 1 a run finished with failing tests, 2 anything else.
@@ -29,10 +29,16 @@
               after a worker gave up on a host that stopped answering.
 
     How it runs
-      There is no service. Jobs are files under the queue root, one folder per host. submit starts a
-      detached worker when none is running; the worker runs jobs in order (priority, then submission) and
-      exits when the queue is empty. Before each job it checks that the host answers and waits up to 30
-      minutes if it does not, leaving the jobs queued.
+      There is no service. Jobs are files under the queue root, one folder per machine (the machine key of
+      scripts\eval-hosts.json, for example 85): one lock and one worker per machine, whatever servers (LM
+      Studio, llama-server) the machine runs. submit resolves -HostAddress to one table entry and stores its
+      endpoint in the job. submit starts a detached worker when none is running; the worker runs jobs in
+      order (priority, then submission) and exits when the queue is empty. Each pass it probes the endpoint
+      of every queued job once (GET <baseUrl>/models) and runs the first queued job whose endpoint answers,
+      so a dead endpoint does not hold back a job for another endpoint of the machine. When no queued job's
+      endpoint answers it waits up to 30 minutes, leaving the jobs queued; a job is never refused or ended
+      because its endpoint did not answer. Folders of the earlier URL-keyed layout stay readable by
+      status, wait and cancel.
 
     What a job tests
       submit resolves -Commit to a full sha and creates the checkout of that commit at once, so a bad rev
@@ -67,7 +73,9 @@
       failed; the reason holds the end of its log), TreeChanged (legacy jobs only).
 
 .PARAMETER HostAddress
-    Host alias (112, 113, 85) or an LM Studio base URL. Same values as roslynsentinel-modeleval.ps1.
+    A table entry alias (for example 85u or 112lms), a machine key (112, 113, 85: the machine's default
+    entry, resolved at submit and stored in the job) or a base URL, as in scripts\eval-hosts.json. An address
+    that is not in the table is used verbatim (its folder is the sanitised address).
 
 .PARAMETER Test
     One or more test aliases accepted by roslynsentinel-modeleval.ps1 -Test.
@@ -117,7 +125,9 @@
 .PARAMETER RepoRoot
 .PARAMETER EvalScript
 .PARAMETER SkipHostCheck
-    Test seams: the repo a job builds, the script it runs and whether the host is probed first.
+.PARAMETER HostTablePath
+    Test seams: the repo a job builds, the script it runs, whether the endpoints are probed first and the host
+    table file read instead of scripts\eval-hosts.json (also passed on to the detached worker).
 
 .EXAMPLE
     .\roslynsentinel-evalqueue.ps1 submit -HostAddress 113 -Test OrderPricingRefactorChain10 -Model qwen3.5-9b-coder -Repeats 5 -Session roslynsentinel-86 -Purpose 'Baseline after the stop-marker prompt'
@@ -155,11 +165,13 @@ param(
     [string]$QueueRoot,
     [string]$RepoRoot,
     [string]$EvalScript,
+    [string]$HostTablePath,
     [switch]$SkipHostCheck
 )
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'roslynsentinel-evalcheckout.ps1')
+. (Join-Path $PSScriptRoot 'roslynsentinel-evalhosts.ps1')
 
 $terminalStates = @('Finished', 'Cancelled', 'TimedOut', 'Crashed', 'TreeChanged', 'BuildFailed')
 $defaultExpectedSeconds = 600
@@ -217,26 +229,37 @@ function Format-Span([double]$Seconds) {
 
 function ConvertTo-Quoted([string]$Text) { return "'" + ($Text -replace "'", "''") + "'" }
 
+function Get-HostTable {
+    # The table is read on every call (a small file), so a long-lived worker never works from a stale copy.
+    if ($HostTablePath) { return @(Read-EvalHostTable -Path $HostTablePath) }
+    return @(Read-EvalHostTable)
+}
+
+function Get-HostTableOrEmpty {
+    # For lookups that have a documented fallback when the table cannot be read (jobs written before the table).
+    try { return @(Get-HostTable) }
+    catch { return @() }
+}
+
 function Resolve-EvalHost([string]$Address) {
-    # TODO share one host table with roslynsentinel-modeleval.ps1 ($knownHosts there) instead of two copies.
-    # The suffix rule must match that script: it names the scratch build folder and the results folder.
-    $known = [ordered]@{
-        '112' = 'http://192.168.1.112:1234/v1'
-        '113' = 'http://192.168.1.113:1234/v1'
-        '85'  = 'http://192.168.10.85:1234/v1'
+    # Alias, bare machine key (the machine's default entry), base URL, or an unknown address used verbatim
+    # (Machine = Suffix = the sanitised address). Both the table and the rules live in roslynsentinel-evalhosts.ps1.
+    try {
+        $entry = Resolve-EvalHostEntry -Address $Address -Table @(Get-HostTable)
     }
-    foreach ($alias in $known.Keys) {
-        if ($Address -eq $alias -or $Address.TrimEnd('/') -eq $known[$alias]) {
-            return [pscustomobject]@{ Alias = $alias; BaseUrl = $known[$alias]; Suffix = $alias }
-        }
+    catch { Stop-EvalQueue $_.Exception.Message }
+    return [pscustomobject]@{
+        Alias   = $entry.Alias
+        BaseUrl = $entry.BaseUrl
+        Suffix  = $entry.Suffix
+        Machine = $entry.Machine
+        Backend = $entry.Backend
     }
-    $suffix = ($Address -replace '[^a-zA-Z0-9]', '_').Trim('_')
-    if (-not $suffix) { Stop-EvalQueue "-HostAddress '$Address' is not a known alias (112, 113, 85) or a base URL such as http://host:1234/v1." }
-    return [pscustomobject]@{ Alias = $Address; BaseUrl = $Address; Suffix = $suffix }
 }
 
 function Get-HostDir($HostInfo) {
-    $dir = Join-Path $QueueRoot $HostInfo.Suffix
+    # One folder, one lock and one worker per machine.
+    $dir = Join-Path $QueueRoot $HostInfo.Machine
     foreach ($sub in @('jobs', 'logs')) { New-Item -ItemType Directory -Force -Path (Join-Path $dir $sub) | Out-Null }
     return $dir
 }
@@ -266,7 +289,38 @@ function Read-Job([string]$Path) {
     return $null
 }
 
-function Get-JobPath($Job) { return Join-Path $QueueRoot "$($Job.suffix)\jobs\$($Job.id).json" }
+function Get-JobMachine($Job) {
+    # The queue folder of a job: its machine, else (jobs written before machine keys) the machine of the table
+    # entry with the job's suffix, else the suffix itself (which was the folder name then).
+    if ($Job.PSObject.Properties['machine'] -and $Job.machine) { return [string]$Job.machine }
+    $entry = @(Get-HostTableOrEmpty | Where-Object { $_.Suffix -eq $Job.suffix }) | Select-Object -First 1
+    if ($entry) { return [string]$entry.Machine }
+    return [string]$Job.suffix
+}
+
+function Get-ProbeKey([string]$BaseUrl) { return $BaseUrl.TrimEnd('/').ToLowerInvariant() }
+
+function Get-JobEndpoint($Job) {
+    # Where the job's run talks to: the baseUrl and backend stored at submit, else (a job written before they were
+    # stored) what the table says, else the default entry of the job's machine.
+    $backend = $null
+    if ($Job.PSObject.Properties['backend'] -and $Job.backend) { $backend = [string]$Job.backend }
+    if ($Job.PSObject.Properties['baseUrl'] -and $Job.baseUrl) {
+        if (-not $backend) {
+            $jobKey = Get-ProbeKey ([string]$Job.baseUrl)
+            $match = @(Get-HostTableOrEmpty | Where-Object { (Get-ProbeKey $_.BaseUrl) -eq $jobKey }) | Select-Object -First 1
+            $backend = if ($match) { [string]$match.Backend } else { 'lmstudio' }
+        }
+        return [pscustomobject]@{ BaseUrl = [string]$Job.baseUrl; Backend = $backend }
+    }
+    $machine = Get-JobMachine $Job
+    $default = @(Get-HostTableOrEmpty | Where-Object { $_.Machine -eq $machine -and $_.IsDefault }) | Select-Object -First 1
+    if ($default) { return [pscustomobject]@{ BaseUrl = [string]$default.BaseUrl; Backend = [string]$default.Backend } }
+    # No table entry: an unknown address was used verbatim as its own base URL.
+    return [pscustomobject]@{ BaseUrl = $machine; Backend = 'lmstudio' }
+}
+
+function Get-JobPath($Job) { return Join-Path $QueueRoot "$(Get-JobMachine $Job)\jobs\$($Job.id).json" }
 
 function Write-Job($Job) {
     $path = Get-JobPath $Job
@@ -389,10 +443,12 @@ function Repair-OrphanedJobs([string]$HostDir) {
     }
 }
 
-function Start-DetachedWorker($HostInfo) {
+function Start-DetachedWorker([string]$Machine) {
+    # -HostAddress is the machine key: the worker serves the whole machine folder, not one entry.
     $exe = (Get-Process -Id $PID).Path
     $workerArgs = @('-NoProfile', '-NonInteractive', '-File', "`"$PSCommandPath`"", 'worker',
-        '-HostAddress', "`"$($HostInfo.Alias)`"", '-QueueRoot', "`"$QueueRoot`"")
+        '-HostAddress', "`"$Machine`"", '-QueueRoot', "`"$QueueRoot`"")
+    if ($HostTablePath) { $workerArgs += @('-HostTablePath', "`"$HostTablePath`"") }
     if ($SkipHostCheck) { $workerArgs += '-SkipHostCheck' }
     if ($PreBuildScript) { $workerArgs += @('-PreBuildScript', "`"$PreBuildScript`"") }
     Start-Process -FilePath $exe -ArgumentList $workerArgs -WindowStyle Hidden -WorkingDirectory $QueueRoot | Out-Null
@@ -533,6 +589,18 @@ function Invoke-Submit {
 
     $hostInfo = Resolve-EvalHost $HostAddress
     $hostDir = Get-HostDir $hostInfo
+    # What the run's -HostAddress and results suffix are depends on the pinned commit's eval script. A checkout
+    # with scripts\eval-hosts.json understands the alias and names its folders from the table's suffix. An older
+    # commit (and an address that is not in the table, which both treat verbatim) takes the base URL and derives
+    # the suffix by sanitising it, so the job records the suffix that script will actually write under.
+    if (Test-Path -LiteralPath (Join-Path $checkoutPath 'scripts\eval-hosts.json') -PathType Leaf) {
+        $jobHost = $hostInfo.Alias
+        $jobSuffix = $hostInfo.Suffix
+    }
+    else {
+        $jobHost = $hostInfo.BaseUrl
+        $jobSuffix = ($hostInfo.BaseUrl -replace '[^a-zA-Z0-9]', '_').Trim('_')
+    }
     $argsText = ($EvalArgs -replace '\s+', ' ').Trim()
     $envMap = [ordered]@{}
     Get-ChildItem Env: | Where-Object {
@@ -547,8 +615,8 @@ function Invoke-Submit {
         $queued = @()
         $attached = @()
         $stamp = [datetime]::UtcNow.ToString('yyyyMMdd-HHmmss')
-        # Count this second's ids in every host folder, not just this one: wait and cancel look an id up across all
-        # hosts, so an id must be unique queue-wide. Submits to two hosts hold different locks, so two submits in the
+        # Count this second's ids in every folder under the root (machine folders and the legacy URL-keyed ones alike),
+        # not just this one: wait and cancel look an id up across all folders, so an id must be unique queue-wide. Submits to two hosts hold different locks, so two submits in the
         # same second can still race; Find-JobFile accepts <host>/<id> for that case and for ids from before this rule.
         $sequence = @(Get-ChildItem -LiteralPath $QueueRoot -Directory | ForEach-Object {
                 $jobsDir = Join-Path $_.FullName 'jobs'
@@ -578,8 +646,11 @@ function Invoke-Submit {
                 $jobId = '{0}-{1:000}' -f $stamp, $sequence
                 $job = [pscustomobject][ordered]@{
                     id                = $jobId
-                    host              = $hostInfo.Alias
-                    suffix            = $hostInfo.Suffix
+                    host              = $jobHost
+                    # machine names the queue folder; baseUrl and backend are the endpoint the worker probes for this job.
+                    machine           = $hostInfo.Machine
+                    backend           = $hostInfo.Backend
+                    suffix            = $jobSuffix
                     baseUrl           = $hostInfo.BaseUrl
                     # repoRoot and evalScript are the checkout's: the run builds and executes there.
                     repoRoot          = $checkoutPath
@@ -626,7 +697,7 @@ function Invoke-Submit {
                 $queued += $job
             }
         }
-        if ($queued.Count -gt 0 -and -not $NoStart -and -not (Test-WorkerAlive $hostDir)) { Start-DetachedWorker $hostInfo }
+        if ($queued.Count -gt 0 -and -not $NoStart -and -not (Test-WorkerAlive $hostDir)) { Start-DetachedWorker $hostInfo.Machine }
         [pscustomobject]@{ queued = $queued; attached = $attached; jobs = $jobs.ToArray() }
     }
 
@@ -660,7 +731,16 @@ function Get-HostSnapshot([string]$HostDir) {
         $worker = $null
         $workerPath = Join-Path $HostDir 'worker.json'
         if ($alive -and (Test-Path -LiteralPath $workerPath)) { $worker = Read-Job $workerPath }
-        [pscustomobject]@{ host = (Split-Path $HostDir -Leaf); workerAlive = $alive; worker = $worker; jobs = @(Get-Jobs $HostDir) }
+        $leaf = Split-Path $HostDir -Leaf
+        # machine: the leaf itself when it is a machine key, else the machine whose entry has this leaf as its suffix
+        # (a legacy URL-keyed folder), else the leaf (an address that is not in the table).
+        $table = @(Get-HostTableOrEmpty)
+        $machine = $leaf
+        if (@($table | Where-Object { $_.Machine -eq $leaf }).Count -eq 0) {
+            $bySuffix = @($table | Where-Object { $_.Suffix -eq $leaf }) | Select-Object -First 1
+            if ($bySuffix) { $machine = [string]$bySuffix.Machine }
+        }
+        [pscustomobject]@{ host = $leaf; machine = $machine; workerAlive = $alive; worker = $worker; jobs = @(Get-Jobs $HostDir) }
     }
 }
 
@@ -704,7 +784,7 @@ function Invoke-Start {
         if (Test-WorkerAlive $hostDir) { return 'A worker is already running.' }
         Repair-OrphanedJobs $hostDir
         if ((Get-QueuedInOrder (Get-Jobs $hostDir)).Count -eq 0) { return 'Nothing is queued; no worker started.' }
-        Start-DetachedWorker $hostInfo
+        Start-DetachedWorker $hostInfo.Machine
         'Worker started.'
     }
     Write-Output $result
@@ -723,14 +803,14 @@ function Invoke-Wait {
         $open = @($jobs | Where-Object { $_ -and $_.state -notin $terminalStates })
         if ($open.Count -eq 0) { break }
         # A queue nobody is working (worker gave up on the host, or was killed) would never end this wait.
-        foreach ($suffix in @($open | ForEach-Object { $_.suffix } | Sort-Object -Unique)) {
-            $hostDir = Join-Path $QueueRoot $suffix
+        foreach ($machine in @($open | ForEach-Object { Get-JobMachine $_ } | Sort-Object -Unique)) {
+            $hostDir = Join-Path $QueueRoot $machine
             $restart = ([datetime]::UtcNow - $lastStartAttempt).TotalSeconds -ge 60
             $started = Invoke-WithQueueLock $hostDir {
                 if (Test-WorkerAlive $hostDir) { return $false }
                 Repair-OrphanedJobs $hostDir
                 if (-not $restart -or (Get-QueuedInOrder (Get-Jobs $hostDir)).Count -eq 0) { return $false }
-                Start-DetachedWorker (Resolve-EvalHost ($open | Where-Object { $_.suffix -eq $suffix } | Select-Object -First 1).host)
+                Start-DetachedWorker $machine
                 $true
             }
             if ($started) { $lastStartAttempt = [datetime]::UtcNow }
@@ -803,12 +883,28 @@ function Invoke-Worker {
         } | ConvertTo-Json | Set-Content -LiteralPath $workerPath -Encoding utf8
     }
 
-    function Test-HostAnswers {
-        try {
-            $null = Invoke-WebRequest -Uri ($hostInfo.BaseUrl.TrimEnd('/') + '/models') -TimeoutSec 8 -SkipHttpErrorCheck
-            return $true
+    function Get-EndpointPass($Queued) {
+        # One pass of the endpoint pick (outside the queue lock, probes take seconds): probes each distinct baseUrl of
+        # the queued jobs once. One GET <baseUrl>/models gives reachability and, for llama-server, the model list
+        # (kept in Models for the model-load check). Any failed request means the endpoint is not answering: it
+        # never refuses a job. JobKey maps a job id to its endpoint key; a job submitted after this pass is not in
+        # it and waits for the next pass.
+        $probes = @{}
+        $jobKey = @{}
+        foreach ($queuedJob in @($Queued)) {
+            $endpoint = Get-JobEndpoint $queuedJob
+            $key = Get-ProbeKey $endpoint.BaseUrl
+            $jobKey[[string]$queuedJob.id] = $key
+            if ($probes.ContainsKey($key)) { continue }
+            if ($SkipHostCheck) {
+                $probes[$key] = [pscustomobject]@{ BaseUrl = $endpoint.BaseUrl; Backend = $endpoint.Backend; Answers = $true; Models = @() }
+                continue
+            }
+            if ($endpoint.Backend -eq 'llama-server') { $result = Get-EvalHostModels -Entry $endpoint -TimeoutSec 8 }
+            else { $result = Get-EvalHostModels -Entry $endpoint -TimeoutSec 8 -ReachabilityOnly }
+            $probes[$key] = [pscustomobject]@{ BaseUrl = $endpoint.BaseUrl; Backend = $endpoint.Backend; Answers = [bool]$result.Reachable; Models = @($result.Models) }
         }
-        catch { return $false }
+        return [pscustomobject]@{ Probes = $probes; JobKey = $jobKey }
     }
 
     function Get-RunFolders($Job) {
@@ -1055,22 +1151,26 @@ function Invoke-Worker {
         $hostDownSince = $null
         while ($true) {
             $queueState = Invoke-WithQueueLock $hostDir {
-                if ((Get-QueuedInOrder (Get-Jobs $hostDir)).Count -gt 0) { return 'work' }
+                $queuedNow = @(Get-QueuedInOrder (Get-Jobs $hostDir))
+                if ($queuedNow.Count -gt 0) { return [pscustomobject]@{ State = 'work'; Queued = $queuedNow } }
                 # Release the worker lock inside the queue lock: a submit that lands now must see no worker.
                 Remove-Item -LiteralPath $workerPath -Force -ErrorAction SilentlyContinue
                 $lockStream.Dispose()
-                'empty'
+                [pscustomobject]@{ State = 'empty'; Queued = @() }
             }
-            if ($queueState -eq 'empty') { Write-WorkerLog 'queue empty, worker exiting'; return }
+            if ($queueState.State -eq 'empty') { Write-WorkerLog 'queue empty, worker exiting'; return }
 
-            if (-not $SkipHostCheck -and -not (Test-HostAnswers)) {
+            $pass = Get-EndpointPass $queueState.Queued
+            $answered = @($pass.Probes.Values | Where-Object { $_.Answers })
+            if ($answered.Count -eq 0) {
                 if (-not $hostDownSince) {
                     $hostDownSince = [datetime]::UtcNow
-                    Write-WorkerLog "host $($hostInfo.BaseUrl) does not answer; queue paused"
+                    $urls = (@($pass.Probes.Values | ForEach-Object { $_.BaseUrl } | Sort-Object -Unique)) -join ', '
+                    Write-WorkerLog "no queued job's endpoint answers ($urls); queue paused"
                 }
                 Write-WorkerState 'WaitingForHost' $null $hostDownSince
                 if (([datetime]::UtcNow - $hostDownSince).TotalMinutes -ge $hostWaitMinutes) {
-                    Write-WorkerLog "host still down after $hostWaitMinutes min, worker exiting; jobs stay queued"
+                    Write-WorkerLog "no queued job's endpoint answered for $hostWaitMinutes min, worker exiting; jobs stay queued"
                     Invoke-WithQueueLock $hostDir {
                         Remove-Item -LiteralPath $workerPath -Force -ErrorAction SilentlyContinue
                         $lockStream.Dispose()
@@ -1083,7 +1183,12 @@ function Invoke-Worker {
             $hostDownSince = $null
 
             $job = Invoke-WithQueueLock $hostDir {
-                $next = Get-QueuedInOrder (Get-Jobs $hostDir) | Select-Object -First 1
+                # The queue is re-read here: the first queued job whose endpoint answered in this pass. A job that
+                # was cancelled or started elsewhere since the pass is gone from the list; none left means the next
+                # pass starts over.
+                $next = Get-QueuedInOrder (Get-Jobs $hostDir) |
+                    Where-Object { $pass.JobKey.ContainsKey([string]$_.id) -and $pass.Probes[$pass.JobKey[[string]$_.id]].Answers } |
+                    Select-Object -First 1
                 if (-not $next) { return $null }
                 if ($next.pinnedCommit) {
                     # A pinned job runs from its own checkout, so there is no tree to compare. Building is set here, inside
