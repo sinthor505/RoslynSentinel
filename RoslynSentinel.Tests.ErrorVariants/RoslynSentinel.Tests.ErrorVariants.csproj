@@ -46,6 +46,7 @@
   <ItemGroup>
     <None Include="ErrorVariants\**\*.md" CopyToOutputDirectory="PreserveNewest" />
     <None Include="TestData\**\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\scripts\eval-hosts.json" Link="eval-hosts.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
