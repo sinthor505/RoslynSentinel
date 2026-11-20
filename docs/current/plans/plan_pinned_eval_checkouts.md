@@ -79,7 +79,7 @@ This replaces `TreeChanged` and `-OnTreeChange RunAnyway`").
   rooted before the run (the archivers' own catch, `ModelTestingResultsArchiver.cs:56-59`, would swallow
   a throw); the old Steps 3 and 4 merge into one commit (Step 3 alone would strand results in
   checkouts); the old Step 5 splits into checkout-function tests (Step 3) and submit/worker tests (Step 5).
-- **Prerequisite:** roslynsentinel-b2 holds uncommitted edits to `scripts/roslynsentinel-modeleval.ps1`
+- **Prerequisite (met: a0d4b1e9, queues idle 2026-11-19):** roslynsentinel-b2 held uncommitted edits to `scripts/roslynsentinel-modeleval.ps1`
   (archive step: `$modelEvalRoot`, `$resultsRoot`, `<TestName>(case)` folders) and
   `scripts/roslynsentinel-evalqueue.Tests.ps1` (AST-lifted archive cases, 222-247), under HOLD until their
   Ornith queue drains and they commit. Steps 1, 3, 4 and 5 start after that commit. Step 2 (a new file)
