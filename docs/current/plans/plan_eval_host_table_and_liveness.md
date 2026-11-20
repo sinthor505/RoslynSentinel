@@ -1,6 +1,6 @@
 # Plan: one eval-host table, a host liveness probe, a per-machine queue key and a run index
 
-**Status:** APPROVED 2026-11-20. Host table, liveness probe, machine-keyed queue, run index and ownership visibility in 15 steps across three hold points.
+**Status:** IN PROGRESS 2026-11-20. Steps 1-6 done (04fab1df, 986f1b29, 9737c57d, 1ea220f7, 68ed4226, af39ed7b).
 
 ## Problem
 
@@ -235,6 +235,7 @@ Slot map (a slot is one dispatch window; hold points in Decision 10):
 Step 12 (docs) is H1 and may move to any earlier slot; if it does, Step 11 runs alone in S6.
 
 ### Step 1 - C# helper and its tests
+- Done: 04fab1df
 - Files: `RoslynSentinel.Common/AgentLoop/EvalHostTable.cs` (new), `RoslynSentinel.Common/AgentLoop/LlamaServerModels.cs`
   (new), `RoslynSentinel.Tests.ModelEval/EvalHostTests.cs` (new, both fixtures `EvalHostTableTests` and
   `LlamaServerModelsTests`). 3 files, 3 `CreateFile` writes.
@@ -302,6 +303,7 @@ Step 12 (docs) is H1 and may move to any earlier slot; if it does, Step 11 runs 
 - Lane: `implementer` (3 files, 3 writes, 1 acceptance).
 
 ### Step 2 - PowerShell host library, table data and tests
+- Done: 986f1b29 (also `!scripts/eval-hosts.json` in .gitignore)
 - Files: `scripts/eval-hosts.json` (new), `scripts/roslynsentinel-evalhosts.ps1` (new),
   `scripts/roslynsentinel-evalhosts.Tests.ps1` (new). 3 files, 3 writes.
 - Depends on: none. Pairs with: Step 1 (different language, disjoint files). Hold point: H1.
@@ -356,6 +358,7 @@ Step 12 (docs) is H1 and may move to any earlier slot; if it does, Step 11 runs 
 - Lane: `implementer` (3 files, 3 writes, 1 acceptance).
 
 ### Step 3 - Link the table into both test projects, with a shipped-table test
+- Done: 9737c57d
 - Files: `RoslynSentinel.Tests.ModelEval/RoslynSentinel.Tests.ModelEval.csproj`,
   `RoslynSentinel.Tests.ErrorVariants/RoslynSentinel.Tests.ErrorVariants.csproj`,
   `RoslynSentinel.Tests.ModelEval/ShippedEvalHostTableTests.cs` (new). 3 files, 3 edits.
@@ -373,6 +376,7 @@ Step 12 (docs) is H1 and may move to any earlier slot; if it does, Step 11 runs 
 - Lane: `implementer` (3 files, 3 edits, 1 acceptance).
 
 ### Step 4 - `Get-EvalHostStatus.ps1` and its tests
+- Done: 1ea220f7 (per-row queue matches legacy suffix folders until Step 11; Step 14 reworks grouping)
 - Files: `scripts/Get-EvalHostStatus.ps1` (new), `scripts/Get-EvalHostStatus.Tests.ps1` (new). 2 files, 2 writes.
 - Depends on: 2. Pairs with: Step 3. Hold point: H1.
 - Effect: text-neutral (new script; the queue does not call it yet).
@@ -402,6 +406,7 @@ Step 12 (docs) is H1 and may move to any earlier slot; if it does, Step 11 runs 
 - Lane: `implementer` (2 files, 2 writes, 1 acceptance).
 
 ### Step 5 - Run-index helper and its tests
+- Done: 68ed4226
 - Files: `scripts/roslynsentinel-evalruns.ps1` (new), `scripts/roslynsentinel-evalruns.Tests.ps1` (new). 2 files,
   2 writes. Written in full (no callers yet, so no skeleton).
 - Depends on: none. Pairs with: Step 6. Hold point: H1.
@@ -425,6 +430,7 @@ Step 12 (docs) is H1 and may move to any earlier slot; if it does, Step 11 runs 
 - Lane: `implementer` (2 files, 2 writes, 1 acceptance).
 
 ### Step 6 - Collapse the two archivers onto the shared helper
+- Done: af39ed7b (stale comment at EvalHostTable.cs:197 naming the removed DeriveHostSuffix: fix in Step 15 sweep)
 - Files: `RoslynSentinel.Tests.ModelEval/ModelTestingResultsArchiver.cs`,
   `RoslynSentinel.Tests.ErrorVariants/ModelTestingResultsArchiver.cs`,
   `RoslynSentinel.Tests.ModelEval/ModelTestingResultsArchiverTests.cs`. 3 files, about 9 edits. The tests are the
