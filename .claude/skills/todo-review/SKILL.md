@@ -12,6 +12,10 @@ throughout, so ask freely; the session never edits C# or dispatches implementers
 
 ## 1. Triage list
 
+First triage every line of `docs/current/INBOX.md` (rules in its header): move it to TODO.md (with a
+doc if it needs design), fix it, or close it in CLOSED.md with a reason, then delete the line. Ask the
+owner only for lines whose destination is unclear.
+
 Read `docs/current/TODO.md` yourself and add three more sources:
 - the "Needs owner review" section of TODO.md;
 - `PARKED` lines in the memory index;

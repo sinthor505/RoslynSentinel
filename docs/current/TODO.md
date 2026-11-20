@@ -1,6 +1,6 @@
 # TODO - open items only
 
-Rules: (1) one entry = one line (`- [OPEN|READY|IN-PROGRESS|BLOCKED|PARKED] Title (YYYY-MM-DD if known) - one sentence - [doc]` followed by a relative link; READY = decided and scoped by a todo review, decisions in the linked doc's `## Decisions`; PARKED = the sentence says why and what would unpark it); (2) when an item is done, move it to [CLOSED.md](./CLOSED.md) with evidence (older months: [archive/](./archive/)); (3) design prose belongs in proposals/, ideas/, issues/ or design/ (see [templates/README.md](./templates/README.md)), never here. Full text of every shrunk entry lives in the linked doc under "Moved from TODO.md (2026-10-17)".
+Rules: (1) one entry = one line (`- [OPEN|READY|IN-PROGRESS|BLOCKED|PARKED] Title (YYYY-MM-DD if known) - one sentence - [doc]` followed by a relative link; READY = decided and scoped by a todo review, decisions in the linked doc's `## Decisions`; PARKED = the sentence says why and what would unpark it); (2) when an item is done, move it to [CLOSED.md](./CLOSED.md) with evidence (older months: [archive/](./archive/)); (3) design prose belongs in proposals/, ideas/, issues/ or design/ (see [templates/README.md](./templates/README.md)), never here; (4) a newly noticed issue goes to [INBOX.md](./INBOX.md) first and reaches this file through triage. Full text of every shrunk entry lives in the linked doc under "Moved from TODO.md (2026-10-17)".
 
 ## P1 Now
 
@@ -11,6 +11,8 @@ Blocking or in-flight slices.
 ## P2 Next
 
 Committed, not started.
+
+- [OPEN] Pinned eval checkouts (2026-11-19) - evalqueue pins each job to a commit at submit and runs it from its own checkout outside the repo, results kept central, TreeChanged retired migration-first; DRAFT, owner settles D1-D4 then run in a fresh session - [plan](plans/plan_pinned_eval_checkouts.md)
 
 - [OPEN] Remove the dead external-drift session halt (2026-11-15) - nothing sets `_sessionHalted` since the drift latch went (1c9cb4db), but `IsSessionHalted`/`KindExternalDrift` have 54 references in 19 files; staged removal (`[Obsolete]` first, callers per project, delete last); owner ruled it out of plan_tool_experience_journal_fixes (its Step 32); code TODO in `PersistentWorkspaceManager.cs` near the `_sessionHalted` field; Medium - [plan](plans/closed/plan_tool_experience_journal_fixes.md)
 

@@ -14,6 +14,9 @@ steps, tracker, dispatch contract, failures and summary are defined there. CLAUD
 
 ## 1. Punchlist
 
+- Triage `docs/current/INBOX.md` first (rules in its header): each line becomes a TODO.md entry or a
+  CLOSED.md entry with a reason, then is deleted; lines that need the owner go under "Needs owner or
+  blocked".
 - Read `docs/current/TODO.md` yourself (one small file) and the latest
   `.claude/handoff/*_todo_review_*.md` record if there is one. Show a numbered list, one sentence per
   item, grouped **Quick wins / Small / Medium / Large / Needs owner or blocked**, cheapest first. Give

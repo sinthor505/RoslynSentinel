@@ -42,7 +42,7 @@ and the monthly `closed_*.md` rollups; do not add new docs there.
    a FIXED or SUPERSEDED finding, a closed issue, a finished eval), set the Status line (with the commit
    hashes) and move it to `<genre>/closed/` (`blockers/closed/`, `plans/closed/`, `evals/closed/`, ...);
    a fixed blocker also gets a resolution note citing the commit hash. Fix relative links when it moves.
-9. **`docs/current/` root** holds only `TODO.md`, `CLOSED.md` and `DOCUMENTATION_INDEX.md`. Every other
+9. **`docs/current/` root** holds only `TODO.md`, `INBOX.md` (untriaged issues), `CLOSED.md` and `DOCUMENTATION_INDEX.md`. Every other
    doc lives in its genre folder under the filename rules above (no hyphenated or `-v1` names, no
    `specs/`, `obsolete/`, `research/` or `testing/` folders).
 10. **Maintaining this folder:** if the house style changes, change the template first.

@@ -31,11 +31,14 @@ checks it; the `tidy-guidance` skill cleans up and promotes memory entries).
 - Comment intentional deviations from a codebase pattern, and a `[Test]` that fails only on full/parallel runs.
 - A tool param added to stop a known model failure is mandatory unless a concrete usage needs the fallback.
 - In agent/plan docs state the allowed workflow positively; never name a tool that is gated off.
+- Script/harness/fixture/test bug: fix it unasked only if it meets every criterion in
+  `docs/current/references/reference_harness_bug_autofix.md`, reporting it in one line; else propose a fix.
 
 ## Deferred issues (no approval needed)
 
 - On noticing an issue or deferring a fix, leave `// TODO <brief issue statement>` at the spot in the
-  code and name it in your report. The code is the source of truth; `.md` files drift and miss what
+  code, append one line to `docs/current/INBOX.md` at once (format in its header) and name it in your
+  report. The code is the source of truth; `.md` files drift and miss what
   another plan or session already flagged. `Search` a file for `TODO` before editing it.
 - Never hold work for all-or-nothing completion: new member beside the old, old `[Obsolete("Use X")]`,
   `// TODO` for the remaining callers, finish in slices. CS0618 warnings during a migration are expected.
