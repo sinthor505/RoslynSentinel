@@ -9,6 +9,7 @@
 
 $ErrorActionPreference = 'Stop'
 $queueScript = Join-Path $PSScriptRoot 'roslynsentinel-evalqueue.ps1'
+. (Join-Path $PSScriptRoot 'roslynsentinel-evalcheckout.ps1')
 
 $script:failures = 0
 function Assert-That([bool]$Condition, [string]$Name) {
@@ -17,6 +18,7 @@ function Assert-That([bool]$Condition, [string]$Name) {
 }
 
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("rs-evalqueue-tests-" + [guid]::NewGuid().ToString('N'))
+$env:ROSLYNSENTINEL_EVALQUEUE_CHECKOUTS_ROOT = Join-Path $tempRoot 'checkouts'
 $repo = Join-Path $tempRoot 'repo'
 $stub = Join-Path $repo 'scripts\stub-eval.ps1'
 New-Item -ItemType Directory -Path (Join-Path $repo 'scripts') -Force | Out-Null
@@ -42,15 +44,17 @@ $name = $Test[0]
 Write-Host "stub run $name"
 if ($name -eq 'NoResult') { exit 1 }
 if ($name -eq 'Slow') { Start-Sleep -Seconds 120 } else { Start-Sleep -Milliseconds 300 }
-$dir = Join-Path $root "ModelTestingResults\$HostAddress\$name\$([datetime]::UtcNow.ToString('yyyyMMdd-HHmmss-fff'))"
+$resultsBase = if ($env:ROSLYNSENTINEL_RESULTS_ROOT) { $env:ROSLYNSENTINEL_RESULTS_ROOT } else { Join-Path $root 'ModelTestingResults' }
+$dir = Join-Path $resultsBase "$HostAddress\$name\$([datetime]::UtcNow.ToString('yyyyMMdd-HHmmss-fff'))"
 New-Item -ItemType Directory -Force -Path $dir | Out-Null
-Set-Content -LiteralPath (Join-Path $dir 'results.txt') -Value "flag=$env:ROSLYNSENTINEL_TEST_FLAG job=$env:ROSLYNSENTINEL_EVALQUEUE_JOB samples=$Samples model=$Model"
+$marker = ([IO.File]::ReadAllText((Join-Path $root 'Lib.cs'))).Replace("`r`n", "`n").Trim()
+Set-Content -LiteralPath (Join-Path $dir 'results.txt') -Value "flag=$env:ROSLYNSENTINEL_TEST_FLAG job=$env:ROSLYNSENTINEL_EVALQUEUE_JOB samples=$Samples model=$Model marker=$marker"
 if ($name -eq 'Fail') { exit 1 }
 exit 0
 '@
 Set-Content -LiteralPath (Join-Path $repo 'Lib.cs') -Value 'class Lib { }'
 Invoke-Git @('init', '-q', '-b', 'master')
-Invoke-Git @('add', '--', 'Lib.cs')
+Invoke-Git @('add', '--', 'Lib.cs', 'scripts/stub-eval.ps1')
 Invoke-Git @('commit', '-q', '-m', 'one')
 
 $script:queueCount = 0
@@ -201,6 +205,85 @@ try {
     $stalledDone = Get-JobById $stalled.id
     Assert-That ($stalledDone.state -eq 'Crashed' -and $stalledDone.reason -like '*SetUp*' -and $stalledDone.durationSeconds -lt 60) 'No run folder: a run stuck before its run folder ends Crashed with a SetUp reason'
 
+    # --- checkout functions (roslynsentinel-evalcheckout.ps1); the repo is clean here -----------------------
+    function Get-LfText([string]$Path) { return [IO.File]::ReadAllText($Path).Replace("`r`n", "`n").Trim() }
+    $checkoutRoot = Get-EvalCheckoutRoot 3>$null
+    Assert-That ($checkoutRoot -eq (Join-Path $tempRoot 'checkouts')) 'Checkout: Get-EvalCheckoutRoot returns the temp checkouts root while the env var is set'
+    $headNow = (& git -C $repo rev-parse HEAD).Trim()
+    $resolved = Resolve-EvalCommit -RepoRoot $repo -Rev 'HEAD'
+    Assert-That ($resolved -match '^[0-9a-f]{40}$' -and $resolved -eq $headNow) 'Checkout: Resolve-EvalCommit HEAD returns the 40-char sha that git rev-parse reports'
+    $badRev = $null
+    try { Resolve-EvalCommit -RepoRoot $repo -Rev 'no-such-rev' | Out-Null } catch { $badRev = $_.Exception.Message }
+    Assert-That ($badRev -match 'no-such-rev') 'Checkout: Resolve-EvalCommit throws on a bad rev and the message names it'
+
+    $sha1 = Resolve-EvalCommit -RepoRoot $repo -Rev 'HEAD'
+    Set-Content -LiteralPath (Join-Path $repo 'Lib.cs') -Value 'class Lib { int two; }'
+    Invoke-Git @('add', '--', 'Lib.cs')
+    Invoke-Git @('commit', '-q', '-m', 'two')
+    $sha2 = Resolve-EvalCommit -RepoRoot $repo -Rev 'HEAD'
+
+    $co1 = Get-EvalCheckout -RepoRoot $repo -Sha $sha1 -CheckoutRoot $checkoutRoot
+    Assert-That ($co1 -eq (Join-Path $checkoutRoot $sha1.Substring(0, 12))) 'Checkout: checkout of the first commit is <root>\<sha12>'
+    Assert-That ((Get-Content -LiteralPath (Join-Path $co1 'complete') -Raw) -match "sha=$sha1") 'Checkout: complete marker records the requested sha'
+    Assert-That (Test-Path -LiteralPath (Join-Path $co1 '.git') -PathType Container) 'Checkout: checkout has a real .git directory'
+    Assert-That ((& git -C $co1 rev-parse HEAD).Trim() -eq $sha1) 'Checkout: HEAD is detached at the requested commit'
+    Assert-That (Test-Path -LiteralPath (Join-Path $co1 'scripts\stub-eval.ps1')) 'Checkout: the stub is in the checkout (committed in the first commit)'
+    Assert-That ((Get-LfText (Join-Path $co1 'Lib.cs')) -eq 'class Lib { }') 'Checkout: first commit checkout has the first Lib.cs'
+    $co2 = Get-EvalCheckout -RepoRoot $repo -Sha $sha2 -CheckoutRoot $checkoutRoot
+    Assert-That ((Get-LfText (Join-Path $co2 'Lib.cs')) -eq 'class Lib { int two; }') 'Checkout: second commit gets its own checkout with the second Lib.cs'
+
+    $dirsBefore = @(Get-ChildItem -LiteralPath $checkoutRoot -Directory).Count
+    $lastBefore = (Get-Content -LiteralPath (Join-Path $co1 'lastused') -Raw).Trim()
+    $again = Get-EvalCheckout -RepoRoot $repo -Sha $sha1 -CheckoutRoot $checkoutRoot
+    $lastAfter = (Get-Content -LiteralPath (Join-Path $co1 'lastused') -Raw).Trim()
+    $dirsAfter = @(Get-ChildItem -LiteralPath $checkoutRoot -Directory).Count
+    Assert-That ($again -eq $co1 -and $dirsAfter -eq $dirsBefore) 'Checkout: second call for the same sha returns the same path and creates no directory'
+    Assert-That ($lastAfter -ge $lastBefore) 'Checkout: second call touches lastused without moving it back'
+
+    # Fake published checkouts (complete + lastused) and partials (<sha12>.<token>), ages set by file times.
+    function New-FakeCheckout([string]$Dir, [string]$Sha, [double]$AgeHours) {
+        New-Item -ItemType Directory -Path $Dir -Force | Out-Null
+        [IO.File]::WriteAllText((Join-Path $Dir 'complete'), "sha=$Sha createdUtc=2026-11-01T00:00:00Z")
+        $used = Join-Path $Dir 'lastused'
+        [IO.File]::WriteAllText($used, '2026-11-01T00:00:00Z')
+        [IO.File]::SetLastWriteTimeUtc($used, [DateTime]::UtcNow.AddHours(-$AgeHours))
+    }
+    function New-FakePartial([string]$Dir, [double]$AgeHours) {
+        New-Item -ItemType Directory -Path $Dir -Force | Out-Null
+        [IO.Directory]::SetLastWriteTimeUtc($Dir, [DateTime]::UtcNow.AddHours(-$AgeHours))
+    }
+    $day = [TimeSpan]::FromHours(24)
+    $sweepRoot = Join-Path $tempRoot 'sweep'
+    $listedDir = Join-Path $sweepRoot '111111111111'
+    $youngDir = Join-Path $sweepRoot '222222222222'
+    $oldDir = Join-Path $sweepRoot '333333333333'
+    $oldPartial = Join-Path $sweepRoot '444444444444.abcdef12'
+    $youngPartial = Join-Path $sweepRoot '555555555555.fedcba98'
+    New-FakeCheckout $listedDir ('1' * 40) 48
+    New-FakeCheckout $youngDir ('2' * 40) 1
+    New-FakeCheckout $oldDir ('3' * 40) 48
+    New-FakePartial $oldPartial 48
+    New-FakePartial $youngPartial 1
+    New-Item -ItemType Directory -Path (Join-Path $sweepRoot 'notes') -Force | Out-Null
+    $swept = @(Invoke-EvalCheckoutSweep -CheckoutRoot $sweepRoot -KeepShas @('1' * 40) -MinimumAge $day -KeepNewest 0)
+    Assert-That (Test-Path -LiteralPath $listedDir) 'Sweep: an old checkout whose sha is listed in -KeepShas is kept'
+    Assert-That (Test-Path -LiteralPath $youngDir) 'Sweep: a young checkout is kept'
+    Assert-That (-not (Test-Path -LiteralPath $oldDir)) 'Sweep: an old unlisted checkout is removed'
+    Assert-That (-not (Test-Path -LiteralPath $oldPartial)) 'Sweep: an old partial is removed'
+    Assert-That (Test-Path -LiteralPath $youngPartial) 'Sweep: a young partial is kept'
+    Assert-That (Test-Path -LiteralPath (Join-Path $sweepRoot 'notes')) 'Sweep: an unrelated folder is left alone'
+    Assert-That (((@($swept) | Sort-Object) -join '|') -eq ((@($oldDir, $oldPartial) | Sort-Object) -join '|')) 'Sweep: the returned list names exactly the removed paths'
+
+    $newestRoot = Join-Path $tempRoot 'sweep-newest'
+    $newestOld = Join-Path $newestRoot '666666666666'
+    $newestKept = Join-Path $newestRoot '777777777777'
+    New-FakeCheckout $newestOld ('6' * 40) 48
+    New-FakeCheckout $newestKept ('7' * 40) 30
+    $newestSwept = @(Invoke-EvalCheckoutSweep -CheckoutRoot $newestRoot -MinimumAge $day -KeepNewest 1)
+    Assert-That ($newestSwept.Count -eq 1 -and $newestSwept[0] -eq $newestOld -and (Test-Path -LiteralPath $newestKept)) 'Sweep: -KeepNewest 1 keeps the most recently used of two old checkouts'
+    $missingSwept = @(Invoke-EvalCheckoutSweep -CheckoutRoot (Join-Path $tempRoot 'no-such-root') -MinimumAge $day)
+    Assert-That ($missingSwept.Count -eq 0) 'Sweep: a missing root returns nothing'
+
     # --- tree changed between submit and dispatch (last: it leaves the repo dirty) --------------------------
     New-Queue
     $pinned = @((Submit @{ Test = 'Quick' }).queued)[0]
@@ -248,6 +331,7 @@ try {
 }
 finally {
     Start-Sleep -Seconds 1
+    Remove-Item Env:\ROSLYNSENTINEL_EVALQUEUE_CHECKOUTS_ROOT -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 
