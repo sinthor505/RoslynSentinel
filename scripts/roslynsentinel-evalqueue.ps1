@@ -70,7 +70,13 @@
       completed; 'passed' says whether the tests passed), Cancelled, TimedOut (stopped at
       -TimeLimitMinutes), Crashed (ended without a run folder: build failure or testhost crash; or the
       worker died; or no run folder after -NoRunFolderMinutes, a stuck SetUp), BuildFailed (the pre-build
-      failed; the reason holds the end of its log), TreeChanged (legacy jobs only).
+      failed; the reason holds the end of its log), TreeChanged (legacy jobs only), Refused (a job for a
+      llama-server endpoint whose -Model is not the loaded model; never run; the reason lists the loaded ids).
+
+    Run index
+      Every job the worker ends (Finished, Crashed, TimedOut, Cancelled, BuildFailed, Refused, TreeChanged) gets
+      one row in ModelTestingResults\<suffix>\runs.csv under its results base (scripts\roslynsentinel-evalruns.ps1).
+      A job cancelled while still Queued has no worker and gets no row.
 
 .PARAMETER HostAddress
     A table entry alias (for example 85u or 112lms), a machine key (112, 113, 85: the machine's default
@@ -172,8 +178,9 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'roslynsentinel-evalcheckout.ps1')
 . (Join-Path $PSScriptRoot 'roslynsentinel-evalhosts.ps1')
+. (Join-Path $PSScriptRoot 'roslynsentinel-evalruns.ps1')
 
-$terminalStates = @('Finished', 'Cancelled', 'TimedOut', 'Crashed', 'TreeChanged', 'BuildFailed')
+$terminalStates = @('Finished', 'Cancelled', 'TimedOut', 'Crashed', 'TreeChanged', 'BuildFailed', 'Refused')
 $defaultExpectedSeconds = 600
 $hostWaitMinutes = 30
 $hostCheckIntervalSeconds = 30
@@ -1190,6 +1197,23 @@ function Invoke-Worker {
                     Where-Object { $pass.JobKey.ContainsKey([string]$_.id) -and $pass.Probes[$pass.JobKey[[string]$_.id]].Answers } |
                     Select-Object -First 1
                 if (-not $next) { return $null }
+                # Policy (owner, 2026-11-20): a job whose -Model is not the loaded model is refused. Revisit if this causes friction.
+                if (-not $SkipHostCheck) {
+                    $probe = $pass.Probes[$pass.JobKey[[string]$next.id]]
+                    if ($probe.Backend -eq 'llama-server') {
+                        $load = Get-EvalModelLoadState -Models $probe.Models -Requested $next.model
+                        if ($load.State -eq 'NotLoaded') {
+                            $where = if ($next.host) { $next.host } else { $next.baseUrl }
+                            $loadedText = if (@($load.LoadedIds).Count -gt 0) { @($load.LoadedIds) -join ', ' } else { '(none)' }
+                            $next.state = 'Refused'
+                            $next.reason = "Not run: host $where serves loaded: $loadedText, requested: $($next.model)."
+                            $next.endedUtc = Get-UtcStamp
+                            Write-Job $next
+                            Write-WorkerLog "job $($next.id) refused: requested model not loaded (loaded: $loadedText)"
+                            return $next
+                        }
+                    }
+                }
                 if ($next.pinnedCommit) {
                     # A pinned job runs from its own checkout, so there is no tree to compare. Building is set here, inside
                     # the lock, so a submit or cancel sees it; the build itself runs after the lock is released.
@@ -1209,7 +1233,7 @@ function Invoke-Worker {
                     $next.endedUtc = Get-UtcStamp
                     Write-Job $next
                     Write-WorkerLog "job $($next.id) refused: tree changed"
-                    return $null
+                    return $next
                 }
                 $next.state = 'Running'
                 $next.startedUtc = Get-UtcStamp
@@ -1221,12 +1245,32 @@ function Invoke-Worker {
                 $next
             }
             $dispatched = $job
-            if ($job -and $job.pinnedCommit) {
-                Write-WorkerState 'Building' $job.id $null
-                $job = Start-PinnedJob $job
+            if ($job -and $job.state -in @('Refused', 'TreeChanged')) {
+                # Ended inside the lock above and never started: no pre-build, run or checkout retention. Only the run index below.
+                $job = $null
             }
-            if ($job) { Invoke-JobRun $job }
-            if ($dispatched -and $dispatched.pinnedCommit) { Invoke-CheckoutRetention $dispatched.checkoutRoot }
+            else {
+                if ($job -and $job.pinnedCommit) {
+                    Write-WorkerState 'Building' $job.id $null
+                    $job = Start-PinnedJob $job
+                }
+                if ($job) { Invoke-JobRun $job }
+                if ($dispatched -and $dispatched.pinnedCommit) { Invoke-CheckoutRetention $dispatched.checkoutRoot }
+            }
+            if ($dispatched) {
+                $final = Read-Job (Get-JobPath $dispatched)
+                if ($final -and $final.state -in $terminalStates) {
+                    $resultsRoot = Join-Path $(if ($final.pinnedCommit) { $final.sourceRepoRoot } else { $final.repoRoot }) 'ModelTestingResults'
+                    $suffixRoot = Join-Path $resultsRoot $final.suffix
+                    # The index wants run folders relative to the suffix folder (<Test>\<leaf>), not the absolute paths on the job.
+                    $indexJob = $final | Select-Object *
+                    $relativeFolders = @(@($final.runFolders) | Where-Object { $_ } | ForEach-Object { [System.IO.Path]::GetRelativePath($suffixRoot, $_) })
+                    $indexJob | Add-Member -NotePropertyName runFolders -NotePropertyValue $relativeFolders -Force
+                    if (-not (Add-EvalRunIndexRow -Job $indexJob -ResultsRoot $resultsRoot)) {
+                        Write-WorkerLog "run index append failed for job $($final.id)"
+                    }
+                }
+            }
         }
     }
     catch {
