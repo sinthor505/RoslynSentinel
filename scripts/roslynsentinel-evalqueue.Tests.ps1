@@ -284,23 +284,140 @@ try {
     $missingSwept = @(Invoke-EvalCheckoutSweep -CheckoutRoot (Join-Path $tempRoot 'no-such-root') -MinimumAge $day)
     Assert-That ($missingSwept.Count -eq 0) 'Sweep: a missing root returns nothing'
 
-    # --- tree changed between submit and dispatch (last: it leaves the repo dirty) --------------------------
+    # --- pinned submits, legacy jobs, pre-build and the sweep keep-list (plan_pinned_eval_checkouts, Step 5) ---
+    # Each case starts from a clean repo at HEAD (the Checkout section left it clean) and restores it when it dirties it.
+    function Get-StubMarker([string]$Text) {
+        $m = [regex]::Match($Text.Replace("`r`n", "`n"), 'marker=([^\n]*)')
+        if ($m.Success) { return $m.Groups[1].Value.Trim() }
+        return $null
+    }
+    function Get-CleanTreeFingerprint([string]$Head) {
+        # Mirrors Get-TreeFingerprint in roslynsentinel-evalqueue.ps1 for a clean tree: no diff, no untracked source files.
+        $bytes = [System.Security.Cryptography.SHA256]::HashData([System.Text.Encoding]::UTF8.GetBytes("$Head`n`n"))
+        return [Convert]::ToHexString($bytes).Substring(0, 16).ToLowerInvariant()
+    }
+    function Write-LegacyJob([string]$JobId) {
+        # Rewrites a pinned job file into the shape queued before pinning existed: no pinnedCommit, sourceRepoRoot or checkoutRoot.
+        $path = Join-Path $script:queueRoot "stub\jobs\$JobId.json"
+        $job = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+        foreach ($field in @('pinnedCommit', 'sourceRepoRoot', 'checkoutRoot')) { $job.PSObject.Properties.Remove($field) }
+        $head = (& git -C $repo rev-parse HEAD).Trim()
+        $job.repoRoot = $repo
+        $job.evalScript = $stub
+        $job.commit = $head
+        $job.fingerprint = Get-CleanTreeFingerprint $head
+        [IO.File]::WriteAllText($path, ($job | ConvertTo-Json -Depth 6))
+    }
+    function Get-JobFromHost([string]$Suffix, [string]$JobId) {
+        # Get-JobById reads only the first host folder; with two host folders read the job file directly.
+        return Get-Content -LiteralPath (Join-Path $script:queueRoot "$Suffix\jobs\$JobId.json") -Raw | ConvertFrom-Json
+    }
+
+    # (a) a clean submit pins HEAD; the job runs that commit after the repo has moved on. (d) results land in the source repo.
     New-Queue
-    $pinned = @((Submit @{ Test = 'Quick' }).queued)[0]
+    $pinnedA = @((Submit @{ Test = 'Quick' }).queued)[0]
+    $headA = (& git -C $repo rev-parse HEAD).Trim()
+    Assert-That ($pinnedA.pinnedCommit -eq $headA) 'Pinned: a clean submit pins HEAD'
+    Set-Content -LiteralPath (Join-Path $repo 'Lib.cs') -Value 'class Lib { int three; }'
+    Invoke-Git @('add', '--', 'Lib.cs')
+    Invoke-Git @('commit', '-q', '-m', 'three')
+    Run-Worker
+    $pinnedADone = Get-JobById $pinnedA.id
+    $runA = @($pinnedADone.runFolders)[0]
+    $runAText = if ($runA) { Get-Content -LiteralPath (Join-Path $runA 'results.txt') -Raw } else { '' }
+    Assert-That ($pinnedADone.state -eq 'Finished') 'Pinned: a job whose source changed after submit is Finished, not TreeChanged'
+    Assert-That ((Get-StubMarker $runAText) -eq 'class Lib { int two; }') 'Pinned: the run shows the marker of the pinned commit, not the later one'
+    Assert-That ([bool]($runA -and $runA.StartsWith((Join-Path $repo 'ModelTestingResults'), [StringComparison]::OrdinalIgnoreCase) -and -not (Test-Path -LiteralPath (Join-Path $pinnedADone.repoRoot 'ModelTestingResults')))) 'Results: a pinned run lands under <source repo>\ModelTestingResults, not in the checkout'
+
+    # (b) a dirty submit without -Commit is refused; -Commit HEAD tests the committed tree.
+    New-Queue
+    Set-Content -LiteralPath (Join-Path $repo 'Lib.cs') -Value 'class Lib { int dirty; }'
+    $refused = Submit @{ Test = 'Quick'; Json = $false }
+    Assert-That ($script:lastExit -eq 2 -and "$refused" -match 'Lib\.cs' -and "$refused" -match '-Commit HEAD') 'Pinned: a dirty submit without -Commit is refused, names the dirty path and the -Commit option'
+    $out = Invoke-Queue 'status'
+    Assert-That ("$out" -match 'No eval queue exists yet') 'Pinned: a refused dirty submit queued nothing'
+    $accepted = Submit @{ Test = 'Quick'; Commit = 'HEAD' }
+    $headB = (& git -C $repo rev-parse HEAD).Trim()
+    Assert-That (@($accepted.queued).Count -eq 1 -and @($accepted).Count -eq 1 -and @($accepted.queued)[0].pinnedCommit -eq $headB) 'Pinned: a dirty submit with -Commit HEAD is accepted and pins the committed HEAD'
+    Invoke-Git @('checkout', '--', 'Lib.cs')
+
+    # (c) two submits of one sha share one checkout folder; an identical second submit attaches to the first job.
+    New-Queue
+    Set-Content -LiteralPath (Join-Path $repo 'Lib.cs') -Value 'class Lib { int four; }'
+    Invoke-Git @('add', '--', 'Lib.cs')
+    Invoke-Git @('commit', '-q', '-m', 'four')
+    $shaC = (& git -C $repo rev-parse HEAD).Trim()
+    $c1 = Submit @{ Test = 'Quick' }
+    $c2 = Submit @{ Test = 'Quick'; Session = 's2' }
+    $checkoutsForC = @(Get-ChildItem -LiteralPath $checkoutRoot -Directory | Where-Object { $_.Name -like "$($shaC.Substring(0, 12))*" })
+    Assert-That ($checkoutsForC.Count -eq 1 -and $checkoutsForC[0].Name -eq $shaC.Substring(0, 12)) 'Pinned: two submits of one sha share one checkout folder'
+    Assert-That (@($c1.queued).Count -eq 1 -and @($c2.queued).Count -eq 0 -and @($c2.attached).Count -eq 1 -and @($c2.attached)[0].id -eq @($c1.queued)[0].id) 'Pinned dedup: an identical second submit attaches to the first job'
+
+    # (f) a job file without pinnedCommit still runs from the working tree, and still ends TreeChanged when the tree moves.
+    New-Queue
+    $legacyRun = @((Submit @{ Test = 'Quick' }).queued)[0]
+    Write-LegacyJob $legacyRun.id
+    Run-Worker
+    $legacyRunDone = Get-JobById $legacyRun.id
+    Assert-That ($legacyRunDone.state -eq 'Finished' -and -not $legacyRunDone.pinnedCommit -and @($legacyRunDone.runFolders).Count -eq 1) 'Legacy: a job without pinnedCommit runs the working tree and ends Finished'
+    New-Queue
+    $legacyChanged = @((Submit @{ Test = 'Quick' }).queued)[0]
+    Write-LegacyJob $legacyChanged.id
     Set-Content -LiteralPath (Join-Path $repo 'Lib.cs') -Value 'class Lib { int changed; }'
     Run-Worker
-    $pinnedDone = Get-JobById $pinned.id
-    Assert-That ($pinnedDone.state -eq 'TreeChanged' -and @($pinnedDone.runFolders).Count -eq 0) 'Tree: a job whose source changed after submit is not run'
-    $loose = @((Submit @{ Test = 'Quick'; OnTreeChange = 'RunAnyway' }).queued)[0]
-    Set-Content -LiteralPath (Join-Path $repo 'New.cs') -Value 'class New { }'
+    $legacyChangedDone = Get-JobById $legacyChanged.id
+    Assert-That ($legacyChangedDone.state -eq 'TreeChanged' -and @($legacyChangedDone.runFolders).Count -eq 0) 'Legacy: a job without pinnedCommit still ends TreeChanged when the tree changes after submit'
+    Invoke-Git @('checkout', '--', 'Lib.cs')
+
+    # (g) a pre-build that exits 1 ends the job BuildFailed; no run starts; wait returns 2.
+    New-Queue
+    $failScript = Join-Path $tempRoot 'prebuild-fail.ps1'
+    Set-Content -LiteralPath $failScript -Value 'exit 1'
+    $unbuilt = @((Submit @{ Test = 'Quick' }).queued)[0]
+    $null = Invoke-Queue 'worker' @{ HostAddress = 'stub'; PreBuildScript = $failScript }
+    $unbuiltDone = Get-JobById $unbuilt.id
+    Assert-That ($unbuiltDone.state -eq 'BuildFailed' -and "$($unbuiltDone.reason)" -match 'pre-build failed' -and @($unbuiltDone.runFolders).Count -eq 0) 'Pre-build: a pre-build that exits 1 ends the job BuildFailed with the reason, and no run starts'
+    $null = Invoke-Queue 'wait' @{ Id = $unbuilt.id }
+    Assert-That ($script:lastExit -eq 2) 'Pre-build: wait returns exit code 2 for a BuildFailed job'
+
+    # (h) a cancel while the job is Building (slow pre-build, detached worker) ends it Cancelled.
+    New-Queue
+    $sleepScript = Join-Path $tempRoot 'prebuild-sleep.ps1'
+    Set-Content -LiteralPath $sleepScript -Value 'Start-Sleep -Seconds 30'
+    $building = @((Submit @{ Test = 'Quick'; NoStart = $false; PreBuildScript = $sleepScript }).queued)[0]
+    $deadline = (Get-Date).AddSeconds(30)
+    while ((Get-Date) -lt $deadline -and (Get-JobById $building.id).state -ne 'Building') { Start-Sleep -Milliseconds 300 }
+    $sawBuilding = (Get-JobById $building.id).state -eq 'Building'
+    Assert-That $sawBuilding 'Cancel while building: the detached worker has the job in Building'
+    $null = Invoke-Queue 'cancel' @{ Id = $building.id; Session = 's1' }
+    $stopClock = [System.Diagnostics.Stopwatch]::StartNew()
+    $null = Invoke-Queue 'wait' @{ Id = $building.id }
+    $buildingDone = Get-JobById $building.id
+    Assert-That ($buildingDone.state -eq 'Cancelled' -and $stopClock.Elapsed.TotalSeconds -lt 25) 'Cancel while building: the pre-build is stopped and the job ends Cancelled'
+
+    # (e) the sweep keep-list spans host folders: a checkout that a Queued job on another host folder needs survives.
+    # Own checkout root so the ages and counts below are the only checkouts in it.
+    New-Queue
+    $checkoutsE = Join-Path $tempRoot 'checkouts-e'
+    $env:ROSLYNSENTINEL_EVALQUEUE_CHECKOUTS_ROOT = $checkoutsE
+    $shaE = (& git -C $repo rev-parse HEAD).Trim()
+    $elsewhere = @((Submit @{ HostAddress = 'http://127.0.0.1:9/v1'; Test = 'Quick' }).queued)[0]
+    $keptDir = Join-Path $checkoutsE $shaE.Substring(0, 12)
+    [IO.File]::SetLastWriteTimeUtc((Join-Path $keptDir 'lastused'), [DateTime]::UtcNow.AddHours(-48))
+    Set-Content -LiteralPath (Join-Path $repo 'Lib.cs') -Value 'class Lib { int five; }'
+    Invoke-Git @('add', '--', 'Lib.cs')
+    Invoke-Git @('commit', '-q', '-m', 'five')
+    $here = @((Submit @{ Test = 'Quick' }).queued)[0]
+    $oldUnlisted = Join-Path $checkoutsE '999999999999'
+    New-FakeCheckout $oldUnlisted ('9' * 40) 48
+    # Five newer checkouts fill the KeepNewest 5 protection, so only the keep-list can save the old one.
+    foreach ($digit in 1..5) { New-FakeCheckout (Join-Path $checkoutsE ([string]$digit * 12)) ([string]$digit * 40) 1 }
     Run-Worker
-    $looseDone = Get-JobById $loose.id
-    Assert-That ($looseDone.state -eq 'Finished' -and $looseDone.testedDirty -eq $true -and $looseDone.testedFingerprint -ne $looseDone.fingerprint) 'Tree: -OnTreeChange RunAnyway runs and records the tree it tested'
-    Set-Content -LiteralPath (Join-Path $repo 'notes.md') -Value 'docs only'
-    $docOnly = @((Submit @{ Test = 'Quick'; Force = $true }).queued)[0]
-    Set-Content -LiteralPath (Join-Path $repo 'notes.md') -Value 'docs changed'
-    Run-Worker
-    Assert-That ((Get-JobById $docOnly.id).state -eq 'Finished') 'Tree: a change outside source files does not refuse the job'
+    $env:ROSLYNSENTINEL_EVALQUEUE_CHECKOUTS_ROOT = Join-Path $tempRoot 'checkouts'
+    Assert-That ((Get-JobFromHost 'stub' $here.id).state -eq 'Finished') 'Sweep keep-list: the job on this host folder runs'
+    Assert-That (Test-Path -LiteralPath (Join-Path $keptDir 'complete')) 'Sweep keep-list: an old checkout that a Queued job on another host folder needs survives the worker run here'
+    Assert-That (-not (Test-Path -LiteralPath $oldUnlisted)) 'Sweep keep-list: an old checkout that nothing needs is removed by the same run'
+    Assert-That ((Get-JobFromHost $elsewhere.suffix $elsewhere.id).state -eq 'Queued') 'Sweep keep-list: the job on the other host folder is still Queued'
 
     # --- roslynsentinel-modeleval.ps1 archive step (the queue's Finished/Crashed verdict reads what it copies) ---
     # Runs the script's own Get-RunLeafDirs / Copy-NewRunDirectories (lifted by AST) on a fake model-eval tree.

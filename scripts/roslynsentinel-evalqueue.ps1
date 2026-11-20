@@ -12,9 +12,12 @@
       submit  Queue runs. Needs -HostAddress, -Test, -Model, -Session, -Purpose. -Repeats N queues N jobs.
               Other model-eval parameters go in -EvalArgs as one string, for example
               -EvalArgs '-Samples 10 -ContinueTurns 3'. Prints each job id, its place and estimated start.
-              A request that matches an existing job (same commit, same uncommitted source changes, host,
-              model, test, arguments and ROSLYNSENTINEL_* variables) attaches to that job instead of
-              queuing a second run; -Force queues it anyway.
+              The job is pinned to one commit (-Commit <rev>, default HEAD of the repo) and runs from its own
+              checkout of that commit, so later edits and commits in the repo do not affect it. A repo with
+              uncommitted source changes is refused unless -Commit is given: commit first, or pass
+              -Commit HEAD to test the committed tree. A request that matches an existing job (same
+              commit, host, model, test, arguments and ROSLYNSENTINEL_* variables) attaches to that job
+              instead of queuing a second run; -Force queues it anyway.
       status  Shows the running job, the queue in order and recent jobs. -HostAddress limits it to one host.
       wait    -Id <id>[,<id>...]. Blocks until those jobs end, then prints state, results folder and log.
               Run it in the background to be woken when the run is done.
@@ -31,17 +34,26 @@
       minutes if it does not, leaving the jobs queued.
 
     What a job tests
-      roslynsentinel-modeleval.ps1 builds from the working tree when the run starts. submit records the
-      commit and a fingerprint of uncommitted source changes (*.cs, project and solution files). If they
-      differ when the job's turn comes, the job ends as TreeChanged and is not run (-OnTreeChange RunAnyway
-      runs it against the tree as it is then). ROSLYNSENTINEL_* variables set in the submitting shell are
-      recorded with the job and applied to its run; the worker's own are not inherited.
+      submit resolves -Commit to a full sha and creates (or reuses) a checkout of that commit outside the
+      repo (root C:\rs-eval, override ROSLYNSENTINEL_EVALQUEUE_CHECKOUTS_ROOT). The job runs that
+      checkout's own copy of the eval script. When the job's turn comes the worker pre-builds the eval
+      project there (state Building) and only then starts the run, so a cold build does not count against
+      -TimeLimitMinutes. Results are written under <repo>\ModelTestingResults (the worker sets
+      ROSLYNSENTINEL_RESULTS_ROOT for the run), not inside the checkout. After each job the worker removes
+      checkouts that no queued or running job needs, are older than 24 hours and are not among the newest 5.
+      ROSLYNSENTINEL_* variables set in the submitting shell are recorded with the job and applied to its
+      run; the worker's own are not inherited.
+      Legacy: a job file without a pinned commit (queued before pinning existed) still builds from the working
+      tree; submit records the commit and a fingerprint of its uncommitted source changes and, if they differ
+      when the job's turn comes, the job ends as TreeChanged (-OnTreeChange RunAnyway runs it anyway).
+      -OnTreeChange has no effect on pinned jobs.
 
     Job states
-      Queued, Running, Finished (the run completed; 'passed' says whether the tests passed), Cancelled,
-      TimedOut (stopped at -TimeLimitMinutes), Crashed (ended without a run folder: build failure or
-      testhost crash; or the worker died; or no run folder after -NoRunFolderMinutes, a stuck SetUp),
-      TreeChanged.
+      Queued, Building (the worker is pre-building the checkout; cancellable), Running, Finished (the run
+      completed; 'passed' says whether the tests passed), Cancelled, TimedOut (stopped at
+      -TimeLimitMinutes), Crashed (ended without a run folder: build failure or testhost crash; or the
+      worker died; or no run folder after -NoRunFolderMinutes, a stuck SetUp), BuildFailed (the pre-build
+      failed; the reason holds the end of its log), TreeChanged (legacy jobs only).
 
 .PARAMETER HostAddress
     Host alias (112, 113, 85) or an LM Studio base URL. Same values as roslynsentinel-modeleval.ps1.
@@ -77,6 +89,17 @@
 .PARAMETER NoStart
     submit only: queue without starting the worker (tests and maintenance).
 
+.PARAMETER Commit
+    submit only: the commit to test (any rev git understands; resolved to a full sha at submit). Default:
+    HEAD of the repo, which needs a repo without uncommitted source changes (*.cs, project and solution
+    files). Passing -Commit HEAD tests the committed tree and ignores uncommitted changes.
+
+.PARAMETER PreBuildScript
+    Test seam: path of a script that replaces the pre-build ('dotnet build' of the eval project into the
+    checkout's _scratchbuild_<suffix>). Run by the worker in a child pwsh with the checkout as its working
+    directory; a non-zero exit ends the job as BuildFailed. ROSLYNSENTINEL_EVALQUEUE_PREBUILD_CHECKOUT and
+    ROSLYNSENTINEL_EVALQUEUE_PREBUILD_SUFFIX name the checkout and the host suffix.
+
 .PARAMETER QueueRoot
     Queue folder. Default: $env:ROSLYNSENTINEL_EVALQUEUE_ROOT, else %LOCALAPPDATA%\RoslynSentinel\evalqueue.
 
@@ -108,7 +131,10 @@ param(
     [ValidateRange(1, 100)][int]$Repeats = 1,
     [ValidateRange(1, 9)][int]$Priority = 5,
     [string]$EvalArgs = '',
+    # TODO remove the unpinned path and -OnTreeChange once no unpinned job remains (pinned jobs ignore it).
     [ValidateSet('Refuse', 'RunAnyway')][string]$OnTreeChange = 'Refuse',
+    [string]$Commit,
+    [string]$PreBuildScript,
     [double]$TimeLimitMinutes = 40,
     [double]$NoRunFolderMinutes = 20,
     [switch]$Force,
@@ -122,14 +148,15 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'roslynsentinel-evalcheckout.ps1')
 
-$terminalStates = @('Finished', 'Cancelled', 'TimedOut', 'Crashed', 'TreeChanged')
+$terminalStates = @('Finished', 'Cancelled', 'TimedOut', 'Crashed', 'TreeChanged', 'BuildFailed')
 $defaultExpectedSeconds = 600
 $hostWaitMinutes = 30
 $hostCheckIntervalSeconds = 30
 $pruneAfterDays = 30
 # Variables the model-eval script sets itself, or that name a place and not a behaviour: never part of a job.
-$envNeverCaptured = @('ROSLYNSENTINEL_LLM_BASE_URL', 'ROSLYNSENTINEL_LLM_MODEL', 'ROSLYNSENTINEL_INSTANCES_ROOT')
+$envNeverCaptured = @('ROSLYNSENTINEL_LLM_BASE_URL', 'ROSLYNSENTINEL_LLM_MODEL', 'ROSLYNSENTINEL_INSTANCES_ROOT', 'ROSLYNSENTINEL_RESULTS_ROOT')
 # Source files that decide what a run builds. Docs and scripts are left out so that an unrelated edit
 # on the shared tree does not refuse a queued job.
 $fingerprintPathspecs = @('*.cs', '*.csproj', '*.props', '*.targets', '*.sln', '*.slnx')
@@ -285,6 +312,13 @@ function Get-TreeFingerprint([string]$Root) {
     }
 }
 
+function Get-DirtyPaths([string]$Root, [string[]]$Pathspecs) {
+    # Tracked files that differ from HEAD (staged or not) plus untracked files, limited to the pathspecs.
+    $tracked = @(& git -C $Root diff HEAD --name-only -- @Pathspecs 2>$null)
+    $untracked = @(& git -C $Root ls-files --others --exclude-standard -- @Pathspecs 2>$null)
+    return @(@($tracked) + @($untracked) | Where-Object { $_ } | Sort-Object -Unique)
+}
+
 function Get-ExpectedSeconds($Jobs, [string]$TestName) {
     $durations = @($Jobs | Where-Object { $_.state -eq 'Finished' -and $_.test -eq $TestName -and $_.durationSeconds } |
             Select-Object -Last 10 | ForEach-Object { [double]$_.durationSeconds } | Sort-Object)
@@ -296,8 +330,10 @@ function Get-QueueSchedule($Jobs) {
     # Seconds until each queued job starts, from recorded durations of earlier runs of the same test.
     $schedule = @{}
     $offset = 0.0
-    foreach ($running in @($Jobs | Where-Object { $_.state -eq 'Running' })) {
-        $elapsed = ([datetime]::UtcNow - (ConvertTo-Utc $running.startedUtc)).TotalSeconds
+    # Recorded durations (durationSeconds) cover the run only, not the cold pre-build, so every estimate here is
+    # a lower bound for a job that still has to build.
+    foreach ($running in @($Jobs | Where-Object { $_.state -in @('Building', 'Running') })) {
+        $elapsed = if ($running.state -eq 'Running') { ([datetime]::UtcNow - (ConvertTo-Utc $running.startedUtc)).TotalSeconds } else { 0 }
         $offset += [math]::Max(0, (Get-ExpectedSeconds $Jobs $running.test) - $elapsed)
     }
     foreach ($queued in (Get-QueuedInOrder $Jobs)) {
@@ -320,10 +356,10 @@ function Test-WorkerAlive([string]$HostDir) {
 }
 
 function Repair-OrphanedJobs([string]$HostDir) {
-    # Call inside Invoke-WithQueueLock, only when no worker is alive: a Running job then has no owner.
-    foreach ($job in @(Get-Jobs $HostDir | Where-Object { $_.state -eq 'Running' })) {
+    # Call inside Invoke-WithQueueLock, only when no worker is alive: a Building or Running job then has no owner.
+    foreach ($job in @(Get-Jobs $HostDir | Where-Object { $_.state -in @('Building', 'Running') })) {
+        $job.reason = if ($job.state -eq 'Building') { 'The worker that was pre-building this job stopped before the run started.' } else { 'The worker that ran this job stopped before the run ended.' }
         $job.state = 'Crashed'
-        $job.reason = 'The worker that ran this job stopped before the run ended.'
         $job.endedUtc = Get-UtcStamp
         Write-Job $job
     }
@@ -334,12 +370,13 @@ function Start-DetachedWorker($HostInfo) {
     $workerArgs = @('-NoProfile', '-NonInteractive', '-File', "`"$PSCommandPath`"", 'worker',
         '-HostAddress', "`"$($HostInfo.Alias)`"", '-QueueRoot', "`"$QueueRoot`"")
     if ($SkipHostCheck) { $workerArgs += '-SkipHostCheck' }
+    if ($PreBuildScript) { $workerArgs += @('-PreBuildScript', "`"$PreBuildScript`"") }
     Start-Process -FilePath $exe -ArgumentList $workerArgs -WindowStyle Hidden -WorkingDirectory $QueueRoot | Out-Null
 }
 
-function Get-EvalScriptInfo {
-    if (-not (Test-Path -LiteralPath $EvalScript)) { Stop-EvalQueue "Eval script not found: $EvalScript" }
-    return Get-Command -Name $EvalScript -CommandType ExternalScript
+function Get-EvalScriptInfo([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path)) { Stop-EvalQueue "Eval script not found: $Path" }
+    return Get-Command -Name $Path -CommandType ExternalScript
 }
 
 function Test-EvalArgs([string]$Text, $ScriptInfo) {
@@ -381,6 +418,9 @@ function Format-JobLine($Job, $Schedule, $Jobs) {
     $who = ($Job.sessions -join '+')
     if (-not $who) { $who = $Job.session }
     switch ($Job.state) {
+        'Building' {
+            return "  building $($Job.id)  $what  $who  pre-building the checkout, then runs  `"$($Job.purpose)`""
+        }
         'Running' {
             $elapsed = ([datetime]::UtcNow - (ConvertTo-Utc $Job.startedUtc)).TotalSeconds
             return "  running  $($Job.id)  $what  $who  $(Format-Span $elapsed) of about $(Format-Span (Get-ExpectedSeconds $Jobs $Job.test))  `"$($Job.purpose)`""
@@ -418,19 +458,57 @@ function Invoke-Submit {
             Stop-EvalQueue "submit needs -$required. Example: submit -HostAddress 113 -Test LiteralSteps -Model <model key> -Session <your session name> -Purpose '<why>'."
         }
     }
-    $scriptInfo = Get-EvalScriptInfo
+    # Pin the job to one commit. Uncommitted changes cannot be tested through the queue: the job runs from a
+    # checkout of the commit, never from the working tree.
+    $tree = Get-TreeFingerprint $RepoRoot
+    if ($tree.dirty -and -not $Commit) {
+        $dirtyPaths = @(Get-DirtyPaths $RepoRoot $fingerprintPathspecs)
+        $shownPaths = @($dirtyPaths | Select-Object -First 5)
+        $more = if ($dirtyPaths.Count -gt $shownPaths.Count) { " (and $($dirtyPaths.Count - $shownPaths.Count) more)" } else { '' }
+        Stop-EvalQueue ("$RepoRoot has uncommitted source changes: $($shownPaths -join ', ')$more. A queued run tests a commit, not the working tree. " +
+            "Either commit them first, or pass -Commit HEAD to test the committed tree without them.")
+    }
+    if ($Commit -and $tree.dirty) {
+        Write-Warning "$RepoRoot has uncommitted source changes; they are not part of this run (it tests commit '$Commit')."
+    }
+    $dirtyScripts = @(Get-DirtyPaths $RepoRoot @('scripts/*.ps1'))
+    if ($dirtyScripts.Count -gt 0) {
+        Write-Warning "Uncommitted script changes are not part of this run (it runs the committed scripts): $(@($dirtyScripts | Select-Object -First 5) -join ', ')."
+    }
+    if ($PSBoundParameters.ContainsKey('OnTreeChange')) {
+        Write-Warning '-OnTreeChange is ignored: a pinned job runs its own checkout, so the working tree cannot change under it.'
+    }
+
+    $evalFull = [System.IO.Path]::GetFullPath($EvalScript)
+    if (-not (Test-PathUnderRoot -Path $evalFull -Root $RepoRoot)) {
+        Stop-EvalQueue "-EvalScript '$EvalScript' is outside the repo '$RepoRoot'. A pinned job runs the checkout's copy of the script, so it must live in the repo."
+    }
+    $evalRelative = $evalFull.Substring($RepoRoot.Length).TrimStart('\')
+
+    try {
+        $pinnedSha = Resolve-EvalCommit -RepoRoot $RepoRoot -Rev $(if ($Commit) { $Commit } else { 'HEAD' })
+        $checkoutRoot = Get-EvalCheckoutRoot
+        $checkoutPath = Get-EvalCheckout -RepoRoot $RepoRoot -Sha $pinnedSha -CheckoutRoot $checkoutRoot
+    }
+    catch { Stop-EvalQueue $_.Exception.Message }
+    $checkoutEvalScript = Join-Path $checkoutPath $evalRelative
+    if (-not (Test-Path -LiteralPath $checkoutEvalScript)) {
+        Stop-EvalQueue "The eval script '$evalRelative' does not exist in commit $pinnedSha (checkout $checkoutPath)."
+    }
+
+    # -Test and -EvalArgs are checked against the script the job will run: the checkout's, not the working tree's.
+    $scriptInfo = Get-EvalScriptInfo $checkoutEvalScript
     $validTests = @($scriptInfo.Parameters['Test'].Attributes |
             Where-Object { $_ -is [System.Management.Automation.ValidateSetAttribute] } | ForEach-Object { $_.ValidValues })
     foreach ($name in $Test) {
         if ($validTests.Count -gt 0 -and $name -notin $validTests) {
-            Stop-EvalQueue "-Test '$name' is not a test alias of $(Split-Path $EvalScript -Leaf). Valid: $($validTests -join ', ')."
+            Stop-EvalQueue "-Test '$name' is not a test alias of $(Split-Path $EvalScript -Leaf) at commit $pinnedSha. Valid: $($validTests -join ', ')."
         }
     }
     Test-EvalArgs $EvalArgs $scriptInfo
 
     $hostInfo = Resolve-EvalHost $HostAddress
     $hostDir = Get-HostDir $hostInfo
-    $tree = Get-TreeFingerprint $RepoRoot
     $argsText = ($EvalArgs -replace '\s+', ' ').Trim()
     $envMap = [ordered]@{}
     Get-ChildItem Env: | Where-Object {
@@ -447,14 +525,15 @@ function Invoke-Submit {
         $stamp = [datetime]::UtcNow.ToString('yyyyMMdd-HHmmss')
         $sequence = @($jobs | Where-Object { $_.id -like "$stamp-*" }).Count
         foreach ($testName in $Test) {
-            $argsKey = Get-Hash "$($hostInfo.Suffix)|$Model|$testName|$argsText|$envText|$($RepoRoot.ToLowerInvariant())"
+            $argsKey = Get-Hash "$($hostInfo.Suffix)|$Model|$testName|$argsText|$envText|$($RepoRoot.ToLowerInvariant())|$pinnedSha"
             for ($index = 1; $index -le $Repeats; $index++) {
                 $same = $null
                 if (-not $Force) {
+                    # A pinned job's fingerprint and testedFingerprint are its sha, so the two comparisons agree.
                     $same = $jobs | Where-Object {
                         $_.argsKey -eq $argsKey -and $_.repeatIndex -eq $index -and (
-                            ($_.state -eq 'Queued' -and $_.fingerprint -eq $tree.fingerprint) -or
-                            ($_.state -in @('Running', 'Finished') -and $_.testedFingerprint -eq $tree.fingerprint))
+                            ($_.state -eq 'Queued' -and $_.fingerprint -eq $pinnedSha) -or
+                            ($_.state -in @('Building', 'Running', 'Finished') -and $_.testedFingerprint -eq $pinnedSha))
                     } | Select-Object -Last 1
                 }
                 if ($same) {
@@ -472,8 +551,12 @@ function Invoke-Submit {
                     host              = $hostInfo.Alias
                     suffix            = $hostInfo.Suffix
                     baseUrl           = $hostInfo.BaseUrl
-                    repoRoot          = $RepoRoot
-                    evalScript        = $EvalScript
+                    # repoRoot and evalScript are the checkout's: the run builds and executes there.
+                    repoRoot          = $checkoutPath
+                    evalScript        = $checkoutEvalScript
+                    pinnedCommit      = $pinnedSha
+                    sourceRepoRoot    = $RepoRoot
+                    checkoutRoot      = $checkoutRoot
                     session           = $Session
                     sessions          = @($Session)
                     purpose           = $Purpose
@@ -488,9 +571,9 @@ function Invoke-Submit {
                     onTreeChange      = $OnTreeChange
                     timeLimitMinutes  = $TimeLimitMinutes
                     noRunFolderMinutes = $NoRunFolderMinutes
-                    commit            = $tree.commit
-                    dirty             = $tree.dirty
-                    fingerprint       = $tree.fingerprint
+                    commit            = $pinnedSha
+                    dirty             = $false
+                    fingerprint       = $pinnedSha
                     testedCommit      = $null
                     testedDirty       = $null
                     testedFingerprint = $null
@@ -574,7 +657,7 @@ function Invoke-Status {
         Write-Output "Host $($snapshot.host): $workerText"
         $schedule = Get-QueueSchedule $jobs
         $shown = 0
-        foreach ($job in @($jobs | Where-Object { $_.state -eq 'Running' })) { Write-Output (Format-JobLine $job $schedule $jobs); $shown++ }
+        foreach ($job in @($jobs | Where-Object { $_.state -in @('Building', 'Running') })) { Write-Output (Format-JobLine $job $schedule $jobs); $shown++ }
         foreach ($job in $queued) { Write-Output (Format-JobLine $job $schedule $jobs); $shown++ }
         if ($shown -eq 0) { Write-Output '  nothing running or queued' }
         foreach ($job in @($jobs | Where-Object { $_.state -in $terminalStates } | Select-Object -Last 5)) {
@@ -654,10 +737,12 @@ function Invoke-Cancel {
                 Write-Job $job
                 return "$($job.id): cancelled (it had not started)."
             }
+            # Building or Running: the worker polls cancelRequested and stops the build or the run.
+            $phase = if ($job.state -eq 'Building') { 'building' } else { 'running' }
             $job.cancelRequested = $true
-            $job.reason = "Cancelled by $Session while running."
+            $job.reason = "Cancelled by $Session while $phase."
             Write-Job $job
-            "$($job.id): stop requested; the worker ends the run within a few seconds."
+            "$($job.id): stop requested; the worker ends the $(if ($phase -eq 'building') { 'build' } else { 'run' }) within a few seconds."
         }
         Write-Output $message
     }
@@ -699,7 +784,10 @@ function Invoke-Worker {
     function Get-RunFolders($Job) {
         # Run folders are timestamp-named leaves under ModelTestingResults\<suffix>\<TestName>\ (one level
         # deeper for SizeThreshold). roslynsentinel-modeleval.ps1 copies each run there when it ends.
-        $root = Join-Path $Job.repoRoot "ModelTestingResults\$($Job.suffix)"
+        # A pinned job's run writes to the source repo's results folder (ROSLYNSENTINEL_RESULTS_ROOT, set in
+        # Invoke-JobRun), not into its checkout; a legacy job ran in the repo itself.
+        $resultsBase = if ($Job.pinnedCommit) { $Job.sourceRepoRoot } else { $Job.repoRoot }
+        $root = Join-Path $resultsBase "ModelTestingResults\$($Job.suffix)"
         if (-not (Test-Path -LiteralPath $root)) { return @() }
         return @(Get-ChildItem -LiteralPath $root -Directory -Recurse -Depth 2 -ErrorAction SilentlyContinue |
                 Where-Object { $_.Name -match '^\d{8}-\d{6}' } | ForEach-Object FullName)
@@ -740,7 +828,11 @@ function Invoke-Worker {
         foreach ($name in @($startInfo.Environment.Keys | Where-Object { $_ -like 'ROSLYNSENTINEL_*' })) { [void]$startInfo.Environment.Remove($name) }
         foreach ($property in $Job.env.PSObject.Properties) { $startInfo.Environment[$property.Name] = [string]$property.Value }
         $startInfo.Environment['ROSLYNSENTINEL_EVALQUEUE_JOB'] = $Job.id
+        # Set after the submitter's variables so it always wins: results stay central, outside the disposable checkout.
+        if ($Job.pinnedCommit) { $startInfo.Environment['ROSLYNSENTINEL_RESULTS_ROOT'] = Join-Path $Job.sourceRepoRoot 'ModelTestingResults' }
 
+        # durationSeconds (and so the ETA in Get-ExpectedSeconds) covers the run only: the clock starts here, after
+        # the pre-build, so a cold build is not part of it.
         $started = [datetime]::UtcNow
         $process = [System.Diagnostics.Process]::Start($startInfo)
         $childId = $process.Id
@@ -801,6 +893,118 @@ function Invoke-Worker {
         Write-WorkerLog "job $($Job.id) ended: exit=$exitCode stop=$stopAs folders=$($newFolders.Count) seconds=$duration"
     }
 
+    function Start-PinnedJob($Job) {
+        # Takes a job the dispatcher just flipped to Building (queue lock NOT held: a cold build runs for minutes and
+        # the lock times out after 60 s). Makes sure its checkout exists, pre-builds, then ends the job (Cancelled,
+        # BuildFailed) and returns $null, or flips it to Running and returns it. The time limit starts at Running.
+        $buildLog = [System.IO.Path]::ChangeExtension($Job.logPath, '.build.log')
+        $failure = $null
+        $stopAs = $null
+        $exitCode = 0
+        try {
+            # From the job's own checkoutRoot, never this worker's environment (a detached worker inherits whichever
+            # session started it). Recreates the checkout when a sweep or a person removed it since submit.
+            $null = Get-EvalCheckout -RepoRoot $Job.sourceRepoRoot -Sha $Job.pinnedCommit -CheckoutRoot $Job.checkoutRoot
+        }
+        catch { $failure = "The checkout of commit $($Job.pinnedCommit) is not available: $($_.Exception.Message)" }
+
+        if (-not $failure) {
+            $csproj = Join-Path $Job.repoRoot 'RoslynSentinel.Tests.ModelEval\RoslynSentinel.Tests.ModelEval.csproj'
+            $artifactsPath = Join-Path $Job.repoRoot "_scratchbuild_$($Job.suffix)"
+            $command = $null
+            if ($PreBuildScript) {
+                $command = "try { & $(ConvertTo-Quoted $PreBuildScript) *> $(ConvertTo-Quoted $buildLog) } " +
+                    "catch { `$_ | Out-String | Add-Content -LiteralPath $(ConvertTo-Quoted $buildLog); exit 97 }; exit `$LASTEXITCODE"
+            }
+            elseif (Test-Path -LiteralPath $csproj) {
+                # Must match the build in roslynsentinel-modeleval.ps1 (same project, configuration and --artifacts-path,
+                # MSBUILDDISABLENODEREUSE below), so the run's own 'dotnet test' finds everything up to date.
+                $command = "try { & dotnet build $(ConvertTo-Quoted $csproj) -c Debug --artifacts-path $(ConvertTo-Quoted $artifactsPath) *> $(ConvertTo-Quoted $buildLog) } " +
+                    "catch { `$_ | Out-String | Add-Content -LiteralPath $(ConvertTo-Quoted $buildLog); exit 97 }; exit `$LASTEXITCODE"
+            }
+            else {
+                # No eval project in the checkout (the queue tests' throwaway repo): nothing to build; the run itself
+                # reports a missing project.
+                Write-WorkerLog "job $($Job.id): no eval project in $($Job.repoRoot), pre-build skipped"
+            }
+
+            if ($command) {
+                $startInfo = [System.Diagnostics.ProcessStartInfo]::new((Get-Process -Id $PID).Path)
+                foreach ($argument in @('-NoProfile', '-NonInteractive', '-Command', $command)) { $startInfo.ArgumentList.Add($argument) }
+                $startInfo.UseShellExecute = $false
+                $startInfo.CreateNoWindow = $true
+                $startInfo.WorkingDirectory = $Job.repoRoot
+                foreach ($name in @($startInfo.Environment.Keys | Where-Object { $_ -like 'ROSLYNSENTINEL_*' })) { [void]$startInfo.Environment.Remove($name) }
+                $startInfo.Environment['MSBUILDDISABLENODEREUSE'] = '1'
+                $startInfo.Environment['ROSLYNSENTINEL_EVALQUEUE_PREBUILD_CHECKOUT'] = $Job.repoRoot
+                $startInfo.Environment['ROSLYNSENTINEL_EVALQUEUE_PREBUILD_SUFFIX'] = $Job.suffix
+                $process = [System.Diagnostics.Process]::Start($startInfo)
+                Write-WorkerLog "job $($Job.id) building in $($Job.repoRoot) child=$($process.Id)"
+                # A hung build must not hold the host forever: it gets the job's time limit, the same budget the run gets.
+                $buildDeadline = [datetime]::UtcNow.AddMinutes([double]$Job.timeLimitMinutes)
+                while (-not $process.WaitForExit(2000)) {
+                    $current = Read-Job (Get-JobPath $Job)
+                    if ($current -and $current.cancelRequested) { $stopAs = 'Cancelled'; break }
+                    if ([datetime]::UtcNow -gt $buildDeadline) { $stopAs = 'TimedOut'; break }
+                }
+                if ($stopAs) {
+                    & taskkill.exe /PID $process.Id /T /F *> $null
+                    [void]$process.WaitForExit(15000)
+                }
+                $exitCode = if ($process.HasExited) { $process.ExitCode } else { -1 }
+            }
+        }
+
+        return Invoke-WithQueueLock $hostDir {
+            $current = Read-Job (Get-JobPath $Job)
+            if (-not $current) { return $null }
+            # A cancel that arrived during the build wins over the build's outcome.
+            if ($stopAs -eq 'Cancelled' -or $current.cancelRequested) {
+                $current.state = 'Cancelled'
+                $current.endedUtc = Get-UtcStamp
+                Write-Job $current
+                Write-WorkerLog "job $($Job.id) cancelled during the pre-build"
+                return $null
+            }
+            $buildFailure = $failure
+            if (-not $buildFailure -and $stopAs -eq 'TimedOut') {
+                $buildFailure = "The pre-build was stopped at the time limit of $($Job.timeLimitMinutes) minute(s)."
+            }
+            elseif (-not $buildFailure -and $exitCode -ne 0) {
+                $tail = if (Test-Path -LiteralPath $buildLog) { (@(Get-Content -LiteralPath $buildLog -Tail 15 -ErrorAction SilentlyContinue) -join "`n").Trim() } else { '' }
+                if ($tail.Length -gt 1500) { $tail = $tail.Substring($tail.Length - 1500) }
+                $buildFailure = "The pre-build failed (exit code $exitCode). Full log: $buildLog`n$tail"
+            }
+            if ($buildFailure) {
+                $current.state = 'BuildFailed'
+                $current.reason = $buildFailure
+                $current.endedUtc = Get-UtcStamp
+                Write-Job $current
+                Write-WorkerLog "job $($Job.id) BuildFailed: $($buildFailure -replace '\s+', ' ')"
+                return $null
+            }
+            $current.state = 'Running'
+            $current.startedUtc = Get-UtcStamp
+            Write-Job $current
+            $current
+        }
+    }
+
+    function Invoke-CheckoutRetention([string]$CheckoutRoot) {
+        # Checkouts are global but queue locks are per host, so the keep-list reads every host folder. Anything a
+        # Queued, Building or Running job names stays; the rest goes only when old and outside the newest few.
+        try {
+            $keep = @(foreach ($dir in @(Get-ChildItem -LiteralPath $QueueRoot -Directory)) {
+                    foreach ($other in @(Get-Jobs $dir.FullName)) {
+                        if ($other.pinnedCommit -and ($other.state -in @('Queued', 'Building', 'Running'))) { $other.pinnedCommit }
+                    }
+                })
+            $removed = @(Invoke-EvalCheckoutSweep -CheckoutRoot $CheckoutRoot -KeepShas $keep -MinimumAge ([TimeSpan]::FromHours(24)) -KeepNewest 5)
+            if ($removed.Count -gt 0) { Write-WorkerLog "checkout sweep removed $($removed.Count): $($removed -join ', ')" }
+        }
+        catch { Write-WorkerLog "checkout sweep failed: $($_.Exception.Message)" }
+    }
+
     $lockStream = Invoke-WithQueueLock $hostDir {
         try { [System.IO.File]::Open($lockPath, [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::Write, [System.IO.FileShare]::Read) }
         catch [System.IO.IOException] { $null }
@@ -814,7 +1018,7 @@ function Invoke-Worker {
             Repair-OrphanedJobs $hostDir
             $cutoff = [datetime]::UtcNow.AddDays(-$pruneAfterDays)
             foreach ($old in @(Get-Jobs $hostDir | Where-Object { $_.state -in $terminalStates -and $_.endedUtc -and (ConvertTo-Utc $_.endedUtc) -lt $cutoff })) {
-                Remove-Item -LiteralPath (Get-JobPath $old), $old.logPath -Force -ErrorAction SilentlyContinue
+                Remove-Item -LiteralPath (Get-JobPath $old), $old.logPath, ([System.IO.Path]::ChangeExtension($old.logPath, '.build.log')) -Force -ErrorAction SilentlyContinue
             }
         }
 
@@ -851,6 +1055,18 @@ function Invoke-Worker {
             $job = Invoke-WithQueueLock $hostDir {
                 $next = Get-QueuedInOrder (Get-Jobs $hostDir) | Select-Object -First 1
                 if (-not $next) { return $null }
+                if ($next.pinnedCommit) {
+                    # A pinned job runs from its own checkout, so there is no tree to compare. Building is set here, inside
+                    # the lock, so a submit or cancel sees it; the build itself runs after the lock is released.
+                    $next.state = 'Building'
+                    $next.workerPid = $PID
+                    $next.testedCommit = $next.pinnedCommit
+                    $next.testedDirty = $false
+                    $next.testedFingerprint = $next.pinnedCommit
+                    Write-Job $next
+                    return $next
+                }
+                # TODO remove the unpinned path and -OnTreeChange once no unpinned job remains
                 $tree = Get-TreeFingerprint $next.repoRoot
                 if ($tree.fingerprint -ne $next.fingerprint -and $next.onTreeChange -eq 'Refuse') {
                     $next.state = 'TreeChanged'
@@ -869,7 +1085,13 @@ function Invoke-Worker {
                 Write-Job $next
                 $next
             }
+            $dispatched = $job
+            if ($job -and $job.pinnedCommit) {
+                Write-WorkerState 'Building' $job.id $null
+                $job = Start-PinnedJob $job
+            }
             if ($job) { Invoke-JobRun $job }
+            if ($dispatched -and $dispatched.pinnedCommit) { Invoke-CheckoutRetention $dispatched.checkoutRoot }
         }
     }
     catch {
