@@ -137,6 +137,7 @@ $testName = 'ReplayVariants_SamplesAndClassifies'
 $artifactsPath = Join-Path $repoRoot "_scratchbuild_ev_$suffix"
 $csproj = Join-Path $repoRoot 'RoslynSentinel.Tests.ErrorVariants\RoslynSentinel.Tests.ErrorVariants.csproj'
 $testDir = Join-Path $artifactsPath "bin\RoslynSentinel.Tests.ErrorVariants\debug\model-eval\$testName"
+# TODO honour ROSLYNSENTINEL_RESULTS_ROOT here like roslynsentinel-modeleval.ps1 does (this script does not run through the queue)
 $resultsDir = Join-Path $repoRoot "ModelTestingResults\$suffix\$testName"
 
 $env:ROSLYNSENTINEL_LLM_BASE_URL = $baseUrl

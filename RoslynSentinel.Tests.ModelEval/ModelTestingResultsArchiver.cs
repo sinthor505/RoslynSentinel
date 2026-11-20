@@ -31,7 +31,7 @@ internal static class ModelTestingResultsArchiver
 
             WriteTestResult(runDirectory);
 
-            var repoRoot = FindRepoRoot();
+            var resultsBase = ResolveResultsBase();
             var suffix = DeriveHostSuffix(RoslynSentinel.Common.LlmOptions.BaseUrl);
 
             // _runDirectory always looks like <work-dir>\model-eval\<...>\<timestamp>; keep
@@ -44,7 +44,7 @@ internal static class ModelTestingResultsArchiver
                 ? runDirectory[(markerIndex + marker.Length)..]
                 : Path.GetFileName(runDirectory);
 
-            var destination = Path.Combine(repoRoot, "ModelTestingResults", suffix, relative);
+            var destination = Path.Combine(resultsBase, suffix, relative);
             if (Directory.Exists(destination))
             {
                 return;
@@ -131,6 +131,15 @@ internal static class ModelTestingResultsArchiver
         {
             CopyDirectoryRecursive(subDir, Path.Combine(destinationDir, Path.GetFileName(subDir)));
         }
+    }
+
+    // ROSLYNSENTINEL_RESULTS_ROOT (absolute) redirects the results tree, e.g. for queue jobs that run from a throwaway checkout; unset or relative -> <repo root>\ModelTestingResults as before.
+    private static string ResolveResultsBase()
+    {
+        var overrideRoot = Environment.GetEnvironmentVariable("ROSLYNSENTINEL_RESULTS_ROOT");
+        return !string.IsNullOrWhiteSpace(overrideRoot) && Path.IsPathRooted(overrideRoot)
+            ? overrideRoot
+            : Path.Combine(FindRepoRoot(), "ModelTestingResults");
     }
 
     private static string FindRepoRoot()

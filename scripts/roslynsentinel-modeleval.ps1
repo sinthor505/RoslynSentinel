@@ -517,6 +517,16 @@ if ($Test.Count -gt 1) {
     Write-Host "=== Queuing $($Test.Count) tests in sequence against $baseUrl (model=$Model): $($Test -join ', ') ===" -ForegroundColor Magenta
 }
 
+# Central results base. ROSLYNSENTINEL_RESULTS_ROOT (absolute) redirects every writer of ModelTestingResults (the queue sets it for pinned jobs, whose repo root is a throwaway checkout). Validated here because the test archivers catch and swallow their own exceptions.
+if ($env:ROSLYNSENTINEL_RESULTS_ROOT) {
+    if (-not [System.IO.Path]::IsPathRooted($env:ROSLYNSENTINEL_RESULTS_ROOT)) {
+        throw "ROSLYNSENTINEL_RESULTS_ROOT must be an absolute path, got '$($env:ROSLYNSENTINEL_RESULTS_ROOT)'."
+    }
+    $resultsBase = $env:ROSLYNSENTINEL_RESULTS_ROOT
+} else {
+    $resultsBase = Join-Path $repoRoot 'ModelTestingResults'
+}
+
 $finalExitCode = 0
 foreach ($currentTest in $Test) {
 $testName = $testNames[$currentTest]
@@ -525,7 +535,7 @@ if ($Clean) {
     $modelEvalDir = Join-Path $artifactsPath 'bin\RoslynSentinel.Tests.ModelEval\debug\model-eval'
     if (Test-Path $modelEvalDir) {
         $archiveStamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-        $archiveDir = Join-Path $repoRoot "ModelTestingResults\$suffix\$archiveStamp"
+        $archiveDir = Join-Path $resultsBase "$suffix\$archiveStamp"
         Write-Host "Archiving stale run history to $archiveDir before removing $modelEvalDir" -ForegroundColor Yellow
         New-Item -ItemType Directory -Force -Path (Split-Path $archiveDir -Parent) | Out-Null
         Move-Item -Path $modelEvalDir -Destination $archiveDir
@@ -704,7 +714,7 @@ function Wait-ForTesthostExit {
 }
 
 $modelEvalRoot = Join-Path $artifactsPath "bin\RoslynSentinel.Tests.ModelEval\debug\model-eval"
-$resultsRoot = Join-Path $repoRoot "ModelTestingResults\$suffix"
+$resultsRoot = Join-Path $resultsBase $suffix
 $resultsDir = Join-Path $resultsRoot $testName
 
 function Get-RunLeafDirs {
