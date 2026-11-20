@@ -35,28 +35,26 @@ LM Studio server through the real in-process MCP server (same harness pattern as
 `McpTasksHarnessTests.cs`) — no mocking. Tests `Assert.Ignore` (skip, not fail) if
 `ROSLYNSENTINEL_LLM_MODEL` isn't set, so they're always safe to include in a normal run.
 
-## Known LM Studio hosts (as of 2026-08-30)
+## Eval hosts (table: `scripts/eval-hosts.json`)
 
-- `http://192.168.1.112:1234/v1` — GTX 1080. Slower; the harness floors its HTTP client
-  timeout and turn/wall-clock caps assuming this GPU (see `WholeFileRewriteAgentTests.cs`
-  `SetUp`/`RunOnceAsync` comments).
-- `http://192.168.1.113:1234/v1` — RTX 4060. Faster.
-- Model in use on both: `qwen3.5-9b-coder`. Confirmed present in each host's `/v1/models`
-  listing, but that endpoint lists every *downloaded* model, not which one is actually
-  *loaded* for inference — it cannot be used alone to infer the right model string. Ask the
-  user to confirm/update if a session needs a different model than the one recorded here.
+Do not copy host addresses from older notes; read the table. `.\scripts\Get-EvalHostStatus.ps1 -Json`
+shows, per endpoint, whether it is reachable, which model ids are loaded, the context length and the queue.
 
-**Why the model can't just be re-derived from `/v1/models`:** both hosts have dozens of
-downloaded models (coder, vision, uncensored/roleplay, embedding models, etc.) — the
-endpoint has no "currently loaded" flag, so guessing from that list risks silently running
-eval against the wrong model. Always confirm the model string with the user before a run
-if it's not already recorded here or hasn't been reconfirmed recently.
+- Machine keys are `112`, `113` and `85`. Each has a `<machine>u` alias (Unsloth llama-server, port 8888)
+  and a `<machine>lms` alias (LM Studio, port 1234). Exactly one entry per machine is `default: true`,
+  currently the llama-server one.
+- A bare machine key (`-HostAddress 113`) means that machine's default entry. Use `113lms` for LM Studio.
+- Address resolution: a table alias, a bare machine key (its default entry), or a base URL equal to an
+  entry's `baseUrl`; any other base URL is used verbatim.
+- llama-server model rule: request the loaded model id. The match ignores case and an org prefix.
+  Refusal of a mismatched `-Model` lands with Step 13; until then, pass the loaded id that
+  `Get-EvalHostStatus.ps1 -Json` reports.
 
 ## Env vars (read by `RoslynSentinel.Common/LlmOptions.cs` and the ModelEval tests)
 
 | Var | Purpose | Default |
 |---|---|---|
-| `ROSLYNSENTINEL_LLM_BASE_URL` | LM Studio server URL | `http://localhost:1234/v1` |
+| `ROSLYNSENTINEL_LLM_BASE_URL` | LM Studio or llama-server server URL | `http://localhost:1234/v1` |
 | `ROSLYNSENTINEL_LLM_MODEL` | Loaded model name | none — unset skips all ModelEval tests |
 | `ROSLYNSENTINEL_LLM_TIMEOUT_SECONDS` | Per-request timeout | 30 |
 | `ROSLYNSENTINEL_LLM_PARALLELISM` | Concurrent LLM calls | 2 |
@@ -97,7 +95,7 @@ work for these tests** — CLI args are for other entry points (e.g. `Commenting
 ## How to invoke (`[Explicit]` tests need `--filter "Name=..."`, not `FullyQualifiedName~`)
 
 ```
-export ROSLYNSENTINEL_LLM_BASE_URL="http://192.168.1.112:1234/v1"
+export ROSLYNSENTINEL_LLM_BASE_URL="<baseUrl of an entry in scripts/eval-hosts.json>"
 export ROSLYNSENTINEL_LLM_MODEL="qwen3.5-9b-coder"
 export ROSLYNSENTINEL_MODELEVAL_SIZES="60"          # only for the sweep test
 dotnet test RoslynSentinel.Tests.ModelEval/RoslynSentinel.Tests.ModelEval.csproj -c Debug \
@@ -165,9 +163,10 @@ different mechanism, not by the same one:
 .\scripts\roslynsentinel-modeleval.ps1 112 SizeThreshold 60          # positional shorthand
 ```
 
-- `-HostAddress` accepts the `112`/`113` aliases (resolved to their base URLs and to
-  `_scratchbuild_112`/`_scratchbuild_113`) or any other base URL, which gets a sanitized
-  `--artifacts-path` suffix derived from it.
+- `-HostAddress` takes a machine key (`112`, `113`, `85`: that machine's default endpoint), an alias from
+  `scripts/eval-hosts.json` (for example `113lms`) or a base URL equal to an entry's `baseUrl`. Any other
+  base URL is used verbatim. Results folders are per entry: LM Studio entries keep the machine key (`113`),
+  llama-server entries use a URL-derived name (`http___192_168_1_113_8888_v1`).
 - `-Test` is one of: `SizeThreshold`, `MinimalGuidance`, `MinimalGuidanceDisambiguated`,
   `PlanOnly`, `PlanThenExecute` (see the "Test names" section above for what each maps to
   and does — `PlanOnly`/`PlanThenExecute` live in `PlanThenExecuteAgentTests.cs`, not
@@ -196,7 +195,7 @@ terminals) — each gets its own `--artifacts-path` automatically, so they won't
 
 A host performs one generation at a time and several sessions use the same hosts, so start a
 model-eval run through the queue. It wraps `roslynsentinel-modeleval.ps1` (one job = one run),
-runs jobs one at a time per host and shows every session what is running and waiting.
+runs jobs one at a time per endpoint today (one per machine lands with Step 11) and shows every session what is running and waiting.
 
 ```powershell
 # Queue 5 runs; prints each job id, its place and the estimated start
@@ -242,9 +241,14 @@ runs jobs one at a time per host and shows every session what is running and wai
   tree): if the commit or uncommitted source files changed since submit, the job ends `TreeChanged` without
   running. Resubmit it to get a pinned run. `-OnTreeChange` is ignored for pinned jobs and slated for removal.
 - If the host stops answering, the queue pauses and the jobs stay queued.
-- Queue files: `%LOCALAPPDATA%\RoslynSentinel\evalqueue\<host>\` (`jobs\`, `logs\`, `worker.log`).
+- Queue files: `%LOCALAPPDATA%\RoslynSentinel\evalqueue\<host>\` (`jobs\`, `logs\`, `worker.log`); `<host>` is
+  the endpoint's results-folder name today and becomes the machine key (lands with Step 11).
   Tests: `pwsh -NoProfile -File scripts\roslynsentinel-evalqueue.Tests.ps1`.
 - `roslynsentinel-planstep.ps1` runs are not queued yet.
+- A dead endpoint does not block another endpoint's job (lands with Step 11).
+- Refused job state and refusal of a mismatched `-Model` (lands with Step 13).
+- `runs.csv` (lands with Step 13).
+- `evalqueue.ps1 hosts`, `status -Session` / `-ActiveOnly` and the submit session warning (lands with Step 14).
 
 ### Resuming from a saved transcript (`-Test ResumeTranscript`)
 
@@ -430,7 +434,7 @@ mandatory first parameter (`112`/`113` alias or a base URL), `-Model` defaults t
 (`scripts/roslynsentinel-planstep.ps1` param block).
 
 Standing preferences (user, 2026-09-13):
-- **Host:** use `-HostAddress 113` (RTX 4060) by default and do not ask; 112 (GTX 1080) is too slow for
+- **Host:** use `-HostAddress 113` (RTX 4060) by default and do not ask; 113 now means the machine's default endpoint (llama-server), use 113lms for LM Studio; 112 (GTX 1080) is too slow for
   complex tasks. Use 112 only when the user asks (to free 113 or to test on weaker hardware). The same
   default applies to `roslynsentinel-modeleval.ps1`.
 - **Caps:** for large mechanical multi-file steps pass `-TurnCap 60 -WallClockCapMinutes 45`. Evidence:

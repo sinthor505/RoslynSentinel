@@ -8,7 +8,8 @@ metadata:
   modified: 2026-09-04T00:48:38.204Z
 ---
 
-`http://<host>:1234/api/v1/models` (LM Studio's own REST API, not the OpenAI-compat
+`<base>/api/v1/models`, with `<base>` the `baseUrl` of an `lmstudio` entry in `scripts/eval-hosts.json`
+without its trailing `/v1` (LM Studio's own REST API, not the OpenAI-compat
 `/v1/models`) lists every downloaded model with a `loaded_instances` array per entry —
 empty if not loaded, populated with `id`/`config`/`remaining_ttl_seconds` if it is. This is
 the way to confirm which model(s) a host is actually serving before launching a
@@ -28,3 +29,8 @@ comparing runs across quant switches — different loaded instances of the same 
 different context windows/parallelism configured (e.g. `q4_k_m` was 65536 ctx/parallel 4,
 `q6_k` was 32768 ctx/parallel 2 on the same host) which can change failure signatures
 (truncation) independent of the quantization itself.
+
+**llama-server endpoints (the `<machine>u` aliases, Unsloth on :8888) do not serve `/api/v1/models`.** Read
+`<baseUrl>/models` instead (GET `/v1/models`): each entry gives `loaded` (bool) or `status.value`
+(`loaded` / `unloaded`), and `context_length` / `max_context_length` for the loaded entry (probed 2026-11-20).
+`.\scripts\Get-EvalHostStatus.ps1 -Json` does this for every endpoint in the table (`scripts/eval-hosts.json`).

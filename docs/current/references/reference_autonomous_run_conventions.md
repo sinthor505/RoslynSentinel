@@ -16,16 +16,15 @@ specific.
 - Restart your **own** server instance freely when it is idle (no agent mid-operation); never
   another session's. After server source changes: `Build(level: fullBuild)`, then restart only when
   a live check needs it.
-- Model-eval runs are allowed. First query `http://192.168.1.112:1234/api/v1/models` and
-  `http://192.168.1.113:1234/api/v1/models` for an entry whose `loaded_instances` is non-empty and
-  whose key is a `qwen3.5` variant; pass that exact key with `-Model`.
-  If neither host has one, defer the eval work.
+- Model-eval runs are allowed. First run `scripts\Get-EvalHostStatus.ps1 -Json` and pick a reachable
+  endpoint whose `loaded` holds a `qwen3.5` variant; pass that id with `-Model`.
+  If no endpoint has one, defer the eval work.
 - Loading and unloading models during testing is approved (owner, 2026-11-19), with two conditions:
   - A freshly loaded model gets LM Studio's default sampler settings (penalties included). Only the owner
     can set the penalties by hand, so do not reload when the run depends on non-default penalties and the
     owner is away. Temperature and top-p can still be sent per request.
-  - Keep exactly one model loaded per host at a time (limited VRAM): unload before loading, and never
-    unload while a queue job is running on that host.
+  - Keep exactly one model loaded per machine at a time, whichever backend serves it (limited VRAM):
+    unload before loading, and never unload while a queue job is running on that machine.
 - Commit each finished slice to master; never push.
 - Decisions: with the owner present, ask with `AskUserQuestion`, recommended option first. With the
   owner away, defer the decision (tracker "Deferred decisions", with a recommendation) and continue
