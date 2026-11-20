@@ -109,10 +109,7 @@
     _scratchbuild_<host-suffix>\bin\RoslynSentinel.Tests.ModelEval\debug\model-eval\...
 
 .PARAMETER HostAddress
-    LM Studio host to target. Known aliases: 112 (http://192.168.1.112:1234/v1, GTX 1080) and
-    113 (http://192.168.1.113:1234/v1, RTX 4060). Any other value is used verbatim as the full
-    base URL (e.g. http://localhost:1234/v1), and its --artifacts-path suffix is derived from
-    a sanitized version of that URL.
+    an alias from scripts/eval-hosts.json (for example 85u or 85lms), a machine key (its default endpoint) or a base URL
 
 .PARAMETER Test
     SizeThreshold | LiteralSteps | MinimalGuidance | MinimalGuidanceDisambiguated | PlanOnly | LargeResultPaging |
@@ -396,23 +393,15 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
 
-$knownHosts = @{
-    '112' = @{ BaseUrl = 'http://192.168.1.112:1234/v1'; Suffix = '112' }
-    '113' = @{ BaseUrl = 'http://192.168.1.113:1234/v1'; Suffix = '113' }
-	'85' = @{ BaseUrl = 'http://192.168.10.85:1234/v1'; Suffix = '85' }
-}
-
-if ($knownHosts.ContainsKey($HostAddress)) {
-    $baseUrl = $knownHosts[$HostAddress].BaseUrl
-    $suffix = $knownHosts[$HostAddress].Suffix
-}
-else {
-    $baseUrl = $HostAddress
-    $suffix = ($HostAddress -replace '[^a-zA-Z0-9]', '_').Trim('_')
-    if (-not $suffix) {
-        throw "Could not derive an --artifacts-path suffix from -HostAddress '$HostAddress'. Pass a known alias (112, 113, 85) or a URL like http://host:1234/v1."
-    }
-    Write-Warning "'$HostAddress' is not a known host alias (112, 113, 85) - using it verbatim as the base URL and deriving artifacts suffix '$suffix'."
+. (Join-Path $PSScriptRoot 'roslynsentinel-evalhosts.ps1')
+$evalTable = Read-EvalHostTable
+$hostEntry = Resolve-EvalHostEntry -Address $HostAddress -Table $evalTable
+$baseUrl = $hostEntry.BaseUrl
+$suffix = $hostEntry.Suffix
+if (-not $hostEntry.Known) {
+    $knownAliases = (@($evalTable | ForEach-Object { $_.Alias })) -join ', '
+    $knownMachines = (@($evalTable | ForEach-Object { $_.Machine } | Sort-Object -Unique)) -join ', '
+    Write-Warning "'$HostAddress' is not an alias or machine key in scripts/eval-hosts.json - using it verbatim as the base URL and deriving artifacts suffix '$suffix'. Known aliases: $knownAliases. Known machine keys: $knownMachines."
 }
 
 $testNames = @{

@@ -20,8 +20,7 @@
     /api/v1/models; if it is not loaded, every row is a harness error and no model request is made.
 
 .PARAMETER HostAddress
-    LM Studio host (aliases -HostName, -Host). Known aliases: 112, 113 and 85 (as in roslynsentinel-modeleval.ps1). Any other value
-    is used verbatim as the full base URL, e.g. http://localhost:1234/v1.
+    Aliases -HostName, -Host. An alias from scripts/eval-hosts.json (for example 85u or 85lms), a machine key (its default endpoint) or a base URL
 
 .PARAMETER Model
     ROSLYNSENTINEL_LLM_MODEL, the model key as /api/v1/models lists it. Mandatory, no default: a default would silently overwrite
@@ -103,23 +102,15 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
 
-$knownHosts = @{
-    '112' = @{ BaseUrl = 'http://192.168.1.112:1234/v1'; Suffix = '112' }
-    '113' = @{ BaseUrl = 'http://192.168.1.113:1234/v1'; Suffix = '113' }
-    '85'  = @{ BaseUrl = 'http://192.168.10.85:1234/v1'; Suffix = '85' }
-}
-
-if ($knownHosts.ContainsKey($HostAddress)) {
-    $baseUrl = $knownHosts[$HostAddress].BaseUrl
-    $suffix = $knownHosts[$HostAddress].Suffix
-}
-else {
-    $baseUrl = $HostAddress
-    $suffix = ($HostAddress -replace '[^a-zA-Z0-9]', '_').Trim('_')
-    if (-not $suffix) {
-        throw "Could not derive an --artifacts-path suffix from -HostAddress '$HostAddress'. Pass a known alias (112, 113, 85) or a URL like http://host:1234/v1."
-    }
-    Write-Warning "'$HostAddress' is not a known host alias (112, 113, 85) - using it verbatim as the base URL and deriving artifacts suffix '$suffix'."
+. (Join-Path $PSScriptRoot 'roslynsentinel-evalhosts.ps1')
+$evalTable = Read-EvalHostTable
+$hostEntry = Resolve-EvalHostEntry -Address $HostAddress -Table $evalTable
+$baseUrl = $hostEntry.BaseUrl
+$suffix = $hostEntry.Suffix
+if (-not $hostEntry.Known) {
+    $knownAliases = (@($evalTable | ForEach-Object { $_.Alias })) -join ', '
+    $knownMachines = (@($evalTable | ForEach-Object { $_.Machine } | Sort-Object -Unique)) -join ', '
+    Write-Warning "'$HostAddress' is not an alias or machine key in scripts/eval-hosts.json - using it verbatim as the base URL and deriving artifacts suffix '$suffix'. Known aliases: $knownAliases. Known machine keys: $knownMachines."
 }
 
 # The testhost runs from the scratch build folder, so every source path must be absolute.
