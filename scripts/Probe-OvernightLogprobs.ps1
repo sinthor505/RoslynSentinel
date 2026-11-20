@@ -49,7 +49,9 @@
     Turns 1..K are history; the decision prefix comes from turn K+1. Default: the turn after the first ReadFile of ShippingKinds.cs.
 
 .PARAMETER HostAddress
-    112, 113 or 85 (LM Studio on port 1234). Or pass -BaseUrl.
+    An alias from scripts/eval-hosts.json (for example 85u or 85lms), a machine key (its default
+    endpoint) or a base URL. A bare number not in the table (for example 114) is read as
+    http://192.168.1.<n>:1234. Or pass -BaseUrl.
 
 .PARAMETER Model
     Model key. Default: the model loaded on the host (fails if none or several).
@@ -130,9 +132,18 @@ if ($Endpoint -eq 'responses' -and $passedChatOnly) {
     throw "LM Studio's /v1/responses ignores logit_bias and the request-side sampler fields, so -$($passedChatOnly -join ', -') would have no effect there. Use -Endpoint chat (/v1/chat/completions honours logit_bias)."
 }
 
+. (Join-Path $PSScriptRoot 'roslynsentinel-evalhosts.ps1')
+
+$hostEntry = $null
 if (-not $BaseUrl) {
-    if (-not $HostAddress) { throw 'Pass -HostAddress (112, 113, 85) or -BaseUrl.' }
-    $BaseUrl = switch ($HostAddress) { '85' { 'http://192.168.10.85:1234' } default { "http://192.168.1.$($HostAddress):1234" } }
+    if (-not $HostAddress) { throw 'Pass -HostAddress (an alias or machine key from scripts/eval-hosts.json) or -BaseUrl.' }
+    $hostEntry = Resolve-EvalHostEntry -Address $HostAddress -Table (Read-EvalHostTable)
+    if ($hostEntry.Known) {
+        $BaseUrl = [string]$hostEntry.BaseUrl
+    }
+    else {
+        $BaseUrl = switch ($HostAddress) { '85' { 'http://192.168.10.85:1234' } default { "http://192.168.1.$($HostAddress):1234" } }
+    }
 }
 $BaseUrl = $BaseUrl.TrimEnd('/') -replace '/v1$', ''
 
@@ -141,7 +152,8 @@ $t = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json -Depth 100
 $turns = @($t.Turns)
 
 if (-not $Model) {
-    $loaded = @((Invoke-RestMethod "$BaseUrl/api/v1/models" -TimeoutSec 15).models | Where-Object { $_.loaded_instances.Count -gt 0 } | ForEach-Object key)
+    $modelEntry = if ($hostEntry -and $hostEntry.Known) { $hostEntry } else { [pscustomobject]@{ BaseUrl = "$BaseUrl/v1"; Backend = 'lmstudio' } }
+    $loaded = @((Get-EvalHostModels -Entry $modelEntry -TimeoutSec 15).Models | Where-Object { $_.Loaded -eq $true } | ForEach-Object Id)
     if ($loaded.Count -ne 1) { throw "Pass -Model: $($loaded.Count) model(s) loaded on $BaseUrl ($($loaded -join ', '))." }
     $Model = $loaded[0]
 }

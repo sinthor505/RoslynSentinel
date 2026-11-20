@@ -28,10 +28,10 @@
     leftover worktree automatically instead of requiring a manual `git worktree remove` first.
 
 .PARAMETER HostAddress
-    LM Studio host to target. Known aliases: 112 (http://192.168.1.112:1234/v1, GTX 1080) and 113
-    (http://192.168.1.113:1234/v1, RTX 4060). Any other value is used verbatim as the full base
-    URL (e.g. http://localhost:1234/v1) - matches roslynsentinel-modeleval.ps1's -HostAddress
-    convention.
+    LM Studio host to target: an alias from scripts/eval-hosts.json (for example 85u or 85lms), a
+    machine key (its default endpoint) or a base URL (e.g. http://localhost:1234/v1). Any value not
+    in the table is used verbatim as the full base URL - matches roslynsentinel-modeleval.ps1's
+    -HostAddress convention.
 
 .PARAMETER StartStep
     First plan step number to run (inclusive), 0-11 (tab-completable). Default: 1
@@ -182,17 +182,15 @@ if ($PSCmdlet.ParameterSetName -eq 'Single') {
     $EndStep = $Step
 }
 
-$knownHosts = @{
-    '112' = 'http://192.168.1.112:1234/v1'
-    '113' = 'http://192.168.1.113:1234/v1'
-}
+. (Join-Path $PSScriptRoot 'roslynsentinel-evalhosts.ps1')
 
-if ($knownHosts.ContainsKey($HostAddress)) {
-    $baseUrl = $knownHosts[$HostAddress]
+$hostEntry = Resolve-EvalHostEntry -Address $HostAddress -Table (Read-EvalHostTable)
+if ($hostEntry.Known) {
+    $baseUrl = $hostEntry.BaseUrl
 }
 else {
     $baseUrl = $HostAddress
-    Write-Warning "'$HostAddress' is not a known host alias (112, 113) - using it verbatim as the base URL."
+    Write-Warning "'$HostAddress' is not an alias, machine key or base URL in scripts\eval-hosts.json - using it verbatim as the base URL."
 }
 
 if (-not $PlanDir) {

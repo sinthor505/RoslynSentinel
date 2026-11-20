@@ -21,9 +21,9 @@
     with) that batch's own requests.
 
 .PARAMETER HostAddress
-    LM Studio host to send the follow-up to. Known aliases: 112 (http://192.168.1.112:1234,
-    GTX 1080) and 113 (http://192.168.1.113:1234, RTX 4060). Any other value is used verbatim
-    as a base URL (e.g. http://192.168.10.85:1234) - matches roslynsentinel-modeleval.ps1's
+    LM Studio host to send the follow-up to: an alias from scripts/eval-hosts.json (for example 85u
+    or 85lms), a machine key (its default endpoint) or a base URL (e.g. http://192.168.10.85:1234).
+    Any value not in the table is used verbatim as a base URL - matches roslynsentinel-modeleval.ps1's
     -HostAddress convention so the two scripts stay familiar side by side.
 
 .PARAMETER TranscriptPath
@@ -38,8 +38,8 @@
 
 .PARAMETER Model
     Model name sent in the request body. Default: qwen/qwen3.6-35b-a3b. Must match a model
-    actually loaded on the target host - check with `curl http://<host>:1234/v1/models` first
-    if unsure (see reference_lmstudio_loaded_models_endpoint memory).
+    actually loaded on the target host - run scripts\Get-EvalHostStatus.ps1 to see which endpoints
+    answer and what is loaded if unsure.
 
 .PARAMETER Temperature
     Sampling temperature. Default 0.1, matching project_lmstudio_sampling_params_for_code.
@@ -127,24 +127,22 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$knownHosts = @{
-    '112' = 'http://192.168.1.112:1234'
-    '113' = 'http://192.168.1.113:1234'
-}
+. (Join-Path $PSScriptRoot 'roslynsentinel-evalhosts.ps1')
 
 if (-not $DryRun) {
     if (-not $HostAddress) {
         throw "-HostAddress is required unless -DryRun is passed."
     }
-    if ($knownHosts.ContainsKey($HostAddress)) {
-        $baseUrl = $knownHosts[$HostAddress]
+    $hostEntry = Resolve-EvalHostEntry -Address $HostAddress -Table (Read-EvalHostTable)
+    if ($hostEntry.Known) {
+        $baseUrl = ([string]$hostEntry.BaseUrl -replace '/v1$', '').TrimEnd('/')
     }
     elseif ($HostAddress -match '^https?://') {
         $baseUrl = $HostAddress.TrimEnd('/')
     }
     else {
         $baseUrl = "http://$HostAddress".TrimEnd('/')
-        Write-Warning "'$HostAddress' is not a known host alias (112, 113) - using it verbatim as http://$HostAddress."
+        Write-Warning "'$HostAddress' is not an alias, machine key or base URL in scripts\eval-hosts.json - using it verbatim as http://$HostAddress."
     }
 }
 
