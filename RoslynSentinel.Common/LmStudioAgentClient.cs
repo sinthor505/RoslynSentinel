@@ -32,6 +32,14 @@ public sealed class LmStudioAgentClient
     /// <summary>The LM Studio model key this client targets (the per-instance value passed to the constructor).</summary>
     public string Model => _model;
 
+    /// <summary>
+    /// The backend of the host this client talks to, from <see cref="EvalHostTable.BackendFor(string)"/>:
+    /// <see cref="EvalHostTable.BackendLmStudio"/> or <see cref="EvalHostTable.BackendLlamaServer"/>. Per
+    /// instance, not read from the static <see cref="LlmOptions.BaseUrl"/>, so clients aimed at different hosts
+    /// in one process each keep their own answer.
+    /// </summary>
+    public string Backend { get; }
+
     private readonly Task _loadedModelStatusCheck;
     private readonly SemaphoreSlim _contextLengthLock = new(1, 1);
     private int _cachedContextLength;
@@ -75,6 +83,10 @@ public sealed class LmStudioAgentClient
                 nameof(model))
             : model;
 
+        Backend = httpClient.BaseAddress is { } baseAddress
+            ? EvalHostTable.BackendFor(baseAddress.ToString())
+            : EvalHostTable.BackendLmStudio;
+
         _logger.LogInformation("LM Studio agent client targeting model {Model} at {BaseAddress}", _model, httpClient.BaseAddress);
         _loadedModelStatusCheck = LogLoadedModelStatusAsync();
     }
@@ -94,6 +106,46 @@ public sealed class LmStudioAgentClient
     {
         try
         {
+            if (Backend == EvalHostTable.BackendLlamaServer)
+            {
+                using var listed = await _httpClient.GetAsync("models");
+                var listedText = await listed.Content.ReadAsStringAsync();
+                if (!listed.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning(
+                        "Could not verify loaded model via {Url} ({StatusCode}); proceeding without confirmation.",
+                        new Uri(_httpClient.BaseAddress!, "models"), listed.StatusCode);
+                    return;
+                }
+
+                var models = LlamaServerModels.Parse(listedText);
+                var listedEntry = LlamaServerModels.FindListed(models, _model);
+                if (LlamaServerModels.FindLoaded(models, _model) is not null)
+                {
+                    _logger.LogInformation("Confirmed {Model} is loaded on llama-server.", _model);
+                }
+                else if (listedEntry is { Loaded: false })
+                {
+                    _logger.LogWarning(
+                        "Configured model {Model} is listed by llama-server but not loaded - requests will fail until it is loaded.",
+                        _model);
+                }
+                else if (listedEntry is { Loaded: null })
+                {
+                    _logger.LogInformation(
+                        "Configured model {Model} is listed by llama-server, which reports no load state for it.",
+                        _model);
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "Configured model {Model} was not found in llama-server's model list at all - check ROSLYNSENTINEL_LLM_MODEL/--llm-model for a typo.",
+                        _model);
+                }
+
+                return;
+            }
+
             var baseUrl = LlmOptions.BaseUrl.EndsWith("/v1", StringComparison.OrdinalIgnoreCase)
                 ? LlmOptions.BaseUrl[..^"/v1".Length]
                 : LlmOptions.BaseUrl;
@@ -438,6 +490,36 @@ public sealed class LmStudioAgentClient
     {
         try
         {
+            if (Backend == EvalHostTable.BackendLlamaServer)
+            {
+                using var listedResponse = await _httpClient.GetAsync("models", cancellationToken);
+                var listedText = await listedResponse.Content.ReadAsStringAsync(cancellationToken);
+                if (!listedResponse.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning(
+                        "Could not fetch context size from llama-server ({StatusCode}); skipping cumulative context-size tracking. Body: {Body}",
+                        listedResponse.StatusCode, listedText);
+                    return -1;
+                }
+
+                var models = LlamaServerModels.Parse(listedText);
+                var entry = LlamaServerModels.FindLoaded(models, _model);
+                if (entry is null && LlamaServerModels.FindListed(models, _model) is { Loaded: null } unknownState)
+                {
+                    entry = unknownState;
+                }
+
+                if (entry?.ContextLength is int llamaContextLength and > 0)
+                {
+                    return llamaContextLength;
+                }
+
+                _logger.LogWarning(
+                    "llama-server's /v1/models response had no context_length for model '{Model}'; skipping cumulative context-size tracking.",
+                    _model);
+                return -1;
+            }
+
             var modelsUrl = new Uri(_httpClient.BaseAddress!, "../api/v0/models");
             using var response = await _httpClient.GetAsync(modelsUrl, cancellationToken);
             var responseText = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -503,6 +585,16 @@ public sealed class LmStudioAgentClient
         var baseUrl = _httpClient.BaseAddress!.ToString().TrimEnd('/');
         try
         {
+            if (Backend == EvalHostTable.BackendLlamaServer)
+            {
+                var llamaContextLength = await FetchContextLengthAsync(cancellationToken);
+                return new ModelLoadSettings
+                {
+                    BaseUrl = baseUrl,
+                    ContextLength = llamaContextLength > 0 ? llamaContextLength : null,
+                };
+            }
+
             var modelsUrl = new Uri(_httpClient.BaseAddress!, "../api/v1/models");
             using var response = await _httpClient.GetAsync(modelsUrl, cancellationToken);
             var responseText = await response.Content.ReadAsStringAsync(cancellationToken);

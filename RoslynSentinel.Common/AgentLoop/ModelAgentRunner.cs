@@ -453,7 +453,10 @@ public sealed class ModelAgentRunner
                     }
                 }
 
-                if (IsUsageJumpImplausible(cumulativeTokens, reported, growthEstimate))
+                // LM Studio issue #2559: the /v1/responses usage total can jump by more than the content
+                // explains. The estimate replacement is LM-Studio-only; llama-server reports are used as-is.
+                if (_llm.Backend == EvalHostTable.BackendLmStudio
+                    && IsUsageJumpImplausible(cumulativeTokens, reported, growthEstimate))
                 {
                     // The transcript keeps the raw report; only the context bookkeeping uses the estimate.
                     _logger.LogWarning(
