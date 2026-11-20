@@ -771,7 +771,8 @@ public class SnippetErrorFormatterTests
 
         Assert.That(ex.Message, Does.Not.Contain("literal escape sequences"));
         Assert.That(ex.Message, Does.Contain("First difference at line 5 of your oldContent (file line 5)"));
-        Assert.That(ex.Message, Does.Contain("Member(operation: remove"));
+        // The route is rendered by ToolCallHint in schema order (reason first), so only the operation fragment is stable.
+        Assert.That(ex.Message, Does.Contain("Member(").And.Contain("operation: remove"));
     }
 
     [Test]
