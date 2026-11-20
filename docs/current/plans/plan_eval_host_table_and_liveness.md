@@ -1,6 +1,6 @@
 # Plan: one eval-host table, a host liveness probe, a per-machine queue key and a run index
 
-**Status:** IN PROGRESS 2026-11-20. Steps 1-6 done (04fab1df, 986f1b29, 9737c57d, 1ea220f7, 68ed4226, af39ed7b).
+**Status:** IN PROGRESS 2026-11-20. Steps 1-10 and 12 done (04fab1df, 986f1b29, 9737c57d, 1ea220f7, 68ed4226, af39ed7b, 6f5d36bb, 56c553b2, 0b330595, b7e9b306, 9ab2182d); Steps 11, 13-15 wait for H3 (idle queues).
 
 ## Problem
 
@@ -456,6 +456,7 @@ Step 12 (docs) is H1 and may move to any earlier slot; if it does, Step 11 runs 
 - Lane: `implementer` (3 files, about 9 edits, 1 acceptance).
 
 ### Step 7 - Front doors with a host suffix: modeleval and errorvariants
+- Done: 6f5d36bb
 - Files: `scripts/roslynsentinel-modeleval.ps1`, `scripts/roslynsentinel-errorvariants.ps1`. 2 files, about 8 edits.
   No test merged: neither script has a test seam for host resolution (the library is tested in Step 2; the scripts
   are exercised by Step 15's live runs).
@@ -475,6 +476,7 @@ Step 12 (docs) is H1 and may move to any earlier slot; if it does, Step 11 runs 
 - Lane: `implementer` (2 files, about 8 edits, 1 acceptance).
 
 ### Step 8 - Gate the LM-Studio-only calls by backend: client and runner
+- Done: 56c553b2 (mutation check by dispatcher: removing the backend gate fails the usage-jump test)
 - Files: `RoslynSentinel.Common/LmStudioAgentClient.cs`, `RoslynSentinel.Common/AgentLoop/ModelAgentRunner.cs`,
   `RoslynSentinel.Tests.ModelEval/LlamaServerBackendTests.cs` (new). 3 files, about 10 edits.
 - Depends on: 1, 3. Pairs with: Step 7. Hold point: H2 (Decision 10) before this step starts.
@@ -515,6 +517,7 @@ Step 12 (docs) is H1 and may move to any earlier slot; if it does, Step 11 runs 
 - Lane: `implementer` (3 files, about 10 edits, 1 acceptance).
 
 ### Step 9 - Remaining scripts: interrogate, planstep, Probe-OvernightLogprobs
+- Done: 0b330595
 - Files: `scripts/roslynsentinel-interrogate.ps1`, `scripts/roslynsentinel-planstep.ps1`,
   `scripts/Probe-OvernightLogprobs.ps1`. 3 files, about 9 edits. No test merged (same reason as Step 7).
 - Depends on: 2. Pairs with: Step 10. Hold point: H1.
@@ -539,6 +542,7 @@ Step 12 (docs) is H1 and may move to any earlier slot; if it does, Step 11 runs 
 - Lane: `implementer` (3 files, about 9 edits, 1 acceptance).
 
 ### Step 10 - Gate the replay model check by backend: ErrorVariants
+- Done: b7e9b306 (requested entry with no state while others report state -> treated as fine; empty list -> "not listed (0)")
 - Files: `RoslynSentinel.Tests.ErrorVariants/ErrorVariantReplay.cs`,
   `RoslynSentinel.Tests.ErrorVariants/ErrorVariantReplayBackendTests.cs` (new). 2 files, about 5 edits.
 - Depends on: 1, 3. Pairs with: Step 9. Hold point: H1.
@@ -615,6 +619,7 @@ Step 12 (docs) is H1 and may move to any earlier slot; if it does, Step 11 runs 
   `Hosts.Tests.ps1` (`test-writer`); they land as ONE commit, so the queue never runs half-keyed.
 
 ### Step 12 - Documentation
+- Done: 9ab2182d (Step 11/13/14 behaviour marked "lands with Step N"; remove those notes when they land)
 - Files: `docs/current/references/reference_model_eval_procedure.md`,
   `docs/current/references/reference_autonomous_run_conventions.md`,
   `docs/current/references/reference_lmstudio_loaded_models_endpoint.md`. 3 files, about 12 edits.
