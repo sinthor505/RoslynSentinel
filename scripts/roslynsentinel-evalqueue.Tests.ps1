@@ -218,6 +218,33 @@ try {
     Set-Content -LiteralPath (Join-Path $repo 'notes.md') -Value 'docs changed'
     Run-Worker
     Assert-That ((Get-JobById $docOnly.id).state -eq 'Finished') 'Tree: a change outside source files does not refuse the job'
+
+    # --- roslynsentinel-modeleval.ps1 archive step (the queue's Finished/Crashed verdict reads what it copies) ---
+    # Runs the script's own Get-RunLeafDirs / Copy-NewRunDirectories (lifted by AST) on a fake model-eval tree.
+    # ShippingKindStep* tests write model-eval\<TestName>(<case>)\<timestamp>\, not model-eval\<TestName>\<timestamp>\.
+    $evalAst = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'roslynsentinel-modeleval.ps1'), [ref]$null, [ref]$null)
+    $archiveFunctions = $evalAst.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -in 'Get-RunLeafDirs', 'Copy-NewRunDirectories' }, $true)
+    Assert-That ($archiveFunctions.Count -eq 2) 'Archive: modeleval script defines Get-RunLeafDirs and Copy-NewRunDirectories'
+    function Test-Archive([string]$TestName, [string[]]$RunPaths, [string[]]$Siblings) {
+        $base = Join-Path $tempRoot ("archive-" + [guid]::NewGuid().ToString('N'))
+        $script:modelEvalRoot = Join-Path $base 'model-eval'
+        $script:resultsRoot = Join-Path $base 'ModelTestingResults\url_host'
+        $script:resultsDir = Join-Path $script:resultsRoot $TestName
+        $script:testName = $TestName
+        foreach ($f in $archiveFunctions) { . ([scriptblock]::Create($f.Extent.Text)) }
+        $before = @(Get-RunLeafDirs)
+        foreach ($rel in @($RunPaths) + @($Siblings)) { New-Item -ItemType Directory -Force -Path (Join-Path $script:modelEvalRoot $rel) | Out-Null }
+        Copy-NewRunDirectories -Before $before 6>$null
+        return @(Get-ChildItem -LiteralPath $script:resultsRoot -Directory -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^\d{8}-\d{6}' } |
+                ForEach-Object { $_.FullName.Substring($script:resultsRoot.Length).TrimStart('\') } | Sort-Object)
+    }
+    $stepRuns = @(1..3 | ForEach-Object { "Model_RunsShippingKindStepPromptFinal($_)\20261120-010517-526" })
+    $stepArchived = Test-Archive 'Model_RunsShippingKindStepPromptFinal' $stepRuns @('Model_RunsShippingKindStepPromptFinalX\20261120-010517-526', 'Model_RunsShippingKindStepPromptFinal0\20261120-010517-526')
+    Assert-That ((@($stepArchived) -join '|') -eq (@($stepRuns) -join '|')) 'Archive: a TestCase test''s Name(<case>) folders are copied, a name that merely starts with it is not'
+    $flatArchived = Test-Archive 'Model_FixesWholeFileRewriteBug_MinimalGuidance' @('Model_FixesWholeFileRewriteBug_MinimalGuidance\20261120-003848-238') @()
+    Assert-That ((@($flatArchived) -join '|') -eq 'Model_FixesWholeFileRewriteBug_MinimalGuidance\20261120-003848-238') 'Archive: a flat <TestName>\<timestamp> run is still copied'
+    $nestedArchived = Test-Archive 'Model_SizeThreshold' @('Model_SizeThreshold\n60\20261120-003848-238') @()
+    Assert-That ((@($nestedArchived) -join '|') -eq 'Model_SizeThreshold\n60\20261120-003848-238') 'Archive: SizeThreshold''s extra n<size> level is preserved'
 }
 finally {
     Start-Sleep -Seconds 1

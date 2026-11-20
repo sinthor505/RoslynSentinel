@@ -26,7 +26,8 @@ public static class WholeFileRewriteReproducer
             /// Replaces <paramref name="oldBlock"/> with <paramref name="newBlock"/> inside
             /// <paramref name="fileText"/>, re-indenting only the replacement block to match the
             /// surrounding indentation -> everything else in fileText is returned byte-for-byte
-            /// unchanged.
+            /// unchanged. The first argument is the original text that still contains oldBlock; it throws
+            /// if oldBlock is not found in it.
             /// </summary>
             private static string ReplaceBlockFormatted(string fileText, string oldBlock, string newBlock)
             {

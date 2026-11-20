@@ -95,26 +95,29 @@ internal static class ModelTestingResultsArchiver
     // sanitize-the-URL-into-a-suffix logic, so a test-driven archive lands in the exact same
     // ModelTestingResults\<suffix>\ tree the script has always used -> existing runs (e.g.
     // ModelTestingResults\113\...) and newly-archived ones merge into one history per host.
-    private static string DeriveHostSuffix(string baseUrl)
+    internal static string DeriveHostSuffix(string baseUrl)
     {
-        if (baseUrl.Contains("192.168.1.112", StringComparison.OrdinalIgnoreCase))
+        var trimmed = baseUrl.TrimEnd('/');
+        foreach (var (aliasUrl, alias) in KnownHostAliases)
         {
-            return "112";
+            if (string.Equals(trimmed, aliasUrl, StringComparison.OrdinalIgnoreCase))
+            {
+                return alias;
+            }
         }
 
-        if (baseUrl.Contains("192.168.1.113", StringComparison.OrdinalIgnoreCase))
-        {
-            return "113";
-        }
-
-        if (baseUrl.Contains("192.168.10.85", StringComparison.OrdinalIgnoreCase))
-        {
-            return "85";
-        }
-
-        var sanitized = new string(baseUrl.Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray()).Trim('_');
+        // Same rule as the script's ($HostAddress -replace '[^a-zA-Z0-9]', '_').Trim('_'): ASCII letters and digits only.
+        var sanitized = new string(baseUrl.Select(c => c is >= 'a' and <= 'z' or >= 'A' and <= 'Z' or >= '0' and <= '9' ? c : '_').ToArray()).Trim('_');
         return string.IsNullOrEmpty(sanitized) ? "unknown-host" : sanitized;
     }
+
+    // Alias table copied from roslynsentinel-modeleval.ps1 ($knownHosts).
+    private static readonly (string BaseUrl, string Alias)[] KnownHostAliases =
+    {
+        ("http://192.168.1.112:1234/v1", "112"),
+        ("http://192.168.1.113:1234/v1", "113"),
+        ("http://192.168.10.85:1234/v1", "85"),
+    };
 
     private static void CopyDirectoryRecursive(string sourceDir, string destinationDir)
     {

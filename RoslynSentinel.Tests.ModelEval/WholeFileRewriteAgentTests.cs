@@ -257,8 +257,8 @@ public class WholeFileRewriteAgentTests
            else in that file.
         2. In `{0}/FixtureHelpers/BlockConverter.cs`, in `ConvertAbstractClassToInterface`,
            replace the line `return ReformatWholeFile(rewritten);` with a call to the now-internal
-           `BlockEditHelpers.ReplaceBlockFormatted(rewritten, oldHeader, newHeader)`, returning its
-           result instead.
+           `BlockEditHelpers.ReplaceBlockFormatted(fileText, oldHeader, newHeader)` (the original
+           `fileText` parameter, which still contains `oldHeader`), returning its result instead.
         3. Delete the now-unused `ReformatWholeFile` method from `BlockConverter.cs` entirely.
 
         Do not modify any other method, field, or class in either file, even ones that look

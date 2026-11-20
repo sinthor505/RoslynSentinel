@@ -703,18 +703,25 @@ function Wait-ForTesthostExit {
     Write-Warning "testhost.exe under $artifactsPath did not exit within 60s of the test run finishing - the next iteration's build may hit MSB3027."
 }
 
-$testDir = Join-Path $artifactsPath "bin\RoslynSentinel.Tests.ModelEval\debug\model-eval\$testName"
-$resultsDir = Join-Path $repoRoot "ModelTestingResults\$suffix\$testName"
+$modelEvalRoot = Join-Path $artifactsPath "bin\RoslynSentinel.Tests.ModelEval\debug\model-eval"
+$resultsRoot = Join-Path $repoRoot "ModelTestingResults\$suffix"
+$resultsDir = Join-Path $resultsRoot $testName
 
 function Get-RunLeafDirs {
     # Each individual run's own directory is a UTC-timestamp-named leaf (yyyyMMdd-HHmmss[-fff]).
     # MinimalGuidance lays these out flat (model-eval\<TestName>\<timestamp>\); SizeThreshold
     # nests them one level deeper (model-eval\SizeThreshold\n<size>\<timestamp>\) - matching by
     # name pattern rather than a fixed depth handles both without hardcoding either shape.
-    if (-not (Test-Path $testDir)) { return @() }
-    Get-ChildItem -Path $testDir -Directory -Recurse -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -match '^\d{8}-\d{6}' } |
-        Select-Object -ExpandProperty FullName
+    # The ShippingKindStep* tests are TestCase rows, so their folders are model-eval\<TestName>(<case>)\<timestamp>\:
+    # scan every folder named <TestName> or <TestName>(...) (the "(" keeps ...V1 apart from ...V10).
+    if (-not (Test-Path -LiteralPath $modelEvalRoot)) { return @() }
+    $testRoots = @(Get-ChildItem -LiteralPath $modelEvalRoot -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -eq $testName -or $_.Name.StartsWith("$testName(", [System.StringComparison]::Ordinal) })
+    foreach ($testRoot in $testRoots) {
+        Get-ChildItem -LiteralPath $testRoot.FullName -Directory -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match '^\d{8}-\d{6}' } |
+            Select-Object -ExpandProperty FullName
+    }
 }
 
 function Copy-NewRunDirectories {
@@ -723,8 +730,10 @@ function Copy-NewRunDirectories {
     $after = Get-RunLeafDirs
     $new = $after | Where-Object { $_ -notin $Before }
     foreach ($runPath in $new) {
-        $relative = $runPath.Substring($testDir.Length).TrimStart('\')
-        $dest = Join-Path $resultsDir $relative
+        # Relative to model-eval\ (keeps the <TestName> or <TestName>(<case>) folder), so the layout under
+        # ModelTestingResults\<suffix>\ matches what the test project's own ModelTestingResultsArchiver writes.
+        $relative = $runPath.Substring($modelEvalRoot.Length).TrimStart('\')
+        $dest = Join-Path $resultsRoot $relative
         New-Item -ItemType Directory -Force -Path (Split-Path $dest -Parent) | Out-Null
         Write-Host "Archiving run to $dest" -ForegroundColor DarkGray
         # Copy-Item of a folder onto an EXISTING folder nests it (<ts>\<ts>\...). $dest already exists

@@ -134,7 +134,7 @@ namespace RoslynSentinel.Common.SnippetMatching
                 sb.Append(escapedQuotes).Append('\n');
             }
 
-            var literalEscapes = escapedQuotes is null ? DescribeLiteralEscapeSequences(sourceText, snippet, label) : null;
+            var literalEscapes = escapedQuotes is null ? DescribeLiteralEscapeSequences(result, sourceText, snippet, label) : null;
             if (literalEscapes is not null)
             {
                 sb.Append(literalEscapes).Append('\n');
@@ -149,11 +149,19 @@ namespace RoslynSentinel.Common.SnippetMatching
             sb.Append($"{label} was not found: it matches nothing at any whitespace tolerance probed.");
             sb.Append('\n').Append(DescribeProbe(result));
 
-            // An escaped-quote or literal-escape diagnosis already names the differing lines; a first-difference line would only repeat it.
-            var firstDifference = escapedQuotes is null && literalEscapes is null ? DescribeFirstDifference(result, snippet, label) : null;
+            // An escaped-quote diagnosis already names the differing lines; a first-difference line would only repeat it.
+            // The literal-escape diagnosis names only the sequences, not the line, so the first difference is kept with it.
+            var firstDifference = escapedQuotes is null ? DescribeFirstDifference(result, snippet, label) : null;
             if (firstDifference is not null)
             {
                 sb.Append('\n').Append(firstDifference);
+            }
+
+            if (label == "oldContent")
+            {
+                sb.Append('\n').Append(
+                    "Routes that need no text match: Member(operation: replace, memberName: ...) replaces a whole member from its new source, " +
+                    "and Member(operation: remove, memberName: ...) deletes one.");
             }
 
             sb.Append('\n').Append(DescribeEcho(snippet, label));
@@ -632,8 +640,15 @@ namespace RoslynSentinel.Common.SnippetMatching
 
         // A model that copied JSON-escaped text sends backslash-r, backslash-n, backslash-t or backslash-quote as literal
         // characters. Null unless the snippet has such a sequence and the unescaped text matches the file (or nearly does).
-        private static string? DescribeLiteralEscapeSequences(SourceText sourceText, string snippet, string label)
+        // Also null when the snippet already has real newlines, or when a literal sequence occurs in the file's best-matching
+        // window: then the sequence is the file's own text (for example Split('\n')), not a JSON-escaping slip.
+        private static string? DescribeLiteralEscapeSequences(SnippetMatchResult result, SourceText sourceText, string snippet, string label)
         {
+            if (snippet.Trim('\r', '\n').Contains('\n'))
+            {
+                return null;
+            }
+
             var found = new List<string>();
             if (snippet.Contains("\\r\\n", StringComparison.Ordinal))
             {
@@ -660,6 +675,12 @@ namespace RoslynSentinel.Common.SnippetMatching
             }
 
             if (found.Count == 0)
+            {
+                return null;
+            }
+
+            if (result.ClosestWindows.Count > 0
+                && found.Any(sequence => result.ClosestWindows[0].ActualLines.Any(l => l.Contains(sequence, StringComparison.Ordinal))))
             {
                 return null;
             }

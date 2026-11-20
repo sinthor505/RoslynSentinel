@@ -746,6 +746,62 @@ public class SnippetErrorFormatterTests
         Assert.That(ex.Message, Does.Not.Contain("tool-call markup"));
     }
 
+    private static readonly string[] SplitJoinFile =
+    {
+        "void Normalize(string text)",
+        "{",
+        "    var parts = text.Split('\\n');",
+        "    var normalized = parts.Select(p => p.Trim()).ToList();",
+        "    return string.Join(\"\\n\", normalized);",
+        "}",
+    };
+
+    [Test]
+    public void NoMatch_RealNewlinesWithLiteralBackslashNThatTheFileHas_NamesTheQuoteSlip_NotTheEscapeGuard()
+    {
+        var source = Lines(SplitJoinFile);
+        // Real newlines between lines; the literal backslash-n sequences are the file's own text; the only slip is ' vs ".
+        var snippetLines = (string[])SplitJoinFile.Clone();
+        snippetLines[4] = "    return string.Join('\\n', normalized);";
+        var snippet = Lines(snippetLines);
+        var result = Resolve(source, snippet);
+        Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.NoMatch));
+
+        var ex = Build(source, snippet, result);
+
+        Assert.That(ex.Message, Does.Not.Contain("literal escape sequences"));
+        Assert.That(ex.Message, Does.Contain("First difference at line 5 of your oldContent (file line 5)"));
+        Assert.That(ex.Message, Does.Contain("Member(operation: remove, memberName: ...)"));
+    }
+
+    [Test]
+    public void NoMatch_SingleLineSnippetWhoseLiteralBackslashNIsInTheFile_IsNotBlamedOnJsonEscaping()
+    {
+        var source = Lines(SplitJoinFile);
+        const string snippet = "    var part = text.Split('\\n');";
+        var result = Resolve(source, snippet);
+        Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.NoMatch));
+
+        var ex = Build(source, snippet, result);
+
+        Assert.That(ex.Message, Does.Not.Contain("literal escape sequences"));
+    }
+
+    [Test]
+    public void NoMatch_LiteralBackslashN_NotInTheFile_StillNamesTheEscapeGuard()
+    {
+        var lines = new[] { "public class A", "{", "    public void M()", "    {", "        Run();", "    }", "}" };
+        var source = Lines(lines);
+        var snippet = string.Join("\\n", lines);
+        var result = Resolve(source, snippet);
+        Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.NoMatch));
+
+        var ex = Build(source, snippet, result);
+
+        Assert.That(ex.Message, Does.Contain("literal escape sequences"));
+        Assert.That(ex.Message, Does.Contain("found \\n"));
+    }
+
     [Test]
     public void Build_EveryFailureOutcome_ReturnsItsExceptionTypeAndErrorCode()
     {
