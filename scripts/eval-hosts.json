@@ -1,0 +1,54 @@
+{
+  "hosts": [
+    {
+      "alias": "112u",
+      "machine": "112",
+      "baseUrl": "http://192.168.1.112:8888/v1",
+      "backend": "llama-server",
+      "suffix": "http___192_168_1_112_8888_v1",
+      "default": true
+    },
+    {
+      "alias": "112lms",
+      "machine": "112",
+      "baseUrl": "http://192.168.1.112:1234/v1",
+      "backend": "lmstudio",
+      "suffix": "112",
+      "default": false,
+      "note": "GTX 1080"
+    },
+    {
+      "alias": "113u",
+      "machine": "113",
+      "baseUrl": "http://192.168.1.113:8888/v1",
+      "backend": "llama-server",
+      "suffix": "http___192_168_1_113_8888_v1",
+      "default": true
+    },
+    {
+      "alias": "113lms",
+      "machine": "113",
+      "baseUrl": "http://192.168.1.113:1234/v1",
+      "backend": "lmstudio",
+      "suffix": "113",
+      "default": false,
+      "note": "RTX 4060"
+    },
+    {
+      "alias": "85u",
+      "machine": "85",
+      "baseUrl": "http://192.168.10.85:8888/v1",
+      "backend": "llama-server",
+      "suffix": "http___192_168_10_85_8888_v1",
+      "default": true
+    },
+    {
+      "alias": "85lms",
+      "machine": "85",
+      "baseUrl": "http://192.168.10.85:1234/v1",
+      "backend": "lmstudio",
+      "suffix": "85",
+      "default": false
+    }
+  ]
+}

@@ -40,6 +40,9 @@ ClaudeFiles/
 !RoslynSentinel.Tests.ErrorVariants/TestData/
 !RoslynSentinel.Tests.ErrorVariants/TestData/*.json
 
+# The eval host table (plan_eval_host_table_and_liveness); tracked so every checkout and pinned queue run reads its own copy.
+!scripts/eval-hosts.json
+
 *.trx
 
 TestResults/
