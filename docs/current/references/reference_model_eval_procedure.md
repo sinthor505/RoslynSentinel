@@ -47,8 +47,9 @@ shows, per endpoint, whether it is reachable, which model ids are loaded, the co
 - Address resolution: a table alias, a bare machine key (its default entry), or a base URL equal to an
   entry's `baseUrl`; any other base URL is used verbatim.
 - llama-server model rule: request the loaded model id. The match ignores case and an org prefix.
-  Refusal of a mismatched `-Model` lands with Step 13; until then, pass the loaded id that
-  `Get-EvalHostStatus.ps1 -Json` reports.
+  A job whose `-Model` is not the loaded model on a llama-server endpoint is refused by the queue worker
+  (state `Refused`, reason `Not run: host <h> serves loaded: <ids or (none)>, requested: <model>.`); a host
+  that reports no loaded state runs the job. Read the loaded id from `Get-EvalHostStatus.ps1 -Json`.
 
 ## Env vars (read by `RoslynSentinel.Common/LlmOptions.cs` and the ModelEval tests)
 
@@ -195,7 +196,7 @@ terminals) — each gets its own `--artifacts-path` automatically, so they won't
 
 A host performs one generation at a time and several sessions use the same hosts, so start a
 model-eval run through the queue. It wraps `roslynsentinel-modeleval.ps1` (one job = one run),
-runs jobs one at a time per endpoint today (one per machine lands with Step 11) and shows every session what is running and waiting.
+runs jobs one at a time per machine and shows every session what is running and waiting.
 
 ```powershell
 # Queue 5 runs; prints each job id, its place and the estimated start
@@ -236,19 +237,19 @@ runs jobs one at a time per endpoint today (one per machine lands with Step 11) 
   the build at once; a checkout without `RoslynSentinel.Tests.ModelEval.csproj` skips the default pre-build,
   logged in the worker log, unless `-PreBuildScript` is given),
   `Crashed` (no run folder: testhost crash, a stuck SetUp or the worker stopped; read the log),
-  `BuildFailed` (the pre-build failed; the reason holds the end of its log), `TreeChanged` (legacy jobs only).
+  `BuildFailed` (the pre-build failed; the reason holds the end of its log), `TreeChanged` (legacy jobs only),
+  `Refused` (llama-server `-Model` not loaded; never run).
 - Legacy, for jobs queued before pinning existed (they have no pinned commit and run from the working
   tree): if the commit or uncommitted source files changed since submit, the job ends `TreeChanged` without
   running. Resubmit it to get a pinned run. `-OnTreeChange` is ignored for pinned jobs and slated for removal.
-- If the host stops answering, the queue pauses and the jobs stay queued.
-- Queue files: `%LOCALAPPDATA%\RoslynSentinel\evalqueue\<host>\` (`jobs\`, `logs\`, `worker.log`); `<host>` is
-  the endpoint's results-folder name today and becomes the machine key (lands with Step 11).
+- If the host stops answering, the queue pauses and the jobs stay queued. A dead endpoint does not block another endpoint's job: the worker runs the first queued job whose endpoint answers and pauses only when none does.
+- Queue files: `%LOCALAPPDATA%\RoslynSentinel\evalqueue\<machine>\` (`jobs\`, `logs\`, `worker.log`); `<machine>` is
+  the machine key (`85`, `112`, `113`); older URL-keyed folders are read-only history that status and wait still list.
   Tests: `pwsh -NoProfile -File scripts\roslynsentinel-evalqueue.Tests.ps1`.
 - `roslynsentinel-planstep.ps1` runs are not queued yet.
-- A dead endpoint does not block another endpoint's job (lands with Step 11).
-- Refused job state and refusal of a mismatched `-Model` (lands with Step 13).
-- `runs.csv` (lands with Step 13).
-- `evalqueue.ps1 hosts`, `status -Session` / `-ActiveOnly` and the submit session warning (lands with Step 14).
+- `Refused`: see the llama-server model rule above; it is a terminal state (exit 2 from `wait`).
+- `runs.csv`: the worker appends one row per ended job (Finished, Refused, Crashed, ...) to `ModelTestingResults\<suffix>\runs.csv` (job id, machine, host, endpoint, test, model, sessions, purpose, pinned commit, state, times, run folders); jobs cancelled while still Queued get no row.
+- `roslynsentinel-evalqueue.ps1 hosts [-Json]` shows every endpoint (reachable, loaded model, context length) with its machine's queue; `status -Session <name>` and `status -ActiveOnly` filter jobs (also with `-Json`); `submit` warns, never refuses, when `-Session` is not a live Claude session.
 
 ### Resuming from a saved transcript (`-Test ResumeTranscript`)
 
