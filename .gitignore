@@ -6,20 +6,9 @@ bin-vscode/
 .idea/
 *.user
 *.suo
-server_stdout.txt
 publish/
-/RoslynSentinel.Server/all_methods_all.csv
-/RoslynSentinel.Server/all_methods_workspace.csv
-RoslynSentinel.Server/engine_methods_all.json
-RoslynSentinel.Server/engine_methods_workspace.json
-/RoslynSentinel.Server/engine_methods_workspace.json
-/RoslynSentinel.Server/engine_methods_all.json
 *.json
-/RoslynSentinel.HttpHost/tools.csv
-/RoslynSentinel.HttpHost/tools.json
-ClaudeFiles/
 *.csv
-*.json
 
 # The blanket *.json above swallows the Claude Code project config; this negation counters
 # that one specifically (the .claude/* block further down needs its own separate negation -
@@ -49,9 +38,7 @@ TestResults/
 
 _scratchbuild/
 _scratchbuild_*/
-lmstudio_logs/
 ModelTestingResults/
-PlanStepRunner/
 
 
 # NOTE: git cannot re-include a file whose PARENT DIRECTORY is itself excluded - a bare
