@@ -771,7 +771,7 @@ public class SnippetErrorFormatterTests
 
         Assert.That(ex.Message, Does.Not.Contain("literal escape sequences"));
         Assert.That(ex.Message, Does.Contain("First difference at line 5 of your oldContent (file line 5)"));
-        Assert.That(ex.Message, Does.Contain("Member(operation: remove, memberName: ...)"));
+        Assert.That(ex.Message, Does.Contain("Member(operation: remove"));
     }
 
     [Test]

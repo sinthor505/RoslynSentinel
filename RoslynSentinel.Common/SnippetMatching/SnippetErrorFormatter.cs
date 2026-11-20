@@ -160,8 +160,8 @@ namespace RoslynSentinel.Common.SnippetMatching
             if (label == "oldContent")
             {
                 sb.Append('\n').Append(
-                    "Routes that need no text match: Member(operation: replace, memberName: ...) replaces a whole member from its new source, " +
-                    "and Member(operation: remove, memberName: ...) deletes one.");
+                    $"Routes that need no text match: {ToolCallHint.Call("Member", ("operation", "replace"))} replaces a whole member from its new source, " +
+                    $"and {ToolCallHint.Call("Member", ("operation", "remove"))} deletes one.");
             }
 
             sb.Append('\n').Append(DescribeEcho(snippet, label));
