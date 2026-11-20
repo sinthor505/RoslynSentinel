@@ -327,7 +327,9 @@ public sealed class LoopAssistTracker(LoopAssistOptions options)
 
             return node?.ToJsonString() ?? argumentsJson.Trim();
         }
-        catch (JsonException)
+        // JsonObject builds its dictionary lazily, so duplicate keys in model arguments surface as ArgumentException
+        // on the first Remove/index, not as JsonException from Parse; the raw text is still a usable key.
+        catch (Exception ex) when (ex is JsonException or ArgumentException)
         {
             return argumentsJson.Trim();
         }

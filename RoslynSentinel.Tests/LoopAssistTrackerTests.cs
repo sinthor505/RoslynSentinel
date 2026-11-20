@@ -47,6 +47,19 @@ public class LoopAssistTrackerTests
     }
 
     [Test]
+    public void Observe_DuplicateKeysInArguments_DoesNotThrowAndStillRepeats()
+    {
+        // Seen live: a model sent includeOutput twice in one call and the run crashed in CanonicalArguments.
+        const string duplicated = """{"reason":"r","includeOutput":true,"includeOutput":true}""";
+        var tracker = On();
+
+        tracker.Observe(Call("c1", args: duplicated), Rejection("c1", RenameRejection), isError: true);
+        var second = tracker.Observe(Call("c2", args: duplicated), Rejection("c2", RenameRejection), isError: true);
+
+        Assert.That(second, Is.Not.Null);
+    }
+
+    [Test]
     public void Observe_DifferentToolName_IsNotARepeat()
     {
         var tracker = On();
