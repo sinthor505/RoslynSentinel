@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Pinned eval checkouts - resolved (2026-11-20)
+
+Pinned eval checkouts (2026-11-19) - evalqueue pins each job to a commit at submit and runs it from its own checkout outside the repo, results kept central, TreeChanged retired migration-first; built 2026-11-19/20 - [plan](plans/closed/plan_pinned_eval_checkouts.md)
+
+Evidence: 737a0f87, 4a08cca2, f7a9a31c, 1993c522, d46c368a; live check PINNED-OK job 20261120-064449-001; plans/closed/plan_pinned_eval_checkouts.md
+
 ## Token-path slip recovery, server part - resolved (2026-11-19)
 
 Token-path slip recovery, server part (2026-11-17) - [proposal](proposals/closed/proposal_server_slip_recovery.md) and [plan](plans/closed/plan_server_slip_recovery.md): server-side near-miss detail on rejections, qualified enum members in outlines, eval-only auto-correct and name-display options; built and measured live 2026-11-19 ([finding](findings/finding_overnight_token_path_slips.md))

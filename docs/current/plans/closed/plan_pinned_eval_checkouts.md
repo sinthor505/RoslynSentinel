@@ -1,6 +1,6 @@
 # Plan: evalqueue runs each job from a pinned commit in its own checkout outside the repo
 
-**Status:** IN PROGRESS 2026-11-19. Steps 1-3 done (737a0f87, 4a08cca2, f7a9a31c).
+**Status:** IMPLEMENTED 2026-11-20. 737a0f87, 4a08cca2, f7a9a31c, 1993c522, d46c368a; live check PINNED-OK (job 20261120-064449-001).
 
 ## Problem
 
@@ -15,7 +15,7 @@ other. Manual workarounds exist (`C:\tmp\rs-evaltree-*`,
 `rs_eval_a918`; `docs/current/evals/eval_tenchain_reasoning_replay_2026_11_10.md:14`), with results
 stranded in each worktree's own `ModelTestingResults`.
 
-Prior design: [proposal_peer_session_conflict_resolution.md](../proposals/proposal_peer_session_conflict_resolution.md)
+Prior design: [proposal_peer_session_conflict_resolution.md](../../proposals/proposal_peer_session_conflict_resolution.md)
 lines 89-93 and 111-138 ("at dispatch the worker makes (or reuses) a worktree at the job's commit ...
 This replaces `TreeChanged` and `-OnTreeChange RunAnyway`").
 
@@ -86,6 +86,10 @@ This replaces `TreeChanged` and `-OnTreeChange RunAnyway`").
   may be written earlier but not committed: the fingerprint includes `HEAD` (`evalqueue.ps1:270-284`), so
   any commit, even docs-only, ends every queued unpinned job `TreeChanged`.
 - **Owner present during the run:** mid-run decisions are asked with a recommendation.
+- **2026-11-19, during Step 4 (owner):** keep two behaviours the implementer added beyond the spec: the
+  default pre-build is skipped (with a worker-log line) when the checkout has no
+  `RoslynSentinel.Tests.ModelEval.csproj` (only the stub test repo); the pre-build is capped at
+  `TimeLimitMinutes` (killed -> `BuildFailed`) and a cancel during `Building` kills it at once.
 
 ## Execution rules
 
@@ -215,6 +219,13 @@ This replaces `TreeChanged` and `-OnTreeChange RunAnyway`").
   not recompile; **STAMP-NULL** - ran but the stamp is empty or dirty (libgit2 on the clone or autocrlf,
   follow up); **RESULTS-STRANDED** - results only under the checkout (Step 1/4 wiring); **BUILD-TIME** -
   record the cold pre-build duration and checkout disk size for D2.
+- Done: **PINNED-OK** 2026-11-19, job `20261120-064449-001` (ShippingKindStepFinal, `unsloth/Qwen3.5-4B-MTP-GGUF`
+  on `http://192.168.10.85:8888/v1`, 6 cases, Finished in 5m26s). Pinned 1993c522; d46c368a was committed
+  while it was queued/running and it did not end `TreeChanged`. Run folders under
+  `<devRepo>\ModelTestingResults\http___192_168_10_85_8888_v1\`; transcript `CommitHash` = 1993c522,
+  `WorkingTreeDirty` false. **BUILD-TIME:** cold pre-build 30 s (`logs\<id>.build.log`), the run's
+  `dotnet test` restore was up-to-date and incremental; checkout 220 MB, longest path 208 chars. D2
+  numbers stand.
 
 ### Step 7 - Docs
 - Files: `docs/current/references/reference_model_eval_procedure.md` (195-228),
@@ -227,6 +238,7 @@ This replaces `TreeChanged` and `-OnTreeChange RunAnyway`").
   add a TODO.md line for the `-OnTreeChange` removal.
 - Done when: no doc describes `TreeChanged` as the current behaviour for new jobs.
 - Lane: main session or `implementer`.
+- Done: d46c368a (reference + help header); TODO.md line and proposal Status in the closing commit.
 
 ## Out of scope
 

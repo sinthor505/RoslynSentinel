@@ -1,8 +1,9 @@
 # One coordinator session for the owner, pinned eval builds on a multi-host queue, and file claims for parallel sessions
 
 **Status:** PROPOSED 2026-11-12. Revised after a review of six concurrent session transcripts. The
-single-host queue (`scripts/roslynsentinel-evalqueue.ps1`, c4b18a78) is built and in use; everything
-else here is unbuilt. Supersedes the 2026-11-11 draft (per-host queue plus ranks, intent board and an
+single-host queue (`scripts/roslynsentinel-evalqueue.ps1`, c4b18a78) is built and in use; Part 3 (pinned
+eval builds, section 2a) is implemented by plans/closed/plan_pinned_eval_checkouts.md (2026-11-20, d46c368a);
+everything else here is unbuilt. Supersedes the 2026-11-11 draft (per-host queue plus ranks, intent board and an
 on-demand arbiter).
 
 ## Motivation

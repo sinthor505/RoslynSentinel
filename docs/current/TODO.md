@@ -12,7 +12,10 @@ Blocking or in-flight slices.
 
 Committed, not started.
 
-- [OPEN] Pinned eval checkouts (2026-11-19) - evalqueue pins each job to a commit at submit and runs it from its own checkout outside the repo, results kept central, TreeChanged retired migration-first; DRAFT, owner settles D1-D4 then run in a fresh session - [plan](plans/plan_pinned_eval_checkouts.md)
+
+- [OPEN] Eval host table, liveness probe and run index (2026-11-20) - one `scripts/eval-hosts.json` (LM Studio :1234 and Unsloth :8888 on 85/112/113, backend field) read by every eval script and both archivers; `Get-EvalHostStatus.ps1` plus `evalqueue hosts` report reachability, loaded model and queue owner in one call; queue keyed by machine so two endpoints cannot load one GPU; worker appends `runs.csv` (job, session, commit, model, folders); `status -Session/-ActiveOnly`; owner agreed direction, write the plan in a fresh session - [proposal](proposals/proposal_eval_host_table_and_liveness.md)
+
+- [OPEN] Retire the unpinned evalqueue path (2026-11-20) - once no job file without `pinnedCommit` remains in any queue folder, remove the legacy fingerprint/`TreeChanged` dispatch path and the deprecated `-OnTreeChange` parameter (code `# TODO remove the unpinned path` in `scripts/roslynsentinel-evalqueue.ps1`); Small - [plan](plans/closed/plan_pinned_eval_checkouts.md)
 
 - [OPEN] Remove the dead external-drift session halt (2026-11-15) - nothing sets `_sessionHalted` since the drift latch went (1c9cb4db), but `IsSessionHalted`/`KindExternalDrift` have 54 references in 19 files; staged removal (`[Obsolete]` first, callers per project, delete last); owner ruled it out of plan_tool_experience_journal_fixes (its Step 32); code TODO in `PersistentWorkspaceManager.cs` near the `_sessionHalted` field; Medium - [plan](plans/closed/plan_tool_experience_journal_fixes.md)
 

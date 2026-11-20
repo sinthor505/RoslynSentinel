@@ -11,3 +11,4 @@ close it with a reason in [CLOSED.md](./CLOSED.md), then delete the line here. C
 
 ## Untriaged
 
+- 2026-11-19 23:13 roslynsentinel-errorvariants.ps1 ignores ROSLYNSENTINEL_RESULTS_ROOT (and its ErrorVariants archiver honours it, so script and test would disagree if set) - scripts/roslynsentinel-errorvariants.ps1:140 - # TODO at scripts/roslynsentinel-errorvariants.ps1:140
