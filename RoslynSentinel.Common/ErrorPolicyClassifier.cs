@@ -17,6 +17,11 @@ public enum ErrorPolicyTargetKind
 /// </summary>
 public static class ErrorPolicyClassifier
 {
+    // Mirror GitErrorCodes.PathNotFound and GitErrorCodes.TargetNotFound in RoslynSentinel.Tools.Basic.
+    // Common cannot reference Tools.Basic, so these strings are kept in step by hand.
+    private const string GitPathNotFoundCode = "GitPathNotFound";
+    private const string GitTargetNotFoundCode = "GitTargetNotFound";
+
     /// <summary>
     /// Returns the target kind for a tool error, or null when the error does not map to a policy key.
     /// The comparison is case-insensitive and the kind is trimmed before matching.
@@ -29,6 +34,16 @@ public static class ErrorPolicyClassifier
         }
 
         if (string.Equals(errorCode, "MethodNotFound", StringComparison.OrdinalIgnoreCase))
+        {
+            return ErrorPolicyTargetKind.Symbol;
+        }
+
+        if (string.Equals(errorCode, GitPathNotFoundCode, StringComparison.OrdinalIgnoreCase))
+        {
+            return ErrorPolicyTargetKind.File;
+        }
+
+        if (string.Equals(errorCode, GitTargetNotFoundCode, StringComparison.OrdinalIgnoreCase))
         {
             return ErrorPolicyTargetKind.Symbol;
         }

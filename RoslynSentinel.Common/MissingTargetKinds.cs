@@ -70,6 +70,9 @@ public static class MissingTargetKinds
     /// <summary>Symbol kind: a using directive.</summary>
     public const string UsingDirective = "using directive";
 
+    /// <summary>Symbol kind: a tag, branch, stash entry, worktree or ref that a Git operation named.</summary>
+    public const string GitTarget = "git target";
+
     /// <summary>Unmapped kind: a project.</summary>
     public const string Project = "project";
 
@@ -103,7 +106,7 @@ public static class MissingTargetKinds
         new[]
         {
             Class, Interface, Type, Record, Enum, EnumMember, Method, Member, Declaration, Property,
-            Field, Constructor, Parameter, Attribute, Namespace, Symbol, Container, UsingDirective,
+            Field, Constructor, Parameter, Attribute, Namespace, Symbol, Container, UsingDirective, GitTarget,
         },
         StringComparer.OrdinalIgnoreCase);
 
