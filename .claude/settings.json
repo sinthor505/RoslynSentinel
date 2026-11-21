@@ -204,6 +204,18 @@
               "${CLAUDE_PROJECT_DIR}/.claude/hooks/journal-session-start.ps1"
             ],
             "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "powershell.exe",
+            "args": [
+              "-NoProfile",
+              "-ExecutionPolicy",
+              "Bypass",
+              "-File",
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/repo-hygiene-session-start.ps1"
+            ],
+            "timeout": 15
           }
         ]
       }
