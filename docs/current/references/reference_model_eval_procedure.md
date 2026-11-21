@@ -124,19 +124,19 @@ running any test. Fix: give each concurrent run its own `--artifacts-path`, e.g.
 
 ```
 dotnet test RoslynSentinel.Tests.ModelEval/RoslynSentinel.Tests.ModelEval.csproj -c Debug \
-  --artifacts-path C:/Users/Administrator/source/repos/RoslynSentinel/_scratchbuild_112 \
+  --artifacts-path <scratch>/build/112 \
   --filter "Name=Model_SizeThresholdSweep" --logger "console;verbosity=detailed"
 ```
 
-(and `_scratchbuild_113` for the other host). This redirects both `bin` and `obj` under
-that directory, so the two invocations no longer touch the same files. `_scratchbuild*` is
-already gitignored (`_scratchbuild/`, `_scratchbuild_*/` in `.gitignore`). Test output
-locations (transcripts, `agent.log`, `SizeThreshold/results.csv`) move under
-`_scratchbuild_<host>/bin/RoslynSentinel.Tests.ModelEval/debug/model-eval/...` instead of
+(and `<scratch>/build/113` for the other host). `<scratch>` is `ROSLYNSENTINEL_SCRATCH_ROOT`
+(absolute) when set, else `<parent of the repo>\RoslynSentinel-ScratchDir`; it lies outside the
+repo. This redirects both `bin` and `obj` under that directory, so the two invocations no longer
+touch the same files. Test output locations (transcripts, `agent.log`, `SizeThreshold/results.csv`)
+move under `<scratch>\build\<host>\bin\RoslynSentinel.Tests.ModelEval\debug\model-eval\...` instead of
 the project's own `bin/Debug/net10.0/model-eval/...` when using this flag — adjust any
 `find`/`tail` commands accordingly. Clear a scratch build's stale `model-eval/` dir before
 a fresh run if old CSV rows/run-history from a prior session would otherwise be mixed in
-with the new run's data (`rm -rf _scratchbuild_112/model-eval`).
+with the new run's data (`rm -rf <scratch>/build/112/bin/RoslynSentinel.Tests.ModelEval/debug/model-eval`).
 
 ## Front-door script: `roslynsentinel-modeleval.ps1` — USE THIS INSTEAD OF A HAND-ROLLED LOOP
 
@@ -175,7 +175,7 @@ different mechanism, not by the same one:
 - `-Size` only applies to `SizeThreshold` (sets `ROSLYNSENTINEL_MODELEVAL_SIZES`).
 - `-Model` defaults to `qwen3.5-9b-coder`.
 - `-Clean` archives that host's stale `model-eval/` run-history dir to
-  `ModelTestingResults\<host-suffix>\<archive-timestamp>\` (not deleted — moved) before
+  `<scratch>\ModelTestingResults\<host-suffix>\<archive-timestamp>\` (not deleted — moved) before
   running, so old CSV rows/transcripts from a prior session aren't mixed in with the new
   run's data.
 - `-Repeats N` (default 1): runs the test N times in sequence. **This is the only supported
@@ -185,7 +185,7 @@ different mechanism, not by the same one:
   2026-08-31). The script's internal loop waits for that scratch path's own `testhost.exe` to
   fully exit between iterations before starting the next build. After each run (pass or
   fail), that run's directory is copied unconditionally to
-  `ModelTestingResults\<host-suffix>\<TestName>\<timestamp>\` — independent of `-Clean`, so
+  `<scratch>\ModelTestingResults\<host-suffix>\<TestName>\<timestamp>\` — independent of `-Clean`, so
   results land in the common folder as soon as each run finishes, not only at the next
   `-Clean`.
 
@@ -209,7 +209,7 @@ runs jobs one at a time per machine and shows every session what is running and 
 ```
 
 - `-Model`, `-Session` (first line of `ListAgents`) and `-Purpose` are required.
-- `wait` prints each job's state, results folder (`ModelTestingResults\<host>\<TestName>\<timestamp>\`)
+- `wait` prints each job's state, results folder (`<scratch>\ModelTestingResults\<host>\<TestName>\<timestamp>\`)
   and log. Exit code 0 = all passed, 1 = a run finished with failing tests, 2 = anything else.
 - Job ids are unique across hosts from 2026-11-20 on; older ids can repeat on two hosts. `wait` and `cancel`
   accept `<host folder>/<id>` (for example `http___192_168_1_113_8888_v1/20261120-072518-001`, or `113/<id>` for
@@ -225,11 +225,11 @@ runs jobs one at a time per machine and shows every session what is running and 
 - Each job runs from its own checkout of its commit, so later edits and commits do not change a queued
   job. There is one checkout per sha under `C:\rs-eval` (override `ROSLYNSENTINEL_EVALQUEUE_CHECKOUTS_ROOT`;
   the short root keeps run paths under MAX_PATH). The job runs that checkout's own scripts. Results stay
-  central under `<devRepo>\ModelTestingResults`. After each job the worker removes checkouts that no Queued,
+  central under `<scratch>\ModelTestingResults`. After each job the worker removes checkouts that no Queued,
   Building or Running job on any host needs, that are older than 24 hours and that are not among the newest 5.
 - `ROSLYNSENTINEL_*` variables set in the submitting shell (for example `ROSLYNSENTINEL_LIFT_RENAMES`)
-  are recorded with the job and applied to its run. `ROSLYNSENTINEL_RESULTS_ROOT` and
-  `ROSLYNSENTINEL_EVALQUEUE_*` are never recorded.
+  are recorded with the job and applied to its run. `ROSLYNSENTINEL_RESULTS_ROOT` (absolute path; overrides
+  the scratch default `<scratch>\ModelTestingResults`) and `ROSLYNSENTINEL_EVALQUEUE_*` are never recorded.
 - `-Priority 1..9` (default 5) orders the queue; a running job is never interrupted.
 - States: `Queued`, `Building` (the worker pre-builds the checkout before the time limit starts; cancellable),
   `Running`, `Finished` (`passed` true/false), `Cancelled`, `TimedOut` (`-TimeLimitMinutes`, default 40;
@@ -248,7 +248,7 @@ runs jobs one at a time per machine and shows every session what is running and 
   Tests: `pwsh -NoProfile -File scripts\roslynsentinel-evalqueue.Tests.ps1`.
 - `roslynsentinel-planstep.ps1` runs are not queued yet.
 - `Refused`: see the llama-server model rule above; it is a terminal state (exit 2 from `wait`).
-- `runs.csv`: the worker appends one row per ended job (Finished, Refused, Crashed, ...) to `ModelTestingResults\<suffix>\runs.csv` (job id, machine, host, endpoint, test, model, sessions, purpose, pinned commit, state, times, run folders); jobs cancelled while still Queued get no row.
+- `runs.csv`: the worker appends one row per ended job (Finished, Refused, Crashed, ...) to `<scratch>\ModelTestingResults\<suffix>\runs.csv` (job id, machine, host, endpoint, test, model, sessions, purpose, pinned commit, state, times, run folders); jobs cancelled while still Queued get no row.
 - `roslynsentinel-evalqueue.ps1 hosts [-Json]` shows every endpoint (reachable, loaded model, context length) with its machine's queue; `status -Session <name>` and `status -ActiveOnly` filter jobs (also with `-Json`); `submit` warns, never refuses, when `-Session` is not a live Claude session.
 
 ### Resuming from a saved transcript (`-Test ResumeTranscript`)
@@ -263,12 +263,12 @@ fixture; everything else in the prompts and history is verbatim. Choose -ResumeK
 
 ```powershell
 # 10-chain run R9 (T3 and T4 are the identical rejected ReplaceSnippet; K=4 makes the model produce T5)
-$t = 'ModelTestingResults\113\Model_AppliesTenChainedRefactors\20261110-231957-659\transcript.json'
+$t = '<scratch>\ModelTestingResults\113\Model_AppliesTenChainedRefactors\20261110-231957-659\transcript.json'
 .\scripts\roslynsentinel-modeleval.ps1 113 ResumeTranscript -ResumeTranscript $t -ResumeKeepTurns 4 -Samples 10 -ContinueTurns 3
 .\scripts\roslynsentinel-modeleval.ps1 113 ResumeTranscript -ResumeTranscript $t -ResumeKeepTurns 4 -Samples 10 -ContinueTurns 3 -LoopAssist
 ```
 
-Results land in `ModelTestingResults\<host>\ResumeFromTranscript_SamplesTheNextTurns\<timestamp>\`: `results.csv` (one row
+Results land in `<scratch>\ModelTestingResults\<host>\ResumeFromTranscript_SamplesTheNextTurns\<timestamp>\`: `results.csv` (one row
 per sample: sampleIndex, loopAssist, role, firstNewToolName, firstCallIdenticalToRejected,
 reachedRenameSymbolWithinTurns, assistCount, then stopReason, newCalls, harnessError) and `sample-NN\transcript.json` /
 `agent.log`. `assistCount` includes assists fired while seeding the kept turns.
@@ -285,13 +285,13 @@ A scenario is one registered, single-fault case run for `-Samples` samples, each
 .\scripts\roslynsentinel-modeleval.ps1 -HostAddress 113 -Test Scenario -Scenario <Id> -Samples 10   # direct, no queue
 ```
 
-The run folder is `ModelTestingResults\<host>\RunScenario_SamplesAndScores\<timestamp>\`. It holds `results.csv` (one
+The run folder is `<scratch>\ModelTestingResults\<host>\RunScenario_SamplesAndScores\<timestamp>\`. It holds `results.csv` (one
 row per sample), `sample-NN\transcript.json` per sample, and `final-state\`. After the run the batch summary prints
 (`Get-ScenarioSummary.ps1`): Inconclusive samples are listed by reason and are never in any rate. Run it by hand:
 
 ```powershell
 . .\scripts\Get-ScenarioSummary.ps1
-Write-ScenarioSummary -CsvPath ModelTestingResults\113\RunScenario_SamplesAndScores\<timestamp>\results.csv
+Write-ScenarioSummary -CsvPath <scratch>\ModelTestingResults\113\RunScenario_SamplesAndScores\<timestamp>\results.csv
 ```
 
 ### Scenario types
@@ -396,7 +396,7 @@ A bare pass/fail sends the analyst back into transcripts to learn what happened.
   change; `ShippingKindStep` (V1) stays as the historical control. Results land
   under the variant's own test name. A
   variant's test name must not contain `Model_CompletesShippingKindStep` (the V1 filter is `Name~` on it).
-- Per-step output in the archived run folder `ModelTestingResults/<host>/Model_CompletesShippingKindStep(<k>)/<timestamp>/`:
+- Per-step output in the archived run folder `<scratch>/ModelTestingResults/<host>/Model_CompletesShippingKindStep(<k>)/<timestamp>/`:
   `step-<k>.golden.diff` (the model's tree against the golden tag, a report only, not graded) and
   `step-<k>.outcome.txt` (class, turns, wall time, StopReason).
 - After changing a golden, a prompt or a check (`Fixtures/ShippingKindStepGoldens.cs`,
