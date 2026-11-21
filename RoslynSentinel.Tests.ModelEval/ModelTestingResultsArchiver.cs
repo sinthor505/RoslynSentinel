@@ -41,7 +41,12 @@ internal static class ModelTestingResultsArchiver
                 : result.Outcome.ToString();
             RunDirectoryArchive.WriteTestResult(runDirectory, outcome, TestContext.CurrentContext.Test.FullName, result.Message, result.StackTrace);
 
-            RunDirectoryArchive.CopyToResults(runDirectory, ScratchRoot.ResultsRoot(), EvalHostTable.DeriveSuffix(RoslynSentinel.Common.LlmOptions.BaseUrl));
+            var destination = RunDirectoryArchive.CopyToResults(runDirectory, ScratchRoot.ResultsRoot(), EvalHostTable.DeriveSuffix(RoslynSentinel.Common.LlmOptions.BaseUrl));
+            if (outcome is null)
+            {
+                // Body-called: test-result.txt says Unfinished now; RewriteBodyArchivedOutcomeAttribute rewrites it (run directory and archived copy) when the test ends.
+                PendingArchivedOutcomes.Register(TestContext.CurrentContext.Test.ID, runDirectory, destination);
+            }
         }
         catch (Exception ex)
         {

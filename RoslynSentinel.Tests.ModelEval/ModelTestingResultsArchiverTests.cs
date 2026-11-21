@@ -133,4 +133,43 @@ public class ModelTestingResultsArchiverTests
             }
         }
     }
+
+    [Test]
+    public void PendingArchivedOutcomes_Rewrite_ReplacesTheUnfinishedOutcomeInBothDirectories()
+    {
+        var tmp = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var runDirectory = Path.Combine(tmp, "run");
+        var archivedDirectory = Path.Combine(tmp, "archived");
+        try
+        {
+            Directory.CreateDirectory(runDirectory);
+            Directory.CreateDirectory(archivedDirectory);
+            RoslynSentinel.Common.AgentLoop.RunDirectoryArchive.WriteTestResult(runDirectory, null, "X", null, null);
+            RoslynSentinel.Common.AgentLoop.RunDirectoryArchive.WriteTestResult(archivedDirectory, null, "X", null, null);
+
+            PendingArchivedOutcomes.Register("id-1", runDirectory, archivedDirectory);
+            PendingArchivedOutcomes.Rewrite("id-1", "Passed", "X", null, null);
+
+            Assert.That(File.ReadAllLines(Path.Combine(runDirectory, "test-result.txt"))[0], Is.EqualTo("Outcome: Passed"));
+            Assert.That(File.ReadAllLines(Path.Combine(archivedDirectory, "test-result.txt"))[0], Is.EqualTo("Outcome: Passed"));
+
+            // The entry was consumed by the first Rewrite, so a second one must not change the files.
+            PendingArchivedOutcomes.Rewrite("id-1", "Failed", "X", null, null);
+
+            Assert.That(File.ReadAllLines(Path.Combine(runDirectory, "test-result.txt"))[0], Is.EqualTo("Outcome: Passed"));
+            Assert.That(File.ReadAllLines(Path.Combine(archivedDirectory, "test-result.txt"))[0], Is.EqualTo("Outcome: Passed"));
+
+            // A null archived directory and a directory that no longer exists must neither throw nor change anything.
+            var missingDirectory = Path.Combine(tmp, "missing");
+            Assert.That(() => PendingArchivedOutcomes.Register("id-2", missingDirectory, null), Throws.Nothing);
+            Assert.That(() => PendingArchivedOutcomes.Rewrite("id-2", "Passed", "X", null, null), Throws.Nothing);
+        }
+        finally
+        {
+            if (Directory.Exists(tmp))
+            {
+                Directory.Delete(tmp, recursive: true);
+            }
+        }
+    }
 }
