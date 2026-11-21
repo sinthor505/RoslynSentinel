@@ -37,13 +37,12 @@ public sealed class ToolLoopLatch
     /// </summary>
     public const string RefusalMarker = " is DISABLED until another tool succeeds";
 
-    // TODO live check 2026-11-21 (eval_tenchain_reasoning_replay_2026_11_10.md): the quoted next step can be an edit of the tool just disabled ("widen oldContent"), so the model follows it and is refused again (LoopLatchIgnored, sample 8 of 10).
     private const string NextStepDirective = "You MUST do the next step now: ";
 
     private static readonly Regex DiagnosticId = new(@"\b[A-Z]{2,4}\d{4}\b", RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     // Read-only tools a refusal may point at; each is named only when callable (and is not the latched tool itself).
-    private static readonly string[] ReadTools = ["ReadFile", "GetFileOutline", "Search"];
+    private static readonly string[] ReadTools = ["ReadFile", "GetFileOutline", "GetMethodSource", "Search"];
 
     private sealed class LatchedTool(string errorCode, int failureCount, string? nextStep)
     {
@@ -164,11 +163,12 @@ public sealed class ToolLoopLatch
     /// The refusal text. With a next step: "{Tool} is DISABLED until another tool succeeds: it failed the same way {n} times. You MUST
     /// do the next step now: {next step, verbatim}". Without: the same lead, then "Read the current code first with ..." naming
     /// only the callable read tools other than the latched one, then "choose a different approach".
+    /// A next step that names the latched tool as a whole word is dropped (it would point the caller back at the disabled tool).
     /// </summary>
     public static string BuildRefusal(string toolName, int failureCount, string? nextStep, Func<string, bool>? isCallable = null)
     {
         var lead = $"{toolName}{RefusalMarker}: it failed the same way {failureCount} times. ";
-        if (!string.IsNullOrWhiteSpace(nextStep))
+        if (!string.IsNullOrWhiteSpace(nextStep) && !Regex.IsMatch(nextStep, @"\b" + Regex.Escape(toolName) + @"\b"))
         {
             return lead + NextStepDirective + nextStep;
         }

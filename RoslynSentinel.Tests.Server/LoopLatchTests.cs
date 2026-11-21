@@ -145,6 +145,21 @@ public class LoopLatchTests
     }
 
     [Test]
+    public void Refusal_WithANextStepNamingTheLatchedTool_DropsItAndNamesTheReadTools()
+    {
+        var latch = new ToolLoopLatch();
+        var message = "ReplaceSnippet: no match.\nNext step: widen oldContent and call ReplaceSnippet again.";
+        latch.RecordOutcome("a", "ReplaceSnippet", false, ToolErrorCode.NotFound, message);
+        latch.RecordOutcome("a", "ReplaceSnippet", false, ToolErrorCode.NotFound, message);
+
+        var refusal = latch.TryRefuse("a", "ReplaceSnippet");
+        Assert.That(refusal, Is.EqualTo(
+            "ReplaceSnippet is DISABLED until another tool succeeds: it failed the same way 2 times. "
+            + "Read the current code first with ReadFile, GetFileOutline, GetMethodSource or Search, then choose a different approach."));
+        Assert.That(refusal, Does.Not.Contain("widen"));
+    }
+
+    [Test]
     public void Refusal_WithoutANextStep_PointsAtTheCallableReadTools_AndNamesNoOther()
     {
         var latch = new ToolLoopLatch();
@@ -153,7 +168,7 @@ public class LoopLatchTests
 
         Assert.That(latch.TryRefuse("a", "ReplaceSnippet"), Is.EqualTo(
             "ReplaceSnippet is DISABLED until another tool succeeds: it failed the same way 2 times. "
-            + "Read the current code first with ReadFile, GetFileOutline or Search, then choose a different approach."));
+            + "Read the current code first with ReadFile, GetFileOutline, GetMethodSource or Search, then choose a different approach."));
 
         var onlyOutline = latch.TryRefuse("a", "ReplaceSnippet", tool => tool == "GetFileOutline");
         Assert.That(onlyOutline, Does.Contain("Read the current code first with GetFileOutline, then"));
@@ -168,7 +183,7 @@ public class LoopLatchTests
     {
         var text = ToolLoopLatch.BuildRefusal("ReadFile", 2, null);
 
-        Assert.That(text, Does.Contain("with GetFileOutline or Search,"));
+        Assert.That(text, Does.Contain("with GetFileOutline, GetMethodSource or Search,"));
         Assert.That(text.Replace("ReadFile is DISABLED", ""), Does.Not.Contain("ReadFile"));
     }
 
