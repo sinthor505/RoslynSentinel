@@ -20,6 +20,7 @@ public record AppliedChangeSummary(
     bool DryRun,
     string? Diff = null,
     int? WorkspaceVersion = null,
+    // TODO retype ChangedContent and both From(...) changedContent parameters to DocumentChangeSet? once the ~63 caller sites (Tools.Basic RefactoringStructuralImpl/RefactoringSignatureImpl/RefactoringExtractionDocsImpl/CoreRefactoringTools, Tools.Advanced AdvancedRefactoringTools, Tests.Basic AppliedChangeSummary*Tests and ResultStatusTests:1043) pass a DocumentChangeSet (plan_document_changeset_type Step 7; the property is the positional record property, so parameter and property must change together)
     Dictionary<FilePathWrapper, string>? ChangedContent = null,
     bool Validated = false,
     List<FileLineChange>? LineChanges = null,
