@@ -22,7 +22,7 @@
 
 .PARAMETER Path
     Transcript files and/or folders to scan (folders are searched recursively for transcript.json).
-    Default: every ShippingKind run folder under ModelTestingResults.
+    Default: every ShippingKind run folder under <scratch>\ModelTestingResults.
 
 .PARAMETER Model
     Only transcripts whose ModelKey matches this -like pattern (e.g. 'tiel*', 'qwen3.5-9b*').
@@ -47,15 +47,16 @@
     Transcripts are not scanned unless -Path is also given.
 
 .EXAMPLE
+    <scratch> is ROSLYNSENTINEL_SCRATCH_ROOT, or ..\RoslynSentinel-ScratchDir next to the repo.
     pwsh scripts/Get-ShippingKindTypoCounts.ps1 -Step 4 -Model 'tiel*'
     Typo counts for the tiel-coder step 4 runs.
 
 .EXAMPLE
-    pwsh scripts/Get-ShippingKindTypoCounts.ps1 -ReplayResults ModelTestingResults\113\ShippingKindReplay_SamplesTheDecisionTurn
+    pwsh scripts/Get-ShippingKindTypoCounts.ps1 -ReplayResults <scratch>\ModelTestingResults\113\ShippingKindReplay_SamplesTheDecisionTurn
     Near-miss and invented counts over the samples of a ShippingKindReplay run.
 
 .EXAMPLE
-    pwsh scripts/Get-ShippingKindTypoCounts.ps1 -Path ModelTestingResults\113\ResumeShippingKindStep_SamplesTheNextTurns -Detail
+    pwsh scripts/Get-ShippingKindTypoCounts.ps1 -Path <scratch>\ModelTestingResults\113\ResumeShippingKindStep_SamplesTheNextTurns -Detail
     Typo counts over the samples of a ShippingKindResume run.
 #>
 [CmdletBinding()]

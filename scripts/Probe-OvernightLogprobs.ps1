@@ -16,7 +16,7 @@
       -Channel reasoning  the reasoning prefix is sent as the assistant message "<think>\n" + prefix. The stock Qwen3.5 template
                           wraps every assistant message after the user turn in "<think>\n{reasoning}\n</think>\n\n", so it renders
                           "<think>\n\n</think>\n\n<think>\n" + prefix: a CLOSED empty think block, i.e. content mode, an approximation.
-                          Loading .scratch/chat_template_probe.txt (one added branch: a final assistant message that starts with
+                          Loading <scratch>\probe-inputs\chat_template_probe.txt (one added branch: a final assistant message that starts with
                           "<think>" and has no "</think>" is rendered raw) makes it continue inside an open think block, which is how
                           the real reasoning is generated. -ReasoningAsText drops the "<think>" (plain text).
     Sampler: 200 sampled replies on the 9b step 5 decision request (-SampleCount 200) were all ".Over", matching the logprobs
@@ -230,7 +230,7 @@ $tools = foreach ($name in @($t.Tools)) {
 }
 
 # LM Studio refuses logprobs together with a tools list ("logprobs is not supported with tools + stream"). Inline mode puts the
-# tool block into the system message text exactly as the loaded Qwen3.5 chat template writes it (.scratch/chat_template.txt: the
+# tool block into the system message text exactly as the loaded Qwen3.5 chat template writes it (<scratch>\probe-inputs\chat_template.txt: the
 # "# Tools" block first, then "\n\n" + the system prompt, all in one system message), so with no tools list the template renders the
 # same system turn. Unverified detail: how LM Studio's tojson spaces the tool JSON (Python-style ", " / ": " assumed) and the key
 # order of its tool objects; check against __lmstudio.model_input in a trace log. None drops the tools; Native sends them.

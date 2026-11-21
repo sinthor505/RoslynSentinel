@@ -43,7 +43,7 @@
 .PARAMETER LogPath
     Path to one agent.log file, OR a directory - in which case every agent.log found recursively
     underneath is parsed (e.g. point it at a whole
-    ModelTestingResults\113\Model_AppliesSevenChainedRefactors\ directory to parse every run of
+    <scratch>\ModelTestingResults\113\Model_AppliesSevenChainedRefactors\ directory to parse every run of
     that rung in one call).
 
 .PARAMETER AsJson
@@ -56,19 +56,20 @@
     then querying the JSON files repeatedly without re-parsing.
 
 .EXAMPLE
-    .\Parse-AgentLog.ps1 -LogPath .\ModelTestingResults\113\Model_AppliesThreeChainedRefactors\20260905-104034-728\agent.log
+    <scratch> is ROSLYNSENTINEL_SCRATCH_ROOT, or ..\RoslynSentinel-ScratchDir next to the repo.
+    .\Parse-AgentLog.ps1 -LogPath <scratch>\ModelTestingResults\113\Model_AppliesThreeChainedRefactors\20260905-104034-728\agent.log
     Parse one run, return a PowerShell object you can pipe into Select-Object/Where-Object.
 
 .EXAMPLE
-    .\Parse-AgentLog.ps1 -LogPath .\ModelTestingResults\113\Model_AppliesSevenChainedRefactors | `
+    .\Parse-AgentLog.ps1 -LogPath <scratch>\ModelTestingResults\113\Model_AppliesSevenChainedRefactors | `
         ForEach-Object { $_.Turns.ToolCalls } | Where-Object ToolName -eq 'ApplyDiff' | `
         Select-Object -ExpandProperty Args | Select-Object -ExpandProperty reason
     Parse every run under a rung's results directory and list every ApplyDiff call's stated
     `reason` param across all of them.
 
 .EXAMPLE
-    .\Parse-AgentLog.ps1 -LogPath .\ModelTestingResults\113 -OutDir .\ModelTestingResults\_parsed
-    Parse every agent.log anywhere under ModelTestingResults\113 and cache one JSON file per run.
+    .\Parse-AgentLog.ps1 -LogPath <scratch>\ModelTestingResults\113 -OutDir <scratch>\ModelTestingResults\_parsed
+    Parse every agent.log anywhere under <scratch>\ModelTestingResults\113 and cache one JSON file per run.
 #>
 [CmdletBinding()]
 param(

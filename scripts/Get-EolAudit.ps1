@@ -29,7 +29,7 @@
 .EXAMPLE
     .\scripts\Get-EolAudit.ps1
     .\scripts\Get-EolAudit.ps1 -FailOn lf,mixed -ShowFiles
-    .\scripts\Get-EolAudit.ps1 -CsvPath .scratch\eol.csv
+    .\scripts\Get-EolAudit.ps1 -CsvPath <scratch>\eol.csv
 #>
 [CmdletBinding()]
 param(

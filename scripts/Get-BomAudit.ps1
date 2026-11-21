@@ -20,8 +20,9 @@
     Exit 1 if any project mixes BOM and no-BOM files (for use in CI).
 
 .EXAMPLE
+    <scratch> is ROSLYNSENTINEL_SCRATCH_ROOT, or ..\RoslynSentinel-ScratchDir next to the repo.
     .\scripts\Get-BomAudit.ps1
-    .\scripts\Get-BomAudit.ps1 -ShowFiles -CsvPath .scratch\bom.csv
+    .\scripts\Get-BomAudit.ps1 -ShowFiles -CsvPath <scratch>\bom.csv
 #>
 [CmdletBinding()]
 param(

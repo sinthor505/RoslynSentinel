@@ -38,10 +38,11 @@
     Write the changes. Without it nothing is written.
 
 .EXAMPLE
-    pwsh scripts\Backfill-TranscriptSummary.ps1 -Path ModelTestingResults\112
+    <scratch> is ROSLYNSENTINEL_SCRATCH_ROOT, or ..\RoslynSentinel-ScratchDir next to the repo.
+    pwsh scripts\Backfill-TranscriptSummary.ps1 -Path <scratch>\ModelTestingResults\112
 
 .EXAMPLE
-    pwsh scripts\Backfill-TranscriptSummary.ps1 -Path ModelTestingResults\112, ModelTestingResults\113 -Apply
+    pwsh scripts\Backfill-TranscriptSummary.ps1 -Path <scratch>\ModelTestingResults\112, <scratch>\ModelTestingResults\113 -Apply
 #>
 [CmdletBinding()]
 param(

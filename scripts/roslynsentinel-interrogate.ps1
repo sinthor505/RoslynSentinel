@@ -76,8 +76,9 @@
     they replay unchanged. Pass -OmitTrailingText to replay from ResultJson only (the pre-2026-11-12 behavior).
 
 .EXAMPLE
+    <scratch> is ROSLYNSENTINEL_SCRATCH_ROOT, or ..\RoslynSentinel-ScratchDir next to the repo.
     .\roslynsentinel-interrogate.ps1 -HostAddress 113 `
-        -TranscriptPath "ModelTestingResults\113\Model_AppliesSevenChainedRefactors\20260907-114903-737" `
+        -TranscriptPath "<scratch>\ModelTestingResults\113\Model_AppliesSevenChainedRefactors\20260907-114903-737" `
         -Question "Your OrderCheckout.cs WriteFile used 'new()' against an IOrderPricingCalculator-typed field instead of 'new OrderPricingCalculator()' - that doesn't compile. Why did you write that, and why did your own verification checklist claim otherwise?"
 
     Replays a known-failing Seven-chain run back to qwen3.6-35b-a3b on .113 and asks it to
@@ -85,14 +86,14 @@
 
 .EXAMPLE
     .\roslynsentinel-interrogate.ps1 -HostAddress 192.168.10.85:1234 -Model "qwen/qwen3-4b-thinking-2507" `
-        -TranscriptPath "ModelTestingResults\113\Model_AppliesSevenChainedRefactors\20260907-114903-737\transcript.json" `
+        -TranscriptPath "<scratch>\ModelTestingResults\113\Model_AppliesSevenChainedRefactors\20260907-114903-737\transcript.json" `
         -Question "Why did this fail?"
 
     Same run, but interrogated by a different model on a third box - useful for comparing
     how differently-sized/tuned models diagnose the same failure.
 
 .EXAMPLE
-    .\roslynsentinel-interrogate.ps1 -TranscriptPath "ModelTestingResults\112\Model_FixesWholeFileRewriteBug_MinimalGuidance\20260907-130015-395" -Question "why" -DryRun
+    .\roslynsentinel-interrogate.ps1 -TranscriptPath "<scratch>\ModelTestingResults\112\Model_FixesWholeFileRewriteBug_MinimalGuidance\20260907-130015-395" -Question "why" -DryRun
 
     Just reconstructs and prints the conversation - no HostAddress/API call needed for a dry run,
     handy for eyeballing a transcript without spending any inference time.

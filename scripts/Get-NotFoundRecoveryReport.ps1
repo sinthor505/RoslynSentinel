@@ -46,8 +46,9 @@
 .PARAMETER AgentLog      One agent.log file (same handling as -AgentLogRoot). May be combined with it.
 
 .EXAMPLE
-  .\scripts\Get-NotFoundRecoveryReport.ps1 -AgentLogRoot .\ModelTestingResults\113\Model_FixesWholeFileRewriteBug_MinimalGuidance
-  .\scripts\Get-NotFoundRecoveryReport.ps1 -AgentLog .\ModelTestingResults\113\Some_Test\20261107-080949-313\agent.log -Detail
+  <scratch> is ROSLYNSENTINEL_SCRATCH_ROOT, or ..\RoslynSentinel-ScratchDir next to the repo.
+  .\scripts\Get-NotFoundRecoveryReport.ps1 -AgentLogRoot <scratch>\ModelTestingResults\113\Model_FixesWholeFileRewriteBug_MinimalGuidance
+  .\scripts\Get-NotFoundRecoveryReport.ps1 -AgentLog <scratch>\ModelTestingResults\113\Some_Test\20261107-080949-313\agent.log -Detail
   .\scripts\Get-NotFoundRecoveryReport.ps1 -Since 2026-10-01
   .\scripts\Get-NotFoundRecoveryReport.ps1 -Tool ReplaceSnippet -Top 6
   .\scripts\Get-NotFoundRecoveryReport.ps1 -CsvPath $env:TEMP\notfound.csv
