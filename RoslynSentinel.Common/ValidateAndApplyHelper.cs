@@ -233,7 +233,7 @@ public static class ValidateAndApplyHelper
         if (applyResult.IsError)
         {
             // The chokepoint's own EOL backstop reports RefusalCode; surface it as its distinct code.
-            var applyError = WriteRefusal.TryMap(operationName, applyResult, out var mappedRefusal)
+            var applyError = WriteRefusal.TryMap(operationName, applyResult, out var mappedRefusal, WriteRefusal.LedgerOf(workspaceManager))
                 ? mappedRefusal
                 : applyResult.RefusalCode != null
                     ? new ResultError(applyResult.RefusalCode, applyResult.Summary)

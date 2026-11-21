@@ -197,6 +197,84 @@ public static class NotFoundEvidence
         return (null, callerWrote);
     }
 
+    /// <summary>
+    /// Newest recorded writer per requested path from the operation blobs of the last 60 minutes, one pass over the blobs
+    /// (newest first, stopping once every path is found). The blob folder is per solution root, so this also sees writes by
+    /// other windows that this server's edit attribution ledger never recorded. A path with no blob writer is absent. Never throws.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, EditAttribution> LatestBlobWriters(string solutionRoot, IReadOnlyCollection<string> paths, DateTime utcNow)
+    {
+        var found = new Dictionary<string, EditAttribution>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var dir = Path.Combine(solutionRoot, ".roslynsentinel", "operations");
+            if (paths.Count == 0 || !Directory.Exists(dir))
+            {
+                return found;
+            }
+
+            var cutoff = utcNow - DefaultWindow;
+            var recent = Directory.EnumerateFiles(dir, "*.json")
+                .Select(path => (BlobPath: path, Written: TimestampOf(path)))
+                .Where(blob => blob.Written >= cutoff)
+                .OrderByDescending(blob => blob.Written)
+                .ThenByDescending(blob => blob.BlobPath, StringComparer.Ordinal)
+                .Take(MaxBlobsOpened);
+
+            foreach (var blob in recent)
+            {
+                if (found.Count >= paths.Count)
+                {
+                    break;
+                }
+
+                using var document = TryParse(blob.BlobPath);
+                if (document is null
+                    || !document.RootElement.TryGetProperty("items", out var items)
+                    || items.ValueKind != JsonValueKind.Array)
+                {
+                    continue;
+                }
+
+                var tool = StringOf(document.RootElement, "toolName");
+                foreach (var item in items.EnumerateArray())
+                {
+                    var itemPath = StringOf(item, "FilePath");
+                    if (StringOf(item, "Outcome") is "Skipped" or "Failed" or "RolledBack")
+                    {
+                        continue;
+                    }
+
+                    foreach (var path in paths)
+                    {
+                        if (found.ContainsKey(path) || !PathMatches(itemPath, path))
+                        {
+                            continue;
+                        }
+
+                        var reason = StringOf(item, "AppliedByReason");
+                        found[path] = new EditAttribution(
+                            0,
+                            StringOf(item, "AppliedByAgentId"),
+                            StringOf(item, "AppliedByAgentType"),
+                            tool,
+                            reason is null ? null : Clip(reason, MaxReasonChars),
+                            blob.Written!.Value,
+                            EditAttributionOp.Write,
+                            null,
+                            StringOf(item, "AppliedBySessionId"));
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Blob last-writer lookup failed: {ex}");
+        }
+
+        return found;
+    }
+
     // Scans every recent blob, not only those for one file. Foreign writers only; the newest explaining blob per file wins.
     private static List<string> SearchBlobsAcrossFiles(string solutionRoot, string term, bool isRegex, string agentId, string? sessionId, DateTime utcNow, int maxNotes, string? searchedScope = null, Func<string, bool>? isInScope = null)
     {

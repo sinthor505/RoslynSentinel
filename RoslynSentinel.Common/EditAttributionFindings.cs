@@ -37,10 +37,7 @@ public static class EditAttributionFindings
                 foreignCount++;
                 if (findings.Count < maxFileFindings)
                 {
-                    var sessionLabel = entry.SessionId is null || string.Equals(entry.SessionId, callerSessionId, StringComparison.Ordinal)
-                        ? string.Empty
-                        : $" (session {entry.SessionId[..Math.Min(8, entry.SessionId.Length)]})";
-                    var message = $"{path} was last changed by agent '{entry.AgentId}'{sessionLabel} (type {entry.AgentType ?? "unknown"}) via {entry.Tool ?? "unknown"}, {FormatAge(utcNow - entry.UtcTime)} ago: {entry.Reason ?? "no reason recorded"}";
+                    var message = $"{path} was last changed by {EditAttributionWording.Describe(entry, utcNow, callerSessionId)}";
                     findings.Add(new Finding("EditAttribution", message, FindingSeverity.Info));
                 }
             }

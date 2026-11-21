@@ -77,7 +77,7 @@ public class WholeFileWriteTools
 
             var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = normalizedContent };
             var result = await _workspaceManager.ApplyProposedChangesAsync(changes, validateChanges: validateOnApply, cancellationToken: cancellationToken, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
-            if (WriteRefusal.TryMap("WriteFile", result, out var refusal))
+            if (WriteRefusal.TryMap("WriteFile", result, out var refusal, WriteRefusal.LedgerOf(_workspaceManager)))
                 return new SentinelCallToolResult<object>() { IsError = true, ErrorData = refusal };
 
             IReadOnlyList<Finding>? nearMissFindings = null;
@@ -155,7 +155,7 @@ public class WholeFileWriteTools
                 cancellationToken: cancellationToken,
                 deletePaths: [filePathResolved],
                 staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
-            if (WriteRefusal.TryMap("DeleteFile", result, out var refusal))
+            if (WriteRefusal.TryMap("DeleteFile", result, out var refusal, WriteRefusal.LedgerOf(_workspaceManager)))
                 return new SentinelCallToolResult<object>() { IsError = true, ErrorData = refusal };
 
             if (result.IsError)
@@ -504,7 +504,7 @@ public class WholeFileWriteTools
                     }
 
                     var result = await _workspaceManager.ApplyProposedChangesAsync(normalizedChanges, retryCount, validateChanges: validateOnApply, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
-                    if (WriteRefusal.TryMap("ApplyDiff", result, out var refusal))
+                    if (WriteRefusal.TryMap("ApplyDiff", result, out var refusal, WriteRefusal.LedgerOf(_workspaceManager)))
                         return new SentinelCallToolResult<object>() { IsError = true, ErrorData = refusal };
                     IReadOnlyList<Finding>? nearMissFindings = null;
                     if (result.IsError && result.ValidationResult != null
@@ -652,7 +652,7 @@ public class WholeFileWriteTools
                         // TODO no shrink/no-type-left guard here (ApplyDiff files format has LargeShrinkRejectionThreshold; ReplaceSnippet has the no-type-left guard)
                         var result = await _workspaceManager.ApplyProposedChangesAsync(diffChanges, validateChanges: validateOnApply, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
                         // TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)
-                        if (WriteRefusal.TryMap("ApplyDiff", result, out var refusal))
+                        if (WriteRefusal.TryMap("ApplyDiff", result, out var refusal, WriteRefusal.LedgerOf(_workspaceManager)))
                             return new SentinelCallToolResult<object>() { IsError = true, ErrorData = refusal };
                         IReadOnlyList<Finding>? nearMissFindings = null;
                         if (result.IsError && result.ValidationResult != null
@@ -800,7 +800,7 @@ public class WholeFileWriteTools
                     // TODO no shrink/no-type-left guard here (ApplyDiff files format has LargeShrinkRejectionThreshold; ReplaceSnippet has the no-type-left guard)
                     var result = await _workspaceManager.ApplyProposedChangesAsync(diffChanges, validateChanges: validateOnApply, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
                     // TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)
-                    if (WriteRefusal.TryMap("ApplyUnifiedDiff", result, out var refusal))
+                    if (WriteRefusal.TryMap("ApplyUnifiedDiff", result, out var refusal, WriteRefusal.LedgerOf(_workspaceManager)))
                         return new SentinelCallToolResult<object>() { IsError = true, ErrorData = refusal };
                     IReadOnlyList<Finding>? nearMissFindings = null;
                     if (result.IsError && result.ValidationResult != null

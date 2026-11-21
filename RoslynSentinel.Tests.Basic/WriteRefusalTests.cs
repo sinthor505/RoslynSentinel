@@ -90,6 +90,62 @@ public class WriteRefusalTests
     }
 
     [Test]
+    public void StaleRead_LedgerHoldsWriter_NamesAgentToolAndReason()
+    {
+        var file = FileNamed(1);
+        var ledger = new EditAttributionLedger();
+        ledger.Append(file, new ToolCallContext("agent-a", "implementer", "ReplaceSnippet", "rename the widget factory", 0), EditAttributionOp.Write, "hash");
+
+        var mapped = WriteRefusal.TryMap(ToolName, Refused(ToolErrorCode.StaleRead, true, file), out var error, ledger);
+
+        Assert.That(mapped, Is.True);
+        Assert.That(error.ErrorCode, Is.EqualTo(ToolErrorCode.StaleRead));
+        Assert.That(error.Message, Does.Contain("last changed by agent 'agent-a'"));
+        Assert.That(error.Message, Does.Contain("via ReplaceSnippet"));
+        Assert.That(error.Message, Does.Contain("rename the widget factory"));
+        Assert.That(error.Message, Does.Contain("ReadFile"));
+    }
+
+    [Test]
+    public void StaleRead_NoLedgerEntry_KeepsTheTextWithoutALedger()
+    {
+        var file = FileNamed(1);
+        var result = Refused(ToolErrorCode.StaleRead, true, file);
+
+        WriteRefusal.TryMap(ToolName, result, out var withoutLedger);
+        WriteRefusal.TryMap(ToolName, result, out var withEmptyLedger, new EditAttributionLedger());
+
+        Assert.That(withEmptyLedger.Message, Is.EqualTo(withoutLedger.Message));
+        Assert.That(withEmptyLedger.Message, Does.Not.Contain("last changed by"));
+    }
+
+    [Test]
+    public void StaleRead_LedgerKeyUsesOtherSlashForm_StillNamesWriter()
+    {
+        var file = FileNamed(1);
+        var ledger = new EditAttributionLedger();
+        ledger.Append(file.Replace('\\', '/'), new ToolCallContext("agent-a", "implementer", "WriteFile", "slash form write", 0), EditAttributionOp.Write, "hash");
+
+        WriteRefusal.TryMap(ToolName, Refused(ToolErrorCode.StaleRead, true, file), out var error, ledger);
+
+        Assert.That(error.Message, Does.Contain("last changed by agent 'agent-a'"));
+        Assert.That(error.Message, Does.Contain("slash form write"));
+    }
+
+    [Test]
+    public void StaleRead_ManyFiles_NamesWriterInStructuredDetailForUnlistedFiles()
+    {
+        var files = Enumerable.Range(1, 12).Select(FileNamed).ToArray();
+        var ledger = new EditAttributionLedger();
+        ledger.Append(files[11], new ToolCallContext("agent-a", "implementer", "WriteFile", "late file write", 0), EditAttributionOp.Write, "hash");
+
+        WriteRefusal.TryMap(ToolName, Refused(ToolErrorCode.StaleRead, true, files), out var error, ledger);
+
+        Assert.That(error.StructuredDetail, Is.Not.Null);
+        Assert.That(error.StructuredDetail!.Last().ToString(), Does.Contain("last changed by agent 'agent-a'"));
+    }
+
+    [Test]
     public void UnmappedRefusalCode_ReturnsFalseAndNullError()
     {
         var result = Refused(ToolErrorCode.EolChangeRefused, true, FileNamed(1));

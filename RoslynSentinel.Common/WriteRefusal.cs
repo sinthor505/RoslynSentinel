@@ -6,8 +6,11 @@ namespace RoslynSentinel.Common;
 /// </summary>
 public static class WriteRefusal
 {
-    /// <summary>Maps a refused write to its <see cref="ResultError"/>. Returns false, with <paramref name="error"/> null, for any code not mapped here.</summary>
-    public static bool TryMap(string toolName, ApplyChangesResult result, out ResultError error)
+    /// <summary>
+    /// Maps a refused write to its <see cref="ResultError"/>. Returns false, with <paramref name="error"/> null, for any code not mapped here.
+    /// When <paramref name="ledger"/> is given (see <see cref="LedgerOf"/>), a StaleRead message names the last writer of each failed file; without it the message is unchanged.
+    /// </summary>
+    public static bool TryMap(string toolName, ApplyChangesResult result, out ResultError error, EditAttributionLedger? ledger = null)
     {
         error = null!;
         if (!result.IsError || result.RefusalCode is null)
@@ -18,7 +21,7 @@ public static class WriteRefusal
         switch (result.RefusalCode)
         {
             case ToolErrorCode.StaleRead:
-                error = StaleReadError(toolName, result);
+                error = StaleReadError(toolName, result, ledger);
                 return true;
             case ToolErrorCode.FoldPending:
                 error = FoldPendingError(toolName, result);
@@ -34,23 +37,48 @@ public static class WriteRefusal
     /// <summary>Lists at most this many failed files in the message; the rest go to StructuredDetail.</summary>
     private const int MaxListedFiles = 10;
 
-    private static ResultError StaleReadError(string toolName, ApplyChangesResult result)
+    private static ResultError StaleReadError(string toolName, ApplyChangesResult result, EditAttributionLedger? ledger = null)
     {
         var files = result.FailedFiles;
         var count = files.Count;
+        var writers = LastWritersFor(files, ledger);
+        var now = DateTime.UtcNow;
+        var callerSession = ToolCallContext.Current?.SessionId;
+        string Entry(KeyValuePair<FilePathWrapper, string> f) =>
+            writers.TryGetValue(f.Key.ToString(), out var writer)
+                ? $"{f.Key} ({f.Value}; last changed by {EditAttributionWording.Describe(writer, now, callerSession)})"
+                : $"{f.Key} ({f.Value})";
         var list = count == 0
             ? "(no file names reported)"
-            : string.Join("; ", files.Take(MaxListedFiles).Select(f => $"{f.Key} ({f.Value})"))
+            : string.Join("; ", files.Take(MaxListedFiles).Select(Entry))
               + (count > MaxListedFiles ? $"; and {count - MaxListedFiles} more" : string.Empty);
         var reread = count == 0
             ? $"re-read the file(s) you are editing with {ToolCallHint.Call("ReadFile", ("filePath", "<file you are editing>"))}"
             : $"re-read with {ToolCallHint.Call("ReadFile", ("filePath", (string)files.Keys.First()))}";
         IReadOnlyList<object>? structuredDetail = count > MaxListedFiles
-            ? files.Select(f => (object)$"{f.Key} ({f.Value})").ToList()
+            ? files.Select(f => (object)Entry(f)).ToList()
             : null;
-        // TODO per-file attribution: name the writer that changed each file once proposal_cross_session_write_journal.md lands
         var message = $"{toolName}: {count} target file(s) changed after you last read them; nothing was written: {list}. Next: {reread}, then repeat the edit against the fresh content. If refused again, wait a moment (the server may still be syncing an external change).";
         return new ResultError(ToolErrorCode.StaleRead, message, StructuredDetail: structuredDetail);
+    }
+
+    /// <summary>
+    /// The edit attribution ledger a workspace manager exposes, or null when it exposes none; pass it to
+    /// <see cref="TryMap"/> so a StaleRead refusal names the last writer.
+    /// </summary>
+    public static EditAttributionLedger? LedgerOf(object? workspaceManager) =>
+        (workspaceManager as IEditAttributionLedgerProvider)?.EditAttributions;
+
+    // Empty when there is nothing to look up in: no ledger and no solution root on the call.
+    private static IReadOnlyDictionary<string, EditAttribution> LastWritersFor(IReadOnlyDictionary<FilePathWrapper, string> files, EditAttributionLedger? ledger)
+    {
+        var solutionRoot = ToolCallContext.Current?.SolutionRoot;
+        if (files.Count == 0 || (ledger is null && string.IsNullOrWhiteSpace(solutionRoot)))
+        {
+            return new Dictionary<string, EditAttribution>();
+        }
+
+        return EditAttributionWording.LastWriters(ledger, solutionRoot, files.Keys.Select(k => k.ToString()).ToList(), DateTime.UtcNow);
     }
 
     private static ResultError FoldPendingError(string toolName, ApplyChangesResult result)

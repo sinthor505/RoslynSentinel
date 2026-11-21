@@ -540,9 +540,7 @@ public class WorkspaceFileEditImpl
                     continue;
                 }
 
-                var agentType = latest.AgentType ?? "unknown";
-                var tool = latest.Tool ?? "unknown";
-                clauses.Add($"{item.FilePath} was changed by agent '{latest.AgentId}' (type {agentType}, tool {tool}) after agent '{applierId}' applied this change");
+                clauses.Add($"{item.FilePath} was changed after agent '{applierId}' applied this change; last changed by {EditAttributionWording.Describe(latest, DateTime.UtcNow, ToolCallContext.Current?.SessionId)}");
                 firstPath ??= item.FilePath;
             }
 
@@ -1496,7 +1494,7 @@ public class WorkspaceFileEditImpl
 
                     var result = await _workspaceManager.ApplyProposedChangesAsync(snippetChanges, validateChanges: validateOnApply, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
                     // TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)
-                    if (WriteRefusal.TryMap("ReplaceSnippet", result, out var refusal))
+                    if (WriteRefusal.TryMap("ReplaceSnippet", result, out var refusal, WriteRefusal.LedgerOf(_workspaceManager)))
                         return new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = true, ErrorData = refusal };
                     // Experimental rename lifting (--lift-renames, off by default): a rejected edit that is one unambiguous rename is
                     // re-validated as RenameSymbol output merged with this edit's own text; see TryLiftRenameAsync.
@@ -1522,7 +1520,7 @@ public class WorkspaceFileEditImpl
                         }
                         else
                         {
-                            if (WriteRefusal.TryMap("ReplaceSnippet", lift.Result, out var liftRefusal))
+                            if (WriteRefusal.TryMap("ReplaceSnippet", lift.Result, out var liftRefusal, WriteRefusal.LedgerOf(_workspaceManager)))
                                 return new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = true, ErrorData = liftRefusal };
                             result = lift.Result;
                             snippetChanges = lift.Changes!;
@@ -1858,7 +1856,7 @@ public class WorkspaceFileEditImpl
         {
             var result = await _workspaceManager.ApplyProposedChangesAsync(finalContents, validateChanges: validateOnApply, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
             // TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)
-            if (WriteRefusal.TryMap("ReplaceSnippet", result, out var refusal))
+            if (WriteRefusal.TryMap("ReplaceSnippet", result, out var refusal, WriteRefusal.LedgerOf(_workspaceManager)))
                 return new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = true, ErrorData = refusal };
             // Experimental rename lifting (--lift-renames, off by default); see TryLiftRenameAsync and the single-edit path.
             string? liftNote = null;
@@ -1883,7 +1881,7 @@ public class WorkspaceFileEditImpl
                 }
                 else
                 {
-                    if (WriteRefusal.TryMap("ReplaceSnippet", lift.Result, out var liftRefusal))
+                    if (WriteRefusal.TryMap("ReplaceSnippet", lift.Result, out var liftRefusal, WriteRefusal.LedgerOf(_workspaceManager)))
                         return new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = true, ErrorData = liftRefusal };
                     result = lift.Result;
                     finalContents = lift.Changes!;
