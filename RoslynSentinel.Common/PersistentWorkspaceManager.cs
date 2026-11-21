@@ -1019,6 +1019,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 }
                 terminal = SolutionLoadStatus.Loaded;
                 SweepLargeResultsInBackground(GetSolutionRoot());
+                // Runtime state retention for operation and validation blobs; build instances are swept from BuildIsolation.GetArtifactsPath.
+                SweepRuntimeStateInBackground(GetSolutionRoot());
                 SeedEditEffectsInBackground(GetSolutionRoot());
                 // Fire-and-forget: the repo probe is never awaited here and the load response does not depend on it (McpServerStatus is its only waiter).
                 GitBackendWarmup.Shared.StartRepoProbe(solutionDirectory);
@@ -1081,6 +1083,31 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Large-result sweep failed under {Root}", solutionRoot);
+            }
+        });
+    }
+
+    private void SweepRuntimeStateInBackground(string? solutionRoot)
+    {
+        if (string.IsNullOrWhiteSpace(solutionRoot))
+        {
+            return;
+        }
+
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                var operations = RuntimeStateRetention.SweepOperations(solutionRoot, RuntimeStateRetention.OperationsMaxAge, RuntimeStateRetention.OperationsMaxCount);
+                var validation = RuntimeStateRetention.SweepValidation(solutionRoot, RuntimeStateRetention.ValidationMaxAge);
+                if ((operations + validation) > 0 && _logger.IsEnabled(LogLevel.Information))
+                {
+                    _logger.LogInformation("Swept {OperationCount} operation blobs and {ValidationCount} validation files from {SolutionRoot}", operations, validation, solutionRoot);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Runtime-state sweep failed under {Root}", solutionRoot);
             }
         });
     }

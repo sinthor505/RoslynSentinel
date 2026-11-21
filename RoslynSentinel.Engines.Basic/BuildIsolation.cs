@@ -62,6 +62,14 @@ public static class BuildIsolation
 
         var instanceId = ResolveInstanceId();
         PruneDirectoriesOfExitedProcesses(root, instanceId);
+        try
+        {
+            RuntimeStateRetention.SweepBuildInstances(root, instanceId, RuntimeStateRetention.BuildInstanceMaxAge);
+        }
+        catch (Exception)
+        {
+            // A cleanup must never fail a build; SweepBuildInstances is already non-throwing.
+        }
 
         var path = Path.Combine(root, instanceId);
         Directory.CreateDirectory(path);
@@ -342,7 +350,7 @@ public static class BuildIsolation
     }
 
     // Deletes numeric (pid-named) sibling directories whose process is gone. Named instance directories
-    // (ROSLYNSENTINEL_INSTANCE_ID) are never pruned here; Part 3 of the build-isolation plan sweeps them.
+    // (ROSLYNSENTINEL_INSTANCE_ID) are never pruned here; they are swept by age in GetArtifactsPath via RuntimeStateRetention.SweepBuildInstances.
     private static void PruneDirectoriesOfExitedProcesses(string buildRoot, string currentInstanceId)
     {
         foreach (var directory in Directory.EnumerateDirectories(buildRoot))
