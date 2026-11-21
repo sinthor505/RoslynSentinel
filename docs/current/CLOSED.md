@@ -8,6 +8,42 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Comment survival check for the last NormalizeWhitespace sites - resolved (2026-11-20)
+
+Comment survival check for the last `NormalizeWhitespace` sites (2026-11-08, shrunk 2026-11-20) - the whole-root sites moved to annotate-and-format and no `PinnedC6_*` tests remain, so the `NormalizeNewRootWhitespaceKeepingComments` helper is not needed; add tests that a comment in a constraint clause/type parameter list survives `AlignPartialDeclaration` (`Engines.Advanced/AdvancedStructuralEngine.cs:1097/:1099`) and a member comment survives ExtractInterface; fix only a failing case (annotate-and-format); Small - [doc](proposals/closed/proposal_enforce_normalize_whole_subtree_whitespace_rule.md)
+
+Evidence: d138a18f; test confirmed AlignPartialDeclaration lost line comments on constraint clauses and broke attributes onto their own line, fixed by annotate-and-format; ExtractInterface member comments already survived
+
+## evalqueue cosmetics after the machine-keyed queue - resolved (2026-11-20)
+
+evalqueue cosmetics after the machine-keyed queue (2026-11-20) - (a) `Get-EvalHostStatus.ps1` (:111-115, :246) skips retired folders with no table match and no live jobs, plus a `Get-EvalHostStatus.Tests.ps1` case; (b) `Format-JobLine` prints "waiting for endpoint <url>" instead of "starts in about 0s" when the worker waits (`roslynsentinel-evalqueue.ps1` ~:534, pass worker state at :834-835); (c) `LmStudioAgentClient.cs:311/:320` log "<Backend> streaming" (the client's `Backend`, :43) and `Find-TypoTokenStream.ps1:60` accepts the old and new text; accept: the Tests.ps1 case, a status line for a waiting worker, and Find-TypoTokenStream finding tokens in an old and a new log; Small
+
+Evidence: 9c5cc641 (a,b), 87ac9a95 (c); Get-EvalHostStatus.Tests.ps1, evalqueue Hosts tests, Find-TypoTokenStream.Tests.ps1 pass
+
+## Retire the unpinned evalqueue path - resolved (2026-11-20)
+
+Retire the unpinned evalqueue path (2026-11-20) - delete the legacy fingerprint/`TreeChanged` branch (`scripts/roslynsentinel-evalqueue.ps1` ~:1296-1304, `# TODO remove the unpinned path`) and the deprecated `-OnTreeChange` parameter (:176); an unpinned job still Queued ends Refused (never runs against the live tree); terminal unpinned job files (1687 of 1752, all terminal since pinning 1993c522) stay as history; accept: `roslynsentinel-evalqueue.Tests.ps1` green plus a seeded unpinned Queued job ends Refused without touching the tree; Small - [plan](plans/closed/plan_pinned_eval_checkouts.md)
+
+Evidence: 9c5cc641; unpinned Queued job ends TreeChanged (resubmit pinned) per owner ruling 2026-11-20; roslynsentinel-evalqueue.Tests.ps1 89/89
+
+## ChangeSignature remove-refusal names the keep-parameter option - resolved (2026-11-20)
+
+ChangeSignature remove-refusal names the keep-parameter option (2026-11-20) - `RefuseWhenRemovedParameterIsStillUsed` (`Engines.Basic/BasicRefactoringEngine.cs:1133`) text becomes "Cannot remove parameter '<name>' (originalIndex <N>): the body still uses it at <line>. Options: keep it by listing {originalIndex: <N>} in parameters (an entry with the same name but no originalIndex is a new parameter), or remove its uses from the body first." (N prefilled, policy tail "then retry the removal" dropped); update the 7 exact-match assertions in `Tests.Advanced/ChangeSignatureRemovedParameterUseTests.cs` and the 2 Contains checks; accept: a test that drops index 1 and re-adds the same name asserts the text contains `{originalIndex: 1}`; Bonsai repeated the identical call 12x (overnight 113:8888 win10 pair 8 T18-29); Small
+
+Evidence: 724b6cb0; ChangeSignatureRemovedParameterUseTests, ChangeSignaturePrimaryConstructorTests, ChangeSignatureDescriptionAndRefusalTests pass (worktree run)
+
+## Truncated stream becomes a StreamTruncated stop reason - resolved (2026-11-20)
+
+Truncated stream becomes a `StreamTruncated` stop reason (2026-11-20) - throw a typed exception at `Common/LmStudioAgentClient.cs:367` (after the existing single retry in `CompleteAsync`), catch it beside `StreamRunawayException` in `ModelAgentRunner.RunCoreAsync` (:382), add `AgentStopReason.StreamTruncated` (`AgentTranscript.cs`, next to `StreamRunaway`); today it escapes to `RunAsync` and the test errors (overnight 112 win10 p10, 113 win10 p5); accept: a runner test with a scripted stream that never sends `response.completed` ends `StreamTruncated` with a transcript and no exception; Small-Medium
+
+Evidence: 87ac9a95; StreamRunawayRunnerTests new truncated-stream test, LmStudioClientRetryTests (retry kept), ShippingKindReplayTests pass
+
+## Second TestSolutionFixture restore in one test run fails - resolved (2026-11-20)
+
+Second `TestSolutionFixture` restore in one test run fails (2026-11-20) - `dotnet restore` exits 1 with empty output for the second restoring fixture in RoslynSentinel.Tests (worktree runs 41f195b5-20261120-185751-31392 and 0fbe1aad-20261120-183539-43392; Tests.Integration also wrote no TRX and an empty log there) and for evalqueue ShippingKindStepFinal cases (2)-(6) on 85u (jobs 20261121-012644-001, 20261121-013055-001); reproduces at pre-plan 41f195b5, last pass 8ccccff0 (suspect 41f195b5 package-reference update); a manual restore of a temp ContosoOrders copy passes; code TODO in `RoslynSentinel.Tests/TestSolutionFixture.cs` RestorePackages; accept: both restore fixture tests pass in one worktree run
+
+Evidence: a1d28a75: restore child inherited MSBuildLocator env pins (MSBUILD_EXE_PATH etc.); RestorePackages now strips them like BuildEngine; TestSolutionFixtureRestoreTests 4/4 pass in one run (also in worktree run 87ac9a95)
+
 ## roslynsentinel-errorvariants.ps1 honours ROSLYNSENTINEL_RESULTS_ROOT - resolved (2026-11-20)
 
 `roslynsentinel-errorvariants.ps1` honours ROSLYNSENTINEL_RESULTS_ROOT (2026-11-19) - copy the rooted-check/`$resultsBase` block from `roslynsentinel-modeleval.ps1:509-517`, use it for `$resultsDir` at `errorvariants.ps1:132`, remove the `# TODO` at :131 (today a set variable splits the run across two trees); accept: with the variable set to a temp folder the run lands there and nothing new appears under the repo `ModelTestingResults`; Small
