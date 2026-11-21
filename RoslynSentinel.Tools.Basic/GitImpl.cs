@@ -85,15 +85,23 @@ public static class GitErrorCodes
     public const string HunkSelection = "GitHunkSelection";
     /// <summary>The hunkFingerprint no longer matches the file's current diff.</summary>
     public const string HunkStale = "GitHunkStale";
+    /// <summary>git commit exited 1 and a blocking hook (pre-commit, prepare-commit-msg, commit-msg) exists, so the hook declined the commit; the hook's own output is in the error text. Not used when the index is empty and git printed its own nothing-to-commit status.</summary>
+    public const string HookRejected = "GitHookRejected";
 
     /// <summary>Maps a GitTool failure code to the canonical status. Every GitTool code is a refusal or failure, so none maps to a non-error status; an unknown or fallback code is Failed.</summary>
     public static ResultStatus ToResultStatus(string? code) => code switch
     {
-        // TODO error-policy: GitErrorCodes PathNotFound and TargetNotFound map to ResultStatus.NotFound with no MissingTargetKinds kind or NameCandidates detail (deferred from the Engines.Advanced not-found sweep, TODO.md); migrate onto MissingTargetKinds with facts and options only.
+        // Error-policy gap, decision needed (not built): a Git failure reaches the wire as ResultError(ErrorCode: "GitPathNotFound"/"GitTargetNotFound") from
+        // GitTools, not through ToolNotFoundException, so no missing-target kind is recorded on ToolCallContext, and ErrorPolicyClassifier.MapKind only keys
+        // on the codes "NotFound", "FileNotFound" and "MethodNotFound", so ErrorPolicyFilter never classifies these. Attaching a kind needs a Common change
+        // (MapKind learning the Git codes, or Git failures recording a kind) and, for TargetNotFound (tag, branch, stash, worktree, ref), new
+        // MissingTargetKinds constants placed in a policy set; PathNotFound alone would map to MissingTargetKinds.File.
         PathNotFound or TargetNotFound => ResultStatus.NotFound,
         RefRequired or ActionRequired or InvalidName or HunkSelection or HunkStale => ResultStatus.InvalidInput,
         IgnoredPath or NothingToCommit or NoChanges or OperationInProgress or AlreadyExists or WorkingTreeDirty
             or StashConflict or Refused or HunkUnsupported => ResultStatus.NotApplicable,
+        // HookRejected is NotApplicable, not Failed: the call was valid and git ran; a repository-side gate (the hook) declined it, like the other refusals above, and the caller can fix what the hook reports and retry.
+        HookRejected => ResultStatus.NotApplicable,
         _ => ResultStatus.Failed
     };
 }
@@ -121,6 +129,7 @@ internal static class GitErrorDetails
     internal const string Refused = "Take the safe alternative the message names, then retry. Nothing was changed.";
     internal static string HunkUnsupported => $"Stage the whole file with {ToolCallHint.Call("Git", ("operation", "stage"), ("paths", "<path>"))} instead, or use a file kind that has text hunks.";
     internal static string HunkSelection => $"Call {ToolCallHint.Call("Git", ("operation", "hunks"), ("paths", "<path>"))} and pass hunkIds or lineRange exactly as it lists them.";
+    internal const string HookRejected = "The text above ends with the hook's own output. Fix what the hook reports and commit again; the hooks live in .git/hooks, or in the directory named by core.hooksPath.";
     internal static string HunkStale => $"Re-run {ToolCallHint.Call("Git", ("operation", "hunks"), ("paths", "<path>"))} and pick again with the new hunkFingerprint. Nothing was staged.";
 }
 
@@ -2522,6 +2531,16 @@ public class GitImpl : IGitOperations
         return await Task.Run(() => _gitReader.HasStagedChanges(gitRoot, list, GitProcessTimeout), cancellationToken) == false;
     }
 
+    /// <summary>True when git's own English "nothing to commit" status text is in the output of a failed commit; only the tie-break between a declining pre-commit hook and an empty index (see CommitAsync).</summary>
+    private static bool IsGitNothingToCommitText(string stdout, string stderr)
+    {
+        static bool Has(string text) =>
+            text.Contains("nothing to commit", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("nothing added to commit", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("no changes added to commit", StringComparison.OrdinalIgnoreCase);
+        return Has(stdout) || Has(stderr);
+    }
+
     /// <summary>
     /// Presents the reader's status rows exactly as the tool always has: staged and unstaged entries with a label per XY
     /// letter, conflicts labelled "conflict" on both sides, untracked paths listed individually, and past
@@ -3679,7 +3698,24 @@ public class GitImpl : IGitOperations
                 // with nothing staged is legal), as is a path list that was not classified up front
                 // (an unknown pathspec would otherwise also look like "nothing staged").
                 var pathsWereClassified = string.IsNullOrWhiteSpace(paths) || scope == GitStageScope.listed;
-                if (!amend && pathsWereClassified && await NothingStagedAsync(gitRoot, paths, cancellationToken))
+                var nothingStaged = !amend && pathsWereClassified && await NothingStagedAsync(gitRoot, paths, cancellationToken);
+
+                // Hook rejection, tested before the NothingToCommit fallback (an empty index plus a rejecting pre-commit hook would
+                // otherwise send the caller to stage). git prints nothing of its own when a hook declines, so the signal is structural
+                // first: exit 1 (git's die() paths such as no identity or a locked index exit 128, a declining hook makes commit exit 1)
+                // and a blocking hook exists (GitHooks.HasBlockingHook, the helper the in-process route uses to decline). The one
+                // ambiguity is an empty index with a pre-commit hook: git runs pre-commit before its emptiness check, so exit 1 is either
+                // "hook declined" or "hook passed, nothing to commit"; there git's English status text ("nothing to commit", "no changes
+                // added to commit", "nothing added to commit") is the tie-break, and a localised git without that text reads as a rejection
+                // (the error text still carries git's output). A commit-msg hook never runs on an empty index, so there the text is always present.
+                if (commitRaw.ExitCode == 1
+                    && GitHooks.HasBlockingHook(gitRoot).Outcome == BlockingHookOutcome.Found
+                    && !(nothingStaged && IsGitNothingToCommitText(commitRaw.Stdout, commitRaw.Stderr)))
+                {
+                    failed.ErrorKind = GitErrorCodes.HookRejected;
+                    failed.ErrorDetail = GitErrorDetails.HookRejected;
+                }
+                else if (nothingStaged)
                 {
                     failed.ErrorKind = GitErrorCodes.NothingToCommit;
                     failed.ErrorDetail = GitErrorDetails.NothingToCommit;

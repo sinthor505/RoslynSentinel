@@ -34,6 +34,7 @@ public class ToolsBasicResultStatusTests
     [TestCase(GitErrorCodes.StashConflict, ResultStatus.NotApplicable)]
     [TestCase(GitErrorCodes.Refused, ResultStatus.NotApplicable)]
     [TestCase(GitErrorCodes.HunkUnsupported, ResultStatus.NotApplicable)]
+    [TestCase(GitErrorCodes.HookRejected, ResultStatus.NotApplicable)]
     [TestCase(GitErrorCodes.Fallback, ResultStatus.Failed)]
     public void GitResult_ClassifiedFailure_MapsCodeToStatus_AndStaysAnError(string kind, ResultStatus expected)
     {
