@@ -210,7 +210,7 @@ public class RefactoringStructuralImpl
             };
         }
 
-        var finalContents = new Dictionary<FilePathWrapper, string>();
+        var finalContents = new DocumentChangeSet();
         var touchedFiles = new List<FilePathWrapper>();
         var engineErrorCodes = new List<string>();
         var handledByStaticConversion = new HashSet<int>();
@@ -390,7 +390,7 @@ public class RefactoringStructuralImpl
             .Select((edit, index) => (edit, index))
             .GroupBy(pair => _workspaceManager.ResolveFromWire(pair.edit.FilePath));
 
-        var finalContents = new Dictionary<FilePathWrapper, string>();
+        var finalContents = new DocumentChangeSet();
         var touchedFiles = new List<FilePathWrapper>();
         var appliedIndexes = new HashSet<int>();
         var engineErrorCodes = new List<string>();
@@ -520,7 +520,7 @@ public class RefactoringStructuralImpl
             .Select((edit, index) => (edit, index))
             .GroupBy(pair => _workspaceManager.ResolveFromWire(pair.edit.FilePath));
 
-        var finalContents = new Dictionary<FilePathWrapper, string>();
+        var finalContents = new DocumentChangeSet();
         var touchedFiles = new List<FilePathWrapper>();
         var engineErrorCodes = new List<string>();
         foreach (var fileGroup in editsByFile)
@@ -700,7 +700,7 @@ public class RefactoringStructuralImpl
             if (RefactoringToolHelpers.RequireUpdatedText(enumReplaced, "Member", filePathResolved, recoveryHint: enumReplaceHint) is { } enumReplaceError)
                 return enumReplaceError;
 
-            var enumReplaceChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumReplaced.UpdatedText };
+            var enumReplaceChanges = new DocumentChangeSet { [filePathResolved] = enumReplaced.UpdatedText };
             var enumReplaceApply = await ValidateAndApplyAsync(enumReplaceChanges, $"Replaced '{memberName}' in enum '{replaceEnumName}'.", "Member", dryRun, returnDiff, progress.ToEngineProgress(), cancellationToken: cancellationToken);
             if (enumReplaceApply.Error is not null)
                 return new SentinelCallToolResult<object> { IsError = true, ErrorData = enumReplaceApply.Error };
@@ -710,7 +710,7 @@ public class RefactoringStructuralImpl
         var result = await _memberRefactoringEngine.ReplaceMemberWithAdditionsAsync(filePathResolved, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken);
         if (result.Outcome == EditOutcome.AlreadyInTargetState && RefactoringToolHelpers.RequireUpdatedText(result, "Member", filePathResolved) is { } replaceAlreadyInStateResult)
             return replaceAlreadyInStateResult;
-        var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText };
+        var changes = new DocumentChangeSet { [filePathResolved] = result.UpdatedText };
         var apply = await ValidateAndApplyAsync(changes, $"Replace member '{memberName}'.", "Member", dryRun, returnDiff, progress.ToEngineProgress(), cancellationToken: cancellationToken);
         if (apply.Error is not null)
             return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
@@ -797,7 +797,7 @@ public class RefactoringStructuralImpl
             if (RefactoringToolHelpers.RequireUpdatedText(enumRemoved, "Member", filePathResolved, recoveryHint: enumRemoveHint) is { } enumRemoveError)
                 return enumRemoveError;
 
-            var enumRemoveChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumRemoved.UpdatedText };
+            var enumRemoveChanges = new DocumentChangeSet { [filePathResolved] = enumRemoved.UpdatedText };
             var enumRemoveEffect = dryRun ? null : await RecordRemovedEffectAsync(filePathResolved, memberName, containerName ?? removeEnumName, contextSnippet, lineBefore, lineAfter, cancellationToken);
             var enumRemoveApply = await ValidateAndApplyAsync(enumRemoveChanges, $"Removed '{memberName}' from enum '{removeEnumName}'.", "Member", dryRun, returnDiff, cancellationToken: cancellationToken, recordEffects: enumRemoveEffect);
             if (enumRemoveApply.Error is not null)
@@ -807,7 +807,7 @@ public class RefactoringStructuralImpl
 
         var result = await _memberRefactoringEngine.RemoveMemberAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, containerName, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable, cancellationToken: cancellationToken);
 
-        var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText };
+        var changes = new DocumentChangeSet { [filePathResolved] = result.UpdatedText };
         var removeEffect = dryRun ? null : await RecordRemovedEffectAsync(filePathResolved, memberName, containerName, contextSnippet, lineBefore, lineAfter, cancellationToken);
         var apply = await ValidateAndApplyAsync(changes, $"Remove member '{memberName}'.", "Member", dryRun, returnDiff, cancellationToken: cancellationToken, recordEffects: removeEffect);
         if (apply.Error is not null)
@@ -862,8 +862,8 @@ public class RefactoringStructuralImpl
         {
             var topLevelNoStageDescription = $"Added new top-level type to {Path.GetFileName(filePathResolved)}.";
             var topLevelNoStageChanges = string.IsNullOrEmpty(topLevelResult.UpdatedText)
-                ? new Dictionary<FilePathWrapper, string>()
-                : new Dictionary<FilePathWrapper, string> { [filePathResolved] = topLevelResult.UpdatedText };
+                ? new DocumentChangeSet()
+                : new DocumentChangeSet { [filePathResolved] = topLevelResult.UpdatedText };
             return new SentinelCallToolResult<object>()
             {
                 IsError = false,
@@ -880,7 +880,7 @@ public class RefactoringStructuralImpl
         }
         var topLevelDescription = $"Added new top-level type to {Path.GetFileName(filePathResolved)}.";
 
-        var topLevelChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = topLevelResult.UpdatedText };
+        var topLevelChanges = new DocumentChangeSet { [filePathResolved] = topLevelResult.UpdatedText };
         var topLevelApply = await ValidateAndApplyAsync(topLevelChanges, topLevelDescription, "Member", dryRun, returnDiff || dryRun, cancellationToken: cancellationToken,
             recordEffects: RecordAddedEffect(MemberEditEffectFacts.DescribeAdded(newMemberSource, namespaceName, isEnumMember: false), filePathResolved));
         if (topLevelApply.Error is not null)

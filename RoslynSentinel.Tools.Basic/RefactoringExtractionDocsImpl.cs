@@ -107,8 +107,8 @@ public class RefactoringExtractionDocsImpl
                     ? $"Adds 'using {namespaceName};' to {Path.GetFileName(filePathResolved)}."
                     : $"Removes 'using {namespaceName};' from {Path.GetFileName(filePathResolved)}.";
                 var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText)
-                    ? new Dictionary<FilePathWrapper, string>()
-                    : new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText };
+                    ? new DocumentChangeSet()
+                    : new DocumentChangeSet { [filePathResolved] = updated.UpdatedText };
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = false,
@@ -116,7 +116,7 @@ public class RefactoringExtractionDocsImpl
                 };
             }
 
-            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText };
+            var changes = new DocumentChangeSet { [filePathResolved] = updated.UpdatedText };
             // returnDiff is forced to true here regardless of the caller's own returnDiff flag:
             // the add path below returns the real before/after diff in the summary, not just a preview when the caller asked for one.
             var needsDiff = returnDiff || operation == AddRemoveViewAction.add;
@@ -190,8 +190,8 @@ public class RefactoringExtractionDocsImpl
                     ? $"Added XML summary comment to '{targetName}' in {Path.GetFileName(filePathResolved)}."
                     : $"Removed XML summary comment from '{targetName}' in {Path.GetFileName(filePathResolved)}.";
                 var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText)
-                    ? new Dictionary<FilePathWrapper, string>()
-                    : new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText };
+                    ? new DocumentChangeSet()
+                    : new DocumentChangeSet { [filePathResolved] = updated.UpdatedText };
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = false,
@@ -208,7 +208,7 @@ public class RefactoringExtractionDocsImpl
                 ? $"Added XML summary comment to '{targetName}' in {Path.GetFileName(filePathResolved)}."
                 : $"Removed XML summary comment from '{targetName}' in {Path.GetFileName(filePathResolved)}.";
 
-            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText };
+            var changes = new DocumentChangeSet { [filePathResolved] = updated.UpdatedText };
             var apply = await ValidateAndApplyAsync(changes, description, "SummaryComment", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
@@ -250,7 +250,7 @@ public class RefactoringExtractionDocsImpl
                 return guardResult;
             }
 
-            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText };
+            var changes = new DocumentChangeSet { [filePathResolved] = result.UpdatedText };
             var apply = await ValidateAndApplyAsync(changes, $"Extract local variable '{variableName}'.", "ExtractLocalVariable", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
@@ -302,8 +302,8 @@ public class RefactoringExtractionDocsImpl
             if (!autoStage)
             {
                 var noStageChanges = string.IsNullOrEmpty(result.UpdatedContent)
-                    ? new Dictionary<FilePathWrapper, string>()
-                    : new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedContent };
+                    ? new DocumentChangeSet()
+                    : new DocumentChangeSet { [filePathResolved] = result.UpdatedContent };
                 return new SentinelCallToolResult<AppliedChangeSummary>
                 {
                     IsError = false,
@@ -325,7 +325,7 @@ public class RefactoringExtractionDocsImpl
             // whole-file UpdatedContent, so showing just the new method here would mean duplicating
             // its formatting/signature-inference logic. Revisit only if that engine method starts
             // returning the extracted method's text alongside UpdatedContent.
-            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedContent };
+            var changes = new DocumentChangeSet { [filePathResolved] = result.UpdatedContent };
             var apply = await ValidateAndApplyAsync(changes, $"Extract '{newMethodName}' from '{filePathResolved}'.", "ExtractMethod", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new SentinelCallToolResult<AppliedChangeSummary> { IsError = true, ErrorData = apply.Error };
