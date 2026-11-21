@@ -1,6 +1,6 @@
 # Plan: Replace Dictionary<FilePathWrapper, string> with a named DocumentChangeSet type
 
-**Status:** IN PROGRESS 2026-11-21. Steps 1, 2, 4, 5 done (b0b1614a, 8849400f, 8a307227, a81c3ae7, c2f8c5c0); Step 3 deferred (owner decision, see Risks); Step 6 running.
+**Status:** IN PROGRESS 2026-11-21. Steps 1, 2, 4, 5 done (b0b1614a, 8849400f, 8a307227, a81c3ae7, c2f8c5c0); Step 3 dropped (Decision 10); Step 6 running.
 
 ## Problem
 
@@ -56,6 +56,9 @@ Re-measured 2026-11-21 (`Search(mode: text)` line matches, so approximate):
    pins its JSON shape and the output schema (Step 5).
 8. A status-bearing `ChangeSetResult : IOperationResult` is deferred; see Risks.
 9. Owner away for the run (2026-11-21): mid-run decisions are deferred to the tracker.
+10. Step 3 dropped (owner, 2026-11-21): `ApplyProposedChangesAsync` keeps its `Dictionary<FPW, string>`
+    parameter. `DocumentChangeSet` already passes to it, and widening would cost about 90 caller edits for
+    read-only intent only. Supersedes item 4 for the chokepoint; Step 2's widening stays.
 
 ## Execution rules
 
@@ -112,7 +115,7 @@ Re-measured 2026-11-21 (`Search(mode: text)` line matches, so approximate):
   `ConcurrentDictionary`. The `IWorkspaceMutator.cs:66` tuple and `TakePendingChangeset` (:146) keep their
   types in this step.
 - Done when: Build 0 errors; no caller file edited.
-- DEFERRED 2026-11-21 (owner decision): the premise "zero caller edits" is false. A validate of the
+- WON'T DO 2026-11-21 (Decision 10). The premise "zero caller edits" is false. A validate of the
   widened signature gave 176 new errors: target-typed `new() { [k] = v }` arguments (CS0144 x84,
   CS0200 x90, about 14 test files) and a collection expression (CS9174,
   `WholeFileWriteTools.cs:154`). Three private PWM helpers were widened in a81c3ae7 as prep.
@@ -179,9 +182,6 @@ Re-measured 2026-11-21 (`Search(mode: text)` line matches, so approximate):
 
 ## Risks and open decisions
 
-- **Step 3 shape (open, owner):** (a) drop the chokepoint widening: `DocumentChangeSet` already passes to
-  the `Dictionary` parameter, so nothing else needs it; (b) staged: sweep the target-typed `new()` / `[]`
-  arguments to explicit types, then widen; (c) add an `IReadOnlyDictionary` overload beside the old one.
 
 - **`ChangeSetResult : IOperationResult` (deferred):** decide after Step 6 whether enough results repeat
   the same `Changes` + error pair; record the evidence here.
