@@ -75,7 +75,7 @@ public class WholeFileWriteTools
                 }
             }
 
-            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = normalizedContent };
+            var changes = new DocumentChangeSet { [filePathResolved] = normalizedContent };
             var result = await _workspaceManager.ApplyProposedChangesAsync(changes, validateChanges: validateOnApply, cancellationToken: cancellationToken, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
             if (WriteRefusal.TryMap("WriteFile", result, out var refusal, WriteRefusal.LedgerOf(_workspaceManager)))
                 return new SentinelCallToolResult<object>() { IsError = true, ErrorData = refusal };
@@ -85,7 +85,7 @@ public class WholeFileWriteTools
                 && await NearMissAutoCorrector.TryAutoCorrectAsync(_workspaceManager, changes, result.ValidationResult, "WriteFile", StaleReadPolicy.RefuseIfObservedStale, cancellationToken) is { } nearMissFix)
             {
                 result = nearMissFix.ApplyResult;
-                changes = new Dictionary<FilePathWrapper, string>(nearMissFix.CorrectedChanges);
+                changes = new DocumentChangeSet(nearMissFix.CorrectedChanges);
                 nearMissFindings = nearMissFix.Findings;
             }
 
@@ -490,7 +490,7 @@ public class WholeFileWriteTools
                     }
 
                     // Normalize each file's content to the policy EOL (resolver).
-                    var normalizedChanges = new Dictionary<FilePathWrapper, string>();
+                    var normalizedChanges = new DocumentChangeSet();
                     foreach (var (changeTargetPath, newContent) in resolvedChanges)
                     {
                         var existingText = await ExistingTextReader.ReadAsync(_workspaceManager, changeTargetPath, cancellationToken);
@@ -511,7 +511,7 @@ public class WholeFileWriteTools
                         && await NearMissAutoCorrector.TryAutoCorrectAsync(_workspaceManager, normalizedChanges, result.ValidationResult, "ApplyDiff", StaleReadPolicy.RefuseIfObservedStale, cancellationToken) is { } nearMissFix)
                     {
                         result = nearMissFix.ApplyResult;
-                        normalizedChanges = new Dictionary<FilePathWrapper, string>(nearMissFix.CorrectedChanges);
+                        normalizedChanges = new DocumentChangeSet(nearMissFix.CorrectedChanges);
                         nearMissFindings = nearMissFix.Findings;
                     }
 
@@ -551,7 +551,7 @@ public class WholeFileWriteTools
                     try
                     {
                         // Normalize each file's content to the policy EOL (resolver) before validation.
-                        var normalizedValidateChanges = new Dictionary<FilePathWrapper, string>();
+                        var normalizedValidateChanges = new DocumentChangeSet();
                         foreach (var (valPath, valContent) in resolvedChanges)
                         {
                             var existingText = await ExistingTextReader.ReadAsync(_workspaceManager, valPath, cancellationToken);
@@ -645,7 +645,7 @@ public class WholeFileWriteTools
                         var oldText = await document.GetTextAsync(cancellationToken: cancellationToken);
                         var newContent = _diffEngine.ApplyDiff(oldText, unifiedDiff, out var diffReport).ToString();
                         var targetPath = document.FilePath ?? filePathResolved;
-                        var diffChanges = new Dictionary<FilePathWrapper, string>
+                        var diffChanges = new DocumentChangeSet
                         {
                             [targetPath] = newContent
                         };
@@ -659,7 +659,7 @@ public class WholeFileWriteTools
                             && await NearMissAutoCorrector.TryAutoCorrectAsync(_workspaceManager, diffChanges, result.ValidationResult, "ApplyDiff", StaleReadPolicy.RefuseIfObservedStale, cancellationToken) is { } nearMissFix)
                         {
                             result = nearMissFix.ApplyResult;
-                            diffChanges = new Dictionary<FilePathWrapper, string>(nearMissFix.CorrectedChanges);
+                            diffChanges = new DocumentChangeSet(nearMissFix.CorrectedChanges);
                             nearMissFindings = nearMissFix.Findings;
                         }
 
@@ -793,7 +793,7 @@ public class WholeFileWriteTools
                     var oldText = await document.GetTextAsync(cancellationToken: cancellationToken);
                     var newContent = _diffEngine.ApplyDiff(oldText, unifiedDiff, out var diffReport).ToString();
                     var targetPath = document.FilePath ?? filePathResolved;
-                    var diffChanges = new Dictionary<FilePathWrapper, string>
+                    var diffChanges = new DocumentChangeSet
                     {
                         [targetPath] = newContent
                     };
@@ -807,7 +807,7 @@ public class WholeFileWriteTools
                         && await NearMissAutoCorrector.TryAutoCorrectAsync(_workspaceManager, diffChanges, result.ValidationResult, "ApplyUnifiedDiff", StaleReadPolicy.RefuseIfObservedStale, cancellationToken) is { } nearMissFix)
                     {
                         result = nearMissFix.ApplyResult;
-                        diffChanges = new Dictionary<FilePathWrapper, string>(nearMissFix.CorrectedChanges);
+                        diffChanges = new DocumentChangeSet(nearMissFix.CorrectedChanges);
                         nearMissFindings = nearMissFix.Findings;
                     }
 

@@ -188,7 +188,7 @@ public class RefactoringSignatureImpl
         // file. Only the matching-stem declaration files move; if the target name is taken, that file stays and the response says why.
         string? solutionRoot = _workspaceManager.GetSolutionRoot();
         string RelativeOrAbsolute(FilePathWrapper path) => solutionRoot is null ? path.Absolute : Path.GetRelativePath(solutionRoot, path.Absolute);
-        var changes = new Dictionary<FilePathWrapper, string>(result.PendingChanges);
+        var changes = new DocumentChangeSet(result.PendingChanges);
         var fileMoves = new List<(FilePathWrapper From, FilePathWrapper To)>();
         var deletePaths = new List<FilePathWrapper>();
         var skippedMoveNotes = new List<string>();
@@ -372,7 +372,7 @@ public class RefactoringSignatureImpl
             if (operation == AddRemoveViewAction.add)
             {
                 updated = await _memberRefactoringEngine.AddMethodParameterAsync(filePathResolved, methodName, paramName, paramType!, defaultValue, contextSnippet, lineBefore, lineAfter, cancellationToken, nullDefault);
-                changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText };
+                changes = new DocumentChangeSet { [filePathResolved] = updated.UpdatedText };
             }
             else
             {
@@ -434,8 +434,8 @@ public class RefactoringSignatureImpl
                     _ => accessibility.ToString()
                 };
                 var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText)
-                    ? new Dictionary<FilePathWrapper, string>()
-                    : new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText };
+                    ? new DocumentChangeSet()
+                    : new DocumentChangeSet { [filePathResolved] = updated.UpdatedText };
                 return new SentinelCallToolResult<AppliedChangeSummary>()
                 {
                     IsError = false,
@@ -449,7 +449,7 @@ public class RefactoringSignatureImpl
                 AccessibilityLevel.privateProtected => "private protected",
                 _ => accessibility.ToString()
             };
-            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText };
+            var changes = new DocumentChangeSet { [filePathResolved] = updated.UpdatedText };
             var apply = await ValidateAndApplyAsync(changes, $"Change accessibility of '{targetName}' to '{accessibilityKeyword}'.", "ChangeAccessibility", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new SentinelCallToolResult<AppliedChangeSummary> { IsError = true, ErrorData = apply.Error };
@@ -566,8 +566,8 @@ public class RefactoringSignatureImpl
                     : $"Removed '{paramName}' DI parameter from '{className}' in {Path.GetFileName(filePathResolved)}."
                         + (updated.Message?.Contains("fieldRemoved='True'") == true ? $" Also removed unused backing field '{resolvedFieldName}'." : "");
                 var noStageChanges = cascade?.Changes ?? (string.IsNullOrEmpty(updated.UpdatedText)
-                    ? new Dictionary<FilePathWrapper, string>()
-                    : new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText });
+                    ? new DocumentChangeSet()
+                    : new DocumentChangeSet { [filePathResolved] = updated.UpdatedText });
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = false,
@@ -585,7 +585,7 @@ public class RefactoringSignatureImpl
                 description += $" Added the new argument at {cascade.CallSitesUpdated} call site(s) across {cascade.Changes.Count} file(s)" + (cascade.CallSitesLeftToDefault > 0 ? $"; {cascade.CallSitesLeftToDefault} site(s) left on the default value." : ".");
             }
 
-            var changes = cascade?.Changes ?? new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText };
+            var changes = cascade?.Changes ?? new DocumentChangeSet { [filePathResolved] = updated.UpdatedText };
             var apply = await ValidateAndApplyAsync(changes, description, "ConstructorParameter", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };

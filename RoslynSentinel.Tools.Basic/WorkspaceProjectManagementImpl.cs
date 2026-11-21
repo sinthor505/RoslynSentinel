@@ -880,7 +880,7 @@ public class WorkspaceProjectManagementImpl
         FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         async Task<SentinelCallToolResult<object>> ApplyAndRespondAsync(DocumentEditResult result)
         {
-            var changes = new Dictionary<FilePathWrapper, string>
+            var changes = new DocumentChangeSet
             {
                 [filePathResolved] = result.UpdatedText
             };

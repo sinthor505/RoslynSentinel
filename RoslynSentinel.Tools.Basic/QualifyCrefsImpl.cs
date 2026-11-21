@@ -143,7 +143,7 @@ public class QualifyCrefsImpl
             var fresh = await _workspaceManager.GetDocumentsAsync(
                 DocumentScope.ForProject(group.Key), ReadSource.Committed, cancellationToken);
 
-            var changes = new Dictionary<FilePathWrapper, string>();
+            var changes = new DocumentChangeSet();
             var files = new List<string>();
             var qualified = 0;
             var skippedAlreadyQualified = 0;
