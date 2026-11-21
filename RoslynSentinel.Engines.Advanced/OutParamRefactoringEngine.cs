@@ -15,7 +15,7 @@ public record OutParamConversionResult(
     string? NewSignature,
     int CallSitesRewritten,
     List<string> CallSiteWarnings,
-    Dictionary<FilePathWrapper, string>? Changes = null,
+    DocumentChangeSet? Changes = null,
     [property: System.Text.Json.Serialization.JsonIgnore] string? ErrorCode = null
 ) : IOperationResult
 {
@@ -287,7 +287,7 @@ public class OutParamRefactoringEngine
         // Materialize the changed documents as file text for the caller to route through the
         // shared write chokepoint (ApplyDiff/ApplyProposedChangesAsync) -> this engine must not
         // write to disk itself.
-        var changes = new Dictionary<FilePathWrapper, string>();
+        var changes = new DocumentChangeSet();
         foreach (var pc in updatedSolution.GetChanges(solution).GetProjectChanges())
         {
             foreach (var docId in pc.GetChangedDocuments())

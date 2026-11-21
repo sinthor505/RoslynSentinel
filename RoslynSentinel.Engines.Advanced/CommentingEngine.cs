@@ -65,13 +65,13 @@ public class CommentingEngine
     /// projects are dropped from <c>Changes</c> rather than seeded with an attribute that can't
     /// compile.
     /// </summary>
-    public async Task<(Dictionary<FilePathWrapper, string> Changes, int SeededCount, int AlreadyTaggedCount, List<string> UnresolvedProjects)> SeedContentHashesAsync(
+    public async Task<(DocumentChangeSet Changes, int SeededCount, int AlreadyTaggedCount, List<string> UnresolvedProjects)> SeedContentHashesAsync(
         ToolScope scope, string? projectName, string? filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var documents = EnumerateScopedDocuments(solution, scope, projectName, filePath);
 
-        var changes = new Dictionary<FilePathWrapper, string>();
+        var changes = new DocumentChangeSet();
         int seeded = 0;
         int alreadyTagged = 0;
 
