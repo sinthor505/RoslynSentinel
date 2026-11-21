@@ -41,7 +41,7 @@ public class SyntaxUpgradeEngine
         // Return no-op message when no guard clause patterns were found to upgrade
         if (!rewriter.ChangesMade)
         {
-            throw new ToolNotFoundException("No if-throw guard clause patterns found to upgrade in this file.");
+            throw new ToolNotFoundException("No if-throw guard clause patterns found to upgrade in this file.", MissingTargetKinds.Document, filePath);
         }
 
         return new DocumentEditResult
@@ -120,7 +120,7 @@ public class SyntaxUpgradeEngine
         if (pos < 0)
         {
             // TODO the snippet family wraps ambiguous and no-match outcomes alike as NotFound with SnippetLookup's text; the snippet-sweep slice owns this site.
-            throw new ToolNotFoundException($"{snippetError}");
+            throw new ToolNotFoundException($"{snippetError}", MissingTargetKinds.Snippet, contextSnippet);
         }
 
         var node = root?.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, snippetMatch!.Length))
@@ -374,7 +374,7 @@ public class SyntaxUpgradeEngine
 
         if (replaceMap.Count == 0)
         {
-            throw new ToolNotFoundException("No backing-field and property pairs found to collapse in this file.");
+            throw new ToolNotFoundException("No backing-field and property pairs found to collapse in this file.", MissingTargetKinds.Document, filePath);
         }
 
         var newRoot = root.ReplaceNodes(replaceMap.Keys, (orig, _) => replaceMap[orig]);
@@ -598,7 +598,7 @@ public class SyntaxUpgradeEngine
         var nsDecl = root.DescendantNodes().OfType<NamespaceDeclarationSyntax>().FirstOrDefault();
         if (nsDecl == null)
         {
-            throw new ToolNotFoundException("No block-form namespace declaration found in this file.");
+            throw new ToolNotFoundException("No block-form namespace declaration found in this file.", MissingTargetKinds.Namespace);
         }
 
         // Preserve all members, usings, and extern aliases from the block namespace
@@ -711,7 +711,7 @@ public class SyntaxUpgradeEngine
 
         if (replacements.Count == 0)
         {
-            throw new ToolNotFoundException("No replacements found.");
+            throw new ToolNotFoundException("No replacements found.", MissingTargetKinds.Document, filePath);
         }
 
         var newRoot = root.ReplaceNodes(replacements.Keys, (orig, _) => replacements[orig]);

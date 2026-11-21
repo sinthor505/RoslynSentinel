@@ -543,7 +543,7 @@ public class DiscoveryEngine
             {
                 throw resolution.Error!.Code switch
                 {
-                    EngineErrorCode.SymbolNotResolved => new ToolNotFoundException(resolution.Error.Message),
+                    EngineErrorCode.SymbolNotResolved => new ToolNotFoundException(resolution.Error.Message, MissingTargetKinds.Symbol, docCommentId),
                     EngineErrorCode.MissingParameterListOverloads => new ToolInvalidArgumentException(resolution.Error.Message),
                     _ => new InvalidOperationException(resolution.Error.Message),
                 };
@@ -567,7 +567,7 @@ public class DiscoveryEngine
             var snippet = contextSnippet ?? symbolName;
             var position = SnippetLookup.ResolveOrThrow(sourceText, snippet, lineBefore, lineAfter).Start;
             var semanticModel = await document.GetSemanticModelAsync(cancellationToken) ?? throw new InvalidOperationException("Could not get semantic model.");
-            var foundSymbol = (semanticModel.GetSymbolInfo(root!.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(position, 0)), cancellationToken).Symbol ?? semanticModel.GetDeclaredSymbol(root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(position, 0)), cancellationToken)) ?? throw new ToolNotFoundException($"Symbol '{symbolName}' not found at the provided location.");
+            var foundSymbol = (semanticModel.GetSymbolInfo(root!.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(position, 0)), cancellationToken).Symbol ?? semanticModel.GetDeclaredSymbol(root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(position, 0)), cancellationToken)) ?? throw new ToolNotFoundException($"Symbol '{symbolName}' not found at the provided location.", MissingTargetKinds.Symbol, symbolName);
             symbol = foundSymbol;
             resolvedSymbolName = symbolName;
         }

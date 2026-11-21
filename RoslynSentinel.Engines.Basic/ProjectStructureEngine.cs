@@ -28,7 +28,7 @@ public class SolutionStructureEngine
         if (projectDir == null || fileDir == null || !fileDir.StartsWith(projectDir))
         {
             // TODO not a lookup miss (the file resolved, a precondition failed): reclassify as ToolTargetIneligibleException so the error code is not NotFound
-            throw new ToolNotFoundException($"File '{filePath}' is outside the project directory, so its namespace cannot be checked. Next: {ToolCallHint.Call("ListAll")} to confirm the owning project of this file.");
+            throw new ToolNotFoundException($"File '{filePath}' is outside the project directory, so its namespace cannot be checked. Next: {ToolCallHint.Call("ListAll")} to confirm the owning project of this file.", MissingTargetKinds.Document, filePath);
         }
 
         var relativePath = fileDir.Substring(projectDir.Length).Trim(Path.DirectorySeparatorChar);
