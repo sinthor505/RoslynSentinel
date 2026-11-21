@@ -17,7 +17,9 @@
     instruction, since PlanStepRunner already loads the worktree's solution itself before the
     model gets a turn.
 
-    Everything for one run lives under one folder: RoslynSentinel-TestRuns\PlanStepRunner\<timestamp>\,
+    Everything for one run lives under one folder: <scratch>\TestRuns\PlanStepRunner\<timestamp>\,
+    where <scratch> is ROSLYNSENTINEL_SCRATCH_ROOT when set, else ..\RoslynSentinel-ScratchDir next to
+    the repo (see roslynsentinel-scratch.ps1),
     with each step getting its own <step-name>\ subfolder containing Worktree\ (only for a step
     currently in progress or halted - a successful step's worktree is removed once committed) and
     Logs\ (transcript + agent.log, kept regardless of outcome) - so a run, and each step within
@@ -80,7 +82,7 @@
     the cost of one branch left behind per step instead of one per run.
 
 .PARAMETER ExistingRun
-    Timestamp (e.g. 20260909-171952-844) of an existing RoslynSentinel-TestRuns\PlanStepRunner\<timestamp>
+    Timestamp (e.g. 20260909-171952-844) of an existing <scratch>\TestRuns\PlanStepRunner\<timestamp>
     run folder to continue, instead of starting a new one. New steps in this invocation get their
     own fresh worktree/logs under that same folder, same as any run - this only controls which
     run folder they land in, so a halted step from an earlier invocation can be retried (typically
@@ -202,7 +204,8 @@ if (-not (Test-Path $PlanDir)) {
 
 $runnerProject = Join-Path $repoRoot 'RoslynSentinel.Utilities.PlanStepRunner\RoslynSentinel.Utilities.PlanStepRunner.csproj'
 
-$testRunsRoot = Join-Path (Split-Path $ImplRepo -Parent) 'RoslynSentinel-TestRuns\PlanStepRunner'
+. (Join-Path $PSScriptRoot 'roslynsentinel-scratch.ps1')
+$testRunsRoot = Join-Path (Get-RoslynSentinelTestRunsRoot -RepoRoot $ImplRepo) 'PlanStepRunner'
 
 if ($ExistingRun) {
     $runTimestamp = $ExistingRun

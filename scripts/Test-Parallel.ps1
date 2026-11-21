@@ -8,18 +8,21 @@ failed.
 #>
 param(
     [string]$Configuration = "Debug",
-    [string]$ResultsDirectory = (Join-Path $PSScriptRoot "..\TestResults\parallel-run"),
+    [string]$ResultsDirectory = '',
     [switch]$SkipBuild,
     # Passed to `dotnet test --filter` for every project (build.ps1 -Fast sets TestCategory!=OutOfProcess).
     [string]$Filter
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot 'roslynsentinel-scratch.ps1')
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
-$ResultsDirectory = Join-Path $repoRoot "TestResults\parallel-run"
+if (-not $ResultsDirectory) {
+    $ResultsDirectory = Join-Path (Get-RoslynSentinelScratchRoot -RepoRoot $repoRoot.Path) 'TestResults\parallel-run'
+}
 
 if (Test-Path $ResultsDirectory) { Remove-Item $ResultsDirectory -Recurse -Force }
-New-Item -ItemType Directory -Path $ResultsDirectory | Out-Null
+New-Item -ItemType Directory -Force -Path $ResultsDirectory | Out-Null
 
 $projects = Get-ChildItem -Path $repoRoot -Recurse -Filter "RoslynSentinel.Tests*.csproj" |
     Where-Object { $_.FullName -notmatch '\\(bin|obj|PlanStepRunner)\\' -and $_.Name -notmatch '^RoslynSentinel\.Tests\.Support\.' }
