@@ -1743,7 +1743,7 @@ public class AsyncOptimizationEngine
     /// <summary>Engine-internal result from <see cref="FlagMigrationCandidateAsync"/>.</summary>
     public record FlagMigrationCandidateEngineResult(
         /// <summary>File path -> updated source for every file that must be written to disk.</summary>
-        Dictionary<FilePathWrapper, string> Changes,
+        DocumentChangeSet Changes,
         /// <summary><c>true</c> if the method already carried a <c>[MigrationCandidate]</c> for this pattern.</summary>
         bool WasAlreadyFlagged,
         /// <summary>The pattern string from the previous attribute, or <c>null</c> if the method was not previously flagged.</summary>
@@ -1963,7 +1963,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         var newRoot = root.ReplaceNode(methodNode, updatedMethod);
         var newSource = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
 
-        var result = new Dictionary<FilePathWrapper, string> { { filePath, newSource } };
+        var result = new DocumentChangeSet { { filePath, newSource } };
 
         // ── Inject MigrationCandidateAttribute.cs if not yet in the solution ─
         var alreadyDefined = solution.Projects
@@ -2050,7 +2050,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 {
                     errors.Add((i, $"File '{filePath}' not found in the loaded solution."));
                     resultSlots[i] = new FlagMigrationCandidateEngineResult(
-                        new Dictionary<FilePathWrapper, string>(), false, null, false, -1);
+                        new DocumentChangeSet(), false, null, false, -1);
                 }
 
                 continue;
@@ -2063,7 +2063,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 {
                     errors.Add((i, $"Could not get syntax root for '{filePath}'."));
                     resultSlots[i] = new FlagMigrationCandidateEngineResult(
-                        new Dictionary<FilePathWrapper, string>(), false, null, false, -1);
+                        new DocumentChangeSet(), false, null, false, -1);
                 }
 
                 continue;
@@ -2087,14 +2087,14 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 {
                     errors.Add((idx, ex.Message));
                     resultSlots[idx] = new FlagMigrationCandidateEngineResult(
-                        new Dictionary<FilePathWrapper, string>(), false, null, false, -1);
+                        new DocumentChangeSet(), false, null, false, -1);
                     continue;
                 }
                 if (methodNode == null)
                 {
                     errors.Add((idx, $"Method '{methodName}' not found in '{filePath}'. Names are case-sensitive."));
                     resultSlots[idx] = new FlagMigrationCandidateEngineResult(
-                        new Dictionary<FilePathWrapper, string>(), false, null, false, -1);
+                        new DocumentChangeSet(), false, null, false, -1);
                     continue;
                 }
 
@@ -2149,7 +2149,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 root = root.ReplaceNode(methodNode, updatedMethod);
 
                 resultSlots[idx] = new FlagMigrationCandidateEngineResult(
-                    Changes: new Dictionary<FilePathWrapper, string>(), // populated below after all methods in file
+                    Changes: new DocumentChangeSet(), // populated below after all methods in file
                     WasAlreadyFlagged: wasAlreadyFlagged,
                     PreviousPattern: previousPattern,
                     AttributeClassInjected: false, // set on first item for this file
@@ -2158,7 +2158,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
             // Write final combined source once for all methods in this file.
             var finalSource = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, root, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
-            var fileChanges = new Dictionary<FilePathWrapper, string> { { filePath, finalSource } };
+            var fileChanges = new DocumentChangeSet { { filePath, finalSource } };
 
             // Inject MigrationCandidateAttribute.cs if not yet in solution (check once per file).
             var alreadyDefined = solution.Projects.SelectMany(p => p.Documents)
@@ -2401,7 +2401,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
     /// <summary>Engine-internal result from <see cref="FlagCandidatesInProjectAsync"/>.</summary>
     public record FlagCandidatesInProjectEngineResult(
         /// <summary>All file paths -> updated source that must be written to disk.</summary>
-        Dictionary<FilePathWrapper, string> Changes,
+        DocumentChangeSet Changes,
         /// <summary>Details for every method that was flagged.</summary>
         IReadOnlyList<CandidateScoredItem> Flagged,
         /// <summary>Details for every method that was scored but fell below <c>minScore</c>.</summary>
@@ -2484,7 +2484,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         var flagged = new List<CandidateScoredItem>();
         var skipped = new List<CandidateScoredItem>();
         var alreadyFlagged = new List<CandidateScoredItem>();
-        var fileChanges = new Dictionary<FilePathWrapper, string>();
+        var fileChanges = new DocumentChangeSet();
         int totalExamined = 0;
         bool attrClassInjected = false;
         // Documents are scanned in parallel; each one collects into its own lists and rewrites its own root, and only
@@ -3679,7 +3679,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
     public record RemovedCandidateInfo(FilePathWrapper FilePath, string MethodName, string RemovedPattern, int Line);
 
     public record RemoveMigrationCandidatesEngineResult(
-        Dictionary<FilePathWrapper, string> Changes,
+        DocumentChangeSet Changes,
         int TotalRemoved,
         int FilesModified,
         IReadOnlyList<RemovedCandidateInfo> Removed);
@@ -3719,7 +3719,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
             documents = solution.Projects.SelectMany(p => p.Documents);
         }
 
-        var changes = new Dictionary<FilePathWrapper, string>();
+        var changes = new DocumentChangeSet();
         var removed = new List<RemovedCandidateInfo>();
 
         foreach (var doc in documents)
