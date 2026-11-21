@@ -57,11 +57,11 @@ public interface IWorkspaceMutator : IEolResolver
     /// fresh confirmation code, so a caller that intended the large rewrite can replay just the
     /// code via <see cref="TakePendingChangeset"/> instead of resending file content.
     /// </summary>
-    string CachePendingChangeset(Dictionary<FilePathWrapper, string> changes, int retryCount, bool validateOnApply);
+    string CachePendingChangeset(DocumentChangeSet changes, int retryCount, bool validateOnApply);
 
     /// <summary>
     /// Retrieves and removes (one-time use) the changeset cached under <paramref name="confirmationCode"/>
     /// by <see cref="CachePendingChangeset"/>. Returns null if the code is unrecognized or expired.
     /// </summary>
-    (Dictionary<FilePathWrapper, string> Changes, int RetryCount, bool ValidateOnApply)? TakePendingChangeset(string confirmationCode);
+    (DocumentChangeSet Changes, int RetryCount, bool ValidateOnApply)? TakePendingChangeset(string confirmationCode);
 }

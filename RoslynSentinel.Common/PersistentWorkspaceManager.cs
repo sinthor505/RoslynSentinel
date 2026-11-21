@@ -117,14 +117,14 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     private static readonly TimeSpan PendingConfirmationTtl = TimeSpan.FromMinutes(10);
 
     private sealed record PendingChangeset(
-        Dictionary<FilePathWrapper, string> Changes, int RetryCount, bool ValidateOnApply, DateTime ExpiresAtUtc);
+        DocumentChangeSet Changes, int RetryCount, bool ValidateOnApply, DateTime ExpiresAtUtc);
 
     /// <summary>
     /// Caches <paramref name="changes"/> under a fresh confirmation code and returns the code.
     /// Also opportunistically sweeps expired entries so the cache doesn't grow unbounded across
     /// a long-running server session.
     /// </summary>
-    public string CachePendingChangeset(Dictionary<FilePathWrapper, string> changes, int retryCount, bool validateOnApply)
+    public string CachePendingChangeset(DocumentChangeSet changes, int retryCount, bool validateOnApply)
     {
         foreach (var kvp in _pendingConfirmations)
         {
@@ -143,7 +143,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     /// Retrieves and removes the changeset cached under <paramref name="confirmationCode"/>.
     /// Returns null if the code is unrecognized or has expired (one-time use).
     /// </summary>
-    public (Dictionary<FilePathWrapper, string> Changes, int RetryCount, bool ValidateOnApply)? TakePendingChangeset(string confirmationCode)
+    public (DocumentChangeSet Changes, int RetryCount, bool ValidateOnApply)? TakePendingChangeset(string confirmationCode)
     {
         if (!_pendingConfirmations.TryRemove(confirmationCode, out var pending))
         {

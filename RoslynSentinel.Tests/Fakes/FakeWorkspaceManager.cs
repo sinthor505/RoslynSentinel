@@ -379,8 +379,8 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
             retryCall);
     public Task<ISymbol?> ResolveSymbolAsync(SymbolHandle handle, CancellationToken cancellationToken) => throw new NotImplementedException();
     public Task<ApplyChangesResult> RetryFailedChangesAsync(List<string>? specificFiles = null, int retryCount = 3, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public string CachePendingChangeset(Dictionary<FilePathWrapper, string> changes, int retryCount, bool validateOnApply) => throw new NotImplementedException();
-    public (Dictionary<FilePathWrapper, string> Changes, int RetryCount, bool ValidateOnApply)? TakePendingChangeset(string confirmationCode) => throw new NotImplementedException();
+    public string CachePendingChangeset(DocumentChangeSet changes, int retryCount, bool validateOnApply) => throw new NotImplementedException();
+    public (DocumentChangeSet Changes, int RetryCount, bool ValidateOnApply)? TakePendingChangeset(string confirmationCode) => throw new NotImplementedException();
     // Mirrors PersistentWorkspaceManager.ResolveFromWire(): checks CurrentSolution directly (not
     // GetSolutionRoot()) to distinguish "no solution loaded" from "a solution is loaded but has no
     // on-disk root" (e.g. an in-memory SetTestSolution solution) -> the latter must fall through to
