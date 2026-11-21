@@ -25,11 +25,13 @@ internal static class ModelTestingResultsArchiver
             }
 
             // Deviation: the outcome is always written as Unfinished (null) because this runs from the test body's
-            // finally block, before the test's result is final. The file still names the test that wrote the folder.
+            // finally block, before the test's result is final. RewriteBodyArchivedOutcomeAttribute rewrites the real
+            // outcome into both directories when the test ends. The file still names the test that wrote the folder.
             var result = TestContext.CurrentContext.Result;
             RunDirectoryArchive.WriteTestResult(runDirectory, null, TestContext.CurrentContext.Test.FullName, result.Message, result.StackTrace);
 
-            RunDirectoryArchive.CopyToResults(runDirectory, ScratchRoot.ResultsRoot(), EvalHostTable.DeriveSuffix(RoslynSentinel.Common.LlmOptions.BaseUrl));
+            var destination = RunDirectoryArchive.CopyToResults(runDirectory, ScratchRoot.ResultsRoot(), EvalHostTable.DeriveSuffix(RoslynSentinel.Common.LlmOptions.BaseUrl));
+            PendingArchivedOutcomes.Register(TestContext.CurrentContext.Test.ID, runDirectory, destination);
         }
         catch (Exception ex)
         {

@@ -117,4 +117,30 @@ public sealed class RunDirectoryArchiveTests
             "at Foo()",
         }));
     }
+
+    [Test]
+    public void PendingArchivedOutcomes_Rewrite_ReplacesTheUnfinishedOutcomeInBothDirectories()
+    {
+        var dirA = Path.Combine(_root, "a");
+        var dirB = Path.Combine(_root, "b");
+        Directory.CreateDirectory(dirA);
+        Directory.CreateDirectory(dirB);
+        RunDirectoryArchive.WriteTestResult(dirA, null, "X", null, null);
+        RunDirectoryArchive.WriteTestResult(dirB, null, "X", null, null);
+
+        PendingArchivedOutcomes.Register("id-1", dirA, dirB);
+        PendingArchivedOutcomes.Rewrite("id-1", "Passed", "X", null, null);
+
+        Assert.That(File.ReadAllLines(Path.Combine(dirA, "test-result.txt"))[0], Is.EqualTo("Outcome: Passed"));
+        Assert.That(File.ReadAllLines(Path.Combine(dirB, "test-result.txt"))[0], Is.EqualTo("Outcome: Passed"));
+
+        PendingArchivedOutcomes.Rewrite("id-1", "Failed", "X", null, null);
+
+        Assert.That(File.ReadAllLines(Path.Combine(dirA, "test-result.txt"))[0], Is.EqualTo("Outcome: Passed"));
+        Assert.That(File.ReadAllLines(Path.Combine(dirB, "test-result.txt"))[0], Is.EqualTo("Outcome: Passed"));
+
+        var missing = Path.Combine(_root, "missing");
+        Assert.DoesNotThrow(() => PendingArchivedOutcomes.Register("id-2", missing, null));
+        Assert.DoesNotThrow(() => PendingArchivedOutcomes.Rewrite("id-2", "Passed", "X", null, null));
+    }
 }
