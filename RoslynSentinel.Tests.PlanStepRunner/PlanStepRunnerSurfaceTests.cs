@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using RoslynSentinel.Common;
 using RoslynSentinel.Common.AgentLoop;
 using RoslynSentinel.Utilities.PlanStepRunner;
 
@@ -40,6 +41,25 @@ public class PlanStepRunnerSurfaceTests
             Assert.That(classes, Does.Not.Contain("SymbolNavigationTools"));
             Assert.That(classes, Does.Not.Contain("CommentingTools"));
         });
+    }
+
+    // Mutates the process environment variable ROSLYNSENTINEL_SCRATCH_ROOT, so it must not run in parallel with other tests.
+    [Test]
+    [NonParallelizable]
+    public void Options_RelativeScratchRoot_ThrowsArgumentExceptionNamingTheVariable()
+    {
+        var previous = Environment.GetEnvironmentVariable(ScratchRoot.EnvironmentVariable);
+        try
+        {
+            Environment.SetEnvironmentVariable(ScratchRoot.EnvironmentVariable, "relative-scratch");
+            var ex = Assert.Throws<ArgumentException>(() => RunnerOptions.Parse(["--plan-dir", "p", "--repo", "r"]));
+            Assert.That(ex.Message, Is.Not.Empty);
+            Assert.That(ex.Message, Does.Contain(ScratchRoot.EnvironmentVariable));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(ScratchRoot.EnvironmentVariable, previous);
+        }
     }
 
     [Test]

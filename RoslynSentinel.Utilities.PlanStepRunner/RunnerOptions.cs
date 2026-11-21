@@ -83,7 +83,7 @@ public sealed class RunnerOptions
         // folder RoslynSentinel-ScratchDir of the repo), never inside the repo: a worktree left under the
         // repo shows up in `git status`/diffs/searches as a spurious branched copy of the repo.
         var runDir = GetArg(args, "--run-dir")
-            ?? Path.Combine(ScratchRoot.TestRunsRoot(sourceRepo), "PlanStepRunner", DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
+            ?? DefaultRunDir(sourceRepo);
 
         // Defaults to a per-run branch (named after the run folder's own timestamp) rather than
         // one fixed shared name -> git only allows one worktree to have a given branch checked out
@@ -129,6 +129,22 @@ public sealed class RunnerOptions
             IncludeTools = includeTools,
             Clean = clean,
         };
+    }
+
+    /// <summary>
+    /// Maps the scratch-root failure (a relative ROSLYNSENTINEL_SCRATCH_ROOT, whose message already names the variable)
+    /// to ArgumentException so Program.Main prints it and returns 1 instead of an unhandled exception.
+    /// </summary>
+    private static string DefaultRunDir(string sourceRepo)
+    {
+        try
+        {
+            return Path.Combine(ScratchRoot.TestRunsRoot(sourceRepo), "PlanStepRunner", DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new ArgumentException(ex.Message, ex);
+        }
     }
 
     private static string? GetArg(string[] args, string flag)
