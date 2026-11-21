@@ -159,7 +159,7 @@ public class AppliedChangeSummaryFromTests
     {
         using var workspace = InMemoryWorkspace.Create(("Existing.cs", "line1\r\n"));
 
-        var lineChanges = await ValidateAndApplyHelper.ComputeLineChangesAsync(workspace.Manager, [], CancellationToken.None);
+        var lineChanges = await ValidateAndApplyHelper.ComputeLineChangesAsync(workspace.Manager, new Dictionary<FilePathWrapper, string>(), CancellationToken.None);
 
         Assert.That(lineChanges, Is.Empty);
     }

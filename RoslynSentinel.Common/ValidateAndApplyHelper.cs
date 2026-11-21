@@ -79,7 +79,7 @@ public static class ValidateAndApplyHelper
         ValidationEngine validationEngine,
         IWorkspaceManager workspaceManager,
         ILogger logger,
-        Dictionary<FilePathWrapper, string> changes,
+        IReadOnlyDictionary<FilePathWrapper, string> changes,
         string operationName,
         bool dryRun = false,
         bool returnDiff = false,
@@ -225,7 +225,7 @@ public static class ValidateAndApplyHelper
 
         recordEffects?.Invoke();
         var applyResult = await workspaceManager.ApplyProposedChangesAsync(
-            changes, retryCount: 3, validateChanges: false, rollbackOnPartialFailure: true,
+            new Dictionary<FilePathWrapper, string>(changes), retryCount: 3, validateChanges: false, rollbackOnPartialFailure: true, // TODO widen ApplyProposedChangesAsync to IReadOnlyDictionary and drop this copy
             progress: progress, cancellationToken: cancellationToken, deletePaths: deletePaths,
             operationLabel: operationName,
             staleReadPolicy: staleReadPolicy);
@@ -331,7 +331,7 @@ public static class ValidateAndApplyHelper
         string operationName,
         Func<DiagnosticReport, CancellationToken, Task<NearMissCorrection?>> tryAutoCorrect,
         DiagnosticReport rejected,
-        Dictionary<FilePathWrapper, string> changes,
+        IReadOnlyDictionary<FilePathWrapper, string> changes,
         IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>>? expectedEdits,
         IReadOnlyCollection<FilePathWrapper>? removePaths,
         CancellationToken cancellationToken)
@@ -441,7 +441,7 @@ public static class ValidateAndApplyHelper
     /// every line counts as removed).
     /// </summary>
     private static List<FileLineChange> ComputeLineChanges(
-        Dictionary<FilePathWrapper, string> changes,
+        IReadOnlyDictionary<FilePathWrapper, string> changes,
         IReadOnlyCollection<FilePathWrapper>? deletePaths,
         Func<string, string?> beforeLookup)
     {
@@ -470,7 +470,7 @@ public static class ValidateAndApplyHelper
     /// </summary>
     public static async Task<List<FileLineChange>> ComputeLineChangesAsync(
         IWorkspaceManager workspaceManager,
-        Dictionary<FilePathWrapper, string> changes,
+        IReadOnlyDictionary<FilePathWrapper, string> changes,
         CancellationToken cancellationToken)
     {
         var beforeTexts = await ReadBeforeTextsAsync(workspaceManager, changes.Keys.Select(k => (string)k), cancellationToken);
@@ -479,7 +479,7 @@ public static class ValidateAndApplyHelper
 
     public static async Task<string> BuildDiffAsync(
         IWorkspaceManager workspaceManager,
-        Dictionary<FilePathWrapper, string> changes,
+        IReadOnlyDictionary<FilePathWrapper, string> changes,
         CancellationToken cancellationToken)
     {
         var solution = await workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -503,7 +503,7 @@ public static class ValidateAndApplyHelper
     }
 
     public static string BuildDiffFromPreImages(
-        Dictionary<FilePathWrapper, string> changes,
+        IReadOnlyDictionary<FilePathWrapper, string> changes,
         IReadOnlyDictionary<string, string?>? preImages)
     {
         var parts = new List<string>();
