@@ -129,6 +129,19 @@ function Get-EvalCheckout {
         $r = Invoke-NativeCaptured -File 'git' -Arguments @('clone', '--shared', '--no-checkout', '--', $RepoRoot, $partial)
         if ($r.ExitCode -ne 0) { throw "git clone --shared of '$RepoRoot' failed (exit $($r.ExitCode)): $($r.Output)" }
 
+        # A post-change commit's .gitignore no longer lists _scratchbuild_*/, so without this local exclude the
+        # checkout looks dirty to the run stamp (ModelEvalAssemblySetUp.IsDirty counts untracked .cs files).
+        $excludePath = Join-Path $partial '.git\info\exclude'
+        $excludeDir = Split-Path $excludePath -Parent
+        if (-not (Test-Path -LiteralPath $excludeDir)) { $null = New-Item -ItemType Directory -Path $excludeDir -Force }
+        $existingExclude = if (Test-Path -LiteralPath $excludePath) { [System.IO.File]::ReadAllText($excludePath) } else { '' }
+        $missingExclude = @('_scratchbuild_*/', 'complete', 'lastused') |
+            Where-Object { $existingExclude -notmatch ('(?m)^' + [regex]::Escape($_) + '\r?$') }
+        if ($missingExclude) {
+            $lead = if ($existingExclude -and -not $existingExclude.EndsWith("`n")) { "`n" } else { '' }
+            [System.IO.File]::AppendAllText($excludePath, $lead + (($missingExclude -join "`n") + "`n"), (New-Object System.Text.UTF8Encoding($false)))
+        }
+
         $r = Invoke-NativeCaptured -File 'git' -Arguments @('-C', $partial, 'checkout', '--detach', $Sha)
         if ($r.ExitCode -ne 0) { throw "git checkout --detach $Sha failed (exit $($r.ExitCode)): $($r.Output)" }
 

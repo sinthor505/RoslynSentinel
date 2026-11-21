@@ -59,12 +59,14 @@
       RoslynSentinel.Tests.ModelEval\RoslynSentinel.Tests.ModelEval.csproj skips the default pre-build (the
       worker log says so) unless -PreBuildScript is given.
       Results are not written into the checkout: the worker sets ROSLYNSENTINEL_RESULTS_ROOT to
-      <repo>\ModelTestingResults for the run, using the job's own repo, so results stay central and
+      <scratch>\ModelTestingResults for the run, where <scratch> is the job's scratch root (recorded at submit:
+      ROSLYNSENTINEL_SCRATCH_ROOT, else <parent of the repo>\RoslynSentinel-ScratchDir), so results stay central and
       checkouts can be removed without losing them. After each job the worker removes checkouts that no
       Queued, Building or Running job on any host needs, that are older than 24 hours and that are not among
       the newest 5.
       ROSLYNSENTINEL_* variables set in the submitting shell are recorded with the job and applied to its
-      run. ROSLYNSENTINEL_RESULTS_ROOT and the ROSLYNSENTINEL_EVALQUEUE_* settings are never recorded, and the
+      run. ROSLYNSENTINEL_RESULTS_ROOT, ROSLYNSENTINEL_SCRATCH_ROOT, ROSLYNSENTINEL_REPO_ROOT and the
+      ROSLYNSENTINEL_EVALQUEUE_* settings are never recorded, and the
       worker's own ROSLYNSENTINEL_* variables are not inherited by the run.
       Legacy (applies only to jobs queued before pinning existed, which have no pinned commit): such a job
       still builds from the working tree. Submit recorded its commit and a fingerprint of its uncommitted
@@ -81,7 +83,7 @@
 
     Run index
       Every job the worker ends (Finished, Crashed, TimedOut, Cancelled, BuildFailed, Refused, TreeChanged) gets
-      one row in ModelTestingResults\<suffix>\runs.csv under its results base (scripts\roslynsentinel-evalruns.ps1).
+      one row in <scratch>\ModelTestingResults\<suffix>\runs.csv (scripts\roslynsentinel-evalruns.ps1).
       A job cancelled while still Queued has no worker and gets no row.
       Columns: jobId, machine, host, baseUrl, backend, test, model, sessions ('+' joined), purpose, pinnedCommit,
       state, passed, startedUtc, endedUtc, durationSeconds, reason, runFolders (';' joined).
@@ -196,6 +198,7 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'roslynsentinel-evalcheckout.ps1')
 . (Join-Path $PSScriptRoot 'roslynsentinel-evalhosts.ps1')
 . (Join-Path $PSScriptRoot 'roslynsentinel-evalruns.ps1')
+. (Join-Path $PSScriptRoot 'roslynsentinel-scratch.ps1')
 
 $terminalStates = @('Finished', 'Cancelled', 'TimedOut', 'Crashed', 'TreeChanged', 'BuildFailed', 'Refused')
 $defaultExpectedSeconds = 600
@@ -203,7 +206,7 @@ $hostWaitMinutes = 30
 $hostCheckIntervalSeconds = 30
 $pruneAfterDays = 30
 # Variables the model-eval script sets itself, or that name a place and not a behaviour: never part of a job.
-$envNeverCaptured = @('ROSLYNSENTINEL_LLM_BASE_URL', 'ROSLYNSENTINEL_LLM_MODEL', 'ROSLYNSENTINEL_INSTANCES_ROOT', 'ROSLYNSENTINEL_RESULTS_ROOT')
+$envNeverCaptured = @('ROSLYNSENTINEL_LLM_BASE_URL', 'ROSLYNSENTINEL_LLM_MODEL', 'ROSLYNSENTINEL_INSTANCES_ROOT', 'ROSLYNSENTINEL_RESULTS_ROOT', 'ROSLYNSENTINEL_SCRATCH_ROOT', 'ROSLYNSENTINEL_REPO_ROOT')
 # Source files that decide what a run builds. Docs and scripts are left out so that an unrelated edit
 # on the shared tree does not refuse a queued job.
 $fingerprintPathspecs = @('*.cs', '*.csproj', '*.props', '*.targets', '*.sln', '*.slnx')
@@ -702,6 +705,7 @@ function Invoke-Submit {
                     evalScript        = $checkoutEvalScript
                     pinnedCommit      = $pinnedSha
                     sourceRepoRoot    = $RepoRoot
+                    scratchRoot       = Get-RoslynSentinelScratchRoot -RepoRoot $RepoRoot
                     checkoutRoot      = $checkoutRoot
                     session           = $Session
                     sessions          = @($Session)
@@ -982,13 +986,18 @@ function Invoke-Worker {
         return [pscustomobject]@{ Probes = $probes; JobKey = $jobKey }
     }
 
+    # The scratch root recorded at submit; a job written before that falls back to the source repo's lookup.
+    function Get-JobScratchRoot($Job) {
+        if ($Job.PSObject.Properties['scratchRoot'] -and $Job.scratchRoot) { return [string]$Job.scratchRoot }
+        return Get-RoslynSentinelScratchRoot -RepoRoot $Job.sourceRepoRoot
+    }
+
     function Get-RunFolders($Job) {
         # Run folders are timestamp-named leaves under ModelTestingResults\<suffix>\<TestName>\ (one level
         # deeper for SizeThreshold). roslynsentinel-modeleval.ps1 copies each run there when it ends.
-        # A pinned job's run writes to the source repo's results folder (ROSLYNSENTINEL_RESULTS_ROOT, set in
-        # Invoke-JobRun), not into its checkout; a legacy job ran in the repo itself.
-        $resultsBase = if ($Job.pinnedCommit) { $Job.sourceRepoRoot } else { $Job.repoRoot }
-        $root = Join-Path $resultsBase "ModelTestingResults\$($Job.suffix)"
+        # Every job's run writes to <jobScratch>\ModelTestingResults (ROSLYNSENTINEL_RESULTS_ROOT, set in
+        # Invoke-JobRun), never into its checkout or the worker's own environment.
+        $root = Join-Path (Get-RoslynSentinelResultsRoot -RepoRoot $Job.sourceRepoRoot -ScratchRoot (Get-JobScratchRoot $Job)) $Job.suffix
         if (-not (Test-Path -LiteralPath $root)) { return @() }
         return @(Get-ChildItem -LiteralPath $root -Directory -Recurse -Depth 2 -ErrorAction SilentlyContinue |
                 Where-Object { $_.Name -match '^\d{8}-\d{6}' } | ForEach-Object FullName)
@@ -997,7 +1006,8 @@ function Invoke-Worker {
     function Wait-ForTesthostExit($Job, [switch]$Kill) {
         # Same reason as Wait-ForTesthostExit in roslynsentinel-modeleval.ps1: the next job's build must not
         # race this run's testhost.exe releasing its DLLs. That script only waits between its own repeats.
-        $testhostPath = Join-Path $Job.repoRoot "_scratchbuild_$($Job.suffix)\bin\RoslynSentinel.Tests.ModelEval\debug\testhost.exe"
+        $buildDir = Get-RoslynSentinelBuildDir -RepoRoot $Job.repoRoot -Suffix $Job.suffix -ScratchRoot (Get-JobScratchRoot $Job)
+        $testhostPath = Join-Path $buildDir 'bin\RoslynSentinel.Tests.ModelEval\debug\testhost.exe'
         $deadline = (Get-Date).AddSeconds(60)
         while ((Get-Date) -lt $deadline) {
             $left = @(Get-CimInstance Win32_Process -Filter "Name='testhost.exe'" -ErrorAction SilentlyContinue |
@@ -1029,8 +1039,11 @@ function Invoke-Worker {
         foreach ($name in @($startInfo.Environment.Keys | Where-Object { $_ -like 'ROSLYNSENTINEL_*' })) { [void]$startInfo.Environment.Remove($name) }
         foreach ($property in $Job.env.PSObject.Properties) { $startInfo.Environment[$property.Name] = [string]$property.Value }
         $startInfo.Environment['ROSLYNSENTINEL_EVALQUEUE_JOB'] = $Job.id
-        # Set after the submitter's variables so it always wins: results stay central, outside the disposable checkout.
-        if ($Job.pinnedCommit) { $startInfo.Environment['ROSLYNSENTINEL_RESULTS_ROOT'] = Join-Path $Job.sourceRepoRoot 'ModelTestingResults' }
+        # Set after the submitter's variables so these always win: results stay central, outside the disposable checkout.
+        # RESULTS_ROOT is set for every job because scripts from older commits in a checkout know only that variable.
+        $jobScratch = Get-JobScratchRoot $Job
+        $startInfo.Environment['ROSLYNSENTINEL_SCRATCH_ROOT'] = $jobScratch
+        $startInfo.Environment['ROSLYNSENTINEL_RESULTS_ROOT'] = Join-Path $jobScratch 'ModelTestingResults'
 
         # durationSeconds (and so the ETA in Get-ExpectedSeconds) covers the run only: the clock starts here, after
         # the pre-build, so a cold build is not part of it.
@@ -1111,7 +1124,7 @@ function Invoke-Worker {
 
         if (-not $failure) {
             $csproj = Join-Path $Job.repoRoot 'RoslynSentinel.Tests.ModelEval\RoslynSentinel.Tests.ModelEval.csproj'
-            $artifactsPath = Join-Path $Job.repoRoot "_scratchbuild_$($Job.suffix)"
+            $artifactsPath = Get-RoslynSentinelBuildDir -RepoRoot $Job.repoRoot -Suffix $Job.suffix -ScratchRoot (Get-JobScratchRoot $Job)
             $command = $null
             if ($PreBuildScript) {
                 $command = "try { & $(ConvertTo-Quoted $PreBuildScript) *> $(ConvertTo-Quoted $buildLog) } " +
@@ -1328,7 +1341,7 @@ function Invoke-Worker {
             if ($dispatched) {
                 $final = Read-Job (Get-JobPath $dispatched)
                 if ($final -and $final.state -in $terminalStates) {
-                    $resultsRoot = Join-Path $(if ($final.pinnedCommit) { $final.sourceRepoRoot } else { $final.repoRoot }) 'ModelTestingResults'
+                    $resultsRoot = Get-RoslynSentinelResultsRoot -RepoRoot $final.sourceRepoRoot -ScratchRoot (Get-JobScratchRoot $final)
                     $suffixRoot = Join-Path $resultsRoot $final.suffix
                     # The index wants run folders relative to the suffix folder (<Test>\<leaf>), not the absolute paths on the job.
                     $indexJob = $final | Select-Object *
