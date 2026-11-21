@@ -24,7 +24,7 @@ public class DiscoveryEngine
     {
         _workspaceManager = workspaceManager;
         _logger = new NullLogger<DiscoveryEngine>();
-        _symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager);
+        _symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance, isCallable: null); // null predicate: every tool callable (no ActiveToolSurface on this convenience path)
     }
 
     public DiscoveryEngine(IWorkspaceManager workspaceManager, SymbolNavigationEngine symbolNavigationEngine)

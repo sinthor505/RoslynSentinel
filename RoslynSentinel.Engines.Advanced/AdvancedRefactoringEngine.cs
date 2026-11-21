@@ -21,7 +21,7 @@ public class AdvancedRefactoringEngine
         _workspaceManager = workspaceManager;
         _logger = new NullLogger<AdvancedRefactoringEngine>();
         _config = new SentinelConfiguration();
-        _symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager);
+        _symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance, isCallable: null); // null predicate: every tool callable (no ActiveToolSurface on this convenience path)
     }
 
     public AdvancedRefactoringEngine(IWorkspaceManager workspaceManager, ILogger<AdvancedRefactoringEngine> logger)
@@ -29,7 +29,7 @@ public class AdvancedRefactoringEngine
         _workspaceManager = workspaceManager;
         _logger = logger;
         _config = new SentinelConfiguration();
-        _symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager);
+        _symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance, isCallable: null);
     }
 
     public AdvancedRefactoringEngine(IWorkspaceManager workspaceManager, ILogger<AdvancedRefactoringEngine> logger, SentinelConfiguration config)
@@ -37,7 +37,7 @@ public class AdvancedRefactoringEngine
         _workspaceManager = workspaceManager;
         _logger = logger;
         _config = config;
-        _symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager);
+        _symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance, isCallable: null);
     }
 
     public AdvancedRefactoringEngine(IWorkspaceManager workspaceManager, SymbolNavigationEngine symbolNavigationEngine, ILogger<AdvancedRefactoringEngine> logger, SentinelConfiguration config)
