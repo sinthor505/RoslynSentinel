@@ -2,9 +2,10 @@ using RoslynSentinel.Common.AgentLoop;
 
 namespace RoslynSentinel.Tests.ModelEval;
 
+// TODO fold the duplicate ModelTestingResultsArchiver (ModelEval and ErrorVariants) into a shared helper
 /// <summary>
-/// Copies a finished run's directory (transcripts, agent.log) into the repo's
-/// <c>ModelTestingResults\&lt;host-suffix&gt;\&lt;relative-path-under-model-eval&gt;\</c> tree, so
+/// Copies a finished run's directory (transcripts, agent.log) into
+/// <c>&lt;scratch&gt;\ModelTestingResults\&lt;host-suffix&gt;\&lt;relative-path-under-model-eval&gt;\</c> tree, so
 /// every run is archived regardless of how the test was launched -> previously this only happened
 /// when a run went through <c>roslynsentinel-modeleval.ps1</c>'s own post-run copy step
 /// (Copy-NewRunDirectories), so a run launched directly via `dotnet test`/the VS Code test
@@ -31,7 +32,8 @@ internal static class ModelTestingResultsArchiver
 
             WriteTestResult(runDirectory);
 
-            var resultsBase = ResolveResultsBase();
+            // ScratchRoot.ResultsRoot: ROSLYNSENTINEL_RESULTS_ROOT, else <scratch>\ModelTestingResults.
+            var resultsBase = ScratchRoot.ResultsRoot();
             var suffix = EvalHostTable.DeriveSuffix(RoslynSentinel.Common.LlmOptions.BaseUrl);
 
             // _runDirectory always looks like <work-dir>\model-eval\<...>\<timestamp>; keep
@@ -103,31 +105,5 @@ internal static class ModelTestingResultsArchiver
         {
             CopyDirectoryRecursive(subDir, Path.Combine(destinationDir, Path.GetFileName(subDir)));
         }
-    }
-
-    // ROSLYNSENTINEL_RESULTS_ROOT (absolute) redirects the results tree, e.g. for queue jobs that run from a throwaway checkout; unset or relative -> <repo root>\ModelTestingResults as before.
-    private static string ResolveResultsBase()
-    {
-        var overrideRoot = Environment.GetEnvironmentVariable("ROSLYNSENTINEL_RESULTS_ROOT");
-        return !string.IsNullOrWhiteSpace(overrideRoot) && Path.IsPathRooted(overrideRoot)
-            ? overrideRoot
-            : Path.Combine(FindRepoRoot(), "ModelTestingResults");
-    }
-
-    private static string FindRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "RoslynSentinel.slnx")))
-            {
-                return dir.FullName;
-            }
-
-            dir = dir.Parent;
-        }
-
-        throw new DirectoryNotFoundException(
-            $"ModelTestingResultsArchiver could not locate the repo root (RoslynSentinel.slnx) walking up from '{AppContext.BaseDirectory}'.");
     }
 }

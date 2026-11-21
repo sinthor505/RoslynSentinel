@@ -48,7 +48,8 @@ public class ModelEvalAssemblySetUp
         ErrorPolicyOptions.Configure(ErrorPolicyFile.ResolveConfigureArgs(
             Environment.GetEnvironmentVariable("ROSLYNSENTINEL_ERROR_POLICY_MODE"),
             Environment.GetEnvironmentVariable("ROSLYNSENTINEL_ERROR_POLICY_FILE")));
-        ModelAgentRunner.ProcessStamp = BuildProcessStamp(ReadWorkingTreeStamp(AppContext.BaseDirectory));
+        // RepoRootLocator.TryFind() with no argument consults ROSLYNSENTINEL_REPO_ROOT; TryFind(startDirectory) ignores it.
+        ModelAgentRunner.ProcessStamp = BuildProcessStamp(ReadWorkingTreeStamp(RepoRootLocator.TryFind() ?? AppContext.BaseDirectory));
 
         if (string.IsNullOrEmpty(LlmOptions.Model))
         {
@@ -126,19 +127,11 @@ public class ModelEvalAssemblySetUp
     {
         try
         {
-            // Copy of ModelTestingResultsArchiver.FindRepoRoot: that one is private and throws when no root is found.
-            var dir = new DirectoryInfo(startDirectory);
-            while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "RoslynSentinel.slnx")))
-            {
-                dir = dir.Parent;
-            }
-
-            if (dir is null)
+            var root = RepoRootLocator.TryFind(startDirectory);
+            if (root is null)
             {
                 return null;
             }
-
-            var root = dir.FullName;
 
             // libgit2 calls cannot be timed out and a stamp must never hang an eval run (a 600 s stall was
             // seen when other sessions load the box); the abandoned task only holds a background thread.

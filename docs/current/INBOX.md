@@ -11,3 +11,4 @@ close it with a reason in [CLOSED.md](./CLOSED.md), then delete the line here. C
 
 ## Untriaged
 
+- 2026-11-20 17:32 Duplicate ModelTestingResultsArchiver in Tests.ModelEval and Tests.ErrorVariants should be one shared helper - RoslynSentinel.Tests.ModelEval\ModelTestingResultsArchiver.cs:5 and RoslynSentinel.Tests.ErrorVariants\ModelTestingResultsArchiver.cs - // TODO fold the duplicate ModelTestingResultsArchiver
