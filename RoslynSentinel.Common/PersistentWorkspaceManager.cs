@@ -3521,7 +3521,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     /// </summary>
     public async Task<ApplyChangesResult> RetryFailedChangesAsync(List<string>? specificFiles = null, int retryCount = 3, CancellationToken cancellationToken = default)
     {
-        var toRetry = new Dictionary<FilePathWrapper, string>();
+        var toRetry = new DocumentChangeSet();
 
         if (specificFiles == null || specificFiles.Count == 0)
         {
