@@ -183,4 +183,19 @@ public class ExtractInterfaceNewRootTests
         Assert.That(content, Is.EqualTo(
             "// Copyright (c) Acme\r\nusing System; // for Console\nusing  System.Linq;\n\nnamespace MyApp;\n\npublic interface ISvc\n{\n    string Name { get; set; }\n\n    int Total(int a);\n}\n"));
     }
+
+    [Test]
+    public async Task ExtractInterface_LeadingCommentAndDocOnMember_StayInOriginalClassFile()
+    {
+        // Source side: the original class file keeps a leading // comment and a /// doc comment above the member.
+        const string source = "using System;\n\nnamespace MyApp;\n\npublic class Svc\n{\n    // note\n    /// <summary>Adds numbers.</summary>\n    public int Add(int a, int b) => a + b;\n}\n";
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Source.cs", source)]);
+        _workspaceManager.SetTestSolution(solution);
+
+        var result = await _engine.ExtractInterfaceAsync("Source.cs", "Svc", "ISvc");
+
+        var originalFile = result.Single(kv => kv.Key == "Source.cs").Value;
+        Assert.That(originalFile, Does.Contain("// note"), "the leading line comment stays in the original class file");
+        Assert.That(originalFile, Does.Contain("/// <summary>Adds numbers.</summary>"), "the doc comment stays in the original class file");
+    }
 }

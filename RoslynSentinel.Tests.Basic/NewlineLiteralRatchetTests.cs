@@ -29,7 +29,6 @@ public class NewlineLiteralRatchetTests
     private static readonly Dictionary<string, int> Baseline = new(StringComparer.Ordinal)
     {
         ["RoslynSentinel.Common/ContextHelper.cs::WithAddedByComment"] = 1,
-        ["RoslynSentinel.Engines.Advanced/AdvancedStructuralEngine.cs::AlignPartialDeclaration"] = 2,
         ["RoslynSentinel.Engines.Advanced/AdvancedStructuralEngine.cs::ApplyExtractConstant"] = 1,
         ["RoslynSentinel.Engines.Advanced/AdvancedStructuralEngine.cs::IntroduceParameterObjectAsync"] = 1,
         ["RoslynSentinel.Engines.Advanced/AdvancedStructuralEngine.cs::ReplaceConstructorWithFactoryAsync"] = 2,

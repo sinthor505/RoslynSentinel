@@ -1028,7 +1028,10 @@ public class StructuralRefactoringEngine
         var partialPath = partialFiles.Keys.First();
         var partialRoot = SyntaxFactory.ParseCompilationUnit(partialFiles[partialPath]);
         var generatedPart = partialRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().First(c => c.Identifier.Text == className);
-        var alignedPartialText = partialRoot.ReplaceNode(generatedPart, AlignPartialDeclaration(generatedPart, classNode)).ToFullString();
+        // document is non-null here (root is null when it is). Only the annotated type parameter list and constraint clauses are formatted.
+        var alignedPartialRoot = partialRoot.ReplaceNode(generatedPart, AlignPartialDeclaration(generatedPart, classNode));
+        var partialPreImage = document!.WithText(Microsoft.CodeAnalysis.Text.SourceText.From(partialFiles[partialPath], (await document.GetTextAsync(cancellationToken)).Encoding));
+        var alignedPartialText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(partialPreImage, alignedPartialRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
 
         return new Dictionary<FilePathWrapper, string>
         {
@@ -1073,8 +1076,9 @@ public class StructuralRefactoringEngine
     // Makes the generated 'public partial class X' part agree with the original declaration: the modifiers (accessibility,
     // static/abstract/sealed, plus 'partial'), the type parameter list and the constraint clauses. Without this a generic or
     // non-public class gets a mismatching second part (CS0260/CS0262/CS0264). The base list is deliberately not copied: the
-    // original part keeps it. The copied header tokens are normalised on their own, the generated trivia around them is kept.
-    // TODO type-parameter and constraint attributes/comments are normalised away, not carried to the partial part
+    // original part keeps it. The type parameter list and the constraint clauses are copied with their own trivia (attributes and
+    // comments inside them, comments after them) and annotated with Formatter.Annotation, so the caller formats just them
+    // (RoslynFormattingHelper.FormatAnnotatedTextAsync); the generated trivia around them is kept.
     private static ClassDeclarationSyntax AlignPartialDeclaration(ClassDeclarationSyntax generatedPart, ClassDeclarationSyntax originalClass)
     {
         var originalModifiers = WithPartialModifier(originalClass).Modifiers;
@@ -1094,14 +1098,47 @@ public class StructuralRefactoringEngine
         // Whatever followed the identifier in the generated part (normally the line break before '{') now follows the header's last token.
         var headerEnd = generatedPart.Identifier.TrailingTrivia;
         var constraintClauses = originalClass.ConstraintClauses
-            .Select((c, i) => c.NormalizeWhitespace().WithTrailingTrivia(i == originalClass.ConstraintClauses.Count - 1 ? headerEnd : SyntaxFactory.TriviaList(SyntaxFactory.Space)))
+            .Select((c, i) => AlignHeaderElement(c, i == originalClass.ConstraintClauses.Count - 1 ? headerEnd : SyntaxFactory.TriviaList(SyntaxFactory.Space)))
             .ToList();
-        var typeParameterList = typeParameters.NormalizeWhitespace().WithTrailingTrivia(constraintClauses.Count == 0 ? headerEnd : SyntaxFactory.TriviaList(SyntaxFactory.Space));
+        var typeParameterList = AlignHeaderElement(typeParameters, constraintClauses.Count == 0 ? headerEnd : SyntaxFactory.TriviaList(SyntaxFactory.Space));
         return aligned
             .WithIdentifier(aligned.Identifier.WithTrailingTrivia(SyntaxFactory.TriviaList()))
             .WithTypeParameterList(typeParameterList)
             .WithConstraintClauses(SyntaxFactory.List(constraintClauses));
     }
+
+    // Copies a type parameter list or constraint clause into the generated header with everything inside it intact (attributes,
+    // comments, their spacing) and marks it for the formatter. Only its two edges are touched: the leading trivia of its first
+    // token is dropped unless it carries a comment, and the trivia after its last token becomes 'separator' unless it carries a
+    // comment (then the comment is kept, and a line break is added after it only when the kept trivia does not already end in one).
+    private static T AlignHeaderElement<T>(T element, SyntaxTriviaList separator)
+        where T : SyntaxNode
+    {
+        var first = element.GetFirstToken();
+        var last = element.GetLastToken();
+        return element
+            .ReplaceTokens(new[] { first, last }.Distinct(), (original, rewritten) =>
+            {
+                var result = rewritten;
+                if (original == first)
+                {
+                    result = result.WithLeadingTrivia(original.LeadingTrivia.Any(IsCommentOrDirective) ? original.LeadingTrivia : SyntaxFactory.TriviaList());
+                }
+
+                if (original == last)
+                {
+                    var trailing = original.TrailingTrivia;
+                    var keepsComment = trailing.Any(IsCommentOrDirective);
+                    var endsWithLineBreak = trailing.Count > 0 && trailing[^1].IsKind(SyntaxKind.EndOfLineTrivia);
+                    result = result.WithTrailingTrivia(!keepsComment ? separator : endsWithLineBreak ? trailing : trailing.AddRange(separator));
+                }
+
+                return result;
+            })
+            .WithAdditionalAnnotations(Microsoft.CodeAnalysis.Formatting.Formatter.Annotation);
+    }
+
+    private static bool IsCommentOrDirective(SyntaxTrivia trivia) => !trivia.IsKind(SyntaxKind.WhitespaceTrivia) && !trivia.IsKind(SyntaxKind.EndOfLineTrivia);
 
     // Public (not internal) because Engines.Advanced has no InternalsVisibleTo for the test project. It exists so a
     // test can reach the otherwise unreachable null-root branch of IntroduceParameterObjectAsync.

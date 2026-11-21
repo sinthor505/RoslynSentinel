@@ -1146,4 +1146,37 @@ public class C
         var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _antiPatternEngine.GenerateEqualityOverridesAsync("Missing.cs", "Foo"));
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
+
+    [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
+    public async Task ExtractMembersToPartialWithSource_GenericClass_KeepsTypeParameterAndConstraintComments()
+    {
+        const string source = "internal static class Repo<T /* key */, U> where T : class // refs only\r\n    where U : new() /* ctor */\r\n{\r\n    public static void M1() { }\r\n\r\n    public static T M2(T value) { return value; }\r\n}\r\n";
+        SetSource(source, "Repo.cs");
+        var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).ExtractMembersToPartialWithSourceAsync("Repo.cs", "Repo", ["M2"]);
+        Assert.That(result.Count, Is.EqualTo(2));
+        var partialFile = result.Single(kv => kv.Key.ToString() != "Repo.cs").Value;
+        Assert.That(partialFile, Does.Contain("/* key */"), "the comment inside the type parameter list is kept in the partial part");
+        Assert.That(partialFile, Does.Contain("// refs only"), "the line comment on the first constraint clause is kept in the partial part");
+        Assert.That(partialFile, Does.Contain("/* ctor */"), "the comment on the second constraint clause is kept in the partial part");
+        var parseErrors = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(partialFile).GetDiagnostics().Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error).Select(d => d.ToString()).ToList();
+        Assert.That(parseErrors, Is.Empty, "the partial part parses without errors");
+    }
+
+    [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
+    public async Task ExtractMembersToPartialWithSource_GenericClass_KeepsAttributeOnTypeParameter()
+    {
+        const string source = "internal sealed class FooAttribute : System.Attribute { }\r\n\r\ninternal static class Repo<[Foo] T, U> where T : class\r\n{\r\n    public static void M1() { }\r\n\r\n    public static T M2(T value) { return value; }\r\n}\r\n";
+        SetSource(source, "Repo.cs");
+        var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).ExtractMembersToPartialWithSourceAsync("Repo.cs", "Repo", ["M2"]);
+        Assert.That(result.Count, Is.EqualTo(2));
+        var rewrittenSource = result.Single(kv => kv.Key.ToString() == "Repo.cs").Value;
+        var partialFile = result.Single(kv => kv.Key.ToString() != "Repo.cs").Value;
+        Assert.That(partialFile, Does.Contain("[Foo] T"), "the attribute on the type parameter is kept in the partial part");
+        var parseErrors = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(partialFile).GetDiagnostics().Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error).Select(d => d.ToString()).ToList();
+        Assert.That(parseErrors, Is.Empty, "the partial part parses without errors");
+        var rewrittenErrors = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(rewrittenSource).GetDiagnostics().Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error).Select(d => d.ToString()).ToList();
+        Assert.That(rewrittenErrors, Is.Empty, "the rewritten source parses without errors");
+    }
 }
