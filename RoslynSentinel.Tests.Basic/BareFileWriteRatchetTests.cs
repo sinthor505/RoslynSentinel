@@ -22,6 +22,9 @@ public class BareFileWriteRatchetTests
         // Agent-loop log and transcript files (non-workspace).
         ["RoslynSentinel.Common/AgentLoop/ModelAgentRunner.cs::FormatForAgentLog"] = 1,
         ["RoslynSentinel.Common/AgentLoop/ModelAgentRunner.cs::WriteTranscriptAsync"] = 1,
+        // Model-eval run archive: copies a run directory into the results tree and writes test-result.txt (non-workspace, scratch output).
+        ["RoslynSentinel.Common/AgentLoop/RunDirectoryArchive.cs::CopyDirectoryRecursive"] = 1,
+        ["RoslynSentinel.Common/AgentLoop/RunDirectoryArchive.cs::WriteTestResult"] = 1,
         // Lock holder sidecar under .roslynsentinel/ (server state, not a workspace source file), written while holding the exclusive OS write lock.
         ["RoslynSentinel.Common/CrossProcessWriteLock.cs::WriteHolderSidecar"] = 1,
         // In-process commit route outcome log under <common git dir>/roslynsentinel/ (server state inside .git, not a workspace file; best-effort append).
