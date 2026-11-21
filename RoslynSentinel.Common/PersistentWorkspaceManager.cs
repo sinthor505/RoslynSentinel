@@ -2573,6 +2573,9 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 }
             }
 
+            // Exact text written per file (post EOL pre-pass). No-op writes, deletes and failed writes get no entry; rollback clears it.
+            var postImages = new Dictionary<string, string?>();
+
             foreach (var change in changes)
             {
                 var filePath = change.Key;
@@ -2642,6 +2645,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                         await FileIoHelper.WriteAllTextAsync(filePath, contentToWrite, encoding, cancellationToken);
                         success = true;
                         succeeded.Add(filePath);
+                        postImages[filePath] = contentToWrite;
                         // Update the hash baseline with what we just wrote -> no extra I/O, contentToWrite
                         // is already in memory. See _knownFileHashes's declaration-site comment.
                         _knownFileHashes[filePath] = ComputeContentHash(contentToWrite);
@@ -2722,6 +2726,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     }
                 }
                 succeeded.Clear();
+                postImages.Clear();
             }
 
             // Ledger creation happens here, after the rollback decision, not in the write loop above:
@@ -2817,7 +2822,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 rolledBack.Count > 0 ? rolledBack : null,
                 noOp.Count > 0 ? noOp : null,
                 Findings: resultFindings is { Count: > 0 } ? resultFindings : null,
-                NeedsFullReload: needsFullReload);
+                NeedsFullReload: needsFullReload,
+                PostImages: postImages);
         }
         finally
         {

@@ -8,6 +8,10 @@ namespace RoslynSentinel.Common;
 /// <para><see cref="PreImages"/> maps each file path to its content immediately before
 /// the write (null if the file did not exist). Callers use this to populate
 /// <see cref="OperationItemRecord.BeforeSource"/> in forensic blobs, enabling undo.</para>
+/// <para><see cref="PostImages"/> maps each file the chokepoint actually wrote to disk to the exact text it wrote
+/// (after the EOL pre-pass, so it can differ from the proposed text). No-op writes, deleted files and files rolled back
+/// after a partial failure have no entry. Null on refusals. In-process only: never serialised to tool output, so
+/// callers read it when building operation blobs (<see cref="OperationItemRecord.AfterSource"/>).</para>
 /// <para><see cref="NoOpFiles"/> lists files included in <see cref="SucceededFiles"/> whose
 /// proposed content was skipped rather than re-written -> either byte-for-byte identical to what
 /// was already on disk, or (for .cs files) semantically identical after whitespace
@@ -34,7 +38,8 @@ public record ApplyChangesResult(
     List<string>? NoOpFiles = null,
     string? RefusalCode = null,
     List<Finding>? Findings = null,
-    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)] bool NeedsFullReload = false
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)] bool NeedsFullReload = false,
+    [property: System.Text.Json.Serialization.JsonIgnore] IReadOnlyDictionary<string, string?>? PostImages = null
 ) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]

@@ -115,6 +115,10 @@ be pulled into it.
   - Comparison rule: disk text vs `AfterSource` after the EOL pre-pass normalisation.
   - No-op writes: omitted from the map; deletes: `AfterSource` null.
   - Slice 3 (Asyncify/`AsyncBatchEngine` self-built sites): not in scope; leave `// TODO` at each.
+- **Step 0 answered (2026-11-20 punchlist run):** the scratch operations store held 4211 blobs, 219 MB,
+  average 54.5 KB, max 17.9 MB. `RuntimeStateRetention` caps by age (14 days), count (5000) and protects the
+  last 24 h; there is no byte cap. Owner accepts roughly doubled bytes and **no byte cap**; no further
+  measurement needed.
 - **Why not the hash guard:** it gives undo safety only, no history, which is the owner's goal.
 - **Acceptance:** after an apply, the blob's `AfterSource` equals the disk text; apply, then edit the
   same file (same agent, and a raw disk edit), then `UndoLastApply` is refused; an untouched file
