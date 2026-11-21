@@ -44,6 +44,24 @@ Evidence: 062a90cb (ModelEval), ee26fe96 (ErrorVariants): assembly-level ITestAc
 
 Evidence: 4d79e355 (live run 20261121-052606-268 adopted as the 12-turn capture; probe schemaDrift false, resultDrift 0 after NormalizeResultText masks escaped-quote resultId hints); ResumeScenariosTests, TranscriptResumeTests 82/82 on the main tree
 
+## Loop-latch refusal said "You MUST do the next step now:" - resolved (2026-11-21)
+
+INBOX 2026-11-21 01:10: the latch runs in the server, so its refusal is tool error text for every caller and falls under the facts-and-options rule.
+
+Evidence: `ToolLoopLatch.NextStepDirective` is now "Next step from its last failure: "; LoopLatchTests 27/27.
+
+## TranscriptResumeTests resultId masking test misnamed - resolved (2026-11-21)
+
+INBOX 2026-11-21 01:10: `NormalizeResultText_ResultIdUnquoted_StillMasked` guards the quoted and backslash-quoted forms.
+
+Evidence: renamed to `NormalizeResultText_ResultIdQuotedAndBackslashQuoted_StillMasked` (RenameSymbol).
+
+## Drift probe's LLM reachability requirement undocumented - resolved (2026-11-21)
+
+INBOX 2026-11-21 01:10: `ResumeDriftProbeTests` calls no model but its fixture pings the LLM server and skips when it is unreachable.
+
+Evidence: reference_model_eval_procedure.md "Re-capture a resume transcript" step 4 names `ROSLYNSENTINEL_LLM_BASE_URL` via RunTest `environment`.
+
 ## evalqueue -Model id form undocumented - resolved (2026-11-21)
 
 INBOX 2026-11-21 05:20: the procedure doc did not say which id form `-Model` needs (its `qwen3.5-9b-coder` examples would not match an Unsloth host's `unsloth/Qwen3.5-9B-MTP-GGUF`).

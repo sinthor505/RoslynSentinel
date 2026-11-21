@@ -141,7 +141,7 @@ public class LoopLatchTests
         latch.RecordOutcome("a", "ReplaceSnippet", false, ToolErrorCode.NotFound, message);
 
         Assert.That(latch.TryRefuse("a", "ReplaceSnippet"), Is.EqualTo(
-            "ReplaceSnippet is DISABLED until another tool succeeds: it failed the same way 2 times. You MUST do the next step now: " + NextStepSentence));
+            "ReplaceSnippet is DISABLED until another tool succeeds: it failed the same way 2 times. Next step from its last failure: " + NextStepSentence));
     }
 
     [Test]
@@ -208,7 +208,7 @@ public class LoopLatchTests
         Assert.That(refused.IsError, Is.True);
         Assert.That(ToolTelemetryRecorder.ExtractErrorCode(refused), Is.EqualTo(ToolErrorCode.TargetIneligible));
         var text = ((TextContentBlock)refused.Content![0]).Text;
-        Assert.That(ToolLoopLatch.RefusalMessage("ReplaceSnippet", text), Does.EndWith("You MUST do the next step now: " + NextStepSentence));
+        Assert.That(ToolLoopLatch.RefusalMessage("ReplaceSnippet", text), Does.EndWith("Next step from its last failure: " + NextStepSentence));
         Assert.That(ToolLoopLatch.IsRefusalBody("Search", text), Is.False, "a refusal belongs to one tool");
     }
 

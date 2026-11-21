@@ -568,7 +568,7 @@ public class TranscriptResumeTests
     }
 
     [Test]
-    public void NormalizeResultText_ResultIdUnquoted_StillMasked()
+    public void NormalizeResultText_ResultIdQuotedAndBackslashQuoted_StillMasked()
     {
         // The plain-quoted and backslash-quoted forms keep masking next to the " alternative.
         var text = "resultId: \"7af89068ffd747e8ad3b974a1a09283a\" and resultId: \\\"b2b713451c4344d9b4e3bd2568bfbcf6\\\"";

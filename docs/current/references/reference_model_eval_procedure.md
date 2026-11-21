@@ -351,7 +351,9 @@ A bare pass/fail sends the analyst back into transcripts to learn what happened.
 3. Set `ResumeTranscript` and `ResumeKeepTurns` = K on the scenario definition.
 4. Check drift before spending model time. Run the no-model `ResumeDriftProbeTests` with RunTest filter
    `Name=Probe_ReplaysTheCaptureAndPrintsDrift`, suite full. It writes `drift-probe.txt`. `schemaDrift` must be
-   false and `resultDrift` 0.
+   false and `resultDrift` 0. The probe calls no model, but its fixture's OneTimeSetUp still pings the LLM server
+   and skips the run when it is unreachable: pass a reachable endpoint with RunTest
+   `environment: { ROSLYNSENTINEL_LLM_BASE_URL: "http://<host>:<port>/v1" }` (`Get-EvalHostStatus.ps1 -Json`).
 5. The gate (`ResumeScenarioGate.cs`): a structural schema change to a tool the kept turns call, or a replay
    mismatch (an IsError difference), makes the sample Inconclusive (`SchemaChanged: ...` or `Replay mismatch: ...`).
    A description-only change sets `schemaDrift` but is not Inconclusive. Result-text differences count as `resultDrift`.

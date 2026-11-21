@@ -37,7 +37,7 @@ public sealed class ToolLoopLatch
     /// </summary>
     public const string RefusalMarker = " is DISABLED until another tool succeeds";
 
-    private const string NextStepDirective = "You MUST do the next step now: ";
+    private const string NextStepDirective = "Next step from its last failure: ";
 
     private static readonly Regex DiagnosticId = new(@"\b[A-Z]{2,4}\d{4}\b", RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
