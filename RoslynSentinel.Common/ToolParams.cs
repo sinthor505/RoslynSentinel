@@ -3,7 +3,10 @@ namespace RoslynSentinel.Common;
 public static class ToolParams
 {
     public const string UseScratchDir =
-        "Obsolete: true is the same as level=fullBuildThrowaway on Build; RunTest ignores it.";
+        "Obsolete: on Build the same as level=fullBuildThrowaway (it also turns fullBuild into fullBuildThrowaway); RunTest ignores it (it always runs into the throwaway output folder).";
+
+    public const string RepoPath =
+        "Absolute path of a git worktree of this repo (Build: full levels): builds/tests there with its own bin/obj; worktreeCommit names its HEAD. scopeName still names loaded-solution items.";
 
     public const string BuildLevel =
         "quickBuild: in-memory diagnostics. fullBuildThrowaway (default): `dotnet build` into .roslynsentinel/build/<instance>/, projects' bin/ untouched. fullBuild: builds the projects' own bin/obj; only this level updates bin/ (isServerBinaryStale).";

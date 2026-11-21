@@ -232,13 +232,21 @@ public class BuildEngine
         return Head;
     }
 
+    /// <summary>The paths the competing-build probe matches: the loaded solution's own, or (worktree build) their counterparts under <paramref name="repoRoot"/>; a path with no counterpart is left out.</summary>
+    private static IEnumerable<string> ProbeTargets(IEnumerable<string> loadedPaths, string? repoRoot) =>
+        repoRoot is null
+            ? loadedPaths
+            : loadedPaths.Select(p => RepoWorktrees.MapToWorktree(p, repoRoot)).OfType<string>();
+
     /// <summary>Runs `dotnet build` on the whole solution (scope=solution, default), only the scoped project and its project references (scope=project), or the file's containing project and its references (scope=file). <paramref name="level"/> = fullBuild writes the projects'
     /// own bin/obj (and keeps the competing-build probe); fullBuildThrowaway writes to
     /// .roslynsentinel/build/&lt;instance&gt;/ and skips the probe. <paramref name="useScratchDir"/> is obsolete:
-    /// true is the same as level = fullBuildThrowaway. Both levels hold the server-wide <see cref="BuildGate"/>.</summary>
+    /// true is the same as level = fullBuildThrowaway (and upgrades fullBuild to it). Both levels hold the server-wide <see cref="BuildGate"/>.</summary>
     /// <param name="isCallable">Tool-callability predicate for the active surface; null means every tool is callable (full surface). Selects the listing tool and LoadSolution named in zero-project messages.</param>
+    /// <param name="repoRoot">A validated git worktree root (see <see cref="RepoWorktrees.TryResolve"/>) of the loaded solution's repository, or null for the loaded tree. When set, `dotnet build` runs in that worktree against its own copy of the solution/project (same repository-relative path), so fullBuild writes the worktree's bin/obj and a throwaway build writes the worktree's .roslynsentinel/build/&lt;instance&gt;/; the loaded tree's output is untouched. Project and file scope still name the loaded solution's project/file.</param>
     public async Task<EngineResultWrapper<BuildResult>> RunFullBuildAsync(CancellationToken cancellationToken = default, int maxDetails = 50, bool useScratchDir = false,
-        BuildVerifyLevel level = BuildVerifyLevel.fullBuild, ToolScope scope = ToolScope.solution, string? scopeName = null, Func<string, bool>? isCallable = null)
+        BuildVerifyLevel level = BuildVerifyLevel.fullBuild, ToolScope scope = ToolScope.solution, string? scopeName = null, Func<string, bool>? isCallable = null,
+        string? repoRoot = null)
     {
         var throwaway = useScratchDir || level == BuildVerifyLevel.fullBuildThrowaway;
         var usedLevel = throwaway ? BuildVerifyLevel.fullBuildThrowaway : BuildVerifyLevel.fullBuild;
@@ -259,6 +267,19 @@ public class BuildEngine
                 new EngineError(
                     EngineErrorCode.BuildNotRun,
                     NoProjectsMessage(isCallable)));
+        }
+
+        // A worktree build targets the worktree's copy of the solution; everything below (target, working directory,
+        // artifacts directory, competing-build probe) then derives from that path.
+        if (repoRoot is not null)
+        {
+            if (!RepoWorktrees.TryMapExisting(solutionPath, repoRoot, out var worktreeSolutionPath, out var mapError))
+            {
+                return EngineResultWrapper<BuildResult>.Failure(
+                    EngineOutcome.InvalidInput, new EngineError(EngineErrorCode.BuildNotRun, mapError));
+            }
+
+            solutionPath = worktreeSolutionPath;
         }
 
         string buildTargetPath = solutionPath;
@@ -296,6 +317,17 @@ public class BuildEngine
 
             // Scoped build: the project plus every project it transitively references.
             buildTargetPath = scopedProject.FilePath;
+            if (repoRoot is not null)
+            {
+                if (!RepoWorktrees.TryMapExisting(buildTargetPath, repoRoot, out var worktreeProjectPath, out var mapError))
+                {
+                    return EngineResultWrapper<BuildResult>.Failure(
+                        EngineOutcome.InvalidInput, new EngineError(EngineErrorCode.BuildNotRun, mapError));
+                }
+
+                buildTargetPath = worktreeProjectPath;
+            }
+
             var scopedProjects = new List<Microsoft.CodeAnalysis.Project> { scopedProject };
             foreach (var dependencyId in currentSolution!.GetProjectDependencyGraph().GetProjectsThatThisProjectTransitivelyDependsOn(scopedProject.Id))
             {
@@ -327,10 +359,10 @@ public class BuildEngine
         if (!throwaway)
         {
             // A throwaway build is isolated, so only a build writing to the repo's own obj/ and bin/ can collide.
-            var targetPaths = scopedProjectFilePaths is null ? new List<string> { solutionPath } : new List<string>(scopedProjectFilePaths);
+            var targetPaths = scopedProjectFilePaths is null ? new List<string> { solutionPath } : new List<string>(ProbeTargets(scopedProjectFilePaths, repoRoot));
             if (scopedProjectFilePaths is null)
             {
-                targetPaths.AddRange(currentSolution?.Projects.Select(p => p.FilePath).OfType<string>() ?? []);
+                targetPaths.AddRange(ProbeTargets(currentSolution?.Projects.Select(p => p.FilePath).OfType<string>() ?? [], repoRoot));
             }
             var waitStart = DateTime.UtcNow;
             var competing = await BuildIsolation.WaitForNoCompetingBuildAsync(targetPaths, BuildIsolation.DefaultMaxWait, cancellationToken);

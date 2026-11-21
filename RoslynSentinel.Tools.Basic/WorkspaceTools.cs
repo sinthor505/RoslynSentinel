@@ -223,8 +223,9 @@ public class WorkspaceTools
         [Description(ToolParams.UseScratchDir)] bool useScratchDir = false,
         [Description("true = also return the build's stdout/stderr tail. Default false.")] bool includeOutput = false,
         [Description("true = also return warnings, capped by maxDetails. Default false: count only.")] bool includeWarnings = false,
+        [Description(ToolParams.RepoPath)] string? repoPath = null,
         CancellationToken cancellationToken = default)
-        => _buildTest.Build(reason, level, scope, scopeName, maxDetails, useScratchDir, includeOutput, includeWarnings, cancellationToken);
+        => _buildTest.Build(reason, level, scope, scopeName, maxDetails, useScratchDir, includeOutput, includeWarnings, repoPath, cancellationToken);
 
     [McpServerTool(Name = "RunTest")]
     [Produces(DataTag.Report)]
@@ -242,8 +243,9 @@ public class WorkspaceTools
         [Description(ToolParams.UseScratchDir)] bool useScratchDir = false,
         [Description("true = keep failed tests' Output and the stdout/stderr tails. Default false: compact digest.")] bool includeOutput = false,
         [Description("Extra env vars for the test process (name -> value).")] Dictionary<string, string>? environment = null,
+        [Description(ToolParams.RepoPath)] string? repoPath = null,
         CancellationToken cancellationToken = default)
-        => _buildTest.RunTest(reason, scope, scopeName, filter, suite, resultsType, maxDetails, timeoutSeconds, summary, useScratchDir, includeOutput, environment, cancellationToken);
+        => _buildTest.RunTest(reason, scope, scopeName, filter, suite, resultsType, maxDetails, timeoutSeconds, summary, useScratchDir, includeOutput, environment, repoPath, cancellationToken);
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: none of projectName/docCommentId/symbolName/line/column is
     // individually required -> the tool needs exactly one full resolution strategy: (projectName +
     // docCommentId), or symbolName (optionally with contextSnippet/lineBefore/lineAfter), or

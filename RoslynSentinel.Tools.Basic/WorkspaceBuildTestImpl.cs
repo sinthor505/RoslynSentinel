@@ -363,10 +363,35 @@ public class WorkspaceBuildTestImpl
         }
     }
 
+    /// <summary>
+    /// Validates the optional repoPath of Build/RunTest against the loaded solution's repository. Null with
+    /// <paramref name="worktreeRoot"/> set (or null when repoPath is omitted) means proceed; otherwise the InvalidArgument result to return.
+    /// </summary>
+    private SentinelCallToolResult<object>? RepoPathError(string? repoPath, out string? worktreeRoot)
+    {
+        worktreeRoot = null;
+        if (string.IsNullOrWhiteSpace(repoPath))
+        {
+            return null;
+        }
+
+        if (RepoWorktrees.TryResolve(repoPath, _workspaceManager.GetSolutionRoot(), out var root, out var error))
+        {
+            worktreeRoot = root;
+            return null;
+        }
+
+        // The worktree listing lives in GitRemote, which a lean surface may not serve; name it only when callable.
+        var listing = CallableCheck is null || CallableCheck("GitRemote")
+            ? " Worktrees of this repository: " + ToolCallHint.Call("GitRemote", ("operation", "worktree"), ("action", "list")) + "."
+            : string.Empty;
+        return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, error + listing) };
+    }
+
     public async Task<SentinelCallToolResult<object>> Build(ToolCallReason reason, BuildVerifyLevel level = BuildVerifyLevel.fullBuildThrowaway,
         ToolScope scope = ToolScope.solution, string? scopeName = null, int maxDetails = 20,
         bool useScratchDir = false, bool includeOutput = false, bool includeWarnings = false,
-        CancellationToken cancellationToken = default)
+        string? repoPath = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -378,6 +403,16 @@ public class WorkspaceBuildTestImpl
 
             var isFullBuild = level is BuildVerifyLevel.fullBuild or BuildVerifyLevel.fullBuildThrowaway;
 
+            if (!string.IsNullOrWhiteSpace(repoPath) && !isFullBuild)
+            {
+                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"repoPath applies to full builds only: level={level} compiles the loaded solution in memory and runs no dotnet process. Pass level=fullBuildThrowaway or level=fullBuild with repoPath, or omit repoPath.") };
+            }
+
+            if (RepoPathError(repoPath, out var worktreeRoot) is { } repoPathError)
+            {
+                return repoPathError;
+            }
+
             // file scope (quick and full builds): the engine takes an already-resolved path, so resolve the wire form
             // (solution-root-relative '/' or absolute) here. Project scope is a name; full builds map file scope to its containing project.
             if (scope == ToolScope.file && !string.IsNullOrEmpty(scopeName))
@@ -388,12 +423,17 @@ public class WorkspaceBuildTestImpl
             // useScratchDir is obsolete: true with level=fullBuild means the throwaway level.
             var fullBuildLevel = level == BuildVerifyLevel.fullBuild && useScratchDir ? BuildVerifyLevel.fullBuildThrowaway : level;
             var result = isFullBuild
-                ? await _buildEngine.RunFullBuildAsync(cancellationToken, maxDetails, level: fullBuildLevel, scope: scope, scopeName: scopeName, isCallable: CallableCheck)
+                ? await _buildEngine.RunFullBuildAsync(cancellationToken, maxDetails, level: fullBuildLevel, scope: scope, scopeName: scopeName, isCallable: CallableCheck, repoRoot: worktreeRoot)
                 : await _buildEngine.RunQuickBuildAsync(scope, scopeName, maxDetails, cancellationToken, isCallable: CallableCheck);
 
             if (!result.TryGetData(out var buildResult))
             {
                 return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.BuildFailed, result.Error?.Message ?? "Build failed unexpectedly."), Findings = result.Findings };
+            }
+
+            if (worktreeRoot is not null)
+            {
+                buildResult = buildResult with { WorktreeCommit = RepoWorktrees.ReadHeadCommit(worktreeRoot) };
             }
 
             var transitiveDependencies = await GetTransitiveDependenciesAsync(cancellationToken);
@@ -431,7 +471,7 @@ public class WorkspaceBuildTestImpl
     public async Task<SentinelCallToolResult<object>> RunTest(ToolCallReason reason, ToolScope scope = ToolScope.solution,
         string? scopeName = null, string? filter = null, TestSuite suite = TestSuite.fast, TestResultsFilter resultsType = TestResultsFilter.failed,
         int maxDetails = 50, int timeoutSeconds = 600, bool summary = false, bool useScratchDir = false, bool includeOutput = false,
-        Dictionary<string, string>? environment = null,
+        Dictionary<string, string>? environment = null, string? repoPath = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -442,7 +482,12 @@ public class WorkspaceBuildTestImpl
                 return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.RateLimited, rateLimitError) };
             }
 
-            var result = await _testRunEngine.RunAsync(scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, summary, environment: environment, suite: suite, cancellationToken: cancellationToken);
+            if (RepoPathError(repoPath, out var worktreeRoot) is { } repoPathError)
+            {
+                return repoPathError;
+            }
+
+            var result = await _testRunEngine.RunAsync(scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, summary, environment: environment, suite: suite, repoRoot: worktreeRoot, cancellationToken: cancellationToken);
 
             if (!result.TryGetData(out var testRunResult))
             {
@@ -452,14 +497,15 @@ public class WorkspaceBuildTestImpl
             // Marker bookkeeping (completed runs only): a full solution run resets it, a fast run increments it. Never throws.
             var solutionRoot = _workspaceManager.GetSolutionRoot();
             var now = DateTime.UtcNow;
-            if (testRunResult.RunCompleted)
+            // A worktree run says nothing about the loaded tree, so it neither records into nor reads the full-suite marker.
+            if (testRunResult.RunCompleted && worktreeRoot is null)
             {
                 FullTestMarkerStore.RecordRun(solutionRoot, suite, scope, testRunResult, now, filter);
             }
 
             // Only a completed fast run carries the staleness object; a full run never does.
-            var stale = suite == TestSuite.fast && testRunResult.RunCompleted ? FullTestMarkerStore.EvaluateForRoot(solutionRoot, now) : null;
-            testRunResult = testRunResult with { Suite = suite, FullSuiteStale = stale };
+            var stale = suite == TestSuite.fast && testRunResult.RunCompleted && worktreeRoot is null ? FullTestMarkerStore.EvaluateForRoot(solutionRoot, now) : null;
+            testRunResult = testRunResult with { Suite = suite, FullSuiteStale = stale, WorktreeCommit = worktreeRoot is null ? null : RepoWorktrees.ReadHeadCommit(worktreeRoot) };
 
             var projected = TestRunResultProjector.Project(testRunResult, resultsType, includeOutput: includeOutput);
             if (summary)

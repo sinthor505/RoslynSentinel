@@ -35,9 +35,10 @@ public class ClaudeLeanSchemaBudgetTests
     // Raised 44100 -> 45000 on 2026-11-15: measured 44838 after the D2 Member replace-with-additions text, Git nameOnly on log and McpServerControl toolsets/includeTools descriptions (plan_tool_experience_journal_fixes Steps 6, 10, 14).
     // Raised 45000 -> 45200 on 2026-11-15: measured 45135 after plan_tool_experience_journal_fixes wire-text steps (RunTest timeoutSeconds description, CreateFile typeKind/typeName wording, Git maxBytes paging note, ReplaceSnippet batch cap sentence); each is a deliberate fact an agent needed.
     // Raised 45200 -> 45500 on 2026-11-15 (owner approved): McpServerControl +180 for StopServer keepToolsets/toolsets (plan_tab_scoped_toolset_persistence Step 5); measured 45315.
-    private const int AdvancedTotalBudget = 45500;
+    // Raised 45500 -> 46500 on 2026-11-20 (TODO punchlist #15): Build and RunTest gained the optional repoPath parameter (~200 chars each) and a longer useScratchDir text; estimated ~45900, not measured (re-measure from .roslynsentinel/schema-sizes after a test run and tighten to measured + 300 rounded up to 500).
+    private const int AdvancedTotalBudget = 46500;
     // Basic raised 40000 -> 45000 on 2026-11-10 (core split slice 1): ChangeSignature (~1.9k) and MoveMember (3356) moved from Tools.Advanced to Tools.Basic (CoreRefactoringTools), so the Basic flavor now serves them and measures 44948 chars, the same as Advanced.
-    private const int BasicTotalBudget = 45500; // raised with AdvancedTotalBudget on 2026-11-15 (three times)
+    private const int BasicTotalBudget = 46500; // raised with AdvancedTotalBudget on 2026-11-15 (three times) and 2026-11-20
     private const int AdvancedMaxToolBudget = 5000;
     private const int BasicMaxToolBudget = 5000;
     // Search per-tool budget.

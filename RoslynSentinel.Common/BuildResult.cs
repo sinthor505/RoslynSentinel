@@ -21,7 +21,9 @@ public record BuildResult(
     int? ExitCode = null,
     string? Detail = null,
     BuildFailureBreakdown? Breakdown = null,
-    int SuppressedDownstreamErrorCount = 0) : IOperationResult
+    int SuppressedDownstreamErrorCount = 0,
+    // Full sha of the worktree's HEAD; set by the Build tool only when repoPath was supplied.
+    string? WorktreeCommit = null) : IOperationResult
 {
     /// <summary>True unless the build succeeded; a NotRun build gives no verification, so it is an error.</summary>
     [System.Text.Json.Serialization.JsonIgnore]

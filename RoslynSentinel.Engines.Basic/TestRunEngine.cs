@@ -59,7 +59,9 @@ public record TestRunResult(
     // The suite the run used (fast skips the OutOfProcess fixtures); set by the RunTest tool, null for an engine-level run.
     TestSuite? Suite = null,
     // Set by the RunTest tool on a completed fast run when the full suite is stale; never on a full run.
-    FullSuiteStale? FullSuiteStale = null
+    FullSuiteStale? FullSuiteStale = null,
+    // Full sha of the worktree's HEAD; set by the RunTest tool only when repoPath was supplied.
+    string? WorktreeCommit = null
 ) : IOperationResult
 {
     // The RunTest tool itself sets the MCP isError only when !RunCompleted (WorkspaceBuildTestImpl.cs ~311).
@@ -98,6 +100,7 @@ public class TestRunEngine
     /// artifacts directory (always; the projects' own bin/obj are not written) while holding the server-wide
     /// <see cref="BuildGate"/> for the whole run. <paramref name="useScratchDir"/> is obsolete and ignored; it stays
     /// so existing callers compile. (No [Obsolete] attribute: it would raise CS0618 at every caller for a no-op.)</summary>
+    /// <param name="repoRoot">A validated git worktree root (see <see cref="RepoWorktrees.TryResolve"/>) of the loaded solution's repository, or null for the loaded tree. When set, each test project runs from the worktree's copy of its project file (same repository-relative path) and the artifacts directory is the worktree's own .roslynsentinel/build/&lt;instance&gt;/, so the loaded tree's bin/obj and output are untouched. scopeName still names a loaded-solution project.</param>
     public async Task<EngineResultWrapper<TestRunResult>> RunAsync(
         ToolScope scope,
         string? scopeName,
@@ -109,6 +112,7 @@ public class TestRunEngine
         bool useScratchDir = false,
         IReadOnlyDictionary<string, string>? environment = null,
         TestSuite suite = TestSuite.fast,
+        string? repoRoot = null,
         CancellationToken cancellationToken = default)
     {
         var start = DateTime.UtcNow;
@@ -191,6 +195,27 @@ public class TestRunEngine
         // its own process and TRX file, then aggregating here, is what makes counts trustworthy for
         // scope=solution.
         var solutionPath = _workspaceManager.SolutionPath;
+        if (repoRoot is not null)
+        {
+            // Worktree run: the loaded tree's project files become the worktree's copies, and the artifacts directory follows the
+            // worktree's solution directory (when the loaded solution has no counterpart there, the first test project's directory).
+            var worktreeTargets = new List<(string Name, string Path)>();
+            foreach (var (name, path) in targets)
+            {
+                if (!RepoWorktrees.TryMapExisting(path, repoRoot, out var worktreeProjectPath, out var mapError))
+                {
+                    return new EngineResultWrapper<TestRunResult>(EngineOutcome.InvalidInput,
+                        error: new EngineError($"Test project '{name}': {mapError}"));
+                }
+
+                worktreeTargets.Add((name, worktreeProjectPath));
+            }
+
+            targets = worktreeTargets;
+            var worktreeSolutionPath = string.IsNullOrEmpty(solutionPath) ? null : RepoWorktrees.MapToWorktree(solutionPath, repoRoot);
+            solutionPath = worktreeSolutionPath is not null && File.Exists(worktreeSolutionPath) ? worktreeSolutionPath : null;
+        }
+
         var artifactsSolutionDirectory = Path.GetDirectoryName(string.IsNullOrEmpty(solutionPath) ? targets[0].Path : solutionPath)!;
 
         // The gate is taken once for the whole run (not per project); RunOneProjectAsync never acquires it,
