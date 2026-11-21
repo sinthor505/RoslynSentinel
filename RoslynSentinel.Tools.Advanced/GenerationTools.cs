@@ -1,6 +1,7 @@
 using System.ComponentModel;
 
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using ModelContextProtocol;
 
@@ -30,7 +31,7 @@ public class GenerationTools
         _codeGenerationEngine = new CodeGenerationEngine(workspaceManager);
         _apiGenerationEngine = new ApiGenerationEngine(workspaceManager);
         _mappingEngine = new MappingEngine(workspaceManager);
-        _symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager);
+        _symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance, isCallable: null); // null predicate: every tool callable (no ActiveToolSurface on this convenience path)
         _validationEngine = new ValidationEngine(workspaceManager);
         _workspaceManager = workspaceManager;
         _logger = logger;

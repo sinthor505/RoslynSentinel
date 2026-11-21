@@ -32,7 +32,7 @@ public class AdvancedRefactoringTools
     public AdvancedRefactoringTools(IWorkspaceManager workspaceManager)
     {
         _validationEngine = new ValidationEngine(workspaceManager);
-        _symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager);
+        _symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance, isCallable: null); // null predicate: every tool callable (no ActiveToolSurface on this convenience path)
         _refactoringEngine = new BasicRefactoringEngine(workspaceManager);
         _advancedRefactoringEngine = new AdvancedRefactoringEngine(workspaceManager);
         _memberRefactoringEngine = new MemberRefactoringEngine(workspaceManager, _symbolNavigationEngine, _validationEngine);
