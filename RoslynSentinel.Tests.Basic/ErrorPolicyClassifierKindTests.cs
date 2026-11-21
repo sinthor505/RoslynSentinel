@@ -52,6 +52,7 @@ public class ErrorPolicyClassifierKindTests
     [TestCase("MethodNotFound", "document", ErrorPolicyTargetKind.Symbol)]
     [TestCase("Ambiguous", "document", null)]
     [TestCase("SolutionNotLoaded", "document", null)]
+    [TestCase("PreconditionNotMet", null, null)]
     [TestCase(null, "document", null)]
     [TestCase("", "document", null)]
     public void MapKind_ReturnsExpectedTargetKind(string? errorCode, string? missingTargetKind, ErrorPolicyTargetKind? expected)

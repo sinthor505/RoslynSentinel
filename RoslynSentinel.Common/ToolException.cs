@@ -172,6 +172,22 @@ public sealed class ToolTargetIneligibleException : ToolException
 }
 
 /// <summary>
+/// The arguments are well-formed and any named target exists, but the operation needs server state that is not
+/// present (for example no solution file path is known for the loaded workspace) -> nothing was read or changed.
+/// Distinct from <see cref="ToolNotFoundException"/> (a named target is missing) and
+/// <see cref="ToolTargetIneligibleException"/> (this target is the wrong kind). Carries no missing-target kind, so
+/// <see cref="ErrorPolicyClassifier.MapKind"/> returns null for it. Maps to <see cref="ToolErrorCode.PreconditionNotMet"/>.
+/// </summary>
+public sealed class ToolPreconditionException : ToolException
+{
+    public override string ErrorCode => ToolErrorCode.PreconditionNotMet;
+
+    public ToolPreconditionException(string message) : base(message)
+    {
+    }
+}
+
+/// <summary>
 /// A unified diff's hunk could not be applied -> its declared position and content didn't match
 /// the file even after <see cref="DiffEngine"/>'s re-anchoring search. The remediation (regenerate
 /// the diff against current content) is specific enough to warrant its own code rather than

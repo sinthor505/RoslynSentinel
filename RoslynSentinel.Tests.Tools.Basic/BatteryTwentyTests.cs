@@ -1190,7 +1190,7 @@ public class Order
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.CreateProjectTool(reason: "test message", "NewTestProject");
 
-        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound)); Assert.That(result.ErrorData!.Message, Is.EqualTo("CreateProject failed: Solution path not found."));
+        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.PreconditionNotMet)); Assert.That(result.ErrorData!.Message, Does.StartWith("CreateProject failed: Solution path not found: no solution file path is known"));
         Assert.That(result.ErrorData, Is.Not.Null);
     }
 
@@ -1366,7 +1366,7 @@ public class Order
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.SplitProjectByFolderTool(reason: "test message", "TestProj", "NonExistentFolder", "NewProject");
 
-        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound)); Assert.That(result.ErrorData!.Message, Is.EqualTo("SplitProjectByFolder failed: Solution path not found."));
+        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.PreconditionNotMet)); Assert.That(result.ErrorData!.Message, Does.StartWith("SplitProjectByFolder failed: Solution path not found: no solution file path is known"));
         Assert.That(result.ErrorData, Is.Not.Null);
     }
 }

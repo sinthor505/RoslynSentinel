@@ -1806,9 +1806,10 @@ public class SolutionStructureEngine
     public async Task<ProjectEditResult> CreateProjectAsync(string projectName, string projectType = "console", CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        // TODO the two "Solution path not found." throws below are server-state preconditions, not name lookups: no solution file path is known; reclassify (and give them facts and options) so the error code is not NotFound
-        var slnPath = _workspaceManager.SolutionPath ?? solution.FilePath ?? throw new ToolNotFoundException("Solution path not found.", MissingTargetKinds.File);
-        var slnDir = Path.GetDirectoryName(slnPath) ?? throw new ToolNotFoundException("Solution path not found.", MissingTargetKinds.File);
+        var slnPath = _workspaceManager.SolutionPath ?? solution.FilePath
+            ?? throw new ToolPreconditionException("Solution path not found: no solution file path is known for the loaded workspace (SolutionPath and the solution's FilePath are both null), so a project cannot be placed next to the solution file. Load a solution from disk with LoadSolution(solutionPath: ...) and call again.");
+        var slnDir = Path.GetDirectoryName(slnPath)
+            ?? throw new ToolPreconditionException($"Solution path not found: '{slnPath}' has no parent directory, so a project cannot be placed next to the solution file. Load a solution from disk with LoadSolution(solutionPath: ...) and call again.");
         var projectDir = Path.Combine(slnDir, projectName);
         Directory.CreateDirectory(projectDir);
 

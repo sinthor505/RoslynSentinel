@@ -22,6 +22,7 @@ public class ResultStatusTests
     [TestCase(ToolErrorCode.Ambiguous, ResultStatus.Ambiguous)]
     [TestCase(ToolErrorCode.InvalidArgument, ResultStatus.InvalidInput)]
     [TestCase(ToolErrorCode.TargetIneligible, ResultStatus.NotApplicable)]
+    [TestCase(ToolErrorCode.PreconditionNotMet, ResultStatus.NotApplicable)]
     [TestCase(ToolErrorCode.FeatureDisabled, ResultStatus.FeatureDisabled)]
     [TestCase(ToolErrorCode.Cancelled, ResultStatus.Cancelled)]
     [TestCase(ToolErrorCode.TimedOut, ResultStatus.TimedOut)]
@@ -145,6 +146,16 @@ public class ResultStatusTests
 
         Assert.That(error.ErrorCode, Is.EqualTo(ToolErrorCode.TimedOut));
         Assert.That(ResultStatusExtensions.FromErrorCode(error.ErrorCode), Is.EqualTo(ResultStatus.TimedOut));
+    }
+
+    [Test]
+    public void ToResultError_ToolPrecondition_MapsToPreconditionNotMetWithoutMissingTargetKind()
+    {
+        ResultError error = ToolErrorMapper.ToResultError(new ToolPreconditionException("no solution path"), null!, "Op");
+
+        Assert.That(error.ErrorCode, Is.EqualTo(ToolErrorCode.PreconditionNotMet));
+        Assert.That(ResultStatusExtensions.FromErrorCode(error.ErrorCode), Is.EqualTo(ResultStatus.NotApplicable));
+        Assert.That(ErrorPolicyClassifier.MapKind(error.ErrorCode, null), Is.Null);
     }
 
     [Test]

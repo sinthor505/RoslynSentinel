@@ -138,6 +138,14 @@ public static class ToolErrorCode
     public const string TargetIneligible = "TargetIneligible";
 
     /// <summary>
+    /// The arguments are well-formed and the target (if any) exists, but the operation needs server state that is not
+    /// present (for example no solution file path is known for the loaded workspace). Nothing was read or changed.
+    /// Distinct from <see cref="NotFound"/> (a named target is missing), <see cref="TargetIneligible"/> (this target
+    /// is the wrong kind) and <see cref="SolutionNotLoaded"/> (no workspace at all).
+    /// </summary>
+    public const string PreconditionNotMet = "PreconditionNotMet";
+
+    /// <summary>
     /// The write-path guardrail refused a change to an existing C# file because it would alter that
     /// file's line-ending style (CRLF to LF, or a single style to mixed). Nothing was written. This is
     /// the fingerprint of a whole-file re-serialize/normalize rather than a minimal edit; the message
