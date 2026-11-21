@@ -3,9 +3,6 @@ using RoslynSentinel.Common.AgentLoop;
 
 namespace RoslynSentinel.Tests.ErrorVariants;
 
-// Deliberate copy of Tests.ModelEval's archiver; the host suffix comes from RoslynSentinel.Common.AgentLoop.EvalHostTable (owns the rule, reads scripts/eval-hosts.json).
-
-// TODO fold the duplicate ModelTestingResultsArchiver (ModelEval and ErrorVariants) into a shared helper
 /// <summary>
 /// Copies a finished run's directory (transcripts, variants.csv) into
 /// <c>&lt;scratch&gt;\ModelTestingResults\&lt;host-suffix&gt;\&lt;relative-path-under-model-eval&gt;\</c> tree, so
@@ -27,73 +24,16 @@ internal static class ModelTestingResultsArchiver
                 return;
             }
 
-            WriteTestResult(runDirectory);
+            // Deviation: the outcome is always written as Unfinished (null) because this runs from the test body's
+            // finally block, before the test's result is final. The file still names the test that wrote the folder.
+            var result = TestContext.CurrentContext.Result;
+            RunDirectoryArchive.WriteTestResult(runDirectory, null, TestContext.CurrentContext.Test.FullName, result.Message, result.StackTrace);
 
-            // ScratchRoot.ResultsRoot: ROSLYNSENTINEL_RESULTS_ROOT, else <scratch>\ModelTestingResults.
-            var resultsBase = ScratchRoot.ResultsRoot();
-            var suffix = EvalHostTable.DeriveSuffix(RoslynSentinel.Common.LlmOptions.BaseUrl);
-
-            // runDirectory always looks like <work-dir>\model-eval\<...>\<timestamp>; keep everything after "model-eval\".
-            var marker = Path.Combine("model-eval") + Path.DirectorySeparatorChar;
-            var markerIndex = runDirectory.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
-            var relative = markerIndex >= 0
-                ? runDirectory[(markerIndex + marker.Length)..]
-                : Path.GetFileName(runDirectory);
-
-            var destination = Path.Combine(resultsBase, suffix, relative);
-            if (Directory.Exists(destination))
-            {
-                return;
-            }
-
-            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            CopyDirectoryRecursive(runDirectory, destination);
+            RunDirectoryArchive.CopyToResults(runDirectory, ScratchRoot.ResultsRoot(), EvalHostTable.DeriveSuffix(RoslynSentinel.Common.LlmOptions.BaseUrl));
         }
         catch (Exception ex)
         {
             TestContext.Out.WriteLine($"ModelTestingResultsArchiver: failed to archive '{runDirectory}': {ex.Message}");
-        }
-    }
-
-    // Deviation: the original runs from TearDown, where the test's Result is final. Here it is called from the test body's
-    // finally block, so the outcome written is the one so far (usually Inconclusive); the file still names the test that wrote the folder.
-    private static void WriteTestResult(string runDirectory)
-    {
-        var result = TestContext.CurrentContext.Result;
-        var lines = new List<string>
-        {
-            $"Outcome: {result.Outcome}",
-            $"Test: {TestContext.CurrentContext.Test.FullName}",
-        };
-
-        if (!string.IsNullOrEmpty(result.Message))
-        {
-            lines.Add("");
-            lines.Add("Message:");
-            lines.Add(result.Message);
-        }
-
-        if (!string.IsNullOrEmpty(result.StackTrace))
-        {
-            lines.Add("");
-            lines.Add("StackTrace:");
-            lines.Add(result.StackTrace);
-        }
-
-        File.WriteAllLines(Path.Combine(runDirectory, "test-result.txt"), lines);
-    }
-
-    private static void CopyDirectoryRecursive(string sourceDir, string destinationDir)
-    {
-        Directory.CreateDirectory(destinationDir);
-        foreach (var file in Directory.EnumerateFiles(sourceDir))
-        {
-            File.Copy(file, Path.Combine(destinationDir, Path.GetFileName(file)), overwrite: true);
-        }
-
-        foreach (var subDir in Directory.EnumerateDirectories(sourceDir))
-        {
-            CopyDirectoryRecursive(subDir, Path.Combine(destinationDir, Path.GetFileName(subDir)));
         }
     }
 }

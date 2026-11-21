@@ -2,7 +2,6 @@ using RoslynSentinel.Common.AgentLoop;
 
 namespace RoslynSentinel.Tests.ModelEval;
 
-// TODO fold the duplicate ModelTestingResultsArchiver (ModelEval and ErrorVariants) into a shared helper
 /// <summary>
 /// Copies a finished run's directory (transcripts, agent.log) into
 /// <c>&lt;scratch&gt;\ModelTestingResults\&lt;host-suffix&gt;\&lt;relative-path-under-model-eval&gt;\</c> tree, so
@@ -30,80 +29,23 @@ internal static class ModelTestingResultsArchiver
                 return;
             }
 
-            WriteTestResult(runDirectory);
+            // TestContext.CurrentContext.Result is already populated by the time TearDown runs (NUnit
+            // fills in Outcome/Message/StackTrace before TearDown, even on failure) but nothing was ever
+            // capturing it -> the archived run directory had the agent's own transcript/log but not the
+            // test framework's verdict on it, so a failing run couldn't be told apart from a passing one,
+            // and the actual failed-assertion text/stack trace was only ever visible in the live test
+            // runner's own output, never preserved alongside the transcript that explains it.
+            var result = TestContext.CurrentContext.Result;
+            var outcome = result.Outcome.Status == NUnit.Framework.Interfaces.TestStatus.Inconclusive
+                ? null
+                : result.Outcome.ToString();
+            RunDirectoryArchive.WriteTestResult(runDirectory, outcome, TestContext.CurrentContext.Test.FullName, result.Message, result.StackTrace);
 
-            // ScratchRoot.ResultsRoot: ROSLYNSENTINEL_RESULTS_ROOT, else <scratch>\ModelTestingResults.
-            var resultsBase = ScratchRoot.ResultsRoot();
-            var suffix = EvalHostTable.DeriveSuffix(RoslynSentinel.Common.LlmOptions.BaseUrl);
-
-            // _runDirectory always looks like <work-dir>\model-eval\<...>\<timestamp>; keep
-            // everything from "model-eval"'s next segment onward so SizeThreshold's extra
-            // "n<size>" nesting level is preserved exactly like the .ps1 script's own
-            // Copy-NewRunDirectories does, without hardcoding either shape here.
-            var marker = Path.Combine("model-eval") + Path.DirectorySeparatorChar;
-            var markerIndex = runDirectory.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
-            var relative = markerIndex >= 0
-                ? runDirectory[(markerIndex + marker.Length)..]
-                : Path.GetFileName(runDirectory);
-
-            var destination = Path.Combine(resultsBase, suffix, relative);
-            if (Directory.Exists(destination))
-            {
-                return;
-            }
-
-            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            CopyDirectoryRecursive(runDirectory, destination);
+            RunDirectoryArchive.CopyToResults(runDirectory, ScratchRoot.ResultsRoot(), EvalHostTable.DeriveSuffix(RoslynSentinel.Common.LlmOptions.BaseUrl));
         }
         catch (Exception ex)
         {
             TestContext.Out.WriteLine($"ModelTestingResultsArchiver: failed to archive '{runDirectory}': {ex.Message}");
-        }
-    }
-
-    // TestContext.CurrentContext.Result is already populated by the time TearDown runs (NUnit
-    // fills in Outcome/Message/StackTrace before TearDown, even on failure) but nothing was ever
-    // capturing it -> the archived run directory had the agent's own transcript/log but not the
-    // test framework's verdict on it, so a failing run couldn't be told apart from a passing one,
-    // and the actual failed-assertion text/stack trace was only ever visible in the live test
-    // runner's own output, never preserved alongside the transcript that explains it.
-    private static void WriteTestResult(string runDirectory)
-    {
-        var result = TestContext.CurrentContext.Result;
-        var lines = new List<string>
-        {
-            $"Outcome: {result.Outcome}",
-            $"Test: {TestContext.CurrentContext.Test.FullName}",
-        };
-
-        if (!string.IsNullOrEmpty(result.Message))
-        {
-            lines.Add("");
-            lines.Add("Message:");
-            lines.Add(result.Message);
-        }
-
-        if (!string.IsNullOrEmpty(result.StackTrace))
-        {
-            lines.Add("");
-            lines.Add("StackTrace:");
-            lines.Add(result.StackTrace);
-        }
-
-        File.WriteAllLines(Path.Combine(runDirectory, "test-result.txt"), lines);
-    }
-
-    private static void CopyDirectoryRecursive(string sourceDir, string destinationDir)
-    {
-        Directory.CreateDirectory(destinationDir);
-        foreach (var file in Directory.EnumerateFiles(sourceDir))
-        {
-            File.Copy(file, Path.Combine(destinationDir, Path.GetFileName(file)), overwrite: true);
-        }
-
-        foreach (var subDir in Directory.EnumerateDirectories(sourceDir))
-        {
-            CopyDirectoryRecursive(subDir, Path.Combine(destinationDir, Path.GetFileName(subDir)));
         }
     }
 }

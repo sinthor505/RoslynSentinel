@@ -99,4 +99,38 @@ public class ModelTestingResultsArchiverTests
             }
         }
     }
+
+    [Test]
+    [NonParallelizable]
+    public void ArchiveRunDirectory_FromTheTestBody_WritesAnUnfinishedOutcome()
+    {
+        var tmp = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var originalScratch = Environment.GetEnvironmentVariable(RoslynSentinel.Common.ScratchRoot.EnvironmentVariable);
+        var originalResults = Environment.GetEnvironmentVariable(RoslynSentinel.Common.ScratchRoot.ResultsRootEnvironmentVariable);
+        try
+        {
+            Environment.SetEnvironmentVariable(RoslynSentinel.Common.ScratchRoot.EnvironmentVariable, Path.Combine(tmp, "scratch"));
+            Environment.SetEnvironmentVariable(RoslynSentinel.Common.ScratchRoot.ResultsRootEnvironmentVariable, Path.Combine(tmp, "results"));
+
+            var runDirectory = Path.Combine(tmp, "work", "model-eval", "SomeTest", "20260101-000000-000");
+            Directory.CreateDirectory(runDirectory);
+            File.WriteAllText(Path.Combine(runDirectory, "agent.log"), "log");
+
+            ModelTestingResultsArchiver.ArchiveRunDirectory(runDirectory);
+
+            var suffix = RoslynSentinel.Common.AgentLoop.EvalHostTable.DeriveSuffix(RoslynSentinel.Common.LlmOptions.BaseUrl);
+            var archivedResult = Path.Combine(tmp, "results", suffix, "SomeTest", "20260101-000000-000", "test-result.txt");
+            Assert.That(File.Exists(archivedResult), Is.True, $"expected archived test-result.txt at '{archivedResult}'");
+            Assert.That(File.ReadAllLines(archivedResult)[0], Is.EqualTo("Outcome: Unfinished (overwritten when the test ends)"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(RoslynSentinel.Common.ScratchRoot.EnvironmentVariable, originalScratch);
+            Environment.SetEnvironmentVariable(RoslynSentinel.Common.ScratchRoot.ResultsRootEnvironmentVariable, originalResults);
+            if (Directory.Exists(tmp))
+            {
+                Directory.Delete(tmp, recursive: true);
+            }
+        }
+    }
 }
