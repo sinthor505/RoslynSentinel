@@ -435,7 +435,7 @@ public class TestInstanceLauncherTests
         var outputDirectory = FindBuiltServerOutput(repoRoot);
         if (outputDirectory is null)
         {
-            Assert.Ignore("No built RoslynSentinel.Server.Advanced output found under .roslynsentinel/build or .scratch; run Build first.");
+            Assert.Ignore("No built RoslynSentinel.Server.Advanced output found under .roslynsentinel/build; run Build first.");
             return;
         }
 
@@ -571,7 +571,6 @@ public class TestInstanceLauncherTests
         var roots = new[]
         {
             Path.Combine(repoRoot, ".roslynsentinel", "build"),
-            Path.Combine(repoRoot, ".scratch", "roslynsentinel-builds"),
         };
         return roots.Where(Directory.Exists)
             .SelectMany(Directory.GetDirectories)
