@@ -19,7 +19,14 @@ function Assert-That([bool]$Condition, [string]$Name) {
 
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("rs-evalqueue-tests-" + [guid]::NewGuid().ToString('N'))
 $env:ROSLYNSENTINEL_EVALQUEUE_CHECKOUTS_ROOT = Join-Path $tempRoot 'checkouts'
+# Scratch root under the temp folder, so no run output lands beside the real repo or follows the machine's own setting.
+. (Join-Path $PSScriptRoot 'roslynsentinel-scratch.ps1')
+$savedScratchRoot = $env:ROSLYNSENTINEL_SCRATCH_ROOT
+$savedResultsRoot = $env:ROSLYNSENTINEL_RESULTS_ROOT
+$env:ROSLYNSENTINEL_SCRATCH_ROOT = Join-Path $tempRoot 'scratch'
+Remove-Item Env:\ROSLYNSENTINEL_RESULTS_ROOT -ErrorAction SilentlyContinue
 $repo = Join-Path $tempRoot 'repo'
+$scratch = Get-RoslynSentinelScratchRoot -RepoRoot $repo
 $stub = Join-Path $repo 'scripts\stub-eval.ps1'
 New-Item -ItemType Directory -Path (Join-Path $repo 'scripts') -Force | Out-Null
 
@@ -44,7 +51,7 @@ $name = $Test[0]
 Write-Host "stub run $name"
 if ($name -eq 'NoResult') { exit 1 }
 if ($name -eq 'Slow') { Start-Sleep -Seconds 120 } else { Start-Sleep -Milliseconds 300 }
-$resultsBase = if ($env:ROSLYNSENTINEL_RESULTS_ROOT) { $env:ROSLYNSENTINEL_RESULTS_ROOT } else { Join-Path $root 'ModelTestingResults' }
+$resultsBase = if ($env:ROSLYNSENTINEL_RESULTS_ROOT) { $env:ROSLYNSENTINEL_RESULTS_ROOT } else { Join-Path $env:ROSLYNSENTINEL_SCRATCH_ROOT 'ModelTestingResults' }
 $dir = Join-Path $resultsBase "$HostAddress\$name\$([datetime]::UtcNow.ToString('yyyyMMdd-HHmmss-fff'))"
 New-Item -ItemType Directory -Force -Path $dir | Out-Null
 $marker = ([IO.File]::ReadAllText((Join-Path $root 'Lib.cs'))).Replace("`r`n", "`n").Trim()
@@ -245,6 +252,7 @@ try {
     Assert-That (Test-Path -LiteralPath (Join-Path $co1 '.git') -PathType Container) 'Checkout: checkout has a real .git directory'
     Assert-That ((& git -C $co1 rev-parse HEAD).Trim() -eq $sha1) 'Checkout: HEAD is detached at the requested commit'
     Assert-That (Test-Path -LiteralPath (Join-Path $co1 'scripts\stub-eval.ps1')) 'Checkout: the stub is in the checkout (committed in the first commit)'
+    Assert-That (((Get-LfText (Join-Path $co1 '.git\info\exclude')) -split "`n") -contains '_scratchbuild_*/') 'Checkout: .git\info\exclude of a created checkout lists _scratchbuild_*/'
     Assert-That ((Get-LfText (Join-Path $co1 'Lib.cs')) -eq 'class Lib { }') 'Checkout: first commit checkout has the first Lib.cs'
     $co2 = Get-EvalCheckout -RepoRoot $repo -Sha $sha2 -CheckoutRoot $checkoutRoot
     Assert-That ((Get-LfText (Join-Path $co2 'Lib.cs')) -eq 'class Lib { int two; }') 'Checkout: second commit gets its own checkout with the second Lib.cs'
@@ -344,7 +352,7 @@ try {
     $runAText = if ($runA) { Get-Content -LiteralPath (Join-Path $runA 'results.txt') -Raw } else { '' }
     Assert-That ($pinnedADone.state -eq 'Finished') 'Pinned: a job whose source changed after submit is Finished, not TreeChanged'
     Assert-That ((Get-StubMarker $runAText) -eq 'class Lib { int two; }') 'Pinned: the run shows the marker of the pinned commit, not the later one'
-    Assert-That ([bool]($runA -and $runA.StartsWith((Join-Path $repo 'ModelTestingResults'), [StringComparison]::OrdinalIgnoreCase) -and -not (Test-Path -LiteralPath (Join-Path $pinnedADone.repoRoot 'ModelTestingResults')))) 'Results: a pinned run lands under <source repo>\ModelTestingResults, not in the checkout'
+    Assert-That ([bool]($runA -and $runA.StartsWith((Join-Path $scratch 'ModelTestingResults'), [StringComparison]::OrdinalIgnoreCase) -and -not (Test-Path -LiteralPath (Join-Path $pinnedADone.repoRoot 'ModelTestingResults')))) 'Results: a pinned run lands under <scratch>\ModelTestingResults, not in the checkout'
 
     # (b) a dirty submit without -Commit is refused; -Commit HEAD tests the committed tree.
     New-Queue
@@ -466,6 +474,8 @@ try {
 finally {
     Start-Sleep -Seconds 1
     Remove-Item Env:\ROSLYNSENTINEL_EVALQUEUE_CHECKOUTS_ROOT -ErrorAction SilentlyContinue
+    if ($null -eq $savedScratchRoot) { Remove-Item Env:\ROSLYNSENTINEL_SCRATCH_ROOT -ErrorAction SilentlyContinue } else { $env:ROSLYNSENTINEL_SCRATCH_ROOT = $savedScratchRoot }
+    if ($null -eq $savedResultsRoot) { Remove-Item Env:\ROSLYNSENTINEL_RESULTS_ROOT -ErrorAction SilentlyContinue } else { $env:ROSLYNSENTINEL_RESULTS_ROOT = $savedResultsRoot }
     Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 

@@ -25,6 +25,12 @@ function Assert-That([bool]$Condition, [string]$Name) {
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("rs-evalqueue-hosts-" + [guid]::NewGuid().ToString('N'))
 $env:ROSLYNSENTINEL_EVALQUEUE_CHECKOUTS_ROOT = Join-Path $tempRoot 'checkouts'
 $env:ROSLYNSENTINEL_EVALQUEUE_ROOT = Join-Path $tempRoot 'default-queue-must-stay-empty'
+# Scratch root under the temp folder, so no run output lands beside the real repo or follows the machine's own setting.
+. (Join-Path $PSScriptRoot 'roslynsentinel-scratch.ps1')
+$script:savedScratchRoot = $env:ROSLYNSENTINEL_SCRATCH_ROOT
+$script:savedResultsRoot = $env:ROSLYNSENTINEL_RESULTS_ROOT
+$env:ROSLYNSENTINEL_SCRATCH_ROOT = Join-Path $tempRoot 'scratch'
+Remove-Item Env:\ROSLYNSENTINEL_RESULTS_ROOT -ErrorAction SilentlyContinue
 $repo = Join-Path $tempRoot 'repo'
 $stub = Join-Path $repo 'scripts\stub-eval.ps1'
 New-Item -ItemType Directory -Path (Join-Path $repo 'scripts') -Force | Out-Null
@@ -55,7 +61,7 @@ Write-Host "stub run $name on $HostAddress"
 if ($name -eq 'NoResult') { exit 1 }
 if ($name -eq 'Slow') { Start-Sleep -Seconds 120 } else { Start-Sleep -Milliseconds 300 }
 $suffix = ($HostAddress -replace '[^a-zA-Z0-9]', '_').Trim('_')
-$resultsBase = if ($env:ROSLYNSENTINEL_RESULTS_ROOT) { $env:ROSLYNSENTINEL_RESULTS_ROOT } else { Join-Path $root 'ModelTestingResults' }
+$resultsBase = if ($env:ROSLYNSENTINEL_RESULTS_ROOT) { $env:ROSLYNSENTINEL_RESULTS_ROOT } else { Join-Path $env:ROSLYNSENTINEL_SCRATCH_ROOT 'ModelTestingResults' }
 $dir = Join-Path $resultsBase "$suffix\$name\$([datetime]::UtcNow.ToString('yyyyMMdd-HHmmss-fff'))"
 New-Item -ItemType Directory -Force -Path $dir | Out-Null
 Set-Content -LiteralPath (Join-Path $dir 'results.txt') -Value "host=$HostAddress job=$env:ROSLYNSENTINEL_EVALQUEUE_JOB model=$Model"
@@ -207,6 +213,8 @@ function Close-TestHarness {
     Start-Sleep -Seconds 1
     Remove-Item Env:\ROSLYNSENTINEL_EVALQUEUE_CHECKOUTS_ROOT -ErrorAction SilentlyContinue
     Remove-Item Env:\ROSLYNSENTINEL_EVALQUEUE_ROOT -ErrorAction SilentlyContinue
+    if ($null -eq $script:savedScratchRoot) { Remove-Item Env:\ROSLYNSENTINEL_SCRATCH_ROOT -ErrorAction SilentlyContinue } else { $env:ROSLYNSENTINEL_SCRATCH_ROOT = $script:savedScratchRoot }
+    if ($null -eq $script:savedResultsRoot) { Remove-Item Env:\ROSLYNSENTINEL_RESULTS_ROOT -ErrorAction SilentlyContinue } else { $env:ROSLYNSENTINEL_RESULTS_ROOT = $script:savedResultsRoot }
     Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
     if ($script:killedProcesses.Count -gt 0) { Write-Host "harness killed process(es): $($script:killedProcesses -join ', ')" }
 }

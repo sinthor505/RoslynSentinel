@@ -12,6 +12,9 @@
 # is what runs. No model, no LM Studio, no llama-server.
 
 . (Join-Path $PSScriptRoot 'roslynsentinel-evalqueue.TestHarness.ps1')
+# The harness owns the temp root and points ROSLYNSENTINEL_SCRATCH_ROOT at <tempRoot>\scratch (restored by Close-TestHarness).
+. (Join-Path $PSScriptRoot 'roslynsentinel-scratch.ps1')
+$scratch = Get-RoslynSentinelScratchRoot -RepoRoot $repo
 
 $loadedM1 = '{"data":[{"id":"m1","loaded":true,"status":{"value":"loaded"}}]}'
 
@@ -22,7 +25,7 @@ function Read-TestJob([string]$JobId) {
 
 # Number of run folders the stub wrote under ModelTestingResults\<suffix> (runs.csv is a file and is not counted).
 function Get-RunFolderCount([string]$Suffix) {
-    return @(Get-ChildItem -LiteralPath (Join-Path $repo "ModelTestingResults\$Suffix") -Directory -Recurse -ErrorAction SilentlyContinue).Count
+    return @(Get-ChildItem -LiteralPath (Join-Path $scratch "ModelTestingResults\$Suffix") -Directory -Recurse -ErrorAction SilentlyContinue).Count
 }
 
 # A new queue, one table entry T1 (machine T, backend $Backend) on a stub server answering $Body, one Quick job per
@@ -65,7 +68,7 @@ try {
     # --- (f) a Refused job does not hold the queue; (g) runs.csv has one row per ended job --------------------------
     $f = Invoke-OneEntryQueue $loadedM1 @('m2', 'm1')
     Assert-That ($f[0].state -eq 'Refused' -and $f[1].state -eq 'Finished' -and $f[1].passed -eq $true) '(f) a Refused job is followed by the next queued job, which runs and Finishes'
-    $csvPath = Join-Path $repo "ModelTestingResults\$($f[0].suffix)\runs.csv"
+    $csvPath = Join-Path $scratch "ModelTestingResults\$($f[0].suffix)\runs.csv"
     $rows = @(Import-Csv -LiteralPath $csvPath -ErrorAction SilentlyContinue)
     Assert-That ($rows.Count -eq 2) '(g) runs.csv: one row per ended job (two jobs, two rows, the Refused one included)'
     $refusedRow = @($rows | Where-Object { $_.jobId -eq $f[0].id })
