@@ -921,7 +921,7 @@ public class ResultStatusTests
     public void AddConstructorParameterCascadeResult_FullChangeSet_IsSuccess()
     {
         var classEdit = new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = string.Empty };
-        var result = new AddConstructorParameterCascadeResult(classEdit, new Dictionary<FilePathWrapper, string>(), 2, 0);
+        var result = new AddConstructorParameterCascadeResult(classEdit, new DocumentChangeSet(), 2, 0);
 
         Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
         Assert.That(((IOperationResult)result).IsError, Is.False);

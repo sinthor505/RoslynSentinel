@@ -78,7 +78,7 @@ public sealed class UnresolvedCallSitesException : ToolException
 /// class edit throws before this record is built), and <see cref="Changes"/> holds the class edit plus every call-site
 /// edit as one change set. Unresolved call sites are thrown as <see cref="UnresolvedCallSitesException"/> instead.
 /// </summary>
-public sealed record AddConstructorParameterCascadeResult(DocumentEditResult ClassEdit, Dictionary<FilePathWrapper, string> Changes, int CallSitesUpdated, int CallSitesLeftToDefault) : IOperationResult
+public sealed record AddConstructorParameterCascadeResult(DocumentEditResult ClassEdit, DocumentChangeSet Changes, int CallSitesUpdated, int CallSitesLeftToDefault) : IOperationResult
 {
     /// <summary><see cref="IOperationResult.Status"/>: always Success for this result. Not serialized.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
