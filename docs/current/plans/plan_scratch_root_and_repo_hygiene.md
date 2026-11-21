@@ -1,6 +1,6 @@
 # Plan: move all test/eval/run/scratch output to one out-of-repo scratch root, add runtime-state retention and a repo hygiene guard
 
-**Status:** IN PROGRESS 2026-11-20. Steps 1a-10 except 8a done (1520b74f, fe343823, 840c35a3, 37130409, a3f8b565, 09191c1a, 43b98119, 7550685c, cc021d4e, 0d7efd6a, 7e4f5a36, 86a45912, 006b332f); batched run by session 3e5e7eba.
+**Status:** IN PROGRESS 2026-11-20. Steps 1a-15b done (last 13788ee9; hashes under each step); docs (16a-16c) and main-session Steps 17-19 left. Batched run by session 3e5e7eba.
 
 ## Problem
 
@@ -369,6 +369,8 @@ function Get-RoslynSentinelBuildDir {
 - Done when: `pwsh scripts\roslynsentinel-evalqueue.Tests.ps1`, `...Preflight.Tests.ps1`, `...Hosts.Tests.ps1`, `...Visibility.Tests.ps1` all exit 0 (dispatcher), and `git status` shows no `ModelTestingResults` or `RoslynSentinel-ScratchDir` created under or beside the real repo by the run.
 
 ### Step 8a - TestRuns root in C# (PlanStepRunner and SubAgent)
+
+- Done: 7773d2c8
 - Files: `RoslynSentinel.Utilities.PlanStepRunner\RunnerOptions.cs`, `RoslynSentinel.Tools.Advanced\SubAgentRunNaming.cs`, `RoslynSentinel.Tests.SubAgent\SubAgentLaunchTests.cs`.
 - Depends on: 1a. Lane: implementer (3 files, about 7 edits; `Utilities.PlanStepRunner` and `Tools.Advanced` both reference Common).
 - Effect: behaviour-changing: new SubAgent/PlanStepRunner runs go to `<scratch>\TestRuns\...`. Server code.
@@ -410,6 +412,8 @@ function Get-RoslynSentinelBuildDir {
 - Done when: `Select-String -Path scripts\*.ps1 -Pattern '\.scratch[\\/]'` returns no hits; `Select-String -Path scripts\Get-ShippingKindTypoCounts.ps1 -Pattern 'ModelTestingResults\\113'` shows only `<scratch>`-prefixed lines; all eight files parse.
 
 ### Step 11 - Drop the `.scratch` fallback in the launcher test
+
+- Done: dfa819f4
 - Files: `RoslynSentinel.Tests.Tools.Basic\TestInstanceLauncherTests.cs`.
 - Depends on: none. Lane: implementer (1 file, 2 edits; `ReplaceSnippet`).
 - Effect: text-neutral.
@@ -417,6 +421,8 @@ function Get-RoslynSentinelBuildDir {
 - Done when: `Build` 0 errors; `Search(mode: text, query: "\\.scratch", fileGlob: "RoslynSentinel.Tests.Tools.Basic/**/*.cs")` shows only the two `BuildIsolationTests` lines.
 
 ### Step 12 - `RuntimeStateRetention` bodies
+
+- Done: 3840a054
 - Files: `RoslynSentinel.Common\RuntimeStateRetention.cs`.
 - Depends on: 1a. Lane: implementer-senior (1 file, 4 method bodies with concurrency-tolerant deletes and a count-cap rule; the safety of operation-blob deletion is the point of the slice).
 - Effect: text-neutral (no callers until Step 13).
@@ -430,6 +436,8 @@ function Get-RoslynSentinelBuildDir {
 - Done when: `Build` 0 errors; `Search(mode: text, query: "NotImplementedException", fileGlob: "RoslynSentinel.Common/RuntimeStateRetention.cs")` returns 0 hits.
 
 ### Step 13a - Load-time wiring (operations, validation, build instances)
+
+- Done: 88477c27
 - Files: `RoslynSentinel.Common\PersistentWorkspaceManager.cs`, `RoslynSentinel.Engines.Basic\BuildIsolation.cs`.
 - Depends on: 12. Lane: implementer (2 files, about 4 edits).
 - Effect: behaviour-changing: old blobs disappear after the restart (see Risks for thresholds).
@@ -438,6 +446,8 @@ function Get-RoslynSentinelBuildDir {
 - Done when: `Build` 0 errors; dispatcher runs `LargeResultLoadSweepTests` and `BuildIsolationTests` unchanged (regression).
 
 ### Step 13b - Log wiring and missing-blob error text
+
+- Done: d6767e6f
 - Files: `RoslynSentinel.Server.Advanced\ServerStartupHelpers.cs`, `RoslynSentinel.Tools.Basic\WorkspaceFileEditImpl.cs`, `RoslynSentinel.Tools.Basic\WorkspaceReadNavigationImpl.cs`.
 - Depends on: 12. Lane: implementer (3 files, 4 edits).
 - Effect: behaviour-changing: old server logs are deleted at startup; two error texts gain one fact.
@@ -446,6 +456,8 @@ function Get-RoslynSentinelBuildDir {
 - Done when: `Build` 0 errors; dispatcher runs `UndoLastApplyTests`, `ToolHintRatchetTests`, `ServerInstancePathsTests`.
 
 ### Step 14 - Retention tests
+
+- Done: b0d073da
 - Files: `RoslynSentinel.Tests.Basic\RuntimeStateRetentionTests.cs` (new; same temp-root pattern as `LargeResultSweepTests.cs`), `RoslynSentinel.Tests.Tools.Basic\LargeResultLoadSweepTests.cs` (add one load-time test, modelled on its existing test).
 - Depends on: 13a, 13b. Lane: test-writer.
 - Effect: text-neutral.
@@ -455,6 +467,8 @@ function Get-RoslynSentinelBuildDir {
 - Done when: `RunTest` filter `RuntimeStateRetentionTests|LargeResultLoadSweepTests|LargeResultSweepTests` passes (dispatcher).
 
 ### Step 15a - Hygiene guard script
+
+- Done: 17eefd51
 - Files: `scripts\Test-RepoHygiene.ps1` (new), `scripts\Test-RepoHygiene.Tests.ps1` (new; throwaway git repo in a temp folder, `Invoke-Git` idiom from `roslynsentinel-evalqueue.TestHarness.ps1`).
 - Depends on: none. Lane: implementer (2 new files).
 - Effect: text-neutral (read-only report).
@@ -466,6 +480,8 @@ function Get-RoslynSentinelBuildDir {
 - Done when: `pwsh scripts\Test-RepoHygiene.Tests.ps1` exits 0 (dispatcher). Live run before Step 18 is expected to report only the legacy folders (and any peer-session untracked files); it must be clean after Step 19, which is why the two allowlists above are part of this step.
 
 ### Step 15b - SessionStart warning hook
+
+- Done: 13788ee9
 - Files: `.claude\hooks\repo-hygiene-session-start.ps1` (new), `.claude\settings.json` (append a second command object to the `hooks` array of the existing `SessionStart` entry - do not add a second `SessionStart` entry - `timeout: 15`, same `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ${CLAUDE_PROJECT_DIR}/.claude/hooks/...` form as `journal-session-start.ps1`).
 - Depends on: 15a. Lane: implementer (2 files).
 - Effect: behaviour-changing: a session start prints a warning when the repo root has unexpected entries.
