@@ -68,17 +68,16 @@
       run. ROSLYNSENTINEL_RESULTS_ROOT, ROSLYNSENTINEL_SCRATCH_ROOT, ROSLYNSENTINEL_REPO_ROOT and the
       ROSLYNSENTINEL_EVALQUEUE_* settings are never recorded, and the
       worker's own ROSLYNSENTINEL_* variables are not inherited by the run.
-      Legacy (applies only to jobs queued before pinning existed, which have no pinned commit): such a job
-      still builds from the working tree. Submit recorded its commit and a fingerprint of its uncommitted
-      source changes; if they differ when the job's turn comes, the job ends as TreeChanged. -OnTreeChange
-      is ignored for pinned jobs and is slated for removal.
+      Unpinned jobs (queued before pinning existed, so with no pinned commit) never run: when their turn
+      comes the worker ends them as TreeChanged with a "resubmit pinned" reason and does not touch the
+      working tree. Their job files stay as history.
 
     Job states
       Queued, Building (the worker is pre-building the checkout; cancellable), Running, Finished (the run
       completed; 'passed' says whether the tests passed), Cancelled, TimedOut (stopped at
       -TimeLimitMinutes), Crashed (ended without a run folder: build failure or testhost crash; or the
       worker died; or no run folder after -NoRunFolderMinutes, a stuck SetUp), BuildFailed (the pre-build
-      failed; the reason holds the end of its log), TreeChanged (legacy jobs only), Refused (a job for a
+      failed; the reason holds the end of its log), TreeChanged (an unpinned legacy job that reached the front of the queue; never run, resubmit it pinned), Refused (a job for a
       llama-server endpoint whose -Model is not the loaded model; never run; the reason lists the loaded ids).
 
     Run index
@@ -175,8 +174,6 @@ param(
     [ValidateRange(1, 100)][int]$Repeats = 1,
     [ValidateRange(1, 9)][int]$Priority = 5,
     [string]$EvalArgs = '',
-    # TODO remove the unpinned path and -OnTreeChange once no unpinned job remains (pinned jobs ignore it).
-    [ValidateSet('Refuse', 'RunAnyway')][string]$OnTreeChange = 'Refuse',
     [string]$Commit,
     [string]$PreBuildScript,
     [double]$TimeLimitMinutes = 40,
@@ -521,7 +518,9 @@ function Test-EvalArgs([string]$Text, $ScriptInfo) {
     }
 }
 
-function Format-JobLine($Job, $Schedule, $Jobs) {
+# WorkerWaiting: the machine's worker is paused because no queued job's endpoint answers (WaitingForHost), so a
+# schedule estimate would be wrong; a queued job then reads "worker waiting for host", as Get-EvalHostStatus.ps1 does.
+function Format-JobLine($Job, $Schedule, $Jobs, [bool]$WorkerWaiting = $false) {
     $what = "$($Job.test) on $($Job.host) ($($Job.model))"
     $who = ($Job.sessions -join '+')
     if (-not $who) { $who = $Job.session }
@@ -534,7 +533,7 @@ function Format-JobLine($Job, $Schedule, $Jobs) {
             return "  running  $($Job.id)  $what  $who  $(Format-Span $elapsed) of about $(Format-Span (Get-ExpectedSeconds $Jobs $Job.test))  `"$($Job.purpose)`""
         }
         'Queued' {
-            $eta = if ($Schedule -and $Schedule.ContainsKey($Job.id)) { "starts in about $(Format-Span $Schedule[$Job.id])" } else { 'waiting' }
+            $eta = if ($WorkerWaiting) { 'worker waiting for host' } elseif ($Schedule -and $Schedule.ContainsKey($Job.id)) { "starts in about $(Format-Span $Schedule[$Job.id])" } else { 'waiting' }
             return "  queued   $($Job.id)  p$($Job.priority)  $what  $who  $eta  `"$($Job.purpose)`""
         }
         default {
@@ -602,9 +601,6 @@ function Invoke-Submit {
     $dirtyScripts = @(Get-DirtyPaths $RepoRoot @('scripts/*.ps1'))
     if ($dirtyScripts.Count -gt 0) {
         Write-Warning "Uncommitted script changes are not part of this run (it runs the committed scripts): $(@($dirtyScripts | Select-Object -First 5) -join ', ')."
-    }
-    if ($PSBoundParameters.ContainsKey('OnTreeChange')) {
-        Write-Warning '-OnTreeChange is ignored: a pinned job runs its own checkout, so the working tree cannot change under it.'
     }
 
     $evalFull = [System.IO.Path]::GetFullPath($EvalScript)
@@ -718,7 +714,6 @@ function Invoke-Submit {
                     argsKey           = $argsKey
                     # 0 = queued with -Force: never matched by a later request.
                     repeatIndex       = if ($Force) { 0 } else { $index }
-                    onTreeChange      = $OnTreeChange
                     timeLimitMinutes  = $TimeLimitMinutes
                     noRunFolderMinutes = $NoRunFolderMinutes
                     commit            = $pinnedSha
@@ -823,9 +818,11 @@ function Invoke-Status {
         $jobs = @($snapshot.jobs)
         $queued = Get-QueuedInOrder $jobs
         $workerText = 'no worker running'
+        $workerWaiting = $false
         if ($snapshot.workerAlive) {
             $workerText = 'worker running'
             if ($snapshot.worker -and $snapshot.worker.state -eq 'WaitingForHost') {
+                $workerWaiting = $true
                 $workerText = "worker waiting: the host has not answered since $((ConvertTo-Utc $snapshot.worker.hostDownSinceUtc).ToLocalTime().ToString('HH:mm'))"
             }
         }
@@ -836,7 +833,7 @@ function Invoke-Status {
         $schedule = Get-QueueSchedule $jobs
         $shown = 0
         foreach ($job in @($jobs | Where-Object { $_.state -in @('Building', 'Running') })) { Write-Output (Format-JobLine $job $schedule $jobs); $shown++ }
-        foreach ($job in $queued) { Write-Output (Format-JobLine $job $schedule $jobs); $shown++ }
+        foreach ($job in $queued) { Write-Output (Format-JobLine $job $schedule $jobs $workerWaiting); $shown++ }
         if ($shown -eq 0) { Write-Output '  nothing running or queued' }
         if (-not $ActiveOnly) {
             foreach ($job in @($jobs | Where-Object { $_.state -in $terminalStates } | Select-Object -Last 5)) {
@@ -1306,24 +1303,13 @@ function Invoke-Worker {
                     Write-Job $next
                     return $next
                 }
-                # TODO remove the unpinned path and -OnTreeChange once no unpinned job remains
-                $tree = Get-TreeFingerprint $next.repoRoot
-                if ($tree.fingerprint -ne $next.fingerprint -and $next.onTreeChange -eq 'Refuse') {
-                    $next.state = 'TreeChanged'
-                    $next.reason = "Not run: the commit or the uncommitted source changes in $($next.repoRoot) differ from when this was submitted (then $($next.commit), now $($tree.commit)). Submit it again to test the tree as it is now, or add -OnTreeChange RunAnyway."
-                    $next.endedUtc = Get-UtcStamp
-                    Write-Job $next
-                    Write-WorkerLog "job $($next.id) refused: tree changed"
-                    return $next
-                }
-                $next.state = 'Running'
-                $next.startedUtc = Get-UtcStamp
-                $next.workerPid = $PID
-                $next.testedCommit = $tree.commit
-                $next.testedDirty = $tree.dirty
-                $next.testedFingerprint = $tree.fingerprint
+                # An unpinned job (queued before pinning existed) never runs against the live tree: it ends TreeChanged.
+                $next.state = 'TreeChanged'
+                $next.reason = "Not run: this job was queued without a pinned commit, and a queued run now tests a pinned commit, never the live working tree. Resubmit it (it will be pinned to a commit)."
+                $next.endedUtc = Get-UtcStamp
                 Write-Job $next
-                $next
+                Write-WorkerLog "job $($next.id) not run: unpinned job, resubmit pinned"
+                return $next
             }
             $dispatched = $job
             if ($job -and $job.state -in @('Refused', 'TreeChanged')) {

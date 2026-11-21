@@ -316,11 +316,6 @@ try {
         if ($m.Success) { return $m.Groups[1].Value.Trim() }
         return $null
     }
-    function Get-CleanTreeFingerprint([string]$Head) {
-        # Mirrors Get-TreeFingerprint in roslynsentinel-evalqueue.ps1 for a clean tree: no diff, no untracked source files.
-        $bytes = [System.Security.Cryptography.SHA256]::HashData([System.Text.Encoding]::UTF8.GetBytes("$Head`n`n"))
-        return [Convert]::ToHexString($bytes).Substring(0, 16).ToLowerInvariant()
-    }
     function Write-LegacyJob([string]$JobId) {
         # Rewrites a pinned job file into the shape queued before pinning existed: no pinnedCommit, sourceRepoRoot or checkoutRoot.
         $path = Join-Path $script:queueRoot "stub\jobs\$JobId.json"
@@ -330,7 +325,6 @@ try {
         $job.repoRoot = $repo
         $job.evalScript = $stub
         $job.commit = $head
-        $job.fingerprint = Get-CleanTreeFingerprint $head
         [IO.File]::WriteAllText($path, ($job | ConvertTo-Json -Depth 6))
     }
     function Get-JobFromHost([string]$Suffix, [string]$JobId) {
@@ -378,20 +372,24 @@ try {
     Assert-That ($checkoutsForC.Count -eq 1 -and $checkoutsForC[0].Name -eq $shaC.Substring(0, 12)) 'Pinned: two submits of one sha share one checkout folder'
     Assert-That (@($c1.queued).Count -eq 1 -and @($c2.queued).Count -eq 0 -and @($c2.attached).Count -eq 1 -and @($c2.attached)[0].id -eq @($c1.queued)[0].id) 'Pinned dedup: an identical second submit attaches to the first job'
 
-    # (f) a job file without pinnedCommit still runs from the working tree, and still ends TreeChanged when the tree moves.
+    # (f) a still-Queued job file without pinnedCommit never runs against the live tree: it ends TreeChanged with a
+    # "resubmit pinned" reason, whether or not the tree moved, and no run folder is written.
     New-Queue
     $legacyRun = @((Submit @{ Test = 'Quick' }).queued)[0]
     Write-LegacyJob $legacyRun.id
     Run-Worker
     $legacyRunDone = Get-JobById $legacyRun.id
-    Assert-That ($legacyRunDone.state -eq 'Finished' -and -not $legacyRunDone.pinnedCommit -and @($legacyRunDone.runFolders).Count -eq 1) 'Legacy: a job without pinnedCommit runs the working tree and ends Finished'
+    Assert-That ($legacyRunDone.state -eq 'TreeChanged' -and -not $legacyRunDone.pinnedCommit -and @($legacyRunDone.runFolders).Count -eq 0) 'Legacy: an unpinned Queued job ends TreeChanged and does not run, even with an unchanged tree'
+    Assert-That ("$($legacyRunDone.reason)" -match 'without a pinned commit' -and "$($legacyRunDone.reason)" -match 'Resubmit') 'Legacy: the TreeChanged reason says to resubmit it pinned'
+    Assert-That ([bool]$legacyRunDone.endedUtc -and -not $legacyRunDone.startedUtc -and -not $legacyRunDone.testedCommit) 'Legacy: the unpinned job has an end time but no start and no tested commit'
     New-Queue
     $legacyChanged = @((Submit @{ Test = 'Quick' }).queued)[0]
     Write-LegacyJob $legacyChanged.id
     Set-Content -LiteralPath (Join-Path $repo 'Lib.cs') -Value 'class Lib { int changed; }'
     Run-Worker
     $legacyChangedDone = Get-JobById $legacyChanged.id
-    Assert-That ($legacyChangedDone.state -eq 'TreeChanged' -and @($legacyChangedDone.runFolders).Count -eq 0) 'Legacy: a job without pinnedCommit still ends TreeChanged when the tree changes after submit'
+    Assert-That ($legacyChangedDone.state -eq 'TreeChanged' -and @($legacyChangedDone.runFolders).Count -eq 0) 'Legacy: an unpinned Queued job also ends TreeChanged when the tree changed after submit'
+    Assert-That ((Get-Content -LiteralPath (Join-Path $repo 'Lib.cs') -Raw).Trim() -eq 'class Lib { int changed; }') 'Legacy: the worker left the working tree untouched'
     Invoke-Git @('checkout', '--', 'Lib.cs')
 
     # (g) a pre-build that exits 1 ends the job BuildFailed; no run starts; wait returns 2.

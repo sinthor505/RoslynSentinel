@@ -96,7 +96,12 @@ try {
     $states = @((Get-JobById $closed1.id).state, (Get-JobById $closed2.id).state)
     Assert-That (($states -join ',') -eq 'Queued,Queued') 'All endpoints closed: both jobs stay Queued, nothing is ended'
     Assert-That ($null -ne (Get-WorkerState 'T').hostDownSinceUtc) 'All endpoints closed: the worker state records since when nothing answers'
+    $waitingStatus = @(Invoke-Queue 'status') -join "`n"
+    $queuedLines = @($waitingStatus -split "`n" | Where-Object { $_ -match '^\s+queued\s' })
+    Assert-That ($queuedLines.Count -eq 2 -and @($queuedLines | Where-Object { $_ -match 'worker waiting for host' }).Count -eq 2 -and $waitingStatus -notmatch 'starts in about') 'All endpoints closed: status shows "worker waiting for host" on each queued job, not a start estimate'
     Stop-TestProcess $worker
+    $stoppedStatus = @(Invoke-Queue 'status') -join "`n"
+    Assert-That ($stoppedStatus -notmatch 'worker waiting for host' -and $stoppedStatus -match 'queued\s') 'Worker gone: a queued job no longer claims a waiting worker'
 
     # --- a job file from before machine keys (folder stub, no machine/backend) -------------------------------------
     New-Queue

@@ -237,11 +237,12 @@ runs jobs one at a time per machine and shows every session what is running and 
   the build at once; a checkout without `RoslynSentinel.Tests.ModelEval.csproj` skips the default pre-build,
   logged in the worker log, unless `-PreBuildScript` is given),
   `Crashed` (no run folder: testhost crash, a stuck SetUp or the worker stopped; read the log),
-  `BuildFailed` (the pre-build failed; the reason holds the end of its log), `TreeChanged` (legacy jobs only),
+  `BuildFailed` (the pre-build failed; the reason holds the end of its log), `TreeChanged` (an unpinned legacy job),
   `Refused` (llama-server `-Model` not loaded; never run).
-- Legacy, for jobs queued before pinning existed (they have no pinned commit and run from the working
-  tree): if the commit or uncommitted source files changed since submit, the job ends `TreeChanged` without
-  running. Resubmit it to get a pinned run. `-OnTreeChange` is ignored for pinned jobs and slated for removal.
+- Unpinned jobs, queued before pinning existed (they have no pinned commit): when one reaches the front of
+  the queue the worker ends it `TreeChanged` with a "resubmit pinned" reason. It never runs against the live
+  working tree, whether or not the tree changed. Resubmit it to get a pinned run. The `-OnTreeChange`
+  parameter no longer exists. Terminal unpinned job files stay as history.
 - If the host stops answering, the queue pauses and the jobs stay queued. A dead endpoint does not block another endpoint's job: the worker runs the first queued job whose endpoint answers and pauses only when none does.
 - Queue files: `%LOCALAPPDATA%\RoslynSentinel\evalqueue\<machine>\` (`jobs\`, `logs\`, `worker.log`); `<machine>` is
   the machine key (`85`, `112`, `113`); older URL-keyed folders are read-only history that status and wait still list.

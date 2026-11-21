@@ -150,7 +150,7 @@ try {
         repoRoot = $tempRoot; evalScript = $serverPath
         session = 'status-test-s1'; sessions = @('status-test-s1')
         purpose = 'queue fixture'; priority = 5; test = 'LiteralSteps'; model = 'fixture-model'
-        evalArgs = ''; env = [ordered]@{}; argsKey = 'fixture'; repeatIndex = 1; onTreeChange = 'Refuse'
+        evalArgs = ''; env = [ordered]@{}; argsKey = 'fixture'; repeatIndex = 1
         timeLimitMinutes = 40; noRunFolderMinutes = 20; dirty = $false
         state = 'Queued'; enqueuedUtc = [datetime]::UtcNow.ToString('o')
     }
@@ -170,6 +170,24 @@ try {
 
     $qPlain = Invoke-Status @('-TablePath', $tablePath, '-QueueRoot', $queueRoot, '-TimeoutSec', '3')
     Assert-That (($qPlain.Code -eq 0) -and ($qPlain.Text -match [regex]::Escape($jobId)) -and ($qPlain.Text -match 'queued 1') -and ($qPlain.Text -match 'Machine m1:')) 'default queue output: machine line and table name the queued job and its count'
+
+    # ---- retired folders: no machine in the table (an old URL-keyed folder) ----
+    # One with only a Finished job and no worker is history and is left out; one that still has a Queued job is shown.
+    $retiredDir = Join-Path $queueRoot 'retired-old-url\jobs'
+    New-Item -ItemType Directory -Path $retiredDir -Force | Out-Null
+    $retiredJob = [ordered]@{} + $job
+    $retiredJob.id = '20261119-090000-001'; $retiredJob.state = 'Finished'; $retiredJob.host = 'retired-old-url'; $retiredJob.suffix = 'retired-old-url'
+    Set-Content -LiteralPath (Join-Path $retiredDir "$($retiredJob.id).json") -Encoding UTF8 -Value ($retiredJob | ConvertTo-Json -Depth 6)
+    $liveDir = Join-Path $queueRoot 'retired-live-url\jobs'
+    New-Item -ItemType Directory -Path $liveDir -Force | Out-Null
+    $liveJob = [ordered]@{} + $job
+    $liveJob.id = '20261119-090000-002'; $liveJob.state = 'Queued'; $liveJob.host = 'retired-live-url'; $liveJob.suffix = 'retired-live-url'
+    Set-Content -LiteralPath (Join-Path $liveDir "$($liveJob.id).json") -Encoding UTF8 -Value ($liveJob | ConvertTo-Json -Depth 6)
+
+    $rPlain = Invoke-Status @('-TablePath', $tablePath, '-QueueRoot', $queueRoot, '-TimeoutSec', '3')
+    Assert-That ($rPlain.Code -eq 0 -and $rPlain.Text -notmatch 'Machine retired-old-url') 'retired folder with no table match and only a Finished job gets no machine line'
+    Assert-That ($rPlain.Text -match 'Machine retired-live-url:' -and $rPlain.Text -match 'queued 1') 'folder with no table match but a Queued job still gets its machine line'
+    Assert-That ($rPlain.Text -match 'Machine m1:') 'a table machine keeps its machine line next to the skipped retired folder'
 }
 finally {
     foreach ($s in $servers) { if ($s) { Stop-Process -Id $s.Id -Force -ErrorAction SilentlyContinue } }

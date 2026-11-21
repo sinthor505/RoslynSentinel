@@ -137,6 +137,11 @@ if (-not $SkipQueue -and -not $queueError) {
         $machineKey = Resolve-SnapshotMachine $s $table
         if (($wanted.Count -gt 0) -and -not ($wanted -contains $machineKey)) { continue }
         $jobs = @($s.jobs)
+        # A retired folder (no machine in the table, e.g. an old URL-keyed folder) with no worker and no Queued, Building or
+        # Running job is history: leave it out of the rows and the machine lines.
+        $inTable = [bool](@($table | Where-Object { $_.Machine -eq $machineKey }).Count -gt 0)
+        $hasLiveJob = [bool](@($jobs | Where-Object { $_.state -in @('Queued', 'Building', 'Running') }).Count -gt 0)
+        if (-not $inTable -and -not $hasLiveJob -and -not $s.workerAlive) { continue }
         $queued = @($jobs | Where-Object { $_.state -eq 'Queued' } | Sort-Object -Property @{ Expression = { [int]$_.priority } }, 'id')
         $waiting = [bool]($s.workerAlive -and $s.worker -and ($s.worker.state -eq 'WaitingForHost'))
         $queueViews += [pscustomobject]@{
