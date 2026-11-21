@@ -44,7 +44,7 @@ public class AppliedChangeSummaryFromTests
         var lineChanges = SampleLineChanges();
         var apply = new ApplyOutcome(null, null, true, LineChanges: lineChanges);
 
-        var summary = AppliedChangeSummary.From(apply, [File], "described", changedContent: new Dictionary<FilePathWrapper, string> { { File, "new" } });
+        var summary = AppliedChangeSummary.From(apply, [File], "described", changedContent: new DocumentChangeSet { { File, "new" } });
 
         Assert.That(summary.DryRun, Is.True);
         Assert.That(summary.LineChanges, Is.Not.Null);
@@ -56,7 +56,7 @@ public class AppliedChangeSummaryFromTests
     [Test]
     public void FromApplyOutcome_ChangedContentAndValidatedFalse_PassThrough()
     {
-        var content = new Dictionary<FilePathWrapper, string> { { File, "new" } };
+        var content = new DocumentChangeSet { { File, "new" } };
         var apply = new ApplyOutcome("abc", null, false);
 
         var summary = AppliedChangeSummary.From(apply, [File], "described", changedContent: content, validated: false);
@@ -70,7 +70,7 @@ public class AppliedChangeSummaryFromTests
     {
         var apply = new ApplyOutcome("abc", null, false);
 
-        var summary = AppliedChangeSummary.From(apply, [File], "described", changedContent: new Dictionary<FilePathWrapper, string> { { File, "new" } });
+        var summary = AppliedChangeSummary.From(apply, [File], "described", changedContent: new DocumentChangeSet { { File, "new" } });
 
         Assert.That(summary.ChangedContent, Is.Null);
         Assert.That(summary.Validated, Is.True);
@@ -94,7 +94,7 @@ public class AppliedChangeSummaryFromTests
     {
         var lineChanges = SampleLineChanges();
         var findings = SampleFindings();
-        var content = new Dictionary<FilePathWrapper, string> { { File, "new" } };
+        var content = new DocumentChangeSet { { File, "new" } };
 
         var summary = AppliedChangeSummary.From(lineChanges, findings, [File], "described", diff: "the diff", changedContent: content);
 

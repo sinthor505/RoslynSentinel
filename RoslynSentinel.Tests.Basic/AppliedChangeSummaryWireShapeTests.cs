@@ -27,7 +27,7 @@ public class AppliedChangeSummaryWireShapeTests
     {
         var a = new FilePathWrapper(@"C:\tmp\a.cs");
         var b = new FilePathWrapper(@"C:\tmp\b.cs");
-        var changedContent = new Dictionary<FilePathWrapper, string>
+        var changedContent = new DocumentChangeSet
         {
             { a, "class A { }" },
             { b, "class B { }" },

@@ -28,7 +28,7 @@ public class AppliedChangeSummaryTests
             AffectedFiles: new List<FilePathWrapper> { filePath },
             Description: "test",
             DryRun: false,
-            ChangedContent: new Dictionary<FilePathWrapper, string> { { filePath, "content" } },
+            ChangedContent: new DocumentChangeSet { { filePath, "content" } },
             Validated: true);
 
         Assert.That(summary.ChangedContent, Is.Null);
@@ -38,7 +38,7 @@ public class AppliedChangeSummaryTests
     public void DryRun_DropsChangedContent_KeepsLineChanges()
     {
         var filePath = new FilePathWrapper("test.cs");
-        var content = new Dictionary<FilePathWrapper, string> { { filePath, "content" } };
+        var content = new DocumentChangeSet { { filePath, "content" } };
         var lineChanges = new List<FileLineChange> { FileLineChange.Compute(filePath, "old", "content") };
         var summary = new AppliedChangeSummary(
             ChangeId: null,
@@ -58,7 +58,7 @@ public class AppliedChangeSummaryTests
     public void NoStage_KeepsChangedContent()
     {
         var filePath = new FilePathWrapper("test.cs");
-        var content = new Dictionary<FilePathWrapper, string> { { filePath, "content" } };
+        var content = new DocumentChangeSet { { filePath, "content" } };
         var summary = new AppliedChangeSummary(
             ChangeId: null,
             AffectedFiles: new List<FilePathWrapper> { filePath },
@@ -135,7 +135,7 @@ public class AppliedChangeSummaryTests
             ChangedContentOptions.InlineOnApply = true;
 
             var filePath = new FilePathWrapper("test.cs");
-            var content = new Dictionary<FilePathWrapper, string> { { filePath, "content" } };
+            var content = new DocumentChangeSet { { filePath, "content" } };
             var summary = new AppliedChangeSummary(
                 ChangeId: "abc12345",
                 AffectedFiles: new List<FilePathWrapper> { filePath },
@@ -156,7 +156,7 @@ public class AppliedChangeSummaryTests
     public void DryRun_SerializedJsonOmitsChangedContent_KeepsLineChanges()
     {
         var filePath = new FilePathWrapper("test.cs");
-        var content = new Dictionary<FilePathWrapper, string> { { filePath, "content" } };
+        var content = new DocumentChangeSet { { filePath, "content" } };
         var summary = new AppliedChangeSummary(
             ChangeId: null,
             AffectedFiles: new List<FilePathWrapper> { filePath },
@@ -183,7 +183,7 @@ public class AppliedChangeSummaryTests
             Description: "test",
             DryRun: true,
             Diff: "--- test.cs\n-old\n+content",
-            ChangedContent: new Dictionary<FilePathWrapper, string> { { filePath, "content" } },
+            ChangedContent: new DocumentChangeSet { { filePath, "content" } },
             Validated: true);
 
         var json = JsonSerializer.Serialize(summary, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
@@ -203,7 +203,7 @@ public class AppliedChangeSummaryTests
             ChangedContentOptions.InlineOnApply = true;
 
             var filePath = new FilePathWrapper("test.cs");
-            var content = new Dictionary<FilePathWrapper, string> { { filePath, "content" } };
+            var content = new DocumentChangeSet { { filePath, "content" } };
             var summary = new AppliedChangeSummary(
                 ChangeId: null,
                 AffectedFiles: new List<FilePathWrapper> { filePath },
@@ -230,7 +230,7 @@ public class AppliedChangeSummaryTests
             AffectedFiles: new List<FilePathWrapper> { filePath },
             Description: "test",
             DryRun: true,
-            ChangedContent: new Dictionary<FilePathWrapper, string> { { filePath, "content" } },
+            ChangedContent: new DocumentChangeSet { { filePath, "content" } },
             Validated: true);
 
         Assert.That(summary.Note, Does.Contain("returnDiff: true"));
@@ -259,7 +259,7 @@ public class AppliedChangeSummaryTests
     public void NoStage_SerializedJsonKeepsChangedContent()
     {
         var filePath = new FilePathWrapper("test.cs");
-        var content = new Dictionary<FilePathWrapper, string> { { filePath, "content" } };
+        var content = new DocumentChangeSet { { filePath, "content" } };
         var summary = new AppliedChangeSummary(
             ChangeId: null,
             AffectedFiles: new List<FilePathWrapper> { filePath },
@@ -282,7 +282,7 @@ public class AppliedChangeSummaryTests
             AffectedFiles: new List<FilePathWrapper> { filePath },
             Description: "test",
             DryRun: false,
-            ChangedContent: new Dictionary<FilePathWrapper, string> { { filePath, "content" } },
+            ChangedContent: new DocumentChangeSet { { filePath, "content" } },
             Validated: false);
 
         Assert.That(summary.Status, Is.EqualTo("not_written"));
@@ -314,7 +314,7 @@ public class AppliedChangeSummaryTests
             AffectedFiles: new List<FilePathWrapper> { filePath },
             Description: "test",
             DryRun: false,
-            ChangedContent: new Dictionary<FilePathWrapper, string> { { filePath, "content" } },
+            ChangedContent: new DocumentChangeSet { { filePath, "content" } },
             Validated: true);
 
         Assert.That(summary.Status, Is.EqualTo("applied"));
