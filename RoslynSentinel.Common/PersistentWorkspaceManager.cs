@@ -438,7 +438,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         // is the last sentence the path-sanitization tests split on, so keep quote characters out of what follows it.
         throw new ToolNotFoundException(
             $"Could not resolve relative solution path '{solutionPath}'. Tried: {string.Join(", ", candidates.Distinct())}. " +
-            $"LoadSolution accepts an absolute path, or a baseRepoDir to resolve the relative path against; --base-repo-dir at server startup sets a default.");
+            $"LoadSolution accepts an absolute path, or a baseRepoDir to resolve the relative path against; --base-repo-dir at server startup sets a default.", missingTargetKind: MissingTargetKinds.File, missingTargetName: solutionPath);
     }
 
     /// <summary>
@@ -925,7 +925,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                         // Keep the previously loaded solution and workspace untouched; report the failure to the caller.
                         newWorkspace.Dispose();
                         // TODO a load failure is not a lookup miss (inventory C5b); it is coded NotFound through ToolNotFoundException; reclassify when a load-failure code exists.
-                        throw new ToolNotFoundException($"Solution '{solutionPath}' failed to load: {string.Join(" ", _workspaceLoadErrors)} The previously loaded solution is still active.");
+                        throw new ToolNotFoundException($"Solution '{solutionPath}' failed to load: {string.Join(" ", _workspaceLoadErrors)} The previously loaded solution is still active.", missingTargetKind: MissingTargetKinds.File, missingTargetName: solutionPath);
                     }
 
                     // First load: even if the solution fails to open, keep the partial solution if any (existing behaviour).
@@ -1008,7 +1008,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                         ? string.Join(" ", _workspaceLoadErrors)
                         : "no projects were found.";
                     // TODO a load failure is not a lookup miss (inventory C5b); it is coded NotFound through ToolNotFoundException; reclassify when a load-failure code exists.
-                    throw new ToolNotFoundException($"Solution '{solutionPath}' failed to load: {detail}");
+                    throw new ToolNotFoundException($"Solution '{solutionPath}' failed to load: {detail}", missingTargetKind: MissingTargetKinds.File, missingTargetName: solutionPath);
                 }
 
                 _lastSuccessfulLoadUtc = DateTime.UtcNow;

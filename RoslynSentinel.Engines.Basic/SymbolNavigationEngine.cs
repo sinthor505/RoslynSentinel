@@ -1597,7 +1597,7 @@ public class SymbolNavigationEngine
                     var declaringTypes = string.Join(", ", unfilteredDeclCandidates.Select(c => c.ContainingTypeName).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct());
                     throw new ToolNotFoundException(
                         $"'{symbolName}' is declared in {declaringTypes} in '{filePath}', not in '{containingType}'. " +
-                        "The lookup never ran, so this is not a zero-references result.");
+                        "The lookup never ran, so this is not a zero-references result.", MissingTargetKinds.Symbol, missingTargetName: symbolName);
                 }
             }
             var decls = declCandidates
@@ -1629,7 +1629,7 @@ public class SymbolNavigationEngine
                         "or omit contextSnippet if the symbolName is unambiguous in this file." +
                         (positionalRecord != null
                             ? $" '{symbolName}' is a positional parameter of record {positionalRecord.ContainingType.Name}; point contextSnippet at that line or omit it to resolve the property by name."
-                            : string.Empty) + BuildFindReferencesNextCallForFile(symbolName, "callers", document.FilePath ?? filePath, decls)); // hint-ok: names tools in prose
+                            : string.Empty) + BuildFindReferencesNextCallForFile(symbolName, "callers", document.FilePath ?? filePath, decls), MissingTargetKinds.Symbol, missingTargetName: symbolName); // hint-ok: names tools in prose
                 }
             }
             else
@@ -1667,7 +1667,7 @@ public class SymbolNavigationEngine
                 {
                     throw new ToolNotFoundException(
                         MemberRefactoringNotFound.DeclarationMessage("symbol", symbolName, "symbolName", MemberRefactoringNotFound.MemberNames(root), filePath) +
-                        " The lookup never ran, so this is not a zero-references result. Omitting filePath resolves symbolName by name across the solution.");
+                        " The lookup never ran, so this is not a zero-references result. Omitting filePath resolves symbolName by name across the solution.", MissingTargetKinds.Symbol, missingTargetName: symbolName);
                 }
             }
         }
@@ -1696,7 +1696,7 @@ public class SymbolNavigationEngine
                     var declaringTypes = string.Join(", ", allMatches.Select(c => c.Symbol?.ContainingType?.Name).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct());
                     throw new ToolNotFoundException(
                         $"symbolName '{symbolName}' is declared in {declaringTypes} (by-name lookup, no filePath), not in '{containingType}'. " +
-                        "The lookup never ran, so this is not a zero-references result.");
+                        "The lookup never ran, so this is not a zero-references result.", MissingTargetKinds.Symbol, missingTargetName: symbolName);
                 }
 
                 allMatches = containerMatches;
@@ -1775,7 +1775,7 @@ public class SymbolNavigationEngine
                         "across the solution. This is NOT a confirmed zero-references result - the lookup " +
                         "never ran. " + DescribeCandidateLocations(memberMatches) + DescribeTypeMatchHint(allMatches, symbolName) +
                         "Re-check the snippet against GetMethodSource/GetFileOutline output for the " +
-                        "specific candidate you meant, or supply filePath to pin resolution to one file." + BuildFindReferencesNextCall(symbolName, "callers", allMatches)); // hint-ok: names tools in prose
+                        "specific candidate you meant, or supply filePath to pin resolution to one file." + BuildFindReferencesNextCall(symbolName, "callers", allMatches), MissingTargetKinds.Symbol, missingTargetName: symbolName); // hint-ok: names tools in prose
                 }
             }
             else
@@ -1806,7 +1806,7 @@ public class SymbolNavigationEngine
             throw new ToolNotFoundException(
                 $"symbolName '{symbolName}' could not be resolved anywhere in the solution" +
                 (contextSnippet != null ? " with the supplied contextSnippet" : "") + ". " +
-                "The lookup never ran, so this is not a zero-references result. " + missDetail);
+                "The lookup never ran, so this is not a zero-references result. " + missDetail, MissingTargetKinds.Symbol, missingTargetName: symbolName);
         }
 
         var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
@@ -2032,7 +2032,7 @@ public class SymbolNavigationEngine
                             var declaringTypes = string.Join(", ", unfilteredDeclCandidates.Select(c => c.ContainingTypeName).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct());
                             throw new ToolNotFoundException(
                                 $"FindImplementations: '{symbolName}' is declared in {declaringTypes} in '{filePath}', not in '{containingType}'. " +
-                                "The lookup never ran, so this is not a zero-implementations result.");
+                                "The lookup never ran, so this is not a zero-implementations result.", MissingTargetKinds.Symbol, missingTargetName: symbolName);
                         }
                     }
                     var decls = declCandidates
@@ -2099,7 +2099,7 @@ public class SymbolNavigationEngine
                     var declaringTypes = string.Join(", ", allMatches.Select(c => c.Symbol?.ContainingType?.Name).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct());
                     throw new ToolNotFoundException(
                         $"FindImplementations: symbolName '{symbolName}' is declared in {declaringTypes} (by-name lookup, no filePath), not in '{containingType}'. " +
-                        "The lookup never ran, so this is not a zero-implementations result.");
+                        "The lookup never ran, so this is not a zero-implementations result.", MissingTargetKinds.Symbol, missingTargetName: symbolName);
                 }
 
                 allMatches = containerMatches;
@@ -2176,7 +2176,7 @@ public class SymbolNavigationEngine
                         "across the solution. This is NOT a confirmed zero-implementations result - the " +
                         "lookup never ran. " + DescribeCandidateLocations(memberMatches) + DescribeTypeMatchHint(allMatches, symbolName) +
                         "Re-check the snippet against GetMethodSource/GetFileOutline output for the " +
-                        "specific candidate you meant, or supply filePath to pin resolution to one file." + BuildFindReferencesNextCall(symbolName, "implementations", allMatches)); // hint-ok: names tools in prose
+                        "specific candidate you meant, or supply filePath to pin resolution to one file." + BuildFindReferencesNextCall(symbolName, "implementations", allMatches), MissingTargetKinds.Symbol, missingTargetName: symbolName); // hint-ok: names tools in prose
                 }
             }
             else
@@ -2235,7 +2235,7 @@ public class SymbolNavigationEngine
                 "FindImplementations: " + (scopedResolutionFailure ??
                     ($"symbolName '{symbolName}' could not be resolved anywhere in the solution" +
                     (contextSnippet != null ? " with the supplied contextSnippet" : "") + ".")) +
-                " The lookup never ran, so this is not a zero-implementations result. " + missDetail);
+                " The lookup never ran, so this is not a zero-implementations result. " + missDetail, MissingTargetKinds.Symbol, missingTargetName: symbolName);
         }
 
         // The resolved symbol may still be structurally incapable of having implementations - e.g.
@@ -3209,7 +3209,7 @@ public class SymbolNavigationEngine
 
         if (resolved == null)
         {
-            throw new ToolNotFoundException(await MemberNotFoundDetail.BuildAsync(document, root, memberName, containerName, includeHead: true, cancellationToken));
+            throw new ToolNotFoundException(await MemberNotFoundDetail.BuildAsync(document, root, memberName, containerName, includeHead: true, cancellationToken), MissingTargetKinds.Member, missingTargetName: memberName);
         }
 
         var member = resolved.Node;
