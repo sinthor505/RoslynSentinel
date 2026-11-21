@@ -318,7 +318,7 @@ public class CommentingTools
             }
 
             var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
-                new Dictionary<FilePathWrapper, string> { { currentFilePath, finalText } }, validateChanges: true, cancellationToken: cancellationToken, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
+                new DocumentChangeSet { { currentFilePath, finalText } }, validateChanges: true, cancellationToken: cancellationToken, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
 
             if (applyResult.IsError)
             {

@@ -1457,7 +1457,7 @@ public class AsyncifyTools
                     }
 
                     var bridgeValidation = await _validationEngine.ValidateChangesAsync(
-                        new Dictionary<FilePathWrapper, string> { { target.FilePath, updatedSource! } }, // TODO S4: UpdatedText becomes non-nullable
+                        new DocumentChangeSet { { target.FilePath, updatedSource! } }, // TODO S4: UpdatedText becomes non-nullable
                         cancellationToken: cancellationToken);
                     if (bridgeValidation.IsError)
                     {
@@ -1477,7 +1477,7 @@ public class AsyncifyTools
                     }
 
                     var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
-                        new Dictionary<FilePathWrapper, string> { { target.FilePath, updatedSource } }, validateChanges: true, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
+                        new DocumentChangeSet { { target.FilePath, updatedSource } }, validateChanges: true, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                     if (applyResult.IsError)
                     {
                         var refusedReason = $"Write refused: {applyResult.Summary}";
@@ -1523,7 +1523,7 @@ public class AsyncifyTools
                             if (ctResult.Outcome == EditOutcome.Modified)
                             {
                                 var ctApplyResult = await _workspaceManager.ApplyProposedChangesAsync(
-                                    new Dictionary<FilePathWrapper, string> { { target.FilePath, ctResult.UpdatedText } },
+                                    new DocumentChangeSet { { target.FilePath, ctResult.UpdatedText } },
                                     validateChanges: true, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                                 if (!ctApplyResult.IsError)
                                 {
@@ -1646,7 +1646,7 @@ public class AsyncifyTools
             return halt;
         }
 
-        var allChanges = new Dictionary<FilePathWrapper, string>();
+        var allChanges = new DocumentChangeSet();
         int succeeded = 0;
         int failed = 0;
         int skipped = 0;
@@ -1695,7 +1695,7 @@ public class AsyncifyTools
                     if (!input.DryRun)
                     {
                         var ctFileValidation = await _validationEngine.ValidateChangesAsync(
-                            new Dictionary<FilePathWrapper, string> { { target.FilePath, updatedSource } },
+                            new DocumentChangeSet { { target.FilePath, updatedSource } },
                             cancellationToken: cancellationToken);
                         if (ctFileValidation.IsError)
                         {
@@ -2258,7 +2258,7 @@ public class AsyncifyTools
 
                 var (results, errors) = await _asyncOptimizationEngine.FlagMultipleMigrationCandidatesAsync(tuples, cancellationToken: cancellationToken);
 
-                var allChanges = new Dictionary<FilePathWrapper, string>();
+                var allChanges = new DocumentChangeSet();
                 for (int i = 0; i < results.Count; i++)
                 {
                     var r = results[i];
@@ -2589,7 +2589,7 @@ public class AsyncifyTools
                 }
 
                 var extractValidation = await _validationEngine.ValidateChangesAsync(
-                    new Dictionary<FilePathWrapper, string> { { candidate.FilePath, extractResult.UpdatedContent! } },
+                    new DocumentChangeSet { { candidate.FilePath, extractResult.UpdatedContent! } },
                     cancellationToken: state.InnerToken);
                 if (extractValidation.IsError)
                 {
@@ -2602,7 +2602,7 @@ public class AsyncifyTools
                 }
 
                 var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
-                    new Dictionary<FilePathWrapper, string> { { candidate.FilePath, extractResult.UpdatedContent! } },
+                    new DocumentChangeSet { { candidate.FilePath, extractResult.UpdatedContent! } },
                     validateChanges: true, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                 if (applyResult.IsError)
                 {
@@ -2791,7 +2791,7 @@ public class AsyncifyTools
                     await _asyncOptimizationEngine.FlagMultipleMigrationCandidatesAsync(tuples);
 
                 var flagItemsStart = items.Count; // items from earlier phases sit before this index
-                var allChanges = new Dictionary<FilePathWrapper, string>();
+                var allChanges = new DocumentChangeSet();
                 for (int i = 0; i < flagResults.Count; i++)
                 {
                     var r = flagResults[i];
@@ -3157,7 +3157,7 @@ public class AsyncifyTools
                 }
 
                 var applyResult3a = await _workspaceManager.ApplyProposedChangesAsync(
-                    new Dictionary<FilePathWrapper, string> { { candidate.FilePath, updatedSource! } }, // TODO S4: UpdatedText becomes non-nullable
+                    new DocumentChangeSet { { candidate.FilePath, updatedSource! } }, // TODO S4: UpdatedText becomes non-nullable
                     validateChanges: true, cancellationToken: state.InnerToken, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                 if (applyResult3a.IsError)
                 {
@@ -3267,7 +3267,7 @@ public class AsyncifyTools
                         handler.FilePath, handler.MethodName, cancellationToken: state.InnerToken);
 
                 var applyResult3b = await _workspaceManager.ApplyProposedChangesAsync(
-                    new Dictionary<FilePathWrapper, string> { { handler.FilePath, handlerResult.UpdatedText } },
+                    new DocumentChangeSet { { handler.FilePath, handlerResult.UpdatedText } },
                     validateChanges: true, cancellationToken: state.InnerToken, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                 if (applyResult3b.IsError)
                 {
@@ -3658,7 +3658,7 @@ public class AsyncifyTools
                 }
 
                 var handlerToAsyncValidation = await _validationEngine.ValidateChangesAsync(
-                    new Dictionary<FilePathWrapper, string> { { filePath, updatedSource! } }, // TODO S4: UpdatedText becomes non-nullable
+                    new DocumentChangeSet { { filePath, updatedSource! } }, // TODO S4: UpdatedText becomes non-nullable
                     cancellationToken: cancellationToken);
                 if (handlerToAsyncValidation.IsError)
                 {
@@ -3667,7 +3667,7 @@ public class AsyncifyTools
                 }
 
                 var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
-                    new Dictionary<FilePathWrapper, string> { { filePath, updatedSource } }, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
+                    new DocumentChangeSet { { filePath, updatedSource } }, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
             var refusedReason = DescribeRefusedApply(applyResult);
                 if (refusedReason != null)
                 {
@@ -3895,7 +3895,7 @@ public class AsyncifyTools
             {
                 var updatedContent = extractResult.UpdatedContent!;
                 var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
-                    new Dictionary<FilePathWrapper, string> { { target.FilePath, updatedContent } }, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
+                    new DocumentChangeSet { { target.FilePath, updatedContent } }, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                 var refusedReason = DescribeRefusedApply(applyResult);
                 if (refusedReason != null)
                 {
