@@ -182,7 +182,7 @@ internal static class NullForgivingRemover
             }
         }
 
-        var changes = new Dictionary<FilePathWrapper, string>();
+        var changes = new DocumentChangeSet();
         foreach (var (path, fileEdits) in editsByFile)
         {
             var result = textByFile[path].ToString();
@@ -216,7 +216,7 @@ internal static class NullForgivingRemover
     }
 
     private static SemanticReplaceOutcome Fail(string code, string message) =>
-    new(new List<SemanticReplaceSite>(), new Dictionary<FilePathWrapper, string>(), new ResultError(code, $"SemanticFindReplace removeNullForgiving: {message}"));
+    new(new List<SemanticReplaceSite>(), new DocumentChangeSet(), new ResultError(code, $"SemanticFindReplace removeNullForgiving: {message}"));
 
     // TODO ParseProjectFilter and ResolveAsync duplicate the private helpers in ConstructionReplacer; share one copy.
     private static async Task<(ISymbol? Symbol, Compilation? Compilation)> ResolveAsync(Solution solution, string docCommentId, CancellationToken ct)

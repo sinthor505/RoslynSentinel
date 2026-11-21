@@ -523,8 +523,8 @@ public class ResultStatusTests
     [Test]
     public void SemanticReplaceOutcome_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
     {
-        IOperationResult ok = new SemanticReplaceOutcome([], new Dictionary<FilePathWrapper, string>(), null);
-        IOperationResult bad = new SemanticReplaceOutcome([], new Dictionary<FilePathWrapper, string>(), new ResultError(ToolErrorCode.NotFound, "gone"));
+        IOperationResult ok = new SemanticReplaceOutcome([], new DocumentChangeSet(), null);
+        IOperationResult bad = new SemanticReplaceOutcome([], new DocumentChangeSet(), new ResultError(ToolErrorCode.NotFound, "gone"));
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));

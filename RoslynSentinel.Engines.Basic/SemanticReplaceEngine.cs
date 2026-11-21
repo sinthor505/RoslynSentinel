@@ -1234,17 +1234,17 @@ public class SemanticReplaceEngine
     /// returns a TargetIneligible error.
     /// </remarks>
     /// <returns>(Sites, Changes dictionary mapping each changed file to its full new text, error or null)</returns>
-    public async Task<(List<SemanticReplaceSite> Sites, Dictionary<FilePathWrapper, string> Changes, ResultError? Error)> PlanInvertBooleanAsync(ISymbol symbol, string newName, CancellationToken cancellationToken = default)
+    public async Task<(List<SemanticReplaceSite> Sites, DocumentChangeSet Changes, ResultError? Error)> PlanInvertBooleanAsync(ISymbol symbol, string newName, CancellationToken cancellationToken = default)
     {
         // Step 1: Call CollectSitesAsync
         var (sites, edits, error) = await CollectSitesAsync(symbol, newName, cancellationToken);
         if (error is not null)
         {
-            return (sites, new Dictionary<FilePathWrapper, string>(), error);
+            return (sites, new DocumentChangeSet(), error);
         }
 
         // Step 2: Group edits by FilePath and build changes dictionary
-        var changes = new Dictionary<FilePathWrapper, string>();
+        var changes = new DocumentChangeSet();
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
 
         foreach (var fileGroup in edits.GroupBy(e => e.FilePath))
@@ -1256,7 +1256,7 @@ public class SemanticReplaceEngine
             var lookup = DocumentLookup.TryGetDocument(solution, filePath);
             if (!lookup.TryGetDocument(out var document))
             {
-                return (sites, new Dictionary<FilePathWrapper, string>(), new ResultError(
+                return (sites, new DocumentChangeSet(), new ResultError(
                     ToolErrorCode.TargetIneligible,
                     $"A reference to the symbol sits in '{filePath}', which is not a document of the loaded solution, so the edit cannot be planned there. {lookup.Describe()}"));
             }
@@ -1291,7 +1291,7 @@ public class SemanticReplaceEngine
         var (symbol, resolveError) = await ResolveBoolMemberAsync(docCommentId, newName, cancellationToken);
         if (resolveError is not null)
         {
-            return new SemanticReplaceOutcome(new List<SemanticReplaceSite>(), new Dictionary<FilePathWrapper, string>(), resolveError);
+            return new SemanticReplaceOutcome(new List<SemanticReplaceSite>(), new DocumentChangeSet(), resolveError);
         }
 
         // Step 2: Plan the operation

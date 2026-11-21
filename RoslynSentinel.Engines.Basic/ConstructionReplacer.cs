@@ -228,7 +228,7 @@ public static class ConstructionReplacer
             }
         }
 
-        var changes = new Dictionary<FilePathWrapper, string>();
+        var changes = new DocumentChangeSet();
         foreach (var (path, fileEdits) in editsByFile)
         {
             var result = textByFile[path].ToString();
@@ -501,5 +501,5 @@ public static class ConstructionReplacer
     }
 
     private static SemanticReplaceOutcome Fail(string code, string message) =>
-        new(new List<SemanticReplaceSite>(), new Dictionary<FilePathWrapper, string>(), new ResultError(code, $"SemanticFindReplace replaceConstruction: {message}"));
+        new(new List<SemanticReplaceSite>(), new DocumentChangeSet(), new ResultError(code, $"SemanticFindReplace replaceConstruction: {message}"));
 }
