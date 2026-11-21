@@ -8,6 +8,18 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## RunTest/Build take an optional repoPath - resolved (2026-11-20)
+
+`RunTest`/`Build` take an optional `repoPath` (2026-11-09, decided 2026-11-20) - absolute path to a git worktree of this repository (refused otherwise); build/test run in that tree with its own `bin/`/`obj/`, the result names the worktree HEAD commit, omitted = today's behaviour (`useScratchDir` is obsolete: on `Build` it equals `level=fullBuildThrowaway` and also escalates `fullBuild` to it, `RunTest` ignores it and always runs into the throwaway folder); `scripts/Invoke-WorktreeTests.ps1` stays the batch route; accept: `RunTest(repoPath: <worktree>)` reports the worktree commit and leaves the main tree's `bin/`/`obj/` untouched, and a non-worktree path is refused; Medium
+
+Evidence: d2dcdc33, 1820c47b (punchlist batch D): Common/RepoWorktrees.cs, WorktreeCommit on BuildResult/TestRunResult; RepoPathWorktreeTests pass; lean schema measured 45975 of 46500
+
+## SymbolNavigationEngine hints are surface-aware - resolved (2026-11-20)
+
+SymbolNavigationEngine hints are surface-aware (2026-11-14, decided 2026-11-20) - the FindReferences next-call hints (`SymbolNavigationEngine.cs:2822-2828`, `BuildFindReferencesNextCall` :2857, `...ForFile` :2871, `FormatFindReferencesNextCall` :2915, and the GetTypeHierarchy `isCallable: null` at :3380) get a callable predicate backed by `ActiveToolSurface.IsCallable` (`Common/ActiveToolSurface.cs:55`; the engine has no access today, inject it) and emit a prefilled `Search(mode: references)` when FindReferences is not callable (it is off the lean list, `ToolClassRegistry.cs:41-60`); remove the TODO markers; accept: a lean-surface test sees no `FindReferences` in nextCall, full-surface text byte-identical; Medium - [eval](evals/eval_modeleval_lean_vs_full.md)
+
+Evidence: 5cccefbf, f650b618 (punchlist batch D): engine takes a callable predicate (ActiveToolSurface.IsCallable via DI), Search fallback when FindReferences is off-surface; SymbolNavigationSurfaceHintTests 6/6
+
 ## Not-found leftovers, slices 3-4 - resolved (2026-11-20)
 
 Not-found leftovers, slices 3-4 (2026-11-14, recounted 2026-11-20; Engines.Advanced slices 1-2 done 2026-11-20 in 041195df, a83f9978, fd6975ae, a179a1f5) - slice 3 (owner ruling 2026-11-20: also the Engines.Basic kind-less `ToolNotFoundException` throws: SyntaxUpgradeEngine x5 (:44/:123/:377/:601/:714), ProjectStructureEngine ~1810, DiscoveryEngine ~570, any others; the ratchet ban is solution-wide): `CodeTransformTools` GeneratorFailure (:785) and `GitImpl.ToResultStatus` (:92) NotFound mappings, a ratchet banning kind-less `new ToolNotFoundException(`, `MinimumKindSites` (`ErrorPolicyKindRatchetTests.cs:19`, 30) raised to the measured count; done: 0 `TODO not-found` markers and ratchets green; Small x3
