@@ -8,6 +8,10 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## plan_document_changeset_type Step 6d-3 AppliedChangeSummary.ChangedContent retype - resolved (2026-11-21)
+
+`AppliedChangeSummary.ChangedContent` (positional parameter and property) and both `From(...)` `changedContent` parameters now take `DocumentChangeSet?`. The 63-caller break measured earlier shrank to 4 production sites (CoreRefactoringTools `MoveAllTypesToFilesCore` parameter, RefactoringSignatureImpl `MethodSignature` local) plus 17 test sites once the engine method returns and construction sites moved first (plan Step 7). The INBOX line and the `// TODO` at AppliedChangeSummary.cs:23 are removed.
+
 ## plan_document_changeset_type Step 3 chokepoint widening - won't do (2026-11-21)
 
 Widening `IWorkspaceMutator.ApplyProposedChangesAsync` to `IReadOnlyDictionary` is not zero-caller-edit (176 errors from target-typed `new() { [k] = v }` and `[]` arguments). Owner ruling 2026-11-21: keep the `Dictionary` parameter; `DocumentChangeSet` already passes to it.

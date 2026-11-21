@@ -8,7 +8,7 @@ namespace RoslynSentinel.Common;
 /// but deliberately not written) -> there is no separate apply step.
 /// </summary>
 /// <remarks>
-/// Build it with <see cref="From(ApplyOutcome, List{FilePathWrapper}, string, Dictionary{FilePathWrapper, string}?, bool, int?, List{AppliedEditSpan}?)"/>
+/// Build it with <see cref="From(ApplyOutcome, List{FilePathWrapper}, string, DocumentChangeSet?, bool, int?, List{AppliedEditSpan}?)"/>
 /// (or the preview-only overload) so no site forgets <see cref="LineChanges"/> or <see cref="Findings"/>. The primary constructor is
 /// deliberately not [Obsolete]: tests construct it directly and positional deconstruction relies on it, so
 /// <c>From</c> is the convention for tool code rather than a compiler-enforced rule.
@@ -20,8 +20,7 @@ public record AppliedChangeSummary(
     bool DryRun,
     string? Diff = null,
     int? WorkspaceVersion = null,
-    // TODO retype ChangedContent and both From(...) changedContent parameters to DocumentChangeSet? once the ~63 caller sites (Tools.Basic RefactoringStructuralImpl/RefactoringSignatureImpl/RefactoringExtractionDocsImpl/CoreRefactoringTools, Tools.Advanced AdvancedRefactoringTools, Tests.Basic AppliedChangeSummary*Tests and ResultStatusTests:1043) pass a DocumentChangeSet (plan_document_changeset_type Step 7; the property is the positional record property, so parameter and property must change together)
-    Dictionary<FilePathWrapper, string>? ChangedContent = null,
+        DocumentChangeSet? ChangedContent = null,
     bool Validated = false,
     List<FileLineChange>? LineChanges = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<AppliedEditSpan>? EditSpans = null,
@@ -55,7 +54,7 @@ public record AppliedChangeSummary(
         ApplyOutcome apply,
         List<FilePathWrapper> affectedFiles,
         string description,
-        Dictionary<FilePathWrapper, string>? changedContent = null,
+        DocumentChangeSet? changedContent = null,
         bool validated = true,
         int? workspaceVersion = null,
         List<AppliedEditSpan>? editSpans = null)
@@ -84,7 +83,7 @@ public record AppliedChangeSummary(
         string description,
         bool dryRun = false,
         string? diff = null,
-        Dictionary<FilePathWrapper, string>? changedContent = null,
+        DocumentChangeSet? changedContent = null,
         bool validated = false)
         => new(
             null,
@@ -111,7 +110,7 @@ public record AppliedChangeSummary(
     /// A real apply stays null: its updated text is the stored successData.changedFiles payload (largeResult.resultId).
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public Dictionary<FilePathWrapper, string>? ChangedContent { get; init; } = (DryRun || Validated) && !ChangedContentOptions.InlineOnApply ? null : ChangedContent;
+    public DocumentChangeSet? ChangedContent { get; init; } = (DryRun || Validated) && !ChangedContentOptions.InlineOnApply ? null : ChangedContent;
 
     public string Note
     {

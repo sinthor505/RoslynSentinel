@@ -368,7 +368,7 @@ public class RefactoringSignatureImpl
             }
 
             DocumentEditResult updated;
-            Dictionary<FilePathWrapper, string> changes;
+            DocumentChangeSet changes;
             if (operation == AddRemoveViewAction.add)
             {
                 updated = await _memberRefactoringEngine.AddMethodParameterAsync(filePathResolved, methodName, paramName, paramType!, defaultValue, contextSnippet, lineBefore, lineAfter, cancellationToken, nullDefault);

@@ -365,7 +365,7 @@ public class CoreRefactoringTools
         }
     }
 
-    private async Task<SentinelCallToolResult<object>> MoveAllTypesToFilesCore(Dictionary<FilePathWrapper, string> changes, bool autoStage, bool dryRun, bool returnDiff, string description, bool previewFiles, CancellationToken cancellationToken = default)
+    private async Task<SentinelCallToolResult<object>> MoveAllTypesToFilesCore(DocumentChangeSet changes, bool autoStage, bool dryRun, bool returnDiff, string description, bool previewFiles, CancellationToken cancellationToken = default)
     {
         if (!autoStage)
         {
