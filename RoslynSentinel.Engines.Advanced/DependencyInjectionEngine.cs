@@ -40,7 +40,7 @@ public class DependencyInjectionEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         var classMatches = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>();
-        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(classMatches, "Class", className) ?? throw new ToolNotFoundException($"Class not found: {className}");
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(classMatches, "Class", className) ?? throw new ToolNotFoundException($"Class '{className}' not found in {Path.GetFileName(filePath)}. " + RoslynSentinel.Engines.Basic.DeclarationNotFoundDetail.Build("class", "className", className, root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Select(c => c.Identifier.Text) ?? Enumerable.Empty<string>(), filePath.ToString()), MissingTargetKinds.Class, className);
         var reports = new List<DependencyReport>();
         var constructor = classNode.Members.OfType<ConstructorDeclarationSyntax>().FirstOrDefault();
 
@@ -249,7 +249,7 @@ public class DependencyInjectionEngine
         var document = DocumentLookup.RequireDocument(solution, filePath);
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var classMatches = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>();
-        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(classMatches, "Class", className) ?? throw new ToolNotFoundException($"Class '{className}' not found in file: {filePath}");
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(classMatches, "Class", className) ?? throw new ToolNotFoundException($"Class '{className}' not found in {Path.GetFileName(filePath)}. " + RoslynSentinel.Engines.Basic.DeclarationNotFoundDetail.Build("class", "className", className, root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Select(c => c.Identifier.Text) ?? Enumerable.Empty<string>(), filePath.ToString()), MissingTargetKinds.Class, className);
         var fieldName = $"_{char.ToLower(dependencyName[0])}{dependencyName.Substring(1)}";
 
         // 1. Create the field

@@ -39,6 +39,26 @@ public class DependencyInjectionEngineTests
     }
 
     [Test]
+    public async Task AnalyzeDependencies_ClassMissingFromExistingFile_ThrowsWithCandidate()
+    {
+        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Foo.cs", "public class Foo { }")]));
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.AnalyzeDependenciesAsync("Foo.cs", "Bar"));
+        Assert.That(ex.MissingTargetKind, Is.EqualTo(MissingTargetKinds.Class), "missing class should report the Class kind");
+        Assert.That(ex.MissingTargetName, Is.EqualTo("Bar"), "missing class should report the requested name");
+        Assert.That(ex.Message, Does.Contain("Foo"), "message should list the class that does exist in the file");
+    }
+
+    [Test]
+    public async Task AddDependency_ClassMissingFromExistingFile_ThrowsWithCandidate()
+    {
+        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Foo.cs", "public class Foo { }")]));
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.AddDependencyAsync("Foo.cs", "Bar", "IService", "Service"));
+        Assert.That(ex.MissingTargetKind, Is.EqualTo(MissingTargetKinds.Class), "missing class should report the Class kind");
+        Assert.That(ex.MissingTargetName, Is.EqualTo("Bar"), "missing class should report the requested name");
+        Assert.That(ex.Message, Does.Contain("Foo"), "message should list the class that does exist in the file");
+    }
+
+    [Test]
     public async Task FindDiRegistrations_UnknownFile_ReturnsEmptyList()
     {
         var registrations = await _engine.FindDiRegistrationsAsync("NoSuchFile.cs");
