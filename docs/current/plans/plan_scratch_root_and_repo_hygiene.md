@@ -1,6 +1,6 @@
 # Plan: move all test/eval/run/scratch output to one out-of-repo scratch root, add runtime-state retention and a repo hygiene guard
 
-**Status:** APPROVED 2026-11-20. Owner settled the open decisions (see Decision); batched run by session 3e5e7eba, nothing implemented yet.
+**Status:** IN PROGRESS 2026-11-20. Steps 1a-4 done (1520b74f, fe343823, 840c35a3, 37130409, a3f8b565, 09191c1a); batched run by session 3e5e7eba.
 
 ## Problem
 
@@ -165,6 +165,8 @@ Lane / dependency / effect per step:
 | 19 remove ignores, hygiene run, close | main session | 18 | closing |
 
 ### Step 1a - Common contracts: `ScratchRoot`, `RepoRootLocator`, `RuntimeStateRetention` skeleton
+
+- Done: 1520b74f
 - Files (all new, in `RoslynSentinel.Common\`): `ScratchRoot.cs`, `RepoRootLocator.cs`, `RuntimeStateRetention.cs`.
 - Depends on: none. Lane: implementer (3 files, 3 `CreateFile` calls, definitions first: `RepoRootLocator`, `ScratchRoot`, `RuntimeStateRetention`).
 - Effect: text-neutral (no callers yet).
@@ -233,6 +235,8 @@ public static class RuntimeStateRetention
   and expects exactly four hits until Step 12.
 
 ### Step 1b - PowerShell helper `scripts\roslynsentinel-scratch.ps1` and its test
+
+- Done: fe343823
 - Files: `scripts\roslynsentinel-scratch.ps1` (new), `scripts\roslynsentinel-scratch.Tests.ps1` (new; copy the harness idiom - `Assert-That`, temp root,
   summary and exit code - from `scripts\roslynsentinel-instances-common.Tests.ps1`).
 - Depends on: none. Lane: implementer (2 new files).
@@ -262,6 +266,8 @@ function Get-RoslynSentinelBuildDir {
 - Done when: `pwsh scripts\roslynsentinel-scratch.Tests.ps1` exits 0 (dispatcher runs; implementer checks the file parses).
 
 ### Step 2 - Tests for `ScratchRoot` and `RepoRootLocator`
+
+- Done: 840c35a3
 - Files: `RoslynSentinel.Tests.Basic\ScratchRootTests.cs` (new, fixtures `ScratchRootTests` and `RepoRootLocatorTests`; Tests.Basic references Common).
 - Depends on: 1a. Lane: test-writer.
 - Effect: text-neutral.
@@ -272,6 +278,8 @@ function Get-RoslynSentinelBuildDir {
 - Done when: `RunTest` filter `ScratchRootTests|RepoRootLocatorTests` passes (dispatcher); `Build` 0 errors.
 
 ### Step 3a - Repoint both archivers and the git stamp
+
+- Done: 37130409
 - Files: `RoslynSentinel.Tests.ModelEval\ModelTestingResultsArchiver.cs`, `RoslynSentinel.Tests.ErrorVariants\ModelTestingResultsArchiver.cs`,
   `RoslynSentinel.Tests.ModelEval\ModelEvalAssemblySetUp.cs`.
 - Depends on: 1a. Lane: implementer (3 files, about 7 edits).
@@ -287,6 +295,8 @@ function Get-RoslynSentinelBuildDir {
 - Done when: `Build` 0 errors; dispatcher runs `RunStampTests` (`ReadWorkingTreeStamp_ReturnsTheRepoHead`, `ReadWorkingTreeStamp_OutsideARepo_ReturnsNull`) after Step 3b.
 
 ### Step 3b - Remaining repo-root lookups
+
+- Done: a3f8b565
 - Files: `RoslynSentinel.Tests.ModelEval\ResumeScenarios.cs`, `RoslynSentinel.Tests\TestSolutionFixture.cs`, `RoslynSentinel.Tests.ModelEval\RunStampTests.cs`.
 - Depends on: 1a. Lane: implementer (3 files, 4 edits).
 - Effect: text-neutral inside the repo (same result when the bin folder is under the repo; `ROSLYNSENTINEL_REPO_ROOT` wins when set).
@@ -298,6 +308,8 @@ function Get-RoslynSentinelBuildDir {
 - Done when: `Build` 0 errors; dispatcher runs `RunStampTests` and one `TestSolutionFixture` user (`BuildIsolationTests.RunFullBuildAsync_FullBuildThrowaway_WritesOutputUnderInstanceDirNotProjectBinAsync`).
 
 ### Step 4 - Archiver destination test
+
+- Done: 09191c1a
 - Files: `RoslynSentinel.Tests.ModelEval\ModelTestingResultsArchiverTests.cs` (add tests; the fixture sits in namespace `RoslynSentinel.Tests.ModelEval`, outside the `.LiveModel` SetUpFixture that can `Assert.Ignore` the assembly).
 - Depends on: 3a. Lane: test-writer.
 - Effect: text-neutral.
