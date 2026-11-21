@@ -1236,7 +1236,7 @@ public class BasicRefactoringEngine
         return calls;
     }
 
-    public async Task<Dictionary<FilePathWrapper, string>> MoveTypeToFileAsync(FilePathWrapper filePath, string typeName, string? targetFolder = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentChangeSet> MoveTypeToFileAsync(FilePathWrapper filePath, string typeName, string? targetFolder = null, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("MoveTypeToFile"))
         {
@@ -1390,7 +1390,7 @@ public class BasicRefactoringEngine
         return (root, typeNode);
     }
 
-    private async Task<Dictionary<FilePathWrapper, string>> MoveAllTypesToFilesForDocumentAsync(Document document, CancellationToken cancellationToken = default)
+    private async Task<DocumentChangeSet> MoveAllTypesToFilesForDocumentAsync(Document document, CancellationToken cancellationToken = default)
     {
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         if (root == null)
@@ -1499,7 +1499,7 @@ public class BasicRefactoringEngine
         return toRemove.Count == 0 ? root : (CompilationUnitSyntax)root.ReplaceTrivia(toRemove, (_, _) => SyntaxFactory.Whitespace(""));
     }
 
-    public async Task<Dictionary<FilePathWrapper, string>> MoveAllTypesToFilesAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentChangeSet> MoveAllTypesToFilesAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("MoveTypeToFile"))
         {
@@ -1513,7 +1513,7 @@ public class BasicRefactoringEngine
         return await MoveAllTypesToFilesForDocumentAsync(document, cancellationToken);
     }
 
-    public async Task<Dictionary<FilePathWrapper, string>> MoveAllTypesToFilesInProjectAsync(string projectName, CancellationToken cancellationToken = default)
+    public async Task<DocumentChangeSet> MoveAllTypesToFilesInProjectAsync(string projectName, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("MoveTypeToFile"))
         {
@@ -1535,7 +1535,7 @@ public class BasicRefactoringEngine
         return allChanges;
     }
 
-    public async Task<Dictionary<FilePathWrapper, string>> MoveAllTypesToFilesInSolutionAsync(CancellationToken cancellationToken = default)
+    public async Task<DocumentChangeSet> MoveAllTypesToFilesInSolutionAsync(CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("MoveTypeToFile"))
         {
@@ -1556,7 +1556,7 @@ public class BasicRefactoringEngine
         return allChanges;
     }
 
-    public async Task<Dictionary<FilePathWrapper, string>> ExtractInterfaceAsync(FilePathWrapper filePath, string className, string interfaceName, CancellationToken cancellationToken = default, List<string>? warnings = null)
+    public async Task<DocumentChangeSet> ExtractInterfaceAsync(FilePathWrapper filePath, string className, string interfaceName, CancellationToken cancellationToken = default, List<string>? warnings = null)
     {
         if (!_config.IsFeatureEnabled("ExtractInterface"))
         {
