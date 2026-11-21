@@ -14,7 +14,7 @@ public sealed record StaticConversionRequest(int Index, FilePathWrapper FilePath
 /// Outcome of a static conversion: the request indexes the conversion took over (any other index still needs the
 /// plain modifier path), the new text of every touched file, and non-fatal notes for the caller.
 /// </summary>
-public sealed record StaticConversionResult(HashSet<int> HandledIndexes, Dictionary<FilePathWrapper, string> Changes, List<string> Notes);
+public sealed record StaticConversionResult(HashSet<int> HandledIndexes, DocumentChangeSet Changes, List<string> Notes);
 
 /// <summary>One use of instance state inside a member that was asked to become static.</summary>
 public sealed record InstanceStateUse(string Description, string FileName, int Line)

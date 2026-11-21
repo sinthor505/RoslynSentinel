@@ -1190,7 +1190,7 @@ public class MemberRefactoringEngine
         var handled = new HashSet<int>(targets.Select(t => t.Request.Index));
         if (targets.Count == 0)
         {
-            return new StaticConversionResult(handled, new Dictionary<FilePathWrapper, string>(), new List<string>());
+            return new StaticConversionResult(handled, new DocumentChangeSet(), new List<string>());
         }
 
         var duplicate = targets.GroupBy(t => t.Symbol, SymbolEqualityComparer.Default).FirstOrDefault(g => g.Count() > 1);
@@ -4320,7 +4320,7 @@ public class MemberRefactoringEngine
     /// Applies each document's edits to that document's ORIGINAL text (taken from <paramref name = "knownTexts"/> when
     /// already loaded) and returns the new full text keyed by file path. Documents with no edits are omitted.
     /// </summary>
-    public static async Task<Dictionary<FilePathWrapper, string>> MaterializeDocumentEditsAsync(Solution solution, Dictionary<DocumentId, List<TextChange>> editsByDocument, Dictionary<DocumentId, SourceText> knownTexts, CancellationToken cancellationToken) => (await MaterializeDocumentEditsWithAppliedEditsAsync(solution, editsByDocument, knownTexts, cancellationToken)).Texts;
+    public static async Task<DocumentChangeSet> MaterializeDocumentEditsAsync(Solution solution, Dictionary<DocumentId, List<TextChange>> editsByDocument, Dictionary<DocumentId, SourceText> knownTexts, CancellationToken cancellationToken) => (await MaterializeDocumentEditsWithAppliedEditsAsync(solution, editsByDocument, knownTexts, cancellationToken)).Texts;
 
     /// <summary>
     /// The single definition of "apply each document's edits to its ORIGINAL text": returns the new full text keyed by file
