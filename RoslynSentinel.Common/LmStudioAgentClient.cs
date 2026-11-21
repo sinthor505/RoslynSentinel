@@ -308,7 +308,7 @@ public sealed class LmStudioAgentClient
                             ? existing
                             : messageBuilders[evt.ItemId] = new StringBuilder();
                         sb.Append(evt.Delta);
-                        _logger.LogInformation("LM Studio streaming: {Delta}", evt.Delta);
+                        _logger.LogInformation("{Backend} streaming: {Delta}", Backend, evt.Delta);
                         break;
                     }
                 case "response.output_item.done":
@@ -317,7 +317,7 @@ public sealed class LmStudioAgentClient
                         if (evt.Item.Type == "function_call")
                         {
                             _logger.LogInformation(
-                                "LM Studio streaming: tool call {Tool}({Args})", evt.Item.Name, evt.Item.Arguments);
+                                "{Backend} streaming: tool call {Tool}({Args})", Backend, evt.Item.Name, evt.Item.Arguments);
 
                             toolCallCount++;
                             var callKey = evt.Item.Name + "\n" + evt.Item.Arguments;
@@ -364,7 +364,7 @@ public sealed class LmStudioAgentClient
 
         if (completedResponse is null)
         {
-            throw new InvalidOperationException("LM Studio stream ended without a response.completed event.");
+            throw new StreamTruncatedException("LM Studio stream ended without a response.completed event.");
         }
 
         // A response can arrive via response.completed yet still be truncated -> the Responses API
@@ -1134,6 +1134,14 @@ public sealed class ContextSizeExceededException(string message) : Exception(mes
 /// <c>CompleteAsync</c>'s generic retry filter does not catch it; it has its own single retry.
 /// </summary>
 public sealed class StreamRunawayException(string message) : Exception(message);
+
+/// <summary>
+/// Thrown when an SSE stream ends without a <c>response.completed</c> event (the connection closed early, e.g. the host
+/// dropped it mid-generation). Deliberately an <see cref="InvalidOperationException"/>, so <c>CompleteAsync</c>'s generic
+/// retry filter keeps its single retry; only a second consecutive truncation reaches <c>ModelAgentRunner</c>, which ends
+/// the run as <see cref="AgentStopReason.StreamTruncated"/>.
+/// </summary>
+public sealed class StreamTruncatedException(string message) : InvalidOperationException(message);
 
 /// <summary>One message in the running conversation the harness maintains itself (not tied to the wire format).</summary>
 public sealed class AgentChatMessage

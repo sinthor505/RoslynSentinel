@@ -559,6 +559,13 @@ public enum AgentStopReason
 
     /// <summary>An unhandled exception ended the run.</summary>
     Exception,
+
+    /// <summary>
+    /// The model's streamed response ended without a <c>response.completed</c> event on two attempts (the host closed the connection
+    /// early); nothing from it was recorded or executed; not a genuine finish. Declared last on purpose: stop reasons are persisted
+    /// as numbers in transcript.json, so inserting a member earlier would renumber the stored ones.
+    /// </summary>
+    StreamTruncated,
 }
 
 /// <summary>

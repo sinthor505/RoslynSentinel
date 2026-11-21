@@ -59,7 +59,7 @@ Evidence and data: `docs/current/findings/finding_overnight_token_path_slips.md`
   break out; errors that repeat the bad token feed it back. Environment fixes are sampler settings and
   recovery that needs no retyping, not longer hints.
 - **Read the stream.** For persistent tool struggles or wrong symbol names, review the agent.log
-  `LM Studio reasoning:` / `LM Studio streaming:` deltas (`scripts/Find-TypoTokenStream.ps1`) and
+  `LM Studio reasoning:` / `<backend> streaming:` (older logs `LM Studio streaming:`) deltas (`scripts/Find-TypoTokenStream.ps1`) and
   tokenize the name; whole words hide the awkward token path.
 - **Measure the first write, at scale.** Slips are 1-10% per first write and propagate afterwards, so a
   20-run arm cannot separate a fix from variance. Use the early-stop `ShippingKindReplay` (200+ samples)

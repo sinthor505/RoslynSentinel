@@ -389,6 +389,16 @@ public sealed class ModelAgentRunner
                     turnNumber);
                 break;
             }
+            catch (StreamTruncatedException ex)
+            {
+                // The client already retried once; the discarded response is not added to messages or transcript turns; no tool was executed.
+                stopReason = AgentStopReason.StreamTruncated;
+                _logger.LogWarning(
+                    ex,
+                    "Turn {Turn}: the model's streamed response ended without response.completed twice (connection closed early); no call was executed, stopping.",
+                    turnNumber);
+                break;
+            }
             catch (ContextSizeExceededException ex)
             {
                 // TODO force a reasoning drop (policy DroppedTurns) and retry once before ending the run as ContextExhausted (plan_reasoning_replay_pressure_policy, out of scope).

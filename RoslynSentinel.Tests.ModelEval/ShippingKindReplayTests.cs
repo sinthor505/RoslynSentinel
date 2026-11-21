@@ -333,7 +333,7 @@ public class ShippingKindReplayTests
     }
 
     /// <summary>
-    /// Reads the LM Studio reasoning and content deltas from the logger ("LM Studio reasoning: {Delta}" and "LM Studio streaming: {Delta}")
+    /// Reads the LM Studio reasoning and content deltas from the logger ("LM Studio reasoning: {Delta}" and "{Backend} streaming: {Delta}")
     /// and cancels the current sample once the accumulated text of a channel contains a ShippingKinds.O... member. Deltas arrive on an
     /// HttpClient stream thread, so every buffer access is locked.
     /// </summary>
@@ -472,7 +472,9 @@ public class ShippingKindReplayTests
                 {
                     _owner.Append(true, delta);
                 }
-                else if (format.StartsWith("LM Studio streaming:", StringComparison.Ordinal))
+                // The content line's format is "{Backend} streaming: {Delta}" (older builds: "LM Studio streaming: {Delta}").
+                else if (format.StartsWith("{Backend} streaming:", StringComparison.Ordinal)
+                    || format.StartsWith("LM Studio streaming:", StringComparison.Ordinal))
                 {
                     _owner.Append(false, delta);
                 }

@@ -58,8 +58,8 @@ $ErrorActionPreference = 'Stop'
 # Names in the AgentStopReason enum order (RoslynSentinel.Common/AgentLoop/AgentTranscript.cs); the file stores the number.
 $StopReasonNames = @(
     'ModelFinished', 'TurnCapExceeded', 'WallClockCapExceeded', 'UnknownToolRequested', 'RepeatedToolFailure',
-    'LoopLatchIgnored', 'ContextExhausted', 'MalformedToolCall', 'RepeatedIdenticalCall', 'TargetReached',
-    'Cancelled', 'Exception')
+    'LoopLatchIgnored', 'ContextExhausted', 'StreamRunaway', 'MalformedToolCall', 'RepeatedIdenticalCall', 'TargetReached',
+    'Cancelled', 'Exception', 'StreamTruncated')
 
 $Invariant = [System.Globalization.CultureInfo]::InvariantCulture
 $JsonObjectType = [System.Text.Json.Nodes.JsonObject]

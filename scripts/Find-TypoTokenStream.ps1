@@ -3,7 +3,8 @@
     Finds the streamed tokens where the model writes a misspelled ShippingKinds member (Overnight -> Oovernight/Oversnight ...).
 
 .DESCRIPTION
-    agent.log records every streamed text delta of the model's message content as a line "LM Studio streaming: <delta>" with a
+    agent.log records every streamed text delta of the model's message content as a line "<backend> streaming: <delta>" (older logs:
+    "LM Studio streaming: <delta>"; <backend> is lmstudio or llama-server) with a
     millisecond timestamp (LmStudioAgentClient logs one line per server-sent delta, normally one token). This script rebuilds each
     turn's streamed text from those lines, finds every 'ShippingKinds.<Name>' whose <Name> is not a real member, and shows the token
     sequence around it, so you can see which token commits the typo. For each typo it reports:
@@ -56,9 +57,10 @@ $ErrorActionPreference = 'Stop'
 $placeholderNames = @('ConstantName', 'Name', 'Xxx', 'Foo', 'Member', 'Constant')
 $memberRegex = [regex]'ShippingKinds\.([A-Za-z_][A-Za-z0-9_]*)'
 $lineRegex = [regex]'^(\d{2}:\d{2}:\d{2}\.\d{3}) \[\w+\] [^:]*: (.*)$'
+# Old logs say "LM Studio streaming: ", newer ones "<backend> streaming: " (lmstudio or llama-server, the client's Backend).
 $deltaPrefixes = @(
-    @{ Text = 'LM Studio streaming: '; Channel = 'content' },
-    @{ Text = 'LM Studio reasoning: '; Channel = 'reasoning' }
+    @{ Regex = [regex]'^(?:LM Studio|lmstudio|llama-server) streaming: '; Channel = 'content' },
+    @{ Regex = [regex]'^LM Studio reasoning: '; Channel = 'reasoning' }
 )
 
 $typos = [System.Collections.Generic.List[object]]::new()
@@ -194,8 +196,9 @@ foreach ($file in Get-LogFiles) {
 
         $isDelta = $false
         foreach ($p in $deltaPrefixes) {
-            if ($message.StartsWith($p.Text, [StringComparison]::Ordinal) -and -not $message.StartsWith($p.Text + 'tool call ', [StringComparison]::Ordinal)) {
-                $delta = @{ Time = $time; Text = $message.Substring($p.Text.Length) }
+            $prefix = $p.Regex.Match($message)
+            if ($prefix.Success -and -not $message.Substring($prefix.Length).StartsWith('tool call ', [StringComparison]::Ordinal)) {
+                $delta = @{ Time = $time; Text = $message.Substring($prefix.Length) }
                 $deltas.Add($delta)
                 $lastDelta = $delta
                 $channel = $p.Channel
@@ -227,7 +230,7 @@ foreach ($file in Get-LogFiles) {
 if ($Csv) { $typos | Select-Object Model, Log, Turn, Channel, Time, Typo, Nearest, Truncated, BadChar, ExpectedChar, FirstBad, LastGood, Signature | Export-Csv -LiteralPath $Csv -NoTypeInformation -Encoding utf8 }
 
 "Logs: $($stats.Files) (+$($stats.Duplicates) duplicate copies skipped)   streams with deltas: $($stats.Streams)   deltas: $($stats.Deltas)   typos: $($typos.Count)   correct member uses: $($correctUses.Count)"
-if ($stats.Deltas -eq 0) { 'No streamed deltas found: the log has no "LM Studio streaming:" lines (older log, or turns with no message content).' }
+if ($stats.Deltas -eq 0) { 'No streamed deltas found: the log has no "<backend> streaming:" lines (older log, or turns with no message content).' }
 ''
 
 foreach ($t in $typos | Select-Object -First $MaxExamples) {

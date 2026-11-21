@@ -22,7 +22,8 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// <summary>
 /// <see cref="ModelAgentRunner"/> with a scripted model whose streamed responses never finish cleanly. Every chat request
 /// streams a tool call with placeholder arguments, which <see cref="LmStudioAgentClient"/> treats as a runaway: the runner must
-/// stop as <see cref="AgentStopReason.StreamRunaway"/> after the client's single retry. A second case checks that a model call
+/// stop as <see cref="AgentStopReason.StreamRunaway"/> after the client's single retry. A stream that ends without
+/// <c>response.completed</c> must stop as <see cref="AgentStopReason.StreamTruncated"/> the same way. A further case checks that a model call
 /// outlasting the wall-clock cap is cancelled. No LM Studio needed.
 /// </summary>
 [TestFixture]
@@ -115,6 +116,28 @@ public class StreamRunawayRunnerTests
     }
 
     [Test]
+    public async Task StreamEndingWithoutResponseCompleted_OnBothAttempts_StopsWithStreamTruncated_NoException()
+    {
+        // Each attempt streams a text delta and closes without response.completed, so the client throws StreamTruncatedException,
+        // retries once (it is an InvalidOperationException, caught by the generic retry filter) and throws again; the runner must
+        // end the run with a transcript instead of letting the exception escape to RunAsync.
+        var handler = new TruncatedStreamHandler();
+        var runner = NewRunner(handler: handler);
+
+        var result = await runner.RunAsync("system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.StopReason, Is.EqualTo(AgentStopReason.StreamTruncated));
+            Assert.That(result.Converged, Is.False);
+            Assert.That(handler.ResponsesRequests, Is.EqualTo(2));
+            Assert.That(result.Transcript, Is.Not.Null);
+            Assert.That(result.Transcript.StopReason, Is.EqualTo(AgentStopReason.StreamTruncated));
+            Assert.That(result.Transcript.Turns, Is.Empty);
+        });
+    }
+
+    [Test]
     public async Task ModelCallOutlastingTheWallClockCap_IsCancelled_StopsWithWallClockCapExceeded()
     {
         // The chat request never answers; the runner's per-call deadline (the 1 s cap) must cancel it instead of waiting out the 30 s delay.
@@ -187,6 +210,35 @@ public class StreamRunawayRunnerTests
             {
                 Content = new StringContent(
                     $"event: response.output_item.done\ndata: {payload}\n\n", Encoding.UTF8, "text/event-stream"),
+            });
+        }
+    }
+
+    /// <summary>
+    /// Every /responses POST streams one text delta and then ends the body without a response.completed event. The models
+    /// endpoint answers 404. Counts the /responses POSTs so a test can assert the client retried exactly once.
+    /// </summary>
+    private sealed class TruncatedStreamHandler : HttpMessageHandler
+    {
+        public int ResponsesRequests
+        {
+            get; private set;
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (!request.RequestUri!.AbsolutePath.EndsWith("/responses", StringComparison.Ordinal))
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+            }
+
+            ResponsesRequests++;
+            var payload = JsonSerializer.Serialize(new { item_id = "msg_1", delta = "partial" });
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    $"event: response.output_text.delta\ndata: {payload}\n\n", Encoding.UTF8, "text/event-stream"),
             });
         }
     }
