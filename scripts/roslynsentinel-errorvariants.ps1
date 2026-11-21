@@ -7,11 +7,11 @@
 .DESCRIPTION
     Front door for ErrorVariantReplayTests.ReplayVariants_SamplesAndClassifies ([Explicit]). It maps its parameters to the
     VARIANT_* and ROSLYNSENTINEL_LLM_* environment variables, builds and tests ONLY RoslynSentinel.Tests.ErrorVariants (no MCP
-    server, no fixture), and archives the run folder to ModelTestingResults\<host-suffix>\ReplayVariants_SamplesAndClassifies\<timestamp>\
+    server, no fixture), and archives the run folder to <scratch>\ModelTestingResults\<host-suffix>\ReplayVariants_SamplesAndClassifies\<timestamp>\ (<scratch> is ROSLYNSENTINEL_SCRATCH_ROOT when set, else <parent of the repo>\RoslynSentinel-ScratchDir; ROSLYNSENTINEL_RESULTS_ROOT overrides the results folder)
     (the test's own archiver does it; this script copies the run if that did not happen). The result is variants.csv in that folder,
     one row per sample, plus a transcript.json per sample.
 
-    Like roslynsentinel-modeleval.ps1 it uses its own --artifacts-path (_scratchbuild_ev_<host-suffix>), so it can run beside a
+    Like roslynsentinel-modeleval.ps1 it uses its own --artifacts-path (<scratch>\build\ev_<host-suffix>), so it can run beside a
     ModelEval job on the same host without racing on obj/.
 
     A source whose transcript header records a model key, temperature or top-p different from this run's is refused (a harness-error
@@ -60,12 +60,12 @@
 
 .EXAMPLE
     .\roslynsentinel-errorvariants.ps1 -HostAddress 113 -Model qwen3.5-9b-mtp -Variants FileNotFound/armE -Samples 1 `
-        -Sources ModelTestingResults\113\RunScenario_SamplesAndScores\20261113-050525-257\sample-01
+        -Sources <scratch>\ModelTestingResults\113\RunScenario_SamplesAndScores\20261113-050525-257\sample-01
     One sample: the first transcript of the arm-E run, cut at its first error, with arm E's own message put back.
 
 .EXAMPLE
     .\roslynsentinel-errorvariants.ps1 113 -Model qwen3.5-9b-mtp -Variants 'FileNotFound/*' -Samples 3 -AbsentTargets CustomsDeclarationPrinter.cs `
-        -Sources ModelTestingResults\113\RunScenario_SamplesAndScores\20261113-050525-257
+        -Sources <scratch>\ModelTestingResults\113\RunScenario_SamplesAndScores\20261113-050525-257
     Every FileNotFound variant against all ten transcripts of the run, three samples each.
 #>
 [CmdletBinding()]
@@ -101,6 +101,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
+. (Join-Path $PSScriptRoot 'roslynsentinel-scratch.ps1')
+$scratchRoot = Get-RoslynSentinelScratchRoot -RepoRoot $repoRoot
 
 . (Join-Path $PSScriptRoot 'roslynsentinel-evalhosts.ps1')
 $evalTable = Read-EvalHostTable
@@ -125,11 +127,10 @@ if ($sourcePaths.Count -eq 0) { throw '-Sources is empty.' }
 if ($variantSpecs.Count -eq 0) { throw '-Variants is empty.' }
 
 $testName = 'ReplayVariants_SamplesAndClassifies'
-$artifactsPath = Join-Path $repoRoot "_scratchbuild_ev_$suffix"
+$artifactsPath = Get-RoslynSentinelBuildDir -RepoRoot $repoRoot -Suffix $suffix -Prefix 'ev_'
 $csproj = Join-Path $repoRoot 'RoslynSentinel.Tests.ErrorVariants\RoslynSentinel.Tests.ErrorVariants.csproj'
 $testDir = Join-Path $artifactsPath "bin\RoslynSentinel.Tests.ErrorVariants\debug\model-eval\$testName"
-# TODO honour ROSLYNSENTINEL_RESULTS_ROOT here like roslynsentinel-modeleval.ps1 does (this script does not run through the queue)
-$resultsDir = Join-Path $repoRoot "ModelTestingResults\$suffix\$testName"
+$resultsDir = Join-Path (Get-RoslynSentinelResultsRoot -RepoRoot $repoRoot) "$suffix\$testName"
 
 $env:ROSLYNSENTINEL_LLM_BASE_URL = $baseUrl
 $env:ROSLYNSENTINEL_LLM_MODEL = $Model
@@ -143,6 +144,9 @@ $env:VARIANT_SAMPLES = "$Samples"
 $env:VARIANT_CONTINUE_TURNS = "$ContinueTurns"
 $env:VARIANT_CUT_TURN = if ($PSBoundParameters.ContainsKey('CutTurn')) { "$CutTurn" } else { $null }
 $env:VARIANT_ABSENT_TARGETS = if ($AbsentTargets) { ($AbsentTargets | ForEach-Object { $_ -split '[,;]' } | Where-Object { $_ }) -join ',' } else { $null }
+# The testhost runs from <scratch>\build\..., outside the repo, so it resolves the repo and scratch root from these.
+$env:ROSLYNSENTINEL_REPO_ROOT = $repoRoot
+$env:ROSLYNSENTINEL_SCRATCH_ROOT = $scratchRoot
 
 Write-Host ""
 Write-Host "=== ErrorVariants: $testName against $baseUrl (model=$Model) ===" -ForegroundColor Cyan
