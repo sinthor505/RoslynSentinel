@@ -935,3 +935,73 @@ not change course. The stop did.
 
 - **Untriggered 10-chain fixes: narrow to the loop latch and parameter-rename attribution.** The duplicate-apply no-op (68fef93b) is covered live by scenario `TwinApplyCalls` (10/10 at fed00505) and by `ReplaceSnippetDuplicateApplyTests`; the FileNotFound renamed-file hedge text was largely replaced and has unit tests (`FileNotFoundMessageTests`). Only the latch (mechanics tests only) and parameter-rename (`EditImpactSpanAttributionTests` only) lack a live check. Why: server behaviour is pinned; what is unmeasured is the model's reaction.
 - **Acceptance:** `-Test ResumeTranscript` on H5 R5 `20261111-223133-011` keeping about 13 turns (identical resends at T12, T14, T16, T17) with `ROSLYNSENTINEL_LOOP_LATCH=1`, n=10; pass = a latch refusal or `LoopLatchIgnored` appears and the transcript shows whether the model switches tool; 0 qualifying triggers proves nothing. Then parameter-rename: keep 3-4 turns so the model re-attempts the signature-only edit.
+
+## Live checks: loop latch and parameter-rename attribution (todo punchlist #16, 2026-11-21)
+
+**Setup.** Host 113u (llama-server), `unsloth/Qwen3.5-9B-MTP-GGUF` Q4_K_M, ctx 60000, penalties as set by hand (not reloaded). Commit b8ef6d71
+(pinned, includes the #11 restore fix a1d28a75). Source transcript: H5 R5 `20261111-223133-011` (qwen3.5-9b-coder), copied to
+`<scratch>\resume-sources\h5-r5-20261111-223133-011\transcript.json`. Queue ids `20261121-043239-001` (smoke), `043506-001` (latch n=10),
+`043541-001` (parameter rename n=10). Latch jobs: `ROSLYNSENTINEL_LOOP_LATCH=1` in the submitting shell (recorded with the job); the
+parameter-rename job: variable unset. Loop assist off, lift renames unset, `-ContinueTurns` default (3 live turns). Assistance level L1 (no
+intervention), one harness-side detail: the model key had to be the full loaded id, `unsloth/Qwen3.5-9B-MTP-GGUF` (`Test-EvalModelMatch`
+compares the part after the last slash exactly).
+
+### Latch check, K=17 (the kept turns end on the T16/T17 back-to-back CS0103 ReplaceSnippet pair)
+
+- **Smoke (n=1) passed:** `agent.log` line 73 `Loop latch TRIPPED for agent default: ReplaceSnippet failed the same way 2 times (error code
+  ValidationFailed)` at 21:33:37.417, 43 ms before `Agent run starting` (21:33:37.460), i.e. during the replay of the kept turns and before the
+  first live turn. So the replay does go through `LoopLatchFilter` (agent key `default`, the same key the live calls use): no bypass finding, the K=13
+  fallback was not needed.
+- **n=10 (`043506-001`, 9m07s):** the latch tripped during the replay in 10/10 samples (one TRIPPED line each).
+
+| Sample | First live call | Latch refusals (TargetIneligible) | Stop | What the model did next / outcome after 3 live turns |
+|---|---|---|---|---|
+| 1 | ReadFile | 0 | cap | ReplaceSnippet rejected (ValidationFailed), ReadFile |
+| 2 | ReadFile | 0 | cap | Member rejected, Member ok (applied) |
+| 3 | ReplaceSnippet | 1 (T18) | cap | ReadFile at once (released), ReplaceSnippet rejected (ValidationFailed, not refused) |
+| 4 | ReplaceSnippet | 1 (T18) | cap | ReadFile, ReadFile |
+| 5 | ReadFile | 0 | cap | ReadFile x3 |
+| 6 | ReadFile | 0 | cap | ReplaceSnippet rejected, ReadFile |
+| 7 | ReadFile | 0 | cap | Member rejected, RenameSymbol ok |
+| 8 | ReplaceSnippet | 3 (T18-T20) | **LoopLatchIgnored** | resent ReplaceSnippet three times with changed arguments (v4, v5, v6); stopped at T20 |
+| 9 | ReadFile | 0 | cap | ReplaceSnippet rejected, RenameSymbol ok |
+| 10 | ReplaceSnippet | 2 (T18, T19) | cap | ReadFile at T20 |
+
+Counts: first live call was ReplaceSnippet in 4/10 and was refused every time (the latch did its job: no fourth identical failure was executed);
+6/10 read or switched tool before resending (no refusal needed). Of the 4 refused, 2 switched to ReadFile after one refusal, 1 after two, 1 never
+(`LoopLatchIgnored`, the stop reason fired as designed: 3 refusals of one tool). Any successful call released the latch (samples 3 and 10: the
+next ReplaceSnippet after a ReadFile ran normally). Pass criterion (a latch refusal or `LoopLatchIgnored` appears) met; the transcripts show the
+model's switch: ReadFile every time it switched after a refusal.
+
+**Environment defect seen (sample 8, and the two-refusal sample 10).** The refusal text is `ReplaceSnippet is DISABLED until another tool
+succeeds: it failed the same way 2 times. You MUST do the next step now: <the failed edit's own next step>`. For this failure the next step
+is "widen oldContent to cover every use ... or add a batchEdits item per use", which is a ReplaceSnippet call. The model followed it (v5, v6
+"update ALL body uses" are visibly improved edits), was refused again, and `LoopLatchIgnored` ended the run. The latch is per tool and carries
+no information about whether the arguments changed, and the directive it quotes can only be carried out with the tool it just disabled
+(`ToolLoopLatch.cs:40` `NextStepDirective`, `BuildRefusal` ~:163). Candidate fixes (owner decision): when the quoted next step names an
+edit-tool call, replace it with the read-tool options (the no-next-step branch already points at the callable read tools), or release the
+latch when the resent arguments differ materially from the two failing ones. Also note the directive is policy wording in tool error text
+(CLAUDE.md "Tool error and hint text carries facts and options only"); the proposal chose it deliberately, so this is a question, not a bug report.
+
+### Parameter-rename attribution, K=3 (`043541-001`, 5m45s; the model writes the first signature-only edit live)
+
+The scout found the fit in the same transcript: R5 T4 is the first signature-only edit (`CalcDisc(..., rate, ...)` ->
+`CalculateDiscountedTotal(..., discountRate, ...)` with the body still using `rate`), rejected at the time with only the CS0103 hint. K=3 ends
+on a ReadFile, so the model produces that edit itself. No wider scout was needed.
+
+- **Attribution present in 10/10 samples at T4** (all 10 first live calls were ReplaceSnippet, all rejected): the message carries `Next step:
+  This edit renames parameter rate to discountRate in OrderPricingCalculator.CalculateDiscountedTotal, but 2 use(s) of rate are outside your
+  edit: widen oldContent to cover every use ... so all uses are renamed in the same call.` Pass.
+- **Misdirecting hint still co-present, 10/10:** the same message still appends `No symbol named 'rate' was found anywhere in the solution. This
+  is likely a typo ... Closest name: Byte` (`CompilerErrorLookupHelper.cs`), contradicting the attribution that precedes it. The models did not
+  follow the typo hint: no sample hit the `rate` CS0103 again at T5 or T6.
+- **Reaction:** T5 was ReplaceSnippet in 6 samples (sample 2 applied; the other 5 rejected, sample 4 with "1 file(s) still use CalcDisc: use
+  RenameSymbol"), ReadFile in 2 (samples 3, 10) and Search in 2 (samples 6, 7). 5/10 reached RenameSymbol within the 3 live turns (samples
+  4, 5, 6, 7, 8). Only 1/10 applied an edit within 3 turns, so the attribution removes the `rate` error but the follow-on caller error
+  (`CalcDisc` still used) is where these samples spend their turns.
+
+**Conclusions.** (1) The latch works end to end live on this model: it trips during replay, refuses the resend, and every refused sample that did
+not resend again switched to ReadFile. (2) The one failing path (sample 8) is a defect in the refusal text, above. (3) The parameter-rename
+attribution fires on every qualifying failure; it should be paired with removing the "likely a typo / Closest name" hint when the unresolved name
+is a parameter the same edit renames. The 3-turn window is too short to say whether the attribution raises the success rate: that needs a longer
+`-ContinueTurns`, not more samples.

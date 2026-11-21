@@ -37,6 +37,7 @@ public sealed class ToolLoopLatch
     /// </summary>
     public const string RefusalMarker = " is DISABLED until another tool succeeds";
 
+    // TODO live check 2026-11-21 (eval_tenchain_reasoning_replay_2026_11_10.md): the quoted next step can be an edit of the tool just disabled ("widen oldContent"), so the model follows it and is refused again (LoopLatchIgnored, sample 8 of 10).
     private const string NextStepDirective = "You MUST do the next step now: ";
 
     private static readonly Regex DiagnosticId = new(@"\b[A-Z]{2,4}\d{4}\b", RegexOptions.CultureInvariant | RegexOptions.Compiled);

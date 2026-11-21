@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Live checks for the loop latch and parameter-rename attribution - resolved (2026-11-20)
+
+Live checks for the loop latch and parameter-rename attribution (2026-11-13, re-verified 2026-11-20: not yet run, latch code unchanged since 69606748) - the duplicate-apply no-op (`TwinApplyCalls`, 68fef93b) and the FileNotFound hedge are covered by scenario/unit tests; run `-Test ResumeTranscript` on H5 R5 `20261111-223133-011` keeping about 13 turns (identical resends at T12/T14/T16/T17) with `ROSLYNSENTINEL_LOOP_LATCH=1`, n=10, pass = a latch refusal or `LoopLatchIgnored` appears (0 qualifying triggers proves nothing); then parameter-rename (keep 3-4 turns, signature-only re-attempt); Medium - [doc](evals/eval_tenchain_reasoning_replay_2026_11_10.md)
+
+Evidence: smoke 20261121-043239-001, latch K=17 n=10 043506-001 (10/10 tripped on replay, 4 refusals-first, 1 LoopLatchIgnored), parameter rename K=3 n=10 043541-001 (attribution 10/10); eval_tenchain_reasoning_replay_2026_11_10.md "Live checks"; follow-ups in INBOX
+
 ## ModelEval harness cleanups from the scenario-eval run - resolved (2026-11-20)
 
 ModelEval harness cleanups from the scenario-eval run (2026-11-11) - (a) both archivers write `Outcome: Unfinished (overwritten when the test ends)` instead of the early `Inconclusive`; (b) replace the `ErrorCodeOf`/`TryReadStringProperty` `// TODO` with a comment naming strict vs lenient; (c) one shared MCP environment helper for `ScenarioAgentTests`, `TranscriptResumeAgentTests` and `OrderPricingRefactorChainAgentTests` (staging as a delegate); the `Invoke-WorktreeTests.ps1` part is closed as by design; accept per Decisions 2026-11-20; Small-Medium - [plan](plans/closed/plan_targeted_tool_scenario_evals.md)
