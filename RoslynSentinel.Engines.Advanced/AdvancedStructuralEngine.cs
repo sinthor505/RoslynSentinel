@@ -110,7 +110,7 @@ public class StructuralRefactoringEngine
     // rebases the derived class. Low priority.
     // The ExtractMembers tool refuses newType=superclass; the workaround is CreateFile/Member plus ModifyBaseType.
     // Decided 2026-10-22 (docs/current/TODO.md, pinned tool defects entry). Do not re-raise it as a gap in reviews.
-    public async Task<Dictionary<FilePathWrapper, string>> ExtractSuperclassAsync(FilePathWrapper[] filePaths, string[] classNames, string newBaseClassName, CancellationToken cancellationToken = default)
+    public async Task<DocumentChangeSet> ExtractSuperclassAsync(FilePathWrapper[] filePaths, string[] classNames, string newBaseClassName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var changes = new DocumentChangeSet();
@@ -172,7 +172,7 @@ public class StructuralRefactoringEngine
     /// then removes the source class declaration. Also renames all type references to the
     /// inlined class across the solution to point to the target class name.
     /// </summary>
-    public async Task<Dictionary<FilePathWrapper, string>> InlineClassAsync(string sourceFilePath, string targetFilePath, string className, CancellationToken cancellationToken = default)
+    public async Task<DocumentChangeSet> InlineClassAsync(string sourceFilePath, string targetFilePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         bool sameFile = string.Equals(Path.GetFullPath(sourceFilePath), Path.GetFullPath(targetFilePath), StringComparison.OrdinalIgnoreCase);
@@ -942,7 +942,7 @@ public class StructuralRefactoringEngine
         };
     }
 
-    public async Task<Dictionary<FilePathWrapper, string>> ExtractMembersToPartialAsync(FilePathWrapper filePath, string className, string[] memberNames, CancellationToken cancellationToken = default)
+    public async Task<DocumentChangeSet> ExtractMembersToPartialAsync(FilePathWrapper filePath, string className, string[] memberNames, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         // A missing source file throws ToolNotFoundException (closest real paths in the message) instead of returning an
@@ -1006,7 +1006,7 @@ public class StructuralRefactoringEngine
     /// formatting), with its declaration aligned to the original class (modifiers, type parameters, constraints) so the two
     /// parts agree. A missing file or class throws ToolNotFoundException, like the single-file method.
     /// </summary>
-    public async Task<Dictionary<FilePathWrapper, string>> ExtractMembersToPartialWithSourceAsync(FilePathWrapper filePath, string className, string[] memberNames, CancellationToken cancellationToken = default)
+    public async Task<DocumentChangeSet> ExtractMembersToPartialWithSourceAsync(FilePathWrapper filePath, string className, string[] memberNames, CancellationToken cancellationToken = default)
     {
         var partialFiles = await ExtractMembersToPartialAsync(filePath, className, memberNames, cancellationToken);
         if (partialFiles.Count == 0)
@@ -2074,7 +2074,7 @@ public class StructuralRefactoringEngine
     /// solution-wide with the method's expression, then removing the method declaration.
     /// Returns a dictionary of filePath->updatedContent for every affected file.
     /// </summary>
-    public async Task<Dictionary<FilePathWrapper, string>> InlineMethodAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentChangeSet> InlineMethodAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = DocumentLookup.RequireDocument(solution, filePath);
@@ -2264,7 +2264,7 @@ public class StructuralRefactoringEngine
         return result;
     }
 
-    public async Task<Dictionary<FilePathWrapper, string>> ConvertTupleToClassAsync(FilePathWrapper filePath, string methodName, string newClassName, CancellationToken cancellationToken = default)
+    public async Task<DocumentChangeSet> ConvertTupleToClassAsync(FilePathWrapper filePath, string methodName, string newClassName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = DocumentLookup.RequireDocument(solution, filePath);
@@ -2320,7 +2320,7 @@ public class StructuralRefactoringEngine
         };
     }
 
-    public async Task<Dictionary<FilePathWrapper, string>> ChangePropertyTypeAsync(FilePathWrapper filePath, string className, string propertyName, string newType, CancellationToken cancellationToken = default)
+    public async Task<DocumentChangeSet> ChangePropertyTypeAsync(FilePathWrapper filePath, string className, string propertyName, string newType, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = DocumentLookup.RequireDocument(solution, filePath);
@@ -2388,7 +2388,7 @@ public class StructuralRefactoringEngine
         };
     }
 
-    public async Task<Dictionary<FilePathWrapper, string>> ConvertAnonymousToNamedAsync(FilePathWrapper filePath, string newClassName, CancellationToken cancellationToken = default)
+    public async Task<DocumentChangeSet> ConvertAnonymousToNamedAsync(FilePathWrapper filePath, string newClassName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = DocumentLookup.RequireDocument(solution, filePath);

@@ -142,7 +142,7 @@ public class CodeHealingEngine
         };
     }
 
-    public async Task<Dictionary<FilePathWrapper, string>> ModernizeExceptionsAsync(List<ExceptionTarget> targets, CancellationToken cancellationToken = default)
+    public async Task<DocumentChangeSet> ModernizeExceptionsAsync(List<ExceptionTarget> targets, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var changes = new DocumentChangeSet();
