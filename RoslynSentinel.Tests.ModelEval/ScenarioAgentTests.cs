@@ -1,20 +1,14 @@
-using System.IO.Pipelines;
 using System.Text.Json;
 
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 using ModelContextProtocol.Client;
-using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
 
 using RoslynSentinel.Common;
 using RoslynSentinel.Common.AgentLoop;
-using RoslynSentinel.Server.Advanced;
 using RoslynSentinel.Tests.ModelEval.Fixtures;
-using RoslynSentinel.Tools.Advanced;
 
 namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 
@@ -27,7 +21,6 @@ namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 /// seeded-fault scenarios with no transcript (authored-only seed, no gates).
 /// Measurement only: it asserts that at least one sample ran, not what the model did.
 /// </summary>
-// TODO ResumeEnvironment in TranscriptResumeAgentTests duplicates this wiring; extract one shared environment once both settle.
 [TestFixture]
 public class ScenarioAgentTests
 {
@@ -387,108 +380,42 @@ public class ScenarioAgentTests
         }
     }
 
-    /// <summary>One sample's isolated world: fixture on disk with the scenario's staged files, in-process MCP server, MCP client, LM client.</summary>
-    internal sealed class ScenarioEnvironment : IAsyncDisposable
+    /// <summary>
+    /// Builds one sample's isolated world (a <see cref="ModelEvalMcpEnvironment"/>) with the scenario's staged files. Kept as a
+    /// nested static factory so the other ModelEval tests that call <c>ScenarioAgentTests.ScenarioEnvironment.CreateAsync</c>
+    /// are unchanged.
+    /// </summary>
+    internal static class ScenarioEnvironment
     {
-        private IHost? _host;
-        private McpClient? _client;
-        private RoslynSentinel.Tests.TestSolutionFixture? _fixture;
-
-        public IHost Host => _host!;
-        public McpClient Client => _client!;
-        public LmStudioAgentClient AgentClient { get; private set; } = null!;
-        public string SolutionDirectory => _fixture!.SolutionDirectory;
-
-        public static async Task<ScenarioEnvironment> CreateAsync(
+        public static Task<ModelEvalMcpEnvironment> CreateAsync(
             ScenarioDefinition scenario,
             string sampleDirectory,
+            CancellationToken cancellationToken) =>
+            ModelEvalMcpEnvironment.CreateAsync(
+                sampleDirectory,
+                restorePackages: false,
+                beforeLoad: null,
+                afterLoad: (fixture, workspaceManager, token) => StageScenarioFilesAsync(scenario, fixture, workspaceManager, token),
+                cancellationToken);
+
+        // The solution reloads once, on the last staged file (no reload when the scenario stages nothing).
+        private static async Task StageScenarioFilesAsync(
+            ScenarioDefinition scenario,
+            RoslynSentinel.Tests.TestSolutionFixture fixture,
+            IWorkspaceManager workspaceManager,
             CancellationToken cancellationToken)
         {
-            var environment = new ScenarioEnvironment();
-            try
-            {
-                await environment.InitializeAsync(scenario, sampleDirectory, cancellationToken);
-                return environment;
-            }
-            catch
-            {
-                await environment.DisposeAsync();
-                throw;
-            }
-        }
-
-        private async Task InitializeAsync(ScenarioDefinition scenario, string sampleDirectory, CancellationToken cancellationToken)
-        {
-            _fixture = new RoslynSentinel.Tests.TestSolutionFixture();
-
-            var clientToServer = new Pipe();
-            var serverToClient = new Pipe();
-
-            // Same wiring as TranscriptResumeAgentTests.ResumeEnvironment (default ReplaceSnippet arm).
-            var services = new ServiceCollection();
-            services.AddRoslynSentinelEnginesAdvanced();
-            var mcpBuilder = services.AddMcpServer();
-            mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
-            mcpBuilder.WithTasks(
-                new InMemoryMcpTaskStore(),
-                o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
-            mcpBuilder.AddRoslynSentinelToolsAdvanced(
-                services, ChainEvalToolSurface.NewModes(),
-                hideTools: ChainEvalToolSurface.NewHiddenTools());
-
-            var hostBuilder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder();
-            hostBuilder.Services.AddLmStudioAgentClient(client =>
-            {
-                client.BaseAddress = new Uri(LlmOptions.BaseUrl.TrimEnd('/') + "/");
-                client.Timeout = TimeSpan.FromSeconds(Math.Max(LlmOptions.TimeoutSeconds * 4, 600));
-            });
-            foreach (var descriptor in services)
-            {
-                hostBuilder.Services.Add(descriptor);
-            }
-
-            hostBuilder.Logging.AddProvider(new FlushingFileLoggerProvider(Path.Combine(sampleDirectory, "agent.log")));
-
-            _host = hostBuilder.Build();
-            _ = _host.RunAsync(CancellationToken.None); // stopped by DisposeAsync, not by the test's token
-
-            var workspaceManager = _host.Services.GetRequiredService<IWorkspaceManager>();
-            await workspaceManager.LoadSolutionAsync(_fixture.SolutionPath, cancellationToken);
-
             var stagedFiles = scenario.StagedFiles.ToList();
             for (var i = 0; i < stagedFiles.Count; i++)
             {
                 var entry = stagedFiles[i];
-                await _fixture.AddFileToSolution(
+                await fixture.AddFileToSolution(
                     workspaceManager,
                     entry.Key.Replace('/', Path.DirectorySeparatorChar),
                     entry.Value,
                     reloadSolution: i == stagedFiles.Count - 1,
                     cancellationToken: cancellationToken);
             }
-
-            var clientTransport = new StreamClientTransport(
-                serverInput: clientToServer.Writer.AsStream(),
-                serverOutput: serverToClient.Reader.AsStream(),
-                loggerFactory: NullLoggerFactory.Instance);
-            _client = await McpClient.CreateAsync(clientTransport, cancellationToken: cancellationToken);
-            AgentClient = _host.Services.GetRequiredService<LmStudioAgentClient>();
-        }
-
-        public async ValueTask DisposeAsync()
-        {
-            if (_client is not null)
-            {
-                await _client.DisposeAsync();
-            }
-
-            if (_host is not null)
-            {
-                await _host.StopAsync();
-                _host.Dispose();
-            }
-
-            _fixture?.Dispose();
         }
     }
 }

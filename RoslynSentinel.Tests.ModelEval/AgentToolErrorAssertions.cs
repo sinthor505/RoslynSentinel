@@ -67,7 +67,12 @@ public static class AgentToolErrorAssertions
         return new ToolErrorSummary(errorTools.Count, byTool, redirects);
     }
 
-    // TODO ModelAgentRunner.TryReadStringProperty (private) walks to depth 3 and prefers a top-level errorCode, so it can pick up an errorCode typed inside echoed call arguments; ErrorCodeOf reads only errorData.errorCode then a top-level errorCode, on purpose. Merging them needs a decision on which depth/precedence contract wins (the runner's failure-signature use may want ErrorCodeOf's stricter read).
+    // Two readers of the error code exist and they intentionally differ; that difference is the contract.
+    // ErrorCodeOf (below) is STRICT: errorData.errorCode, then a top-level errorCode, never deeper, because the
+    // envelope echoes the call arguments and a deeper walk could pick up an errorCode typed inside them.
+    // ModelAgentRunner.TryReadStringProperty (private) is LENIENT: it walks to depth 3 and prefers a top-level
+    // errorCode, which suits failure-signature grouping where a false hit is harmless.
+    // Do not merge them without first deciding which depth/precedence wins.
     /// <summary>
     /// Reads the error code nested under errorData, the same value ModelAgentRunner.BuildFailureSignature keys on.
     /// Falls back to a top-level errorCode only; never walks deeper, because the envelope echoes the call arguments.

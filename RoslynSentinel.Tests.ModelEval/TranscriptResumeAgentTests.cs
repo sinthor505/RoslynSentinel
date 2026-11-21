@@ -1,19 +1,9 @@
-using System.IO.Pipelines;
-
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
-
-using ModelContextProtocol.Client;
-using ModelContextProtocol.Extensions.Tasks;
-using ModelContextProtocol.Protocol;
 
 using RoslynSentinel.Common;
 using RoslynSentinel.Common.AgentLoop;
-using RoslynSentinel.Server.Advanced;
 using RoslynSentinel.Tests.ModelEval.Fixtures;
-using RoslynSentinel.Tools.Advanced;
 
 namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 
@@ -115,7 +105,12 @@ public class TranscriptResumeAgentTests
         CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(sampleDirectory);
-        await using var environment = await ResumeEnvironment.CreateAsync(sampleDirectory, cancellationToken);
+        await using var environment = await ModelEvalMcpEnvironment.CreateAsync(
+            sampleDirectory,
+            restorePackages: false,
+            beforeLoad: null,
+            afterLoad: StageChainFilesAsync,
+            cancellationToken);
 
         var directory = environment.SolutionDirectory;
         var seed = TranscriptResume.RewriteTurns(keptTurns, directory);
@@ -161,118 +156,38 @@ public class TranscriptResumeAgentTests
             result.Transcript.Turns, result.Transcript.AssistCount ?? 0, result.StopReason.ToString());
     }
 
-    /// <summary>One sample's isolated world: fixture on disk, in-process MCP server with the ten-chain tool surface, MCP client, LM client.</summary>
-    private sealed class ResumeEnvironment : IAsyncDisposable
+    /// <summary>
+    /// Stages the ten-chain starting files on the loaded fixture (the same files as
+    /// <see cref="OrderPricingRefactorChainAgentTests.Model_AppliesTenChainedRefactors"/>); the solution reloads once, on the last file.
+    /// </summary>
+    private static async Task StageChainFilesAsync(
+        RoslynSentinel.Tests.TestSolutionFixture fixture,
+        IWorkspaceManager workspaceManager,
+        CancellationToken cancellationToken)
     {
-        private IHost? _host;
-        private McpClient? _client;
-        private RoslynSentinel.Tests.TestSolutionFixture? _fixture;
-
-        public IHost Host => _host!;
-        public McpClient Client => _client!;
-        public LmStudioAgentClient AgentClient { get; private set; } = null!;
-        public string SolutionDirectory => _fixture!.SolutionDirectory;
-
-        public static async Task<ResumeEnvironment> CreateAsync(string sampleDirectory, CancellationToken cancellationToken)
-        {
-            var environment = new ResumeEnvironment();
-            try
-            {
-                await environment.InitializeAsync(sampleDirectory, cancellationToken);
-                return environment;
-            }
-            catch
-            {
-                await environment.DisposeAsync();
-                throw;
-            }
-        }
-
-        private async Task InitializeAsync(string sampleDirectory, CancellationToken cancellationToken)
-        {
-            _fixture = new RoslynSentinel.Tests.TestSolutionFixture();
-
-            var clientToServer = new Pipe();
-            var serverToClient = new Pipe();
-
-            // Same wiring as OrderPricingRefactorChainAgentTests.SetUp for Model_AppliesTenChainedRefactors
-            // (default ReplaceSnippet arm).
-            var services = new ServiceCollection();
-            services.AddRoslynSentinelEnginesAdvanced();
-            var mcpBuilder = services.AddMcpServer();
-            mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
-            mcpBuilder.WithTasks(
-                new InMemoryMcpTaskStore(),
-                o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
-            mcpBuilder.AddRoslynSentinelToolsAdvanced(
-                services, ChainEvalToolSurface.NewModes(),
-                hideTools: ChainEvalToolSurface.NewHiddenTools());
-
-            var hostBuilder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder();
-            hostBuilder.Services.AddLmStudioAgentClient(client =>
-            {
-                client.BaseAddress = new Uri(LlmOptions.BaseUrl.TrimEnd('/') + "/");
-                client.Timeout = TimeSpan.FromSeconds(Math.Max(LlmOptions.TimeoutSeconds * 4, 600));
-            });
-            foreach (var descriptor in services)
-            {
-                hostBuilder.Services.Add(descriptor);
-            }
-
-            hostBuilder.Logging.AddProvider(new FlushingFileLoggerProvider(Path.Combine(sampleDirectory, "agent.log")));
-
-            _host = hostBuilder.Build();
-            _ = _host.RunAsync(CancellationToken.None); // stopped by DisposeAsync, not by the test's token
-
-            var workspaceManager = _host.Services.GetRequiredService<IWorkspaceManager>();
-            await workspaceManager.LoadSolutionAsync(_fixture.SolutionPath, cancellationToken);
-            await _fixture.AddFileToSolution(
-                workspaceManager,
-                Path.Combine("ContosoOrders.Core", "FixtureHelpers", "OrderPricingCalculator.cs"),
-                OrderPricingRefactorReproducer.StartingCalculatorFileContent,
-                reloadSolution: false,
-                cancellationToken: cancellationToken);
-            await _fixture.AddFileToSolution(
-                workspaceManager,
-                Path.Combine("ContosoOrders.Core", "FixtureHelpers", "OrderCheckout.cs"),
-                OrderPricingRefactorReproducer.CheckoutCallerFileContent,
-                reloadSolution: false,
-                cancellationToken: cancellationToken);
-            await _fixture.AddFileToSolution(
-                workspaceManager,
-                Path.Combine("ContosoOrders.Tests", "ModelEvalGenerated", "RefactorAcceptanceTests.cs"),
-                OrderPricingRefactorChainAgentTests.RefactorAcceptanceTestsFileContent,
-                reloadSolution: false,
-                cancellationToken: cancellationToken);
-            await _fixture.AddFileToSolution(
-                workspaceManager,
-                Path.Combine("ContosoOrders.Tests", "ModelEvalGenerated", "OrderCheckoutTests.cs"),
-                OrderPricingRefactorReproducer.CheckoutFrontDoorTestsFileContent,
-                reloadSolution: true,
-                cancellationToken: cancellationToken);
-
-            var clientTransport = new StreamClientTransport(
-                serverInput: clientToServer.Writer.AsStream(),
-                serverOutput: serverToClient.Reader.AsStream(),
-                loggerFactory: NullLoggerFactory.Instance);
-            _client = await McpClient.CreateAsync(clientTransport, cancellationToken: cancellationToken);
-            AgentClient = _host.Services.GetRequiredService<LmStudioAgentClient>();
-        }
-
-        public async ValueTask DisposeAsync()
-        {
-            if (_client is not null)
-            {
-                await _client.DisposeAsync();
-            }
-
-            if (_host is not null)
-            {
-                await _host.StopAsync();
-                _host.Dispose();
-            }
-
-            _fixture?.Dispose();
-        }
+        await fixture.AddFileToSolution(
+            workspaceManager,
+            Path.Combine("ContosoOrders.Core", "FixtureHelpers", "OrderPricingCalculator.cs"),
+            OrderPricingRefactorReproducer.StartingCalculatorFileContent,
+            reloadSolution: false,
+            cancellationToken: cancellationToken);
+        await fixture.AddFileToSolution(
+            workspaceManager,
+            Path.Combine("ContosoOrders.Core", "FixtureHelpers", "OrderCheckout.cs"),
+            OrderPricingRefactorReproducer.CheckoutCallerFileContent,
+            reloadSolution: false,
+            cancellationToken: cancellationToken);
+        await fixture.AddFileToSolution(
+            workspaceManager,
+            Path.Combine("ContosoOrders.Tests", "ModelEvalGenerated", "RefactorAcceptanceTests.cs"),
+            OrderPricingRefactorChainAgentTests.RefactorAcceptanceTestsFileContent,
+            reloadSolution: false,
+            cancellationToken: cancellationToken);
+        await fixture.AddFileToSolution(
+            workspaceManager,
+            Path.Combine("ContosoOrders.Tests", "ModelEvalGenerated", "OrderCheckoutTests.cs"),
+            OrderPricingRefactorReproducer.CheckoutFrontDoorTestsFileContent,
+            reloadSolution: true,
+            cancellationToken: cancellationToken);
     }
 }

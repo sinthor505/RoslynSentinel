@@ -1,19 +1,9 @@
-using System.IO.Pipelines;
-
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
-
-using ModelContextProtocol.Client;
-using ModelContextProtocol.Extensions.Tasks;
-using ModelContextProtocol.Protocol;
 
 using RoslynSentinel.Common.AgentLoop;
-using RoslynSentinel.Server.Advanced;
 using RoslynSentinel.Tests.Battery.Basic;
 using RoslynSentinel.Tests.ModelEval.Fixtures;
-using RoslynSentinel.Tools.Advanced;
 
 namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 
@@ -125,7 +115,17 @@ public class ShippingKindResumeAgentTests
         CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(sampleDirectory);
-        await using var environment = await ResumeEnvironment.CreateAsync(step, sampleDirectory, cancellationToken);
+        // restorePackages: the step's golden tree includes ContosoOrders.Tests, which needs restore assets for a solution-scope build.
+        await using var environment = await ModelEvalMcpEnvironment.CreateAsync(
+            sampleDirectory,
+            restorePackages: true,
+            beforeLoad: (fixture, _, _) =>
+            {
+                CheckoutGoldenStep(fixture, step);
+                return Task.CompletedTask;
+            },
+            afterLoad: null,
+            cancellationToken);
 
         var directory = environment.SolutionDirectory;
         var seed = TranscriptResume.RewriteTurns(keptTurns, directory);
@@ -160,100 +160,14 @@ public class ShippingKindResumeAgentTests
             result.Transcript.Turns, result.Transcript.AssistCount ?? 0, result.StopReason.ToString());
     }
 
-    // TODO extract the shared ModelEval host setup (fourth copy: ShippingKindSteppedAgentTests, TranscriptResumeAgentTests, ...)
-    /// <summary>One sample's isolated world: the step's golden tree on disk, in-process MCP server with the chain tool surface, MCP client, LM client.</summary>
-    private sealed class ResumeEnvironment : IAsyncDisposable
+    /// <summary>
+    /// Checks out the golden commit of step N-1 into the fixture. Runs before the solution is loaded, so the server
+    /// never sees a harness write.
+    /// </summary>
+    private static void CheckoutGoldenStep(RoslynSentinel.Tests.TestSolutionFixture fixture, int step)
     {
-        private IHost? _host;
-        private McpClient? _client;
-        private RoslynSentinel.Tests.TestSolutionFixture? _fixture;
-
-        public IHost Host => _host!;
-        public McpClient Client => _client!;
-        public LmStudioAgentClient AgentClient { get; private set; } = null!;
-        public string SolutionDirectory => _fixture!.SolutionDirectory;
-
-        public static async Task<ResumeEnvironment> CreateAsync(int step, string sampleDirectory, CancellationToken cancellationToken)
-        {
-            var environment = new ResumeEnvironment();
-            try
-            {
-                await environment.InitializeAsync(step, sampleDirectory, cancellationToken);
-                return environment;
-            }
-            catch
-            {
-                await environment.DisposeAsync();
-                throw;
-            }
-        }
-
-        private async Task InitializeAsync(int step, string sampleDirectory, CancellationToken cancellationToken)
-        {
-            // restorePackages: ContosoOrders.Tests needs restore assets or a solution-scope build reports CS0246 for every Xunit file
-            _fixture = new RoslynSentinel.Tests.TestSolutionFixture(restorePackages: true);
-
-            var clientToServer = new Pipe();
-            var serverToClient = new Pipe();
-
-            // Same wiring as ShippingKindSteppedAgentTests.SetUp.
-            var services = new ServiceCollection();
-            services.AddRoslynSentinelEnginesAdvanced();
-            var mcpBuilder = services.AddMcpServer();
-            mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
-            mcpBuilder.WithTasks(
-                new InMemoryMcpTaskStore(),
-                o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
-            mcpBuilder.AddRoslynSentinelToolsAdvanced(
-                services, ChainEvalToolSurface.NewModes(),
-                hideTools: ChainEvalToolSurface.NewHiddenTools());
-
-            var hostBuilder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder();
-            hostBuilder.Services.AddLmStudioAgentClient(client =>
-            {
-                client.BaseAddress = new Uri(LlmOptions.BaseUrl.TrimEnd('/') + "/");
-                client.Timeout = TimeSpan.FromSeconds(Math.Max(LlmOptions.TimeoutSeconds * 4, 600));
-            });
-            foreach (var descriptor in services)
-            {
-                hostBuilder.Services.Add(descriptor);
-            }
-
-            hostBuilder.Logging.AddProvider(new FlushingFileLoggerProvider(Path.Combine(sampleDirectory, "agent.log")));
-
-            _host = hostBuilder.Build();
-            _ = _host.RunAsync(CancellationToken.None); // stopped by DisposeAsync, not by the test's token
-
-            // The checkout happens before LoadSolutionAsync, so the server never sees a harness write.
-            var repository = GoldenStepRepository.Create(
-                _fixture.SolutionDirectory, ShippingKindStepGoldens.LastStep, s => ShippingKindStepGoldens.FilesForStep(s, false));
-            repository.CheckoutStep(step - 1, $"run/step-{step}");
-
-            var workspaceManager = _host.Services.GetRequiredService<IWorkspaceManager>();
-            await workspaceManager.LoadSolutionAsync(_fixture.SolutionPath, cancellationToken);
-
-            var clientTransport = new StreamClientTransport(
-                serverInput: clientToServer.Writer.AsStream(),
-                serverOutput: serverToClient.Reader.AsStream(),
-                loggerFactory: NullLoggerFactory.Instance);
-            _client = await McpClient.CreateAsync(clientTransport, cancellationToken: cancellationToken);
-            AgentClient = _host.Services.GetRequiredService<LmStudioAgentClient>();
-        }
-
-        public async ValueTask DisposeAsync()
-        {
-            if (_client is not null)
-            {
-                await _client.DisposeAsync();
-            }
-
-            if (_host is not null)
-            {
-                await _host.StopAsync();
-                _host.Dispose();
-            }
-
-            _fixture?.Dispose();
-        }
+        var repository = GoldenStepRepository.Create(
+            fixture.SolutionDirectory, ShippingKindStepGoldens.LastStep, s => ShippingKindStepGoldens.FilesForStep(s, false));
+        repository.CheckoutStep(step - 1, $"run/step-{step}");
     }
 }

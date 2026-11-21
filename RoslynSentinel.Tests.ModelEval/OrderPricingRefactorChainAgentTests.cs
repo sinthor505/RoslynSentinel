@@ -1,19 +1,14 @@
-using System.IO.Pipelines;
-
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 using ModelContextProtocol.Client;
-using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
 using RoslynSentinel.Common.AgentLoop;
 using RoslynSentinel.Server.Advanced;
 using RoslynSentinel.Tests.ModelEval.Fixtures;
-using RoslynSentinel.Tools.Advanced;
 
 namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 
@@ -75,6 +70,9 @@ public class OrderPricingRefactorChainAgentTests
     // batch; leave false for normal runs.
     private static readonly bool BlockWriteFile = false;
 
+    private ModelEvalMcpEnvironment? _environment;
+
+    // Aliases of _environment's members, assigned in SetUp so the test bodies keep their field names; _environment owns disposal.
     private IHost _host = null!;
     private McpClient _mcpClient = null!;
     private RoslynSentinel.Tests.TestSolutionFixture _fixture = null!;
@@ -93,22 +91,30 @@ public class OrderPricingRefactorChainAgentTests
                 "server with a loaded model and are skipped rather than failed when unconfigured.");
         }
 
+        _runDirectory = Path.Combine(
+            TestContext.CurrentContext.WorkDirectory,
+            "model-eval",
+            TestContext.CurrentContext.Test.Name,
+            DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
+
         // restorePackages: ContosoOrders.Tests needs restore assets or a solution-scope build reports CS0246 for every Xunit file
-        _fixture = new RoslynSentinel.Tests.TestSolutionFixture(restorePackages: true);
+        _environment = await ModelEvalMcpEnvironment.CreateAsync(
+            _runDirectory,
+            restorePackages: true,
+            beforeLoad: null,
+            afterLoad: StageFilesAndRunBaselineAsync,
+            TestContext.CurrentContext.CancellationToken,
+            configureToolSurface: ConfigureToolSurface);
+        _host = _environment.Host;
+        _mcpClient = _environment.Client;
+        _fixture = _environment.Fixture;
+        _agentClient = _environment.AgentClient;
+    }
 
-        var clientToServer = new Pipe();
-        var serverToClient = new Pipe();
-
-        var services = new ServiceCollection();
-        //services.AddRoslynSentinelEnginesBasic(); // Temporarily commented out to give the model access to the full Advanced tool catalog as ExtractInterface is not in the Basic catalog and is required for rung 7.
-        services.AddRoslynSentinelEnginesAdvanced();
-
-        var mcpBuilder = services.AddMcpServer();
-        mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
-        mcpBuilder.WithTasks(
-            new InMemoryMcpTaskStore(),
-            o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
-        //mcpBuilder.AddRoslynSentinelToolsBasic(services, ActiveModes); // Temporarily commented out to give the model access to the full Advanced tool catalog as ExtractInterface is not in the Basic catalog and is required for rung 7.
+    // The default tool registration of ModelEvalMcpEnvironment, plus this fixture's two experiment switches: the edit-tool
+    // A/B arm and BlockWriteFile.
+    private static void ConfigureToolSurface(IMcpServerBuilder mcpBuilder, IServiceCollection services)
+    {
         // A/B arm switch for proposal_edit_snippets_batch_only_ab_test; unset = arm A (ReplaceSnippet).
         var editArm = Environment.GetEnvironmentVariable("ROSLYNSENTINEL_MODELEVAL_EDIT_ARM");
         var editSnippetsArm = string.Equals(editArm, "EditSnippets", StringComparison.OrdinalIgnoreCase);
@@ -159,89 +165,55 @@ public class OrderPricingRefactorChainAgentTests
                     }));
             });
         }
+    }
 
-        _runDirectory = Path.Combine(
-            TestContext.CurrentContext.WorkDirectory,
-            "model-eval",
-            TestContext.CurrentContext.Test.Name,
-            DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
-
-        var hostBuilder = Host.CreateApplicationBuilder();
-        hostBuilder.Services.AddLmStudioAgentClient(client =>
-        {
-            client.BaseAddress = new Uri(LlmOptions.BaseUrl.TrimEnd('/') + "/");
-            client.Timeout = TimeSpan.FromSeconds(Math.Max(LlmOptions.TimeoutSeconds * 4, 600));
-        });
-        foreach (var descriptor in services)
-        {
-            hostBuilder.Services.Add(descriptor);
-        }
-
-        hostBuilder.Logging.AddProvider(new FlushingFileLoggerProvider(Path.Combine(_runDirectory, "agent.log")));
-
-        _host = hostBuilder.Build();
-        _ = _host.RunAsync();
-
-        var workspaceManager = _host.Services.GetRequiredService<IWorkspaceManager>();
-        await workspaceManager.LoadSolutionAsync(_fixture.SolutionPath, TestContext.CurrentContext.CancellationToken);
-
-        await _fixture.AddFileToSolution(
+    // Stages the chain's starting files, then records the test baseline (before the MCP client exists, as before).
+    private async Task StageFilesAndRunBaselineAsync(
+        RoslynSentinel.Tests.TestSolutionFixture fixture,
+        IWorkspaceManager workspaceManager,
+        CancellationToken cancellationToken)
+    {
+        await fixture.AddFileToSolution(
             workspaceManager,
             Path.Combine("ContosoOrders.Core", "FixtureHelpers", "OrderPricingCalculator.cs"),
             OrderPricingRefactorReproducer.StartingCalculatorFileContent,
             reloadSolution: false,
-            cancellationToken: TestContext.CurrentContext.CancellationToken);
-        await _fixture.AddFileToSolution(
+            cancellationToken: cancellationToken);
+        await fixture.AddFileToSolution(
             workspaceManager,
             Path.Combine("ContosoOrders.Core", "FixtureHelpers", "OrderCheckout.cs"),
             OrderPricingRefactorReproducer.CheckoutCallerFileContent,
             reloadSolution: false,
-            cancellationToken: TestContext.CurrentContext.CancellationToken);
+            cancellationToken: cancellationToken);
         // These fail at baseline by design and must pass at the end; the grader already requires zero failures and an unchanged test count.
         if (TestContext.CurrentContext.Test.MethodName == nameof(Model_AppliesTenChainedRefactors))
         {
-            await _fixture.AddFileToSolution(
+            await fixture.AddFileToSolution(
                 workspaceManager,
                 Path.Combine("ContosoOrders.Tests", "ModelEvalGenerated", "RefactorAcceptanceTests.cs"),
                 RefactorAcceptanceTestsFileContent,
                 reloadSolution: false,
-                cancellationToken: TestContext.CurrentContext.CancellationToken);
+                cancellationToken: cancellationToken);
         }
 
-        await _fixture.AddFileToSolution(
+        await fixture.AddFileToSolution(
             workspaceManager,
             Path.Combine("ContosoOrders.Tests", "ModelEvalGenerated", "OrderCheckoutTests.cs"),
             OrderPricingRefactorReproducer.CheckoutFrontDoorTestsFileContent,
             reloadSolution: true,
-            cancellationToken: TestContext.CurrentContext.CancellationToken);
+            cancellationToken: cancellationToken);
 
-        var testProjectPath = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Tests", "ContosoOrders.Tests.csproj");
-        _testBaseline = await DotnetTestRunner.RunAsync(testProjectPath, TestContext.CurrentContext.CancellationToken);
-
-        var clientTransport = new StreamClientTransport(
-            serverInput: clientToServer.Writer.AsStream(),
-            serverOutput: serverToClient.Reader.AsStream(),
-            loggerFactory: NullLoggerFactory.Instance);
-
-        _mcpClient = await McpClient.CreateAsync(clientTransport, cancellationToken: TestContext.CurrentContext.CancellationToken);
-        _agentClient = _host.Services.GetRequiredService<LmStudioAgentClient>();
+        var testProjectPath = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Tests", "ContosoOrders.Tests.csproj");
+        _testBaseline = await DotnetTestRunner.RunAsync(testProjectPath, cancellationToken);
     }
 
     [TearDown]
     public async Task TearDown()
     {
-        if (_mcpClient is not null)
+        if (_environment is not null)
         {
-            await _mcpClient.DisposeAsync();
+            await _environment.DisposeAsync();
         }
-
-        if (_host is not null)
-        {
-            await _host.StopAsync();
-            _host.Dispose();
-        }
-
-        _fixture?.Dispose();
 
         if (_runDirectory is not null)
         {
