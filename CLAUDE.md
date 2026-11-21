@@ -158,6 +158,8 @@ or turn number; unverified causes are hypotheses. Load the `failure-analysis` sk
   `docs/current/templates/README.md` (folder, filename, template); never read existing docs for style.
 - ASCII-only punctuation in comments, docs, commit messages and prompts; non-ASCII becomes mojibake.
 - Exclude `*/Worktree/` folders (PlanStepRunner harness clones) from diffs, searches and reviews.
+- Test, eval, run, log and scratch output goes under the scratch root (`ROSLYNSENTINEL_SCRATCH_ROOT`, default
+  `..\RoslynSentinel-ScratchDir`; resolvers `ScratchRoot`, `scripts\roslynsentinel-scratch.ps1`), never in the repo.
 - Other conventions (doc lifecycle, `scripts/` front doors, solution file):
   `docs/current/references/reference_working_conventions.md`.
 
@@ -210,7 +212,7 @@ Rebuilding does not change the running server; it is stale until restarted. Afte
 source: `Build` (default `fullBuildThrowaway`, 0 errors), commit, then restart your own instance
 (`McpServerControl(operation: StopServer, confirmServerStop: ConfirmServerStop)`, then `LoadSolution`)
 with no subagent mid-operation. The launcher builds committed HEAD; `lastLaunch.servedSha` in
-`McpServerStatus` shows what is live. Old `bin-vscode` layout only: `Build(level: fullBuild)`.
+`McpServerStatus` shows what is live.
 Live-testing uncommitted changes (`LaunchTestInstance`) and `Build` output locations:
 `docs/current/references/reference_live_server_freshness.md`.
 
