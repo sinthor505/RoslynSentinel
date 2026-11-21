@@ -400,7 +400,7 @@ public class MoveMemberToolCollateralRefusalTests
         public override async Task<MoveMemberResult> MoveMemberAsync(FilePathWrapper filePath, string className, string[] memberNames, string targetClassName, FilePathWrapper? targetFilePath = null, CancellationToken cancellationToken = default, bool autoResolveCallSites = true, Dictionary<string, string>? callSiteFixups = null, IReadOnlyDictionary<string, string>? fieldMap = null, MoveMemberOldMember oldMember = MoveMemberOldMember.remove, string? forwarderReceiver = null)
         {
             var result = await base.MoveMemberAsync(filePath, className, memberNames, targetClassName, targetFilePath, cancellationToken, autoResolveCallSites, callSiteFixups, fieldMap, oldMember, forwarderReceiver);
-            var changes = new Dictionary<FilePathWrapper, string>(result.Changes);
+            var changes = new DocumentChangeSet(result.Changes);
             foreach (var key in changes.Keys.ToList())
             {
                 if (System.IO.Path.GetFileName(key.ToString()) == FileName)

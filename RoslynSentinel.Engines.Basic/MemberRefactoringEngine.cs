@@ -18,7 +18,7 @@ public record SkippedCallSite(FilePathWrapper FilePath, int LineNumber, string R
 /// CollateralChangeGuard). A file with no entry is unchecked; a brand-new file (new-class route) has no original text
 /// and so never has an entry. Null when a producer does not report edits.
 /// </summary>
-public record MoveMemberResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites, List<CallSiteLedgerEntry>? PendingLedgerEntries = null, string? PendingLedgerOperationName = null, List<AppliedCallSiteFixup>? AppliedFixups = null, IReadOnlyList<string>? Notes = null, IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>>? AppliedEdits = null, List<RewrittenCallSite>? RewrittenCallSites = null);
+public record MoveMemberResult(DocumentChangeSet Changes, List<SkippedCallSite> SkippedCallSites, List<CallSiteLedgerEntry>? PendingLedgerEntries = null, string? PendingLedgerOperationName = null, List<AppliedCallSiteFixup>? AppliedFixups = null, IReadOnlyList<string>? Notes = null, IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>>? AppliedEdits = null, List<RewrittenCallSite>? RewrittenCallSites = null);
 /// <summary>
 /// One bare same-class call (`M(x)` in a remaining member of the source class) that a remove-mode instance move rewrote to
 /// `this.<field>.M(x)`. <paramref name = "Line"/> is the 1-based line in the ORIGINAL source text. The MoveMember tool reports each one as a finding.
@@ -3979,7 +3979,7 @@ public class MemberRefactoringEngine
         if (sameFile)
         {
             sourceEdits.Add(insertion);
-            return new MoveMemberResult(new Dictionary<FilePathWrapper, string> { { filePath, MoveMemberTextEdits.ApplyChanges(sourceText, sourceEdits) } }, new List<SkippedCallSite>(), AppliedEdits: new Dictionary<FilePathWrapper, IReadOnlyList<TextChange>> { { filePath, sourceEdits.ToList() } });
+            return new MoveMemberResult(new DocumentChangeSet { { filePath, MoveMemberTextEdits.ApplyChanges(sourceText, sourceEdits) } }, new List<SkippedCallSite>(), AppliedEdits: new Dictionary<FilePathWrapper, IReadOnlyList<TextChange>> { { filePath, sourceEdits.ToList() } });
         }
 
         // The moved code may need usings the base type's file lacks (the source file's usings do not travel with it).
@@ -3991,7 +3991,7 @@ public class MemberRefactoringEngine
             baseEdits.Add(usingsEdit.Value);
         }
 
-        return new MoveMemberResult(new Dictionary<FilePathWrapper, string> { { filePath, MoveMemberTextEdits.ApplyChanges(sourceText, sourceEdits) }, { baseFile, MoveMemberTextEdits.ApplyChanges(baseText, baseEdits) } }, new List<SkippedCallSite>(), AppliedEdits: new Dictionary<FilePathWrapper, IReadOnlyList<TextChange>> { { filePath, sourceEdits.ToList() }, { baseFile, baseEdits } });
+        return new MoveMemberResult(new DocumentChangeSet { { filePath, MoveMemberTextEdits.ApplyChanges(sourceText, sourceEdits) }, { baseFile, MoveMemberTextEdits.ApplyChanges(baseText, baseEdits) } }, new List<SkippedCallSite>(), AppliedEdits: new Dictionary<FilePathWrapper, IReadOnlyList<TextChange>> { { filePath, sourceEdits.ToList() }, { baseFile, baseEdits } });
     }
 
     /// <summary>
@@ -4163,7 +4163,7 @@ public class MemberRefactoringEngine
         editsByDocument[sourceDocument.Id] = sourceEdits;
 
         // Materialize each touched document's new text from its original text.
-        var result = new Dictionary<FilePathWrapper, string>();
+        var result = new DocumentChangeSet();
         var appliedEdits = new Dictionary<FilePathWrapper, IReadOnlyList<TextChange>>();
         foreach (var (documentId, edits) in editsByDocument)
         {
@@ -4219,7 +4219,7 @@ public class MemberRefactoringEngine
         // Edits are reported only for EXISTING files (the source and any caller files). The new class file has no original
         // text to apply edits to, so it never gets an entry and the write chokepoint leaves it unchecked.
         var appliedEdits = new Dictionary<FilePathWrapper, IReadOnlyList<TextChange>>();
-        var result = new Dictionary<FilePathWrapper, string>
+        var result = new DocumentChangeSet
         {
             {
                 newFilePath,
@@ -4252,13 +4252,13 @@ public class MemberRefactoringEngine
     /// written into an existing target (empty for a brand-new class file): the data MovePositionMap needs to map
     /// source positions into the trial text.
     /// </summary>
-    public static async Task<(Dictionary<DocumentId, SourceText> Texts, Dictionary<FilePathWrapper, string> NewFiles, List<MovedMemberRegion> MovedRegions)> AddInstanceMoveStructuralEditsAsync(Dictionary<DocumentId, List<TextChange>> editsByDocument, Document sourceDocument, CompilationUnitSyntax root, ClassDeclarationSyntax classNode, List<MemberDeclarationSyntax> membersToMove, string targetClassName, Document? targetDocument, ClassDeclarationSyntax? targetClassNode, bool createNewClassFile, IEolResolver eolResolver, CancellationToken cancellationToken,
+    public static async Task<(Dictionary<DocumentId, SourceText> Texts, DocumentChangeSet NewFiles, List<MovedMemberRegion> MovedRegions)> AddInstanceMoveStructuralEditsAsync(Dictionary<DocumentId, List<TextChange>> editsByDocument, Document sourceDocument, CompilationUnitSyntax root, ClassDeclarationSyntax classNode, List<MemberDeclarationSyntax> membersToMove, string targetClassName, Document? targetDocument, ClassDeclarationSyntax? targetClassNode, bool createNewClassFile, IEolResolver eolResolver, CancellationToken cancellationToken,
         // Deliberate deviation from the token-last rule: an existing test caller passes the token positionally, so the keep-mode parameters were appended after it instead of before.
         ISet<MemberDeclarationSyntax>? keptMembers = null, Func<MemberDeclarationSyntax, string>? forwarderText = null)
     {
         var sourceText = await sourceDocument.GetTextAsync(cancellationToken);
         var texts = new Dictionary<DocumentId, SourceText> { [sourceDocument.Id] = sourceText };
-        var newFiles = new Dictionary<FilePathWrapper, string>();
+        var newFiles = new DocumentChangeSet();
         var movedRegions = new List<MovedMemberRegion>();
         var sourceEdits = MoveMemberTextEdits.BuildSourceEdits(sourceText, membersToMove, editsByDocument.TryGetValue(sourceDocument.Id, out var existingSourceEdits) ? existingSourceEdits : new List<TextChange>(), keptMembers ?? new HashSet<MemberDeclarationSyntax>(), forwarderText ?? (_ => string.Empty), out var insideMovedMemberEdits);
         editsByDocument[sourceDocument.Id] = sourceEdits;
@@ -4328,9 +4328,9 @@ public class MemberRefactoringEngine
     /// keys, positions in the document's original text). Both dictionaries are built in the same loop, so the recorded edits
     /// can never differ from the ones that made the text. Documents with no edits or no file path are omitted from both.
     /// </summary>
-    public static async Task<(Dictionary<FilePathWrapper, string> Texts, Dictionary<FilePathWrapper, IReadOnlyList<TextChange>> AppliedEdits)> MaterializeDocumentEditsWithAppliedEditsAsync(Solution solution, Dictionary<DocumentId, List<TextChange>> editsByDocument, Dictionary<DocumentId, SourceText> knownTexts, CancellationToken cancellationToken)
+    public static async Task<(DocumentChangeSet Texts, Dictionary<FilePathWrapper, IReadOnlyList<TextChange>> AppliedEdits)> MaterializeDocumentEditsWithAppliedEditsAsync(Solution solution, Dictionary<DocumentId, List<TextChange>> editsByDocument, Dictionary<DocumentId, SourceText> knownTexts, CancellationToken cancellationToken)
     {
-        var result = new Dictionary<FilePathWrapper, string>();
+        var result = new DocumentChangeSet();
         var appliedEdits = new Dictionary<FilePathWrapper, IReadOnlyList<TextChange>>();
         foreach (var (documentId, edits) in editsByDocument)
         {
