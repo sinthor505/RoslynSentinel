@@ -94,6 +94,9 @@ public class GitHooksLaunchTests
         Assert.That(lines["tool"], Is.EqualTo("ok"), "git's tool directories (cat, env, grep) must be on the child's PATH");
     }
 
+    // Suspected full-run flake: one full run (2026-11-21) failed with IOException "The process cannot access
+    // the file ...\rs-hooklaunch-*\cwd-main.marker because it is being used by another process"; it passed
+    // when run alone. Likely the hook child still holds the marker file when the test reads it.
     [Test]
     public void SubdirectoryAndLinkedWorktree_RunTheHookInTheirOwnWorkTreeRoot()
     {
