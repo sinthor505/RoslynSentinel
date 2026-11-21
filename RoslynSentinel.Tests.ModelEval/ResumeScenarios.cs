@@ -1,4 +1,5 @@
 using System.IO;
+using RoslynSentinel.Common;
 using System.Text.RegularExpressions;
 
 namespace RoslynSentinel.Tests.ModelEval;
@@ -85,21 +86,13 @@ public static class ResumeScenarios
         EndOnCorrectFinalState: true);
 
     /// <summary>
-    /// Path of a file in the tracked RoslynSentinel.Tests.ModelEval/ResumeTranscripts folder. Walks up from the
-    /// test binary folder to the directory holding RoslynSentinel.slnx. The file itself is not checked.
+    /// Path of a file in the tracked RoslynSentinel.Tests.ModelEval/ResumeTranscripts folder. The repo root comes from
+    /// RepoRootLocator, which reads ROSLYNSENTINEL_REPO_ROOT, then walks up from the test binary folder. The file itself is not checked.
     /// </summary>
     public static string CapturePath(string fileName)
     {
-        var start = AppContext.BaseDirectory;
-        for (var directory = new DirectoryInfo(start); directory is not null; directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "RoslynSentinel.slnx")))
-            {
-                return Path.Combine(directory.FullName, "RoslynSentinel.Tests.ModelEval", "ResumeTranscripts", fileName);
-            }
-        }
-
-        throw new InvalidOperationException($"No RoslynSentinel.slnx found walking up from '{start}'.");
+        var root = RepoRootLocator.Find();
+        return Path.Combine(root, "RoslynSentinel.Tests.ModelEval", "ResumeTranscripts", fileName);
     }
 
     /// <summary>

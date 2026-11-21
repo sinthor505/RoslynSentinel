@@ -14,7 +14,7 @@ public class RunStampTests
         // Other sessions commit into this shared working tree, so HEAD can move while the stamp is read.
         // Accept the HEAD from either side of the read; a stamp matching neither is still a real failure.
         var headBefore = RunGitRevParseHead(repoRoot);
-        var stamp = ModelEvalAssemblySetUp.ReadWorkingTreeStamp(AppContext.BaseDirectory);
+        var stamp = ModelEvalAssemblySetUp.ReadWorkingTreeStamp(RepoRootLocator.Find());
         var headAfter = RunGitRevParseHead(repoRoot);
 
         Assert.That(stamp, Is.Not.Null);
@@ -49,14 +49,7 @@ public class RunStampTests
 
     private static string FindRepoRoot()
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "RoslynSentinel.slnx")))
-        {
-            dir = dir.Parent;
-        }
-
-        return dir?.FullName
-            ?? throw new DirectoryNotFoundException("RoslynSentinel.slnx not found walking up from AppContext.BaseDirectory.");
+        return RepoRootLocator.Find();
     }
 
     private static string RunGitRevParseHead(string workingDirectory)

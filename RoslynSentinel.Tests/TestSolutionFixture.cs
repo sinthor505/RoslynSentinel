@@ -1,3 +1,5 @@
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Tests;
 
 /// <summary>
@@ -225,18 +227,6 @@ public sealed class TestSolutionFixture : IDisposable
 
     private static string FindRepoRoot()
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "RoslynSentinel.slnx")))
-            {
-                return dir.FullName;
-            }
-
-            dir = dir.Parent;
-        }
-
-        throw new DirectoryNotFoundException(
-            $"TestSolutionFixture could not locate the repo root (RoslynSentinel.slnx) walking up from '{AppContext.BaseDirectory}'.");
+        return RepoRootLocator.Find();
     }
 }
