@@ -1,6 +1,6 @@
 # Plan: Replace Dictionary<FilePathWrapper, string> with a named DocumentChangeSet type
 
-**Status:** APPROVED 2026-11-21. Add `DocumentChangeSet` in Common, widen the write chokepoint to `IReadOnlyDictionary` (no caller edits), then retype result records and producers in slices.
+**Status:** IN PROGRESS 2026-11-21. Steps 1, 2, 4, 5 done (b0b1614a, 8849400f, 8a307227, a81c3ae7, c2f8c5c0); Step 3 deferred (owner decision, see Risks); Step 6 running.
 
 ## Problem
 
@@ -85,6 +85,7 @@ Re-measured 2026-11-21 (`Search(mode: text)` line matches, so approximate):
   serialization of a `DocumentChangeSet` equals that of a plain `Dictionary<FPW, string>` with the same
   entries (`SharedJsonOptions.Compact`).
 - Done when: Build 0 errors; the new tests pass; no production caller changed.
+- Done: b0b1614a (serialization-equality test passed)
 
 ### Step 2 - Widen ValidationEngine and ValidateAndApplyHelper parameters
 - Files: `RoslynSentinel.Common/ValidationEngine.cs`, `RoslynSentinel.Common/ValidateAndApplyHelper.cs`
@@ -97,6 +98,9 @@ Re-measured 2026-11-21 (`Search(mode: text)` line matches, so approximate):
   that still requires `Dictionary`, leave that call and widen only if the callee is in these files;
   otherwise add `// TODO widen <callee>` and copy with `new Dictionary<...>(changes)`.
 - Done when: Build 0 errors; no caller file edited.
+- Done: 8849400f (2a ValidationEngine), 8a307227 (2b ValidateAndApplyHelper; split for the D1 edit cap;
+  one forced test edit `AppliedChangeSummaryFromTests.cs:162`, `[]` cannot target an interface;
+  `// TODO widen ApplyProposedChangesAsync` at `ValidateAndApplyHelper.cs:228` copies the map)
 
 ### Step 3 - Widen the write chokepoint
 - Files: `RoslynSentinel.Common/IWorkspaceMutator.cs`, `RoslynSentinel.Common/PersistentWorkspaceManager.cs`, `RoslynSentinel.Tests/Fakes/FakeWorkspaceManager.cs`
@@ -108,6 +112,10 @@ Re-measured 2026-11-21 (`Search(mode: text)` line matches, so approximate):
   `ConcurrentDictionary`. The `IWorkspaceMutator.cs:66` tuple and `TakePendingChangeset` (:146) keep their
   types in this step.
 - Done when: Build 0 errors; no caller file edited.
+- DEFERRED 2026-11-21 (owner decision): the premise "zero caller edits" is false. A validate of the
+  widened signature gave 176 new errors: target-typed `new() { [k] = v }` arguments (CS0144 x84,
+  CS0200 x90, about 14 test files) and a collection expression (CS9174,
+  `WholeFileWriteTools.cs:154`). Three private PWM helpers were widened in a81c3ae7 as prep.
 
 ### Step 4 - Case-insensitive pre-image and post-image maps
 - Files: `RoslynSentinel.Common/PersistentWorkspaceManager.cs`, `RoslynSentinel.Common/ValidateAndApplyHelper.cs`, one test file in `RoslynSentinel.Tests.Basic`
@@ -116,6 +124,7 @@ Re-measured 2026-11-21 (`Search(mode: text)` line matches, so approximate):
 - Change: add `StringComparer.OrdinalIgnoreCase` at `PersistentWorkspaceManager.cs:2438` and `:2577`
   and `ValidateAndApplyHelper.cs:408`.
 - Done when: Build 0 errors; a test proves two paths differing only in case resolve to one pre-image entry.
+- Done: a81c3ae7 (`PreImageComparerTests`; `ReadBeforeTextsAsync` made `internal` for the test)
 
 ### Step 5 - Pin the AppliedChangeSummary wire shape
 - Files: `RoslynSentinel.Tests.Basic/AppliedChangeSummaryTests.cs` (or a new sibling file), and the
@@ -125,6 +134,9 @@ Re-measured 2026-11-21 (`Search(mode: text)` line matches, so approximate):
 - Change: a test that serializes a populated `AppliedChangeSummary` and compares the JSON to a pinned
   string; a test that pins the ModifyModifier output schema node for `ChangedContent`.
 - Done when: both tests pass on the current code.
+- Done: c2f8c5c0 (`AppliedChangeSummaryWireShapeTests`; pins the `AppliedChangeSummary` schema node, since
+  `ModifyModifierResultEnvelope` is in Tools.Basic, which Tests.Basic does not reference, and the
+  `StructuredContentDataTagTests` guard is `[Explicit]`)
 
 ### Step 6 - Retype result records and their producers
 - Slices (each: property/record element type becomes `DocumentChangeSet`, and every producer that builds
@@ -166,6 +178,10 @@ Re-measured 2026-11-21 (`Search(mode: text)` line matches, so approximate):
   MSBuild properties).
 
 ## Risks and open decisions
+
+- **Step 3 shape (open, owner):** (a) drop the chokepoint widening: `DocumentChangeSet` already passes to
+  the `Dictionary` parameter, so nothing else needs it; (b) staged: sweep the target-typed `new()` / `[]`
+  arguments to explicit types, then widen; (c) add an `IReadOnlyDictionary` overload beside the old one.
 
 - **`ChangeSetResult : IOperationResult` (deferred):** decide after Step 6 whether enough results repeat
   the same `Changes` + error pair; record the evidence here.
