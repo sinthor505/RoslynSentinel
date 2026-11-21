@@ -5,11 +5,12 @@
 // Every factory is ActivatorUtilities.CreateInstance<T>(provider, <explicit args>): the arguments a call site passes are
 // explicit (matched by runtime type) and every other constructor parameter resolves from a FRESH container built per call
 // from the production registration methods, so a new constructor parameter is absorbed here once and no state is shared
-// between tests. The container is not disposed: ActivatorUtilities does not track the instance it creates, and what the
+// between tests (SymbolNavigationEngine is the exception, see its factory). The container is not disposed: ActivatorUtilities does not track the instance it creates, and what the
 // container itself resolves (default engines, loggers) holds nothing that needs disposing in a test process.
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Engines.Basic;
 
@@ -66,11 +67,12 @@ public static class TestEngines
     public static DiffEngine DiffEngine() =>
         ActivatorUtilities.CreateInstance<DiffEngine>(CreateProvider());
 
+    // Direct construction, deliberately not ActivatorUtilities: the callable predicate is a required constructor argument (null = every tool callable) that no container service provides.
     public static SymbolNavigationEngine SymbolNavigationEngine(IWorkspaceManager workspaceManager) =>
-        ActivatorUtilities.CreateInstance<SymbolNavigationEngine>(CreateProvider(workspaceManager), workspaceManager);
+        new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance, isCallable: null);
 
     public static SymbolNavigationEngine SymbolNavigationEngine(IWorkspaceManager workspaceManager, ILogger<SymbolNavigationEngine> logger) =>
-        ActivatorUtilities.CreateInstance<SymbolNavigationEngine>(CreateProvider(workspaceManager), workspaceManager, logger);
+        new SymbolNavigationEngine(workspaceManager, logger, isCallable: null);
 
     public static ValidationEngine ValidationEngine(IWorkspaceManager workspaceManager) =>
         ActivatorUtilities.CreateInstance<ValidationEngine>(CreateProvider(workspaceManager), workspaceManager);

@@ -156,20 +156,9 @@ public class SymbolNavigationEngine
     private readonly Func<string, bool>? _isCallable;
 
     /// <summary>
-    /// <paramref name="isCallable"/> says whether a tool name can be called on this server (production passes
-    /// <c>ActiveToolSurface.IsCallable</c>); null means every tool can, so hint text names FindReferences. When
-    /// FindReferences is not callable the next-call hints name a prefilled Search(mode: references) instead.
-    /// </summary>
-    [Obsolete("Use the (ISolutionProvider, ILogger<SymbolNavigationEngine>, Func<string, bool>?) constructor so the callable predicate is chosen explicitly")]
-    public SymbolNavigationEngine(ISolutionProvider workspaceManager, Func<string, bool>? isCallable = null)
-    {
-        _workspaceManager = workspaceManager;
-        _logger = NullLogger<SymbolNavigationEngine>.Instance;
-        _isCallable = isCallable;
-    }
-
-    /// <summary>
     /// isCallable is required; pass null when every tool is callable (test hosts without an ActiveToolSurface).
+    /// null isCallable means every tool is callable, so hint text names FindReferences; when FindReferences is
+    /// not callable the hints name a prefilled Search(mode: references) instead.
     /// </summary>
     public SymbolNavigationEngine(ISolutionProvider workspaceManager, ILogger<SymbolNavigationEngine> logger, Func<string, bool>? isCallable)
     {
