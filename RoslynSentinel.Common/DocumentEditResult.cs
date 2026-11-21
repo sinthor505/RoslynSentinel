@@ -12,7 +12,7 @@ namespace RoslynSentinel.Common
     public sealed record DocumentEditResult : EngineResultBase
     {
 
-        public Dictionary<FilePathWrapper, string> Changes { get; init; } = new Dictionary<FilePathWrapper, string>();
+        public DocumentChangeSet Changes { get; init; } = new DocumentChangeSet();
 
         // DEFERRED (accepted 2026-10-22, finding #22): UpdatedText is excluded from JSON summaries, so generate-style tools do not show the generated text.
         // Left as-is on purpose until scheduled; do not re-raise in reviews.
