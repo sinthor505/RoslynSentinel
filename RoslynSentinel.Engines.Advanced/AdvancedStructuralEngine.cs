@@ -98,8 +98,12 @@ public class StructuralRefactoringEngine
             throw new ToolNotFoundException($"Class '{className}' not found in {Path.GetFileName(filePath)}. " + DeclarationNotFoundDetail.Build("class", "className", className, root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Select(classDecl => classDecl.Identifier.Text) ?? Enumerable.Empty<string>(), filePath.ToString()), MissingTargetKinds.Class, className);
         }
 
-        // TODO not-found: add DeclarationNotFoundDetail candidates (the class is found; the miss is its missing constructor, not a name)
-        throw new ToolNotFoundException($"Class '{className}' has no constructor to replace with a factory.", MissingTargetKinds.Constructor, className);
+        // The class is found; the miss is its missing constructor, so the hint lists the classes here that have one.
+        var classesWithConstructor = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Members.OfType<ConstructorDeclarationSyntax>().Any()).Select(c => c.Identifier.Text).Distinct().ToList() ?? new System.Collections.Generic.List<string>();
+        var constructorHint = classesWithConstructor.Count > 0
+            ? $" Classes in '{Path.GetFileName(filePath)}' that declare a constructor: {string.Join(", ", classesWithConstructor)}."
+            : $" No class in '{Path.GetFileName(filePath)}' declares an explicit constructor.";
+        throw new ToolNotFoundException($"Class '{className}' has no constructor to replace with a factory.{constructorHint}", MissingTargetKinds.Constructor, className);
     }
 
     // ExtractSuperclass is DELIBERATELY left unimplemented (stubbed): it copies only public properties and never
@@ -2078,8 +2082,7 @@ public class StructuralRefactoringEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            // TODO not-found: precondition failure, not a miss; kind-less on purpose (consider a typed validation exception)
-            throw new ToolNotFoundException($"Failed to get syntax root for '{filePath}'.");
+            throw new ToolInvalidArgumentException($"Failed to get syntax root for '{filePath}'.");
         }
 
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
@@ -2117,15 +2120,13 @@ public class StructuralRefactoringEngine
 
         if (expressionToInline == null)
         {
-            // TODO not-found: precondition failure, not a miss; kind-less on purpose (consider a typed validation exception)
-            throw new ToolNotFoundException($"Cannot inline '{methodName}': only expression-body or single-return-statement methods are supported. This method has a complex body with multiple statements.");
+            throw new ToolTargetIneligibleException($"Cannot inline '{methodName}': only expression-body or single-return-statement methods are supported. This method has a complex body with multiple statements.");
         }
 
         var methodSymbol = semanticModel.GetDeclaredSymbol(method, cancellationToken);
         if (methodSymbol == null)
         {
-            // TODO not-found: precondition failure, not a miss; kind-less on purpose (consider a typed validation exception)
-            throw new ToolNotFoundException($"Cannot inline '{methodName}': failed to resolve semantic symbol.");
+            throw new ToolInvalidArgumentException($"Cannot inline '{methodName}': failed to resolve semantic symbol.");
         }
 
         ThrowIfInlineMethodIneligible(methodSymbol);

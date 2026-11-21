@@ -3007,7 +3007,7 @@ public class Math
                         Assert.Fail("Document not found");
                     }
 
-                    await Assert.ThrowsAsync<ToolNotFoundException>(async () => await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).InlineMethodAsync(document!.FilePath!, "Add"), "Multi-statement method should fail gracefully via a typed exception, not crash");
+                    await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).InlineMethodAsync(document!.FilePath!, "Add"), "Multi-statement method should fail gracefully via a typed exception, not crash");
                 }
             }
 
@@ -3884,7 +3884,7 @@ public class Service
     }
 }";
                 SetSource(code, "Service.cs");
-                await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _advancedStructuralEngine.InlineMethodAsync("Service.cs", "Process"), "Multi-statement method should fail gracefully via a typed exception, not crash");
+                await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await _advancedStructuralEngine.InlineMethodAsync("Service.cs", "Process"), "Multi-statement method should fail gracefully via a typed exception, not crash");
             }
 
             [Test]
