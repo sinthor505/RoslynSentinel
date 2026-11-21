@@ -232,6 +232,23 @@ public class Empty { }", "Empty.cs");
             "Should return at least an empty JSON object.");
     }
 
+    [Test]
+    public async Task GenerateDefaultConfigJson_UnknownProject_ThrowsNotFoundWithKind()
+    {
+        SetSource(@"
+public class Empty { }", "Empty.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _codeGenerationEngine.GenerateDefaultConfigJsonAsync("NoSuchProject");
+        });
+        Assert.That(ex!.MissingTargetKind, Is.EqualTo(MissingTargetKinds.Project));
+
+        var result = await _codeGenerationEngine.GenerateDefaultConfigJsonAsync("testproj");
+        Assert.That(result.UpdatedText, Does.Contain("{"),
+            "Project lookup should be case-insensitive by default.");
+    }
+
     // ══════════════════════════════════════════════════════════════
     // GenerateRepositoryInterfaceAsync
     // ══════════════════════════════════════════════════════════════
@@ -523,6 +540,26 @@ public class SomeClass { }", "SomeClass.cs");
             await _codeGenerationEngine.InterpolateStringAsync("Test.cs", "string.Format(\"missing\")");
         });
         Assert.That(ex!.Message, Does.Contain("contextSnippet was not found"));
+    }
+
+    [Test]
+    public async Task InterpolateStringSafe_FormatCallWithoutArguments_ThrowsTargetIneligible()
+    {
+        SetSource("""
+            public class Foo
+            {
+                public void Bar()
+                {
+                    var s = string.Format();
+                }
+            }
+            """);
+
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
+        {
+            await _codeGenerationEngine.InterpolateStringAsync("Test.cs", "string.Format()");
+        });
+        Assert.That(ex!.Message, Does.Contain("no arguments"));
     }
 
     // ══════════════════════════════════════════════════════════════════════════

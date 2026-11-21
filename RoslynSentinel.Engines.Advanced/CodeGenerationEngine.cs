@@ -380,8 +380,7 @@ public class CodeGenerationEngine
     public async Task<DocumentEditResult> GenerateDefaultConfigJsonAsync(string projectName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        // TODO not-found: throws InvalidOperationException and matches case-sensitively; move to ProjectLookup.RequireProject once its callers/tests tolerate ToolNotFoundException
-        var project = ProjectLookup.FindProject(solution, projectName) ?? throw new InvalidOperationException("Project not found.");
+        var project = ProjectLookup.RequireProject(solution, projectName);
         var collectedKeys = new SortedSet<string>(StringComparer.Ordinal);
 
         // IConfiguration type names to recognise the receiver
@@ -1240,8 +1239,7 @@ public class CodeGenerationEngine
         var args = invocation.ArgumentList.Arguments;
         if (args.Count < 1)
         {
-            // TODO not-found: precondition failure, not a miss; kind-less on purpose (consider a typed validation exception)
-            throw new ToolNotFoundException("string.Format call has no arguments.");
+            throw new ToolTargetIneligibleException("string.Format call has no arguments.");
         }
 
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
