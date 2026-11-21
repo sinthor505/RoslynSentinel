@@ -102,11 +102,13 @@
     -Test Scenario also prints a per-scenario summary (Get-ScenarioSummary.ps1) of each archived run's
     results.csv: Inconclusive samples are listed by reason and kept out of every rate. It is advisory and never fails a run.
 
-    Each host gets its own --artifacts-path (RoslynSentinel\_scratchbuild_<host-suffix>) so
+    Each host gets its own --artifacts-path (<scratch>\build\<host-suffix>) so
     that two hosts can be launched concurrently without racing on shared project references'
     obj/ output - see reference_model_eval_procedure memory / CS2012 "locked by VBCSCompiler"
     for the failure this avoids. Test/transcript output lands under
-    _scratchbuild_<host-suffix>\bin\RoslynSentinel.Tests.ModelEval\debug\model-eval\...
+    <scratch>\build\<host-suffix>\bin\RoslynSentinel.Tests.ModelEval\debug\model-eval\...
+    <scratch> is ROSLYNSENTINEL_SCRATCH_ROOT when set, else <parent of the repo>\RoslynSentinel-ScratchDir,
+    outside the repo. An eval checkout (marker files complete and lastused) builds into its own checkout-local folder instead.
 
 .PARAMETER HostAddress
     an alias from scripts/eval-hosts.json (for example 85u or 85lms), a machine key (its default endpoint) or a base URL
@@ -155,20 +157,20 @@
     downloaded model, not which one is actually loaded).
 
 .PARAMETER Clean
-    Archive this host's _scratchbuild_<suffix>\bin\...\model-eval directory (transcripts,
-    agent.log, results.csv - everything) to ModelTestingResults\<host-suffix>\<timestamp>\
-    under the repo root, then delete the original, before running - so stale run-history from
+    Archive this host's <scratch>\build\<suffix>\bin\...\model-eval directory (transcripts,
+    agent.log, results.csv - everything) to <scratch>\ModelTestingResults\<host-suffix>\<timestamp>\
+    then delete the original, before running - so stale run-history from
     a previous session isn't mixed in with this run's data, but nothing is lost. Skipped
     silently if there's no existing model-eval directory to archive.
 
 .PARAMETER Repeats
     Run the test this many times in sequence (default: 1). Between iterations, waits for
-    this scratch path's own testhost.exe to fully exit before starting the next build — a
+    this scratch path's own testhost.exe to fully exit before starting the next build - a
     bare `for` loop calling `dotnet test --artifacts-path <dir>` repeatedly WILL race the
     next build's DLL copy against the previous run's still-exiting testhost.exe and fail
     with MSB3027 "locked by testhost" (seen in practice 2026-08-31). Use -Repeats instead of
     a caller-side loop so this wait always happens. After each individual run (pass or fail),
-    its own run directory is copied to ModelTestingResults\<host-suffix>\<TestName>\ right
+    its own run directory is copied to <scratch>\ModelTestingResults\<host-suffix>\<TestName>\ right
     away - this happens unconditionally, independent of -Clean, so results are available in
     the common folder as soon as each run finishes rather than only on the next -Clean.
 
@@ -392,6 +394,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
+. (Join-Path $PSScriptRoot 'roslynsentinel-scratch.ps1')
+$scratchRoot = Get-RoslynSentinelScratchRoot -RepoRoot $repoRoot
 
 . (Join-Path $PSScriptRoot 'roslynsentinel-evalhosts.ps1')
 $evalTable = Read-EvalHostTable
@@ -499,22 +503,19 @@ if ($Test -contains 'Scenario') {
     }
 }
 
-$artifactsPath = Join-Path $repoRoot "_scratchbuild_$suffix"
+$artifactsPath = Get-RoslynSentinelBuildDir -RepoRoot $repoRoot -Suffix $suffix
+# The testhost runs from <scratch>\build\..., outside the repo, so it resolves the repo and scratch root from these (RepoRootLocator and ScratchRoot read them).
+$env:ROSLYNSENTINEL_REPO_ROOT = $repoRoot
+$env:ROSLYNSENTINEL_SCRATCH_ROOT = $scratchRoot
 
 if ($Test.Count -gt 1) {
     Write-Host ""
     Write-Host "=== Queuing $($Test.Count) tests in sequence against $baseUrl (model=$Model): $($Test -join ', ') ===" -ForegroundColor Magenta
 }
 
-# Central results base. ROSLYNSENTINEL_RESULTS_ROOT (absolute) redirects every writer of ModelTestingResults (the queue sets it for pinned jobs, whose repo root is a throwaway checkout). Validated here because the test archivers catch and swallow their own exceptions.
-if ($env:ROSLYNSENTINEL_RESULTS_ROOT) {
-    if (-not [System.IO.Path]::IsPathRooted($env:ROSLYNSENTINEL_RESULTS_ROOT)) {
-        throw "ROSLYNSENTINEL_RESULTS_ROOT must be an absolute path, got '$($env:ROSLYNSENTINEL_RESULTS_ROOT)'."
-    }
-    $resultsBase = $env:ROSLYNSENTINEL_RESULTS_ROOT
-} else {
-    $resultsBase = Join-Path $repoRoot 'ModelTestingResults'
-}
+# Central results base: <scratch>\ModelTestingResults, or ROSLYNSENTINEL_RESULTS_ROOT (absolute) when set; the queue sets it for pinned jobs.
+# The helper throws on a relative ROSLYNSENTINEL_RESULTS_ROOT. Validated here because the test archivers catch and swallow their own exceptions.
+$resultsBase = Get-RoslynSentinelResultsRoot -RepoRoot $repoRoot
 
 $finalExitCode = 0
 foreach ($currentTest in $Test) {
@@ -730,14 +731,14 @@ function Copy-NewRunDirectories {
     $new = $after | Where-Object { $_ -notin $Before }
     foreach ($runPath in $new) {
         # Relative to model-eval\ (keeps the <TestName> or <TestName>(<case>) folder), so the layout under
-        # ModelTestingResults\<suffix>\ matches what the test project's own ModelTestingResultsArchiver writes.
+        # <scratch>\ModelTestingResults\<suffix>\ matches what the test project's own ModelTestingResultsArchiver writes.
         $relative = $runPath.Substring($modelEvalRoot.Length).TrimStart('\')
         $dest = Join-Path $resultsRoot $relative
         New-Item -ItemType Directory -Force -Path (Split-Path $dest -Parent) | Out-Null
         Write-Host "Archiving run to $dest" -ForegroundColor DarkGray
         # Copy-Item of a folder onto an EXISTING folder nests it (<ts>\<ts>\...). $dest already exists
         # when something else archived this run first (the test project's own
-        # ModelTestingResultsArchiver also writes ModelTestingResults\<suffix>\...), so copy the
+        # ModelTestingResultsArchiver also writes <scratch>\ModelTestingResults\<suffix>\...), so copy the
         # contents in that case; a missing $dest is created by the plain folder copy.
         if (Test-Path -LiteralPath $dest) {
             Copy-Item -Path (Join-Path $runPath '*') -Destination $dest -Recurse -Force
