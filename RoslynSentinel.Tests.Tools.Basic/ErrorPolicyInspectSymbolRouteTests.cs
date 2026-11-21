@@ -80,11 +80,11 @@ public class ErrorPolicyInspectSymbolRouteTests
         var result = await _symbols.InspectSymbol(
             reason: "test error policy info snippet not in file", path, "this snippet is not in the file", InspectSymbolAspect.info);
 
-        // The throw comes from SnippetErrorFormatter.BuildNoMatch (RoslynSentinel.Common/SnippetMatching/SnippetErrorFormatter.cs), whose
-        // ToolNotFoundException calls at lines 122, 169 and 180 pass no missingTargetKind. ToolErrorMapper.ToResultError (ToolException.cs:270)
-        // records that null, and ToolCallContext.RecordMissingTarget ignores null (ToolCallContext.cs:128-129), so no kind is recorded.
+        // The throw comes from SnippetErrorFormatter.BuildNoMatch (RoslynSentinel.Common/SnippetMatching/SnippetErrorFormatter.cs), which
+        // passes MissingTargetKinds.Snippet. ToolErrorMapper.ToResultError records it and ToolCallContext.RecordMissingTarget stores it.
+        // The kind has no error-policy key (it is in MissingTargetKinds.UnmappedKinds).
         Assert.That(result.IsError, Is.True);
-        Assert.That(ctx.MissingTargetKind, Is.Null);
+        Assert.That(ctx.MissingTargetKind, Is.EqualTo("snippet"));
     }
 
     [Test]
