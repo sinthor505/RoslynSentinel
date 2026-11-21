@@ -87,8 +87,14 @@ public class CodeHealingEngine
         method ??= methods.FirstOrDefault();
         if (method?.Body == null)
         {
-            // TODO not-found: add DeclarationNotFoundDetail candidates (no method name is passed; the lookup is by line range, so there is no wanted name to rank against)
-            throw new ToolNotFoundException("Method body not found in '" + f + "'.", MissingTargetKinds.Method);
+            var withBody = methods.Where(m => m.Body != null).Select(m => m.Identifier.ValueText).Distinct().ToList();
+            var searched = sl > 0 && el > 0
+                ? "Looked for a method with a block body inside lines " + sl + "-" + el + ", else the first method in the file."
+                : "Looked for the first method in the file.";
+            var listing = withBody.Count > 0
+                ? " Methods in '" + f + "' with a block body: " + string.Join(", ", withBody) + "."
+                : " No method in '" + f + "' has a block body.";
+            throw new ToolNotFoundException("Method body not found in '" + f + "'. " + searched + listing, MissingTargetKinds.Method);
         }
 
         var retryDecl = SyntaxFactory.LocalDeclarationStatement(

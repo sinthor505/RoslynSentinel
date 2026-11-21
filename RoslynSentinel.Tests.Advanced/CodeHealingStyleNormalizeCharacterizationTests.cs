@@ -610,4 +610,13 @@ public class CodeHealingStyleNormalizeCharacterizationTests
         var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _healing.AddRetryPolicyAsync("Missing.cs", 0, 0, 3));
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
+
+    [Test]
+    public async Task AddRetryPolicy_NoMethodBody_ListsMethodsWithBodies()
+    {
+        SetSource("public class C { int One() => 1; }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _healing.AddRetryPolicyAsync("Test.cs", 0, 0, 3));
+        Assert.That(ex.MissingTargetKind, Is.EqualTo(MissingTargetKinds.Method));
+        Assert.That(ex.Message, Does.Contain("No method in 'Test.cs' has a block body"));
+    }
 }
