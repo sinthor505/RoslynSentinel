@@ -400,12 +400,12 @@ public static class ValidateAndApplyHelper
     /// Reads each path's current text: the committed workspace document when there is one (what the
     /// tool computed its edit against), otherwise the file on disk, otherwise null (a brand-new file).
     /// </summary>
-    private static async Task<Dictionary<string, string?>> ReadBeforeTextsAsync(
+    internal static async Task<Dictionary<string, string?>> ReadBeforeTextsAsync(
         IWorkspaceManager workspaceManager,
         IEnumerable<string> paths,
         CancellationToken cancellationToken)
     {
-        var result = new Dictionary<string, string?>();
+        var result = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
         Solution? solution = null;
         foreach (var path in paths)
         {

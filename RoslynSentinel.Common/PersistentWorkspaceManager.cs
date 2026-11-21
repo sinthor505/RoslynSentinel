@@ -2435,7 +2435,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             // Read every file BEFORE writing. null means the file did not previously
             // exist (undo should delete it rather than restore content).
             // Must run inside the lock and before the first write.
-            var preImages = new Dictionary<string, string?>();
+            var preImages = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
             foreach (var key in changes.Keys.Concat(deletePaths))
             {
                 try
@@ -2574,7 +2574,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             }
 
             // Exact text written per file (post EOL pre-pass). No-op writes, deletes and failed writes get no entry; rollback clears it.
-            var postImages = new Dictionary<string, string?>();
+            var postImages = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var change in changes)
             {
@@ -2962,7 +2962,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     /// only when such a write exists. Returns null when the write may proceed. A check failure is logged and the write proceeds,
     /// so this check never blocks a write on its own.
     /// </summary>
-    private async Task<ApplyChangesResult?> RevalidateAfterForeignWriteAsync(Dictionary<FilePathWrapper, string> changes, bool exactRestore, CancellationToken cancellationToken)
+    private async Task<ApplyChangesResult?> RevalidateAfterForeignWriteAsync(IReadOnlyDictionary<FilePathWrapper, string> changes, bool exactRestore, CancellationToken cancellationToken)
     {
         try
         {
@@ -3097,7 +3097,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     // chokepoint). The finding is a record, never a refusal. Refusal is non-null only when the converted content is not
     // a single line-ending style; RefusalFile names the offending file. Nothing is written here.
     private (Dictionary<string, string> ContentsToWrite, List<Finding> Findings, string? Refusal, string? RefusalFile) ComputeEolPrePass(
-        Dictionary<FilePathWrapper, string> changes,
+        IReadOnlyDictionary<FilePathWrapper, string> changes,
         IReadOnlyDictionary<string, string?> preImages,
         bool exactRestore,
         string? operationLabel)
@@ -3157,7 +3157,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     // disk pre-image (beyond the BOM/EOL/trailing-whitespace trivia FoldComparison converges) is folded once from disk and
     // refused with FoldPending; a path already refused since its last fold proceeds with a Warning finding instead.
     // No-op rule: a target whose proposed content equals its disk pre-image (ordinal) is folded inline and never refused.
-    private async Task<ApplyChangesResult?> CheckFoldPendingAsync(IEnumerable<FilePathWrapper> targets, Dictionary<string, string?> preImages, Dictionary<FilePathWrapper, string> proposed, DiagnosticReport? validationReport, List<Finding> foldFindings, CancellationToken cancellationToken)
+    private async Task<ApplyChangesResult?> CheckFoldPendingAsync(IEnumerable<FilePathWrapper> targets, Dictionary<string, string?> preImages, IReadOnlyDictionary<FilePathWrapper, string> proposed, DiagnosticReport? validationReport, List<Finding> foldFindings, CancellationToken cancellationToken)
     {
         var refuse = new List<FilePathWrapper>();
         var foldInline = new List<FilePathWrapper>();
