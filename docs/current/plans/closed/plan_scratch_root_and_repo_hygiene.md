@@ -1,6 +1,6 @@
 # Plan: move all test/eval/run/scratch output to one out-of-repo scratch root, add runtime-state retention and a repo hygiene guard
 
-**Status:** IN PROGRESS 2026-11-20. Steps 1a-15b done (last 13788ee9; hashes under each step); docs (16a-16c) and main-session Steps 17-19 left. Batched run by session 3e5e7eba.
+**Status:** IMPLEMENTED 2026-11-20. All steps done (hashes under each step; last code commit 5752242e, docs f71c0122). Smoke eval paths ideal; its restore SetUp failure reproduces at pre-plan 41f195b5 (INBOX 2026-11-20 18:40).
 
 ## Problem
 
@@ -490,6 +490,8 @@ function Get-RoslynSentinelBuildDir {
 - Done when: `echo '{"source":"startup","session_id":"x"}' | pwsh -NoProfile -File .claude\hooks\repo-hygiene-session-start.ps1` runs and exits 0 (prints the warning before Step 19, nothing after); `.claude\settings.json` parses (`Get-Content -Raw | ConvertFrom-Json`).
 
 ### Step 16a - Docs sweep: model-eval procedure
+
+- Done: b9371dcd
 - Files: `docs\current\references\reference_model_eval_procedure.md` (16 sites at `:127, 131-133, 135, 139, 178, 188, 212, 228, 251, 266, 271, 288, 294, 399`).
 - Depends on: 5a, 5b, 6. Lane: implementer-sweep (1 file, 16 sites, one operation: path rewrite via `Edit`).
 - Effect: text-neutral.
@@ -497,6 +499,8 @@ function Get-RoslynSentinelBuildDir {
 - Done when: `Select-String -Pattern 'ModelTestingResults'` hits in the file all carry `<scratch>` or `RESULTS_ROOT` context; no bare `_scratchbuild_<suffix>` left except the pinned-checkout form.
 
 ### Step 16b - Docs sweep: five more live references
+
+- Done: 5f4407ef
 - Files: `docs\current\references\reference_model_testing_results_archiver.md` (11 sites), `reference_parse_agent_log_script.md` (`:34, 37, 42, 49`), `reference_interrogate_script.md` (`:8, 32`), `reference_log_sources_and_cross_referencing.md` (`:62, 137`), `docs\current\design\design_subagent_tool.md` (`:451`).
 - Depends on: 5a, 5b, 8a. Lane: implementer-sweep (5 files, about 20 sites, same rewrite rules as 16a plus `RoslynSentinel-TestRuns` -> `<scratch>\TestRuns`).
 - Effect: text-neutral.
@@ -505,6 +509,8 @@ function Get-RoslynSentinelBuildDir {
 - Done when: `Select-String -Pattern 'RoslynSentinel-TestRuns' -Path docs\current\references\*.md, docs\current\design\*.md` returns no hits.
 
 ### Step 16c - New prose: scratch root, retention and hygiene
+
+- Done: f71c0122 (E0 fixes 5752242e)
 - Files: `docs\current\references\reference_working_conventions.md` (new section "Scratch root and repo hygiene"), `docs\current\references\reference_live_server_freshness.md` (one sentence near `:26` and `:50` on build-instance and log retention), `docs\current\references\reference_model_eval_procedure.md` (a short "Where output goes" section: scratch root, `ROSLYNSENTINEL_SCRATCH_ROOT`, `ROSLYNSENTINEL_RESULTS_ROOT`, `ROSLYNSENTINEL_REPO_ROOT`, checkout-local pinned builds, `C:\rs-eval` kept).
 - Depends on: 16a, 16b, 13b, 15b, 8a. Lane: implementer (3 files, 3 prose additions).
 - Effect: text-neutral.
@@ -513,6 +519,8 @@ function Get-RoslynSentinelBuildDir {
 - Done when: `pwsh scripts\Test-GuidanceHygiene.ps1` shows no new `LINK-FORM` or broken-link findings for these three files.
 
 ### Step 17 - Stub scan, full build, commit, restart (main session / dispatcher; not an implementer)
+
+- Done: live checks ideal: server served 5752242e; operations 14,284 -> 4,215 (all 71 under 24 h kept, 0 over 14 d), validation 659 -> 20, undo of a fresh Member edit worked; Build 0/0
 - Depends on: all implementer steps.
 - Effect: verification.
 - Change: (1) `Search(mode: text, query: "NotImplementedException", fileGlob: "RoslynSentinel.Common/Scratch*.cs")`, same for `RepoRootLocator.cs` and `RuntimeStateRetention.cs`: zero hits, else fail. (2) `Build` default level 0 errors, then `scripts\build.ps1 -Flavor Solution` for the additive-layering check (new files are in Common; Advanced must still build). (3) Run in this order, one at a time:
@@ -523,6 +531,8 @@ function Get-RoslynSentinelBuildDir {
 - Done when: all of the above pass and the commit hash is recorded in the plan Status.
 
 ### Step 18 - Data migration (main session only; no implementer, no eval/test/queue process running)
+
+- Done: moved ModelTestingResults, 5 build dirs, TestRuns (worktree via git worktree move after a transient lock), parallel-run; legacy dirs and .roslynsentinel/scans deleted; hygiene guard shows only the owner-owned enforce-dogfood.ps1.bak
 - Depends on: 17 committed and the server restarted.
 - Effect: behaviour-changing (moves 4.8 GB, same volume, so `Move-Item` is a rename).
 - Preconditions (all must hold, else stop): `pwsh scripts\roslynsentinel-evalqueue.ps1 status` shows no Running/Building job on any host (a worker exits when its queue is empty and reloads the script on the next start); `Get-Process testhost, dotnet -ErrorAction SilentlyContinue` has none whose path is under `_scratchbuild*`; `git worktree list` captured to a scratch note.
@@ -538,6 +548,8 @@ function Get-RoslynSentinelBuildDir {
 - Done when: `Test-Path` is false for `ModelTestingResults`, `_scratchbuild*`, `.scratch`, `TestResults`, `..\RoslynSentinel-TestRuns`; `pwsh scripts\Test-RepoHygiene.ps1` prints no `UNEXPECTED-ROOT`; the smoke run lands in scratch.
 
 ### Step 19 - Remove obsolete ignores, final hygiene run, close (main session)
+
+- Done: four obsolete .gitignore entries removed; hygiene guard reports only the owner-owned enforce-dogfood.ps1.bak; TODO.md errorvariants item closed to CLOSED.md
 - Files: `.gitignore`.
 - Depends on: 18. Effect: closing.
 - Change: delete `_scratchbuild/`, `_scratchbuild_*/`, `ModelTestingResults/`, `/.scratch` (keep `TestResults/`: `dotnet test` still writes per-project `TestResults` such as `RoslynSentinel.Tests.Basic\TestResults\`; keep the `*.json`/`*.csv` blanket ignores, see Risks). Run `pwsh scripts\Test-RepoHygiene.ps1`: no findings. Commit with `Closes: plan_scratch_root_and_repo_hygiene`, set Status to IMPLEMENTED with hashes, move this plan to `plans/closed/` and the `docs/current/TODO.md:53` READY item (errorvariants RESULTS_ROOT) to `CLOSED.md` (`ProjectDoc action: close`). CLAUDE.md one-liner is the main session's own task, not this plan's.

@@ -36,10 +36,6 @@ publish/
 
 TestResults/
 
-_scratchbuild/
-_scratchbuild_*/
-ModelTestingResults/
-
 
 # NOTE: git cannot re-include a file whose PARENT DIRECTORY is itself excluded - a bare
 # ".claude/" pattern here would make every !.claude/... negation below a no-op for anything
@@ -57,6 +53,5 @@ ModelTestingResults/
 !.claude/implementer-tiers.json
 docs/known-build-warnings.Solution.txt
 *.tmp
-/.scratch
 # Server runtime state (operation blobs, large results, scans, test instances, write lock). Nothing here is tracked.
 /.roslynsentinel/

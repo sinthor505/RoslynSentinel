@@ -207,6 +207,7 @@ public sealed class TestSolutionFixture : IDisposable
             .RunAsync(process, TimeSpan.FromMinutes(5), System.Threading.CancellationToken.None)
             .GetAwaiter().GetResult();
 
+        // TODO Queue eval ShippingKindStepFinal on 85u: case (1) restores fine, cases (2)-(6) exit 1 after ~13 s with EMPTY output (jobs 20261121-012644-001 at f71c0122 and 20261121-013055-001 at pre-plan 41f195b5; last pass 8ccccff0) - capture why the output is empty and what differs after the first case.
         var output = result.StdOut + result.StdErr;
         var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
         var start = Math.Max(0, lines.Length - 40);

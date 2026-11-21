@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## roslynsentinel-errorvariants.ps1 honours ROSLYNSENTINEL_RESULTS_ROOT - resolved (2026-11-20)
+
+`roslynsentinel-errorvariants.ps1` honours ROSLYNSENTINEL_RESULTS_ROOT (2026-11-19) - copy the rooted-check/`$resultsBase` block from `roslynsentinel-modeleval.ps1:509-517`, use it for `$resultsDir` at `errorvariants.ps1:132`, remove the `# TODO` at :131 (today a set variable splits the run across two trees); accept: with the variable set to a temp folder the run lands there and nothing new appears under the repo `ModelTestingResults`; Small
+
+Evidence: cc021d4e (plan_scratch_root_and_repo_hygiene Step 5b): results root resolved via the shared scratch helper; TODO removed
+
 ## Eval host table, liveness probe and run index - resolved (2026-11-20)
 
 Eval host table, liveness probe and run index (2026-11-20) - one `scripts/eval-hosts.json` (LM Studio :1234 and Unsloth :8888 on 85/112/113, backend field) read by every eval script and both archivers; `Get-EvalHostStatus.ps1` plus `evalqueue hosts` report reachability, loaded model and queue owner in one call; queue keyed by machine so two endpoints cannot load one GPU; worker appends `runs.csv` (job, session, commit, model, folders); `status -Session/-ActiveOnly`; owner agreed direction, write the plan in a fresh session - [proposal](proposals/closed/proposal_eval_host_table_and_liveness.md)
