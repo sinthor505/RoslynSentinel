@@ -8,6 +8,42 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## SymbolNavigationEngine convenience constructors assume every tool is callable - resolved (2026-11-21)
+
+`SymbolNavigationEngine` convenience constructors assume every tool is callable (2026-11-20) - hints are surface-aware only on the DI path; callers: AdvancedRefactoringEngine (3), DiscoveryEngine, AdvancedRefactoringTools, GenerationTools, CoreRefactoringTools; owner ruling 2026-11-21: `[Obsolete("Use X")]` the convenience constructors and migrate the callers in slices, remove last; Small
+
+Evidence: cbf66b40, 72d5a432, 86c26b43 (obsolete ctor removed; TestEngines factories construct directly because ActivatorUtilities could not supply the required predicate); detached run green
+
+## Precondition error type for Solution path not found - resolved (2026-11-21)
+
+Precondition error type for "Solution path not found." (2026-11-21) - the two `ProjectStructureEngine` throws are classified `MissingTargetKinds.File` but are a missing precondition; owner ruling 2026-11-21: add a precondition error type in Common and reclassify both; Small
+
+Evidence: 9416fde5 (ToolPreconditionException, PreconditionNotMet), 5607bc1b (ratchet floor, ToolCallHint-built hint); detached run green
+
+## Git not-found errors carry no missing-target kind - resolved (2026-11-21)
+
+Git not-found errors carry no missing-target kind (2026-11-21) - `GitTools.cs:222` builds ResultError("GitPathNotFound"/"GitTargetNotFound") that `ErrorPolicyClassifier.MapKind` never maps; owner ruling 2026-11-21: map GitPathNotFound to `MissingTargetKinds.File` and add a new `MissingTargetKinds` constant for tag/branch/stash/worktree targets used by GitTargetNotFound, then let `GitImpl` GitErrorCodes.ToResultStatus carry the kind; Small
+
+Evidence: 2d5d739a (MapKind, MissingTargetKinds.GitTarget), 8c348049 (GitTools records the kind); ratchets and Git tests green in the detached run of 5607bc1b
+
+## Loop-latch refusal quotes a next step that calls the latched tool - resolved (2026-11-21)
+
+Loop-latch refusal quotes a next step that calls the latched tool (2026-11-21) - the refusal repeats the failed edit's next step ("widen oldContent ..." = another ReplaceSnippet), sample 8 of live check 20261121-043506-001 followed it into LoopLatchIgnored; owner ruling 2026-11-21: when the quoted next step names the latched tool, drop it and name the read tools (ReadFile/GetMethodSource) instead; code TODO `ToolLoopLatch.cs:40`; Small - [eval](evals/eval_tenchain_reasoning_replay_2026_11_10.md)
+
+Evidence: 2eaeb1ac; LoopLatchTests 27/27
+
+## Archiver test-result.txt stays Unfinished after a body-called archive - resolved (2026-11-21)
+
+Archiver test-result.txt stays "Unfinished" after a body-called archive (2026-11-20) - `RunDirectoryArchive` UnfinishedOutcome says "overwritten when the test ends" but nothing rewrites it for ScenarioAgentTests, TranscriptResume, ShippingKind*, ErrorVariantReplayTests; owner ruling 2026-11-21: TearDown rewrites test-result.txt with the real outcome (keep the wording); Small
+
+Evidence: 062a90cb (ModelEval), ee26fe96 (ErrorVariants): assembly-level ITestAction rewrites the run directory and archived copy; ModelTestingResultsArchiverTests 13/13, ErrorVariants RunDirectoryArchiveTests 7/7
+
+## ResumeScenariosTests capture asserts stale turn positions - resolved (2026-11-21)
+
+`ResumeScenariosTests.Capture_LoadsWithElevenTurnsSchemasAndCommit` asserts stale turn positions (2026-11-20) - expects RenameSymbol at Turns[3] and CreateFile at Turns[10]; no live run of 15 matched; owner ruling 2026-11-21: adopt run 20261121-052606-268 (113u Qwen3.5-9B-MTP, commit 9b00b68c; RenameSymbol idx 3, CreateFile idx 11) as a 12-turn cut - copy its transcript in as the capture, ResumeKeepTurns 12 on the three ResumeScenarios definitions, assertions Count 12 / Turns[3]=RenameSymbol / Turns[11]=CreateFile (ResumeScenariosTests.cs:189-205), rename the test to match; Small
+
+Evidence: 4d79e355 (live run 20261121-052606-268 adopted as the 12-turn capture; probe schemaDrift false, resultDrift 0 after NormalizeResultText masks escaped-quote resultId hints); ResumeScenariosTests, TranscriptResumeTests 82/82 on the main tree
+
 ## evalqueue -Model id form undocumented - resolved (2026-11-21)
 
 INBOX 2026-11-21 05:20: the procedure doc did not say which id form `-Model` needs (its `qwen3.5-9b-coder` examples would not match an Unsloth host's `unsloth/Qwen3.5-9B-MTP-GGUF`).
