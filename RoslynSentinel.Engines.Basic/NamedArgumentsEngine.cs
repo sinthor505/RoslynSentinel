@@ -16,7 +16,7 @@ public sealed record NamedArgumentsRewriteResult(SyntaxNode Root, int CallSitesC
 public sealed record NamedArgumentsFileSummary(string FilePath, int CallSites, int Arguments);
 
 /// <summary>New text for every changed file (keyed by path), per-file counts, or an error.</summary>
-public sealed record NamedArgumentsOutcome(Dictionary<FilePathWrapper, string> Changes, IReadOnlyList<NamedArgumentsFileSummary> Files, ResultError? Error) : IOperationResult
+public sealed record NamedArgumentsOutcome(DocumentChangeSet Changes, IReadOnlyList<NamedArgumentsFileSummary> Files, ResultError? Error) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => Error is not null;
@@ -73,7 +73,7 @@ public sealed class NamedArgumentsEngine
             targetDocCommentId = resolvedId;
         }
 
-        var changes = new Dictionary<FilePathWrapper, string>();
+        var changes = new DocumentChangeSet();
         var files = new List<NamedArgumentsFileSummary>();
         // A file linked into several projects (e.g. multi-targeting) shows up once per project; rewrite it once.
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -120,7 +120,7 @@ public sealed class NamedArgumentsEngine
 
     private static NamedArgumentsOutcome Failed(ResultError error)
     {
-        return new NamedArgumentsOutcome(new Dictionary<FilePathWrapper, string>(), [], error);
+        return new NamedArgumentsOutcome(new DocumentChangeSet(), [], error);
     }
 
     private static (IReadOnlyList<Document> Documents, ResultError? Error) SelectDocuments(Solution solution, NamedArgumentsScope scope, string? scopeName)

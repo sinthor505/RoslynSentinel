@@ -504,8 +504,8 @@ public class ResultStatusTests
     [Test]
     public void NamedArgumentsOutcome_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
     {
-        IOperationResult ok = new NamedArgumentsOutcome(new Dictionary<FilePathWrapper, string>(), [], null);
-        IOperationResult bad = new NamedArgumentsOutcome(new Dictionary<FilePathWrapper, string>(), [], new ResultError(ToolErrorCode.NotFound, "gone"));
+        IOperationResult ok = new NamedArgumentsOutcome(new DocumentChangeSet(), [], null);
+        IOperationResult bad = new NamedArgumentsOutcome(new DocumentChangeSet(), [], new ResultError(ToolErrorCode.NotFound, "gone"));
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
