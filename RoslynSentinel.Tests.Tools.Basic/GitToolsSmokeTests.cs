@@ -1725,6 +1725,33 @@ public class GitToolsSmokeTests
     }
 
     [Test]
+    public void GitErrorCodes_MissingTargetKind_MapsNotFoundCodes()
+    {
+        Assert.That(GitErrorCodes.MissingTargetKind(GitErrorCodes.PathNotFound), Is.EqualTo(MissingTargetKinds.File));
+        Assert.That(GitErrorCodes.MissingTargetKind(GitErrorCodes.TargetNotFound), Is.EqualTo(MissingTargetKinds.GitTarget));
+        Assert.That(GitErrorCodes.MissingTargetKind(GitErrorCodes.Fallback), Is.Null);
+        Assert.That(GitErrorCodes.MissingTargetKind(null), Is.Null);
+    }
+
+    [Test]
+    public async Task Git_Stage_MissingPath_RecordsFileMissingTargetKindAsync()
+    {
+        var ctx = new ToolCallContext(null, null, "Git", null, 0);
+        ToolCallContext.Set(ctx);
+        try
+        {
+            var result = await _gitTools.GitTool(reason: "stage missing path", GitOperation.stage, scope: GitStageScope.listed, paths: "missing.txt");
+
+            AssertCoded(result, "GitPathNotFound");
+            Assert.That(ctx.MissingTargetKind, Is.EqualTo(MissingTargetKinds.File));
+        }
+        finally
+        {
+            ToolCallContext.Set(null);
+        }
+    }
+
+    [Test]
     public async Task Git_StageAndCommit_IgnoredPath_ReportGitIgnoredPathAsync()
     {
         CreateGitignore("ignored/\n");

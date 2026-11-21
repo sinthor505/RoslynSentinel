@@ -219,6 +219,7 @@ public class GitTools
         }
         else
         {
+            ToolCallContext.Current?.RecordMissingTarget(GitErrorCodes.MissingTargetKind(result.ErrorKind));
             return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: result.ErrorKind ?? GitErrorCodes.Fallback, Message: result.Error ?? "Unknown Git error", Detail: result.ErrorDetail) };
         }
     }

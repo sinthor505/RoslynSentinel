@@ -88,14 +88,18 @@ public static class GitErrorCodes
     /// <summary>git commit exited 1 and a blocking hook (pre-commit, prepare-commit-msg, commit-msg) exists, so the hook declined the commit; the hook's own output is in the error text. Not used when the index is empty and git printed its own nothing-to-commit status.</summary>
     public const string HookRejected = "GitHookRejected";
 
+    /// <summary>The missing-target kind (<see cref="MissingTargetKinds"/>) a not-found failure code names for the error-policy classifier, or null for every other code.</summary>
+    public static string? MissingTargetKind(string? code) => code switch
+    {
+        PathNotFound => MissingTargetKinds.File,
+        TargetNotFound => MissingTargetKinds.GitTarget,
+        _ => null
+    };
+
     /// <summary>Maps a GitTool failure code to the canonical status. Every GitTool code is a refusal or failure, so none maps to a non-error status; an unknown or fallback code is Failed.</summary>
     public static ResultStatus ToResultStatus(string? code) => code switch
     {
-        // Error-policy gap, decision needed (not built): a Git failure reaches the wire as ResultError(ErrorCode: "GitPathNotFound"/"GitTargetNotFound") from
-        // GitTools, not through ToolNotFoundException, so no missing-target kind is recorded on ToolCallContext, and ErrorPolicyClassifier.MapKind only keys
-        // on the codes "NotFound", "FileNotFound" and "MethodNotFound", so ErrorPolicyFilter never classifies these. Attaching a kind needs a Common change
-        // (MapKind learning the Git codes, or Git failures recording a kind) and, for TargetNotFound (tag, branch, stash, worktree, ref), new
-        // MissingTargetKinds constants placed in a policy set; PathNotFound alone would map to MissingTargetKinds.File.
+        // Not-found codes also carry a missing-target kind (MissingTargetKind) that GitTools records for the error-policy filter.
         PathNotFound or TargetNotFound => ResultStatus.NotFound,
         RefRequired or ActionRequired or InvalidName or HunkSelection or HunkStale => ResultStatus.InvalidInput,
         IgnoredPath or NothingToCommit or NoChanges or OperationInProgress or AlreadyExists or WorkingTreeDirty
