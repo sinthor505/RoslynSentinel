@@ -137,7 +137,7 @@ public class ThreadSafetyEngine
         var lockStatements = method.Body.DescendantNodes().OfType<LockStatementSyntax>().ToList();
         if (lockStatements.Count == 0)
         {
-            throw new ToolNotFoundException("No lock statement found in method '" + methodName + "'.");
+            throw new ToolNotFoundException("No lock statement found in method '" + methodName + "'.", MissingTargetKinds.Method, methodName);
         }
 
         // Get the lock object identifier (e.g., "_lock")
@@ -150,7 +150,7 @@ public class ThreadSafetyEngine
 
         if (allLockStatementsInType.Count == 0)
         {
-            throw new ToolNotFoundException("No lock statement found using expression '" + lockExpression + "'.");
+            throw new ToolNotFoundException("No lock statement found using expression '" + lockExpression + "'.", MissingTargetKinds.Statement, lockExpression);
         }
 
         const string semaphoreName = "_semaphore";

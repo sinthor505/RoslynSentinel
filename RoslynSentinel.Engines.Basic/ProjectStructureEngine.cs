@@ -1807,8 +1807,8 @@ public class SolutionStructureEngine
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         // TODO the two "Solution path not found." throws below are server-state preconditions, not name lookups: no solution file path is known; reclassify (and give them facts and options) so the error code is not NotFound
-        var slnPath = _workspaceManager.SolutionPath ?? solution.FilePath ?? throw new ToolNotFoundException("Solution path not found.");
-        var slnDir = Path.GetDirectoryName(slnPath) ?? throw new ToolNotFoundException("Solution path not found.");
+        var slnPath = _workspaceManager.SolutionPath ?? solution.FilePath ?? throw new ToolNotFoundException("Solution path not found.", MissingTargetKinds.File);
+        var slnDir = Path.GetDirectoryName(slnPath) ?? throw new ToolNotFoundException("Solution path not found.", MissingTargetKinds.File);
         var projectDir = Path.Combine(slnDir, projectName);
         Directory.CreateDirectory(projectDir);
 

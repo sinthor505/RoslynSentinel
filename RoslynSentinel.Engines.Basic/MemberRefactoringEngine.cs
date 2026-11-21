@@ -3480,7 +3480,7 @@ public class MemberRefactoringEngine
                     _ => "?"
                 }));
                 // TODO not a lookup miss: the target exists and is not a base class of the source, so this is a refusal coded NotFound; the factories of MemberRefactoringNotFound do not apply (prose fix only)
-            throw new ToolNotFoundException($"Cannot move instance member(s) [{names}] to '{targetClassName}': it is not an existing base class of '{className}'. " + "Moving an instance member elsewhere requires rewriting every call site's receiver expression. Pass " + "autoResolveCallSites:true (the default) to have this resolved automatically where unambiguous, or " + "make the member(s) static first, or move to an existing base class of the source type.");
+            throw new ToolNotFoundException($"Cannot move instance member(s) [{names}] to '{targetClassName}': it is not an existing base class of '{className}'. " + "Moving an instance member elsewhere requires rewriting every call site's receiver expression. Pass " + "autoResolveCallSites:true (the default) to have this resolved automatically where unambiguous, or " + "make the member(s) static first, or move to an existing base class of the source type.", MissingTargetKinds.Class, missingTargetName: targetClassName);
             }
 
             return await CheckedAsync(await MoveInstanceMembersAsync(solution, filePath, className, membersToMove, targetClassName, memberNames, targetFilePath, targetDoc, targetClassNode, callSiteFixups, fieldMap, oldMember, forwarderReceiver, cancellationToken));

@@ -336,7 +336,7 @@ public static class MemberSelection
         if (result.Count == 0)
         {
             // TODO no filePath reaches SelectMembers, so the no-candidate case cannot prefill GetFileOutline(filePath)
-            throw new ToolNotFoundException($"None of the requested member(s) [{string.Join(", ", memberNames)}] were found in class '{className}' (found: [{string.Join(", ", SimilarFirst(DescribeAvailable(members), missing))}]).{BuildNotFoundHints(memberNames, missing, members, className, toolName)}");
+            throw new ToolNotFoundException($"None of the requested member(s) [{string.Join(", ", memberNames)}] were found in class '{className}' (found: [{string.Join(", ", SimilarFirst(DescribeAvailable(members), missing))}]).{BuildNotFoundHints(memberNames, missing, members, className, toolName)}", MissingTargetKinds.Member);
         }
 
         // A requested entry that matches no member in this file is otherwise dropped silently while the rest moves (e.g. the
@@ -345,7 +345,7 @@ public static class MemberSelection
         if (missing.Count > 0)
         {
             // TODO no filePath reaches SelectMembers, so the no-candidate case cannot prefill GetFileOutline(filePath)
-            throw new ToolNotFoundException($"Requested member(s) [{string.Join(", ", missing)}] were not found in class '{className}' in this file (found: [{string.Join(", ", SimilarFirst(DescribeAvailable(members), missing))}]). Nothing was {PastTense(verb)}. If the class is partial, the member may be declared in another part; pass that file's path.{BuildNotFoundHints(memberNames, missing, members, className, toolName)}");
+            throw new ToolNotFoundException($"Requested member(s) [{string.Join(", ", missing)}] were not found in class '{className}' in this file (found: [{string.Join(", ", SimilarFirst(DescribeAvailable(members), missing))}]). Nothing was {PastTense(verb)}. If the class is partial, the member may be declared in another part; pass that file's path.{BuildNotFoundHints(memberNames, missing, members, className, toolName)}", MissingTargetKinds.Member);
         }
 
         return result;

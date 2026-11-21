@@ -1883,7 +1883,7 @@ public class MsToolAugmentEngine
             var candidates = currentSolution is null ? [] : DocumentLookup.FindFileCandidates(currentSolution, filePath.Absolute);
             var declaring = currentSolution is null ? null : DocumentLookup.FindDeclaringTypeFiles(currentSolution, filePath.Absolute);
             // TODO isCallable: no ActiveToolSurface is in scope in the engine, so the text names tools unconditionally
-            throw new ToolNotFoundException(FileNotFoundMessage.Build(filePath.Absolute, candidates, currentSolution?.Projects.Count() ?? 0, null, declaring));
+            throw new ToolNotFoundException(FileNotFoundMessage.Build(filePath.Absolute, candidates, currentSolution?.Projects.Count() ?? 0, null, declaring), MissingTargetKinds.File);
         }
 
         return await File.ReadAllTextAsync(filePath, cancellationToken);
