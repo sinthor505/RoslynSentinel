@@ -184,7 +184,7 @@ public class AdvancedRefactoringTools
             if (!string.IsNullOrWhiteSpace(contextSnippet))
             {
                 var result = await _mappingEngine.InvertAssignmentsAsync(resolvedFilePath, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
-                var changes = new Dictionary<FilePathWrapper, string>
+                var changes = new DocumentChangeSet
                 {
                     [resolvedFilePath] = result.UpdatedText
                 };
@@ -204,7 +204,7 @@ public class AdvancedRefactoringTools
             else if (startLine > 0 && endLine > 0)
             {
                 var result = await _mappingEngine.InvertAssignmentsAsync(resolvedFilePath, startLine, endLine, cancellationToken: cancellationToken);
-                var changes = new Dictionary<FilePathWrapper, string>
+                var changes = new DocumentChangeSet
                 {
                     [resolvedFilePath] = result.UpdatedText
                 };
@@ -282,8 +282,8 @@ public class AdvancedRefactoringTools
             // An interface-targeted method also edits every implementer (other files, plus the using they need): the engine
             // then returns every changed file in Changes (the target included); otherwise only the target file changed.
             var changes = result.Changes.Count > 0
-                ? new Dictionary<FilePathWrapper, string>(result.Changes)
-                : new Dictionary<FilePathWrapper, string>
+                ? new DocumentChangeSet(result.Changes)
+                : new DocumentChangeSet
                 {
                     [resolvedFilePath] = result.UpdatedText
                 };
@@ -346,7 +346,7 @@ public class AdvancedRefactoringTools
                         IsError = true,
                         ErrorData = new ResultError(constResult.ErrorCode ?? ToolErrorCode.Exception, constResult.Error ?? "ExtractConstantSafe failed.")
                     };
-                var constChanges = new Dictionary<FilePathWrapper, string>
+                var constChanges = new DocumentChangeSet
                 {
                     [resolvedFilePath] = constResult.UpdatedContent
                 };
@@ -377,7 +377,7 @@ public class AdvancedRefactoringTools
             // the whole-file UpdatedText, so showing just the new declaration here would mean
             // duplicating their formatting logic. Revisit only if those engine methods start
             // returning the introduced declaration's text alongside UpdatedText.
-            var changes = new Dictionary<FilePathWrapper, string>
+            var changes = new DocumentChangeSet
             {
                 [resolvedFilePath] = result.UpdatedText
             };
@@ -574,7 +574,7 @@ public class AdvancedRefactoringTools
                 var implResult = await _codeGenerationEngine.ImplementInterfaceAsync(resolvedFilePath, className, interfaceName, cancellationToken: cancellationToken);
                 var implGuard = RefactoringToolHelpers.RequireUpdatedText(implResult, "SyncInterface implement", resolvedFilePath, $"Verify the class and interface names (case-sensitive); use {ToolCallHint.Call("Search", ("mode", "symbol"))} to confirm both exist in the solution.");
                 if (implGuard != null) return implGuard;
-                var implChanges = new Dictionary<FilePathWrapper, string>
+                var implChanges = new DocumentChangeSet
                 {
                     [resolvedFilePath] = implResult.UpdatedText
                 };
@@ -612,7 +612,7 @@ public class AdvancedRefactoringTools
                 if (syncGuard != null) return syncGuard;
                 // Cross-file sync: the engine returns the interface's text with the interface's path in FilePath.
                 var syncTargetFile = !string.IsNullOrEmpty(syncResult.FilePath) && !string.Equals(syncResult.FilePath, resolvedFilePath, PathComparison.Comparison) ? syncResult.FilePath : resolvedFilePath;
-                var syncChanges = new Dictionary<FilePathWrapper, string>
+                var syncChanges = new DocumentChangeSet
                 {
                     [syncTargetFile] = syncResult.UpdatedText
                 };
@@ -705,7 +705,7 @@ public class AdvancedRefactoringTools
                         IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.NotFound, $"Inline/variable: variable '{targetName}' not found in '{resolvedFilePath}'.")
                     };
-                var varChanges = new Dictionary<FilePathWrapper, string>
+                var varChanges = new DocumentChangeSet
                 {
                     [resolvedFilePath] = updated
                 };
@@ -726,7 +726,7 @@ public class AdvancedRefactoringTools
             if (kind == InlineKind.field)
             {
                 var fieldResult = await _advancedStructuralEngine.InlineFieldAsync(resolvedFilePath, targetName, cancellationToken: cancellationToken);
-                var fieldChanges = new Dictionary<FilePathWrapper, string>
+                var fieldChanges = new DocumentChangeSet
                 {
                     [resolvedFilePath] = fieldResult.UpdatedText
                 };
@@ -753,7 +753,7 @@ public class AdvancedRefactoringTools
                         ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "methodName is required when kind=parameter.")
                     };
                 var paramResult = await _advancedStructuralEngine.InlineParameterAsync(resolvedFilePath, methodName, targetName, cancellationToken: cancellationToken);
-                var paramChanges = new Dictionary<FilePathWrapper, string>
+                var paramChanges = new DocumentChangeSet
                 {
                     [resolvedFilePath] = paramResult.UpdatedText
                 };
@@ -813,7 +813,7 @@ public class AdvancedRefactoringTools
                     var updated = await _refactoringEngine.WrapInTryCatchAsync(resolvedFilePath, contextSnippet, lineBefore, lineAfter, exceptionType, catchVariableName, catchBody, cancellationToken);
                     if (!autoStage)
                     {
-                        var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText) ? new Dictionary<FilePathWrapper, string>() : new Dictionary<FilePathWrapper, string>
+                        var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText) ? new DocumentChangeSet() : new DocumentChangeSet
                         {
                             [resolvedFilePath] = updated.UpdatedText
                         };
@@ -824,7 +824,7 @@ public class AdvancedRefactoringTools
                         };
                     }
 
-                    var changes = new Dictionary<FilePathWrapper, string>
+                    var changes = new DocumentChangeSet
                     {
                         [resolvedFilePath] = updated.UpdatedText
                     };
@@ -857,7 +857,7 @@ public class AdvancedRefactoringTools
                     var updated = await _semanticRefactoringEngine.WrapInUsingAsync(resolvedFilePath, contextSnippet, lineBefore, lineAfter, name, cancellationToken);
                     if (!autoStage)
                     {
-                        var noStageUsingChanges = string.IsNullOrEmpty(updated.UpdatedText) ? new Dictionary<FilePathWrapper, string>() : new Dictionary<FilePathWrapper, string>
+                        var noStageUsingChanges = string.IsNullOrEmpty(updated.UpdatedText) ? new DocumentChangeSet() : new DocumentChangeSet
                         {
                             [resolvedFilePath] = updated.UpdatedText
                         };
@@ -868,7 +868,7 @@ public class AdvancedRefactoringTools
                         };
                     }
 
-                    var usingChanges = new Dictionary<FilePathWrapper, string>
+                    var usingChanges = new DocumentChangeSet
                     {
                         [resolvedFilePath] = updated.UpdatedText
                     };
@@ -901,7 +901,7 @@ public class AdvancedRefactoringTools
                     var updated = await _refactoringEngine.WrapInRegionAsync(resolvedFilePath, contextSnippet, lineBefore, lineAfter, name, cancellationToken);
                     if (!autoStage)
                     {
-                        var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText) ? new Dictionary<FilePathWrapper, string>() : new Dictionary<FilePathWrapper, string>
+                        var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText) ? new DocumentChangeSet() : new DocumentChangeSet
                         {
                             [resolvedFilePath] = updated.UpdatedText
                         };
@@ -912,7 +912,7 @@ public class AdvancedRefactoringTools
                         };
                     }
 
-                    var changes = new Dictionary<FilePathWrapper, string>
+                    var changes = new DocumentChangeSet
                     {
                         [resolvedFilePath] = updated.UpdatedText
                     };
@@ -946,7 +946,7 @@ public class AdvancedRefactoringTools
                     var updated = await _refactoringEngine.WrapInTryCatchAsync(resolvedFilePath, startLine, endLine, exceptionType, catchVariableName, catchBody, cancellationToken);
                     if (!autoStage)
                     {
-                        var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText) ? new Dictionary<FilePathWrapper, string>() : new Dictionary<FilePathWrapper, string>
+                        var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText) ? new DocumentChangeSet() : new DocumentChangeSet
                         {
                             [resolvedFilePath] = updated.UpdatedText
                         };
@@ -957,7 +957,7 @@ public class AdvancedRefactoringTools
                         };
                     }
 
-                    var changes = new Dictionary<FilePathWrapper, string>
+                    var changes = new DocumentChangeSet
                     {
                         [resolvedFilePath] = updated.UpdatedText
                     };
@@ -990,7 +990,7 @@ public class AdvancedRefactoringTools
                     var updated = await _semanticRefactoringEngine.WrapInUsingAsync(resolvedFilePath, startLine, endLine, name, cancellationToken);
                     if (!autoStage)
                     {
-                        var noStageUsingChanges = string.IsNullOrEmpty(updated.UpdatedText) ? new Dictionary<FilePathWrapper, string>() : new Dictionary<FilePathWrapper, string>
+                        var noStageUsingChanges = string.IsNullOrEmpty(updated.UpdatedText) ? new DocumentChangeSet() : new DocumentChangeSet
                         {
                             [resolvedFilePath] = updated.UpdatedText
                         };
@@ -1001,7 +1001,7 @@ public class AdvancedRefactoringTools
                         };
                     }
 
-                    var usingChanges = new Dictionary<FilePathWrapper, string>
+                    var usingChanges = new DocumentChangeSet
                     {
                         [resolvedFilePath] = updated.UpdatedText
                     };
@@ -1034,7 +1034,7 @@ public class AdvancedRefactoringTools
                     var updated = await _refactoringEngine.WrapInRegionAsync(resolvedFilePath, startLine, endLine, name, cancellationToken);
                     if (!autoStage)
                     {
-                        var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText) ? new Dictionary<FilePathWrapper, string>() : new Dictionary<FilePathWrapper, string>
+                        var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText) ? new DocumentChangeSet() : new DocumentChangeSet
                         {
                             [resolvedFilePath] = updated.UpdatedText
                         };
@@ -1045,7 +1045,7 @@ public class AdvancedRefactoringTools
                         };
                     }
 
-                    var changes = new Dictionary<FilePathWrapper, string>
+                    var changes = new DocumentChangeSet
                     {
                         [resolvedFilePath] = updated.UpdatedText
                     };
@@ -1144,7 +1144,7 @@ public class AdvancedRefactoringTools
                 var outerResult = await _advancedStructuralEngine.MoveTypeToOuterScopeAsync(resolvedFilePath, typeName, allowWidenToInternal, cancellationToken: cancellationToken);
                 if (!autoStage)
                 {
-                    var noStageOuterChanges = string.IsNullOrEmpty(outerResult.UpdatedText) ? new Dictionary<FilePathWrapper, string>() : new Dictionary<FilePathWrapper, string>
+                    var noStageOuterChanges = string.IsNullOrEmpty(outerResult.UpdatedText) ? new DocumentChangeSet() : new DocumentChangeSet
                     {
                         [resolvedFilePath] = outerResult.UpdatedText
                     };
@@ -1155,7 +1155,7 @@ public class AdvancedRefactoringTools
                     };
                 }
 
-                var outerChanges = new Dictionary<FilePathWrapper, string>
+                var outerChanges = new DocumentChangeSet
                 {
                     [resolvedFilePath] = outerResult.UpdatedText
                 };
