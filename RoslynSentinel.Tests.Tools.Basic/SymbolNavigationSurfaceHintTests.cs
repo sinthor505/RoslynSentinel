@@ -62,6 +62,18 @@ public sealed class SymbolNavigationSurfaceHintTests
         return result.ErrorData?.Message ?? string.Empty;
     }
 
+    // Runs the same refused call twice against ONE workspace, once with the default engine (null predicate) and once with every tool callable, so the
+    // random in-memory temp path in the text is the same for both and the comparison stays byte-for-byte.
+    private static async Task<(string ByDefault, string Everything)> RunMissDefaultAndEverythingAsync(Func<InMemoryWorkspace, Func<string, bool>?, Task<SentinelCallToolResult<object>>> call)
+    {
+        using var workspace = InMemoryWorkspace.Create((FileName, Fixture));
+        var byDefault = await call(workspace, null);
+        var everything = await call(workspace, Everything);
+        Assert.That(byDefault.IsError, Is.True, byDefault.StatusMessage);
+        Assert.That(everything.IsError, Is.True, everything.StatusMessage);
+        return (byDefault.ErrorData?.Message ?? string.Empty, everything.ErrorData?.Message ?? string.Empty);
+    }
+
     [Test]
     [Category("SymbolNavigationEngine")]
     public async Task FindCallers_SolutionWideMiss_FindReferencesNotCallable_NamesSearchCallersInsteadAsync()
@@ -102,8 +114,7 @@ public sealed class SymbolNavigationSurfaceHintTests
     [Category("SymbolNavigationEngine")]
     public async Task FindCallers_SolutionWideMiss_EveryToolCallable_IsIdenticalToTheDefaultAndNamesFindReferencesAsync()
     {
-        var byDefault = await RunMissAsync(w => RelationshipTools(w, null).FindReferencesTool(reason: "test message", "ComputeTotl", FindReferencesKind.callers));
-        var everything = await RunMissAsync(w => RelationshipTools(w, Everything).FindReferencesTool(reason: "test message", "ComputeTotl", FindReferencesKind.callers));
+        var (byDefault, everything) = await RunMissDefaultAndEverythingAsync((w, isCallable) => RelationshipTools(w, isCallable).FindReferencesTool(reason: "test message", "ComputeTotl", FindReferencesKind.callers));
         Assert.That(everything, Is.EqualTo(byDefault));
         Assert.That(byDefault, Does.Contain("FindReferences("));
         Assert.That(byDefault, Does.Not.Contain("Search(mode: callers"));
@@ -113,11 +124,8 @@ public sealed class SymbolNavigationSurfaceHintTests
     [Category("SymbolNavigationEngine")]
     public async Task FindCallers_SnippetMiss_EveryToolCallable_IsIdenticalToTheDefaultAndNamesFindReferencesAsync()
     {
-        Task<string> Run(Func<string, bool>? isCallable) => RunMissAsync(w => RelationshipTools(w, isCallable).FindReferencesTool(
+        var (byDefault, everything) = await RunMissDefaultAndEverythingAsync((w, isCallable) => RelationshipTools(w, isCallable).FindReferencesTool(
             reason: "test message", "ComputeTotal", FindReferencesKind.callers, filePath: w.PathOf(FileName), contextSnippet: "public int NoSuchLine() => 0;"));
-
-        var byDefault = await Run(null);
-        var everything = await Run(Everything);
         Assert.That(everything, Is.EqualTo(byDefault));
         Assert.That(byDefault, Does.Contain("FindReferences("));
     }
