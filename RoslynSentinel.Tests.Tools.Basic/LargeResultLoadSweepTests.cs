@@ -66,4 +66,41 @@ public class LargeResultLoadSweepTests
         Assert.That(workspaceManager.CurrentSolution, Is.Not.Null, "Solution should load successfully");
         Assert.That(workspaceManager.CurrentSolution!.Projects.Count(), Is.GreaterThan(0), "Solution should have projects");
     }
+
+    [Test]
+    public async Task LoadSolution_SweepsExpiredOperationAndValidationBlobsUnderSolutionRoot()
+    {
+        using var fixture = new TestSolutionFixture();
+        var operationsDir = Path.Combine(fixture.SolutionDirectory, ".roslynsentinel", "operations");
+        var validationDir = Path.Combine(fixture.SolutionDirectory, ".roslynsentinel", "validation");
+        Directory.CreateDirectory(operationsDir);
+        Directory.CreateDirectory(validationDir);
+
+        var operationPath = Path.Combine(operationsDir, "apply_20261101T000000Z_0000000_abc.json");
+        var validationPath = Path.Combine(validationDir, "validation_20261101T000000Z_abc.json");
+
+        File.WriteAllText(operationPath, "{}");
+        File.SetLastWriteTimeUtc(operationPath, DateTime.UtcNow.AddDays(-20));
+        File.WriteAllText(validationPath, "{}");
+        File.SetLastWriteTimeUtc(validationPath, DateTime.UtcNow.AddDays(-20));
+
+        Assert.That(File.Exists(operationPath), Is.True, "Operation blob should exist before load");
+        Assert.That(File.Exists(validationPath), Is.True, "Validation blob should exist before load");
+
+        using var workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+
+        // Poll for up to 10 seconds for the background sweep to complete
+        var maxWaitMs = 10000;
+        var pollIntervalMs = 100;
+        var elapsedMs = 0;
+        while (elapsedMs < maxWaitMs && (File.Exists(operationPath) || File.Exists(validationPath)))
+        {
+            await Task.Delay(pollIntervalMs);
+            elapsedMs += pollIntervalMs;
+        }
+
+        Assert.That(File.Exists(operationPath), Is.False, "Expired operation blob should have been swept");
+        Assert.That(File.Exists(validationPath), Is.False, "Expired validation blob should have been swept");
+    }
 }
