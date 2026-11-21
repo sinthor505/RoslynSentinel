@@ -7,7 +7,11 @@
     (a) a hand-built clean log: expect exit 0 and no fail:* line;
     (b) a hand-built broken log: expect exit 1 and each of fail:missing, fail:parent-mismatch and
         fail:tree-outside-listed-paths;
-    (c) the broken log with -AsJson: expect exit 1, parseable JSON, exitCode 1 and the same three fail classes.
+    (c) the broken log with -AsJson: expect exit 1, parseable JSON, exitCode 1 and the same three fail classes;
+    (d) a taken line without kind/ref/parent: unchecked:no-commit-fields, exit 0;
+    (e) fsck on the healthy repository: no fsck warn or fail, exit 0;
+    (f) a damaged commit-graph file: warn:fsck-commit-graph, exit 0;
+    (g) a corrupt tree object: fail:fsck-corrupt, exit 1.
   Prints PASS/FAIL per case and exits 1 if any case fails. The temp repository is removed at the end.
 #>
 [CmdletBinding()]
@@ -56,8 +60,9 @@ try {
         return ($o | ConvertTo-Json -Compress -Depth 4)
     }
 
-    function Run-Audit([string]$LogFile, [string[]]$Extra = @()) {
-        $out = & pwsh -NoProfile -File $Audit -RepoPath $repo -LogPath $LogFile -SkipFsck @Extra 2>&1
+    function Run-Audit([string]$LogFile, [string[]]$Extra = @(), [bool]$WithFsck = $false) {
+        $skip = @(if ($WithFsck) { } else { '-SkipFsck' })
+        $out = & pwsh -NoProfile -File $Audit -RepoPath $repo -LogPath $LogFile @skip @Extra 2>&1
         return [pscustomobject]@{ Exit = $LASTEXITCODE; Text = (@($out) -join "`n") }
     }
 
@@ -102,6 +107,52 @@ try {
     $classes = if ($null -ne $json) { @($json.entries | ForEach-Object { [string]$_.class }) -join ' ' } else { '' }
     Report-Case 'json entries name the three fail classes' (
         $classes -match 'fail:missing' -and $classes -match 'fail:parent-mismatch' -and $classes -match 'fail:tree-outside-listed-paths') $classes
+
+    # ---- (d) a taken line with no kind/ref/parent is unchecked:no-commit-fields, never a FAIL
+    $noFields = Join-Path $logDir 'nofields.jsonl'
+    $bare = [ordered]@{ utc = (Get-Date).ToUniversalTime().ToString('o'); outcome = 'taken'; commit = $c1; pid = 4242 }
+    Set-Content -LiteralPath $noFields -Encoding utf8 -Value @(($bare | ConvertTo-Json -Compress))
+    $d = Run-Audit $noFields
+    Report-Case 'commit-less line is unchecked:no-commit-fields and exits 0' ($d.Exit -eq 0 -and $d.Text -match 'unchecked:no-commit-fields' -and $d.Text -notmatch 'pre-step-1') "exit $($d.Exit)`n$($d.Text)"
+
+    # ---- (e) healthy repository with fsck: ok, exit 0
+    $fsckOk = Run-Audit $clean @() $true
+    Report-Case 'fsck on a healthy repository exits 0 with no fsck warn or fail' ($fsckOk.Exit -eq 0 -and $fsckOk.Text -notmatch 'fsck-(commit-graph|corrupt)') "exit $($fsckOk.Exit)`n$($fsckOk.Text)"
+
+    # ---- (f) a damaged commit-graph file: fsck fails, passes with core.commitGraph=false -> warn:fsck-commit-graph, exit 0
+    Git-Run commit-graph write --reachable | Out-Null
+    $graphFile = Join-Path $repo '.git\objects\info\commit-graph'
+    if (Test-Path -LiteralPath $graphFile) {
+        Set-ItemProperty -LiteralPath $graphFile -Name IsReadOnly -Value $false
+        $graphBytes = [IO.File]::ReadAllBytes($graphFile)
+        $graphBytes[$graphBytes.Length - 1] = $graphBytes[$graphBytes.Length - 1] -bxor 0xFF
+        [IO.File]::WriteAllBytes($graphFile, $graphBytes)
+        $graphProbe = & git -C $repo fsck --no-dangling 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Report-Case 'stale commit-graph fixture makes fsck fail (fixture check)' $false "fsck still passed: $graphProbe"
+        }
+        else {
+            $f = Run-Audit $clean @() $true
+            Report-Case 'stale commit-graph prints warn:fsck-commit-graph and exits 0' ($f.Exit -eq 0 -and $f.Text -match 'warn:fsck-commit-graph' -and $f.Text -notmatch 'fail:fsck') "exit $($f.Exit)`n$($f.Text)"
+        }
+        Remove-Item -LiteralPath $graphFile -Force
+    }
+    else {
+        Report-Case 'commit-graph file was written (fixture check)' $false "missing $graphFile"
+    }
+
+    # ---- (g) a corrupt object: fsck fails even without the commit-graph -> fail:fsck-corrupt, exit 1
+    $treeId = ([string](Git-Run rev-parse "$c1^{tree}" | Select-Object -First 1)).Trim()
+    $objectFile = Join-Path $repo (".git\objects\{0}\{1}" -f $treeId.Substring(0, 2), $treeId.Substring(2))
+    if (Test-Path -LiteralPath $objectFile) {
+        Set-ItemProperty -LiteralPath $objectFile -Name IsReadOnly -Value $false
+        [IO.File]::WriteAllBytes($objectFile, [byte[]](1..40))
+        $g = Run-Audit $clean @() $true
+        Report-Case 'corrupt object prints fail:fsck-corrupt and exits 1' ($g.Exit -eq 1 -and $g.Text -match 'fail:fsck-corrupt' -and $g.Text -notmatch 'warn:fsck-commit-graph') "exit $($g.Exit)`n$($g.Text)"
+    }
+    else {
+        Report-Case 'loose tree object exists (fixture check)' $false "missing $objectFile"
+    }
 }
 finally {
     if ((Split-Path -Parent $base) -eq 'c:\tmp' -and (Test-Path -LiteralPath $base)) {

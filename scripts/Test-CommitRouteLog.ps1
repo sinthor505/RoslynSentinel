@@ -18,8 +18,10 @@
     unchecked:whole-index         plain or whole-index commit: no listed paths to compare
     unchecked:paths-truncated     the logged path list was truncated
     fail:duplicate                the same commit id logged again (the later line is reported)
-    unchecked:pre-step-1 line     the line lacks kind, ref or parent; it is never a FAIL
-  Once per log: fail:fsck when `git fsck --no-dangling` exits non-zero (skipped by -SkipFsck).
+    unchecked:no-commit-fields    the line lacks kind, ref or parent (for example an old or commit-less line); never a FAIL
+  Once per log, when `git fsck --no-dangling` exits non-zero (skipped by -SkipFsck), it is re-run with
+  `-c core.commitGraph=false`: if that passes the result is warn:fsck-commit-graph (a stale commit-graph file;
+  fix with `git commit-graph write`; exit code unaffected), else fail:fsck-corrupt.
 
   Limits: the reflog is read from -RepoPath's worktree (HEAD) and common git dir (refs/...), so a
   detached-HEAD line from another linked worktree is checked against the wrong HEAD reflog.
@@ -289,7 +291,7 @@ if ($logExists) {
         if ($seen.ContainsKey($commit)) { $dupLine = $seen[$commit] } else { $seen[$commit] = $lineNo }
 
         if (-not $shaped) {
-            $notes = @([pscustomobject]@{ Class = 'unchecked:pre-step-1 line'; Detail = 'lacks kind, ref or parent' })
+            $notes = @([pscustomobject]@{ Class = 'unchecked:no-commit-fields'; Detail = 'lacks kind, ref or parent' })
         }
         else {
             $notes = @(Get-EntryNotes $entry $commit)
@@ -325,9 +327,17 @@ if ($logExists) {
             $fsck = 'ok'
         }
         else {
-            $fsck = 'fail'
             $fsckDetail = (@($fsckOut | Select-Object -First 3 | ForEach-Object { $_.ToString() }) -join ' | ')
             $fsckDetail = "git fsck --no-dangling exit ${fsckExit}: $fsckDetail"
+            # Retry without the commit-graph: if that passes, only the commit-graph file is stale (harmless), not the object store.
+            $null = & git -C $script:RepoPath -c core.commitGraph=false fsck --no-dangling 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                $fsck = 'warn:fsck-commit-graph'
+                $fsckDetail = "$fsckDetail (passes with core.commitGraph=false; run: git commit-graph write)"
+            }
+            else {
+                $fsck = 'fail:fsck-corrupt'
+            }
         }
     }
 }
@@ -335,7 +345,7 @@ if ($logExists) {
 # ---- summary data
 $classCounts = [ordered]@{ ok = 0; unchecked = 0; warn = 0; fail = 0 }
 $classList = @($entries | ForEach-Object { $_.class.Split(':')[0] })
-if ($fsck -eq 'ok') { $classList += 'ok' } elseif ($fsck -eq 'fail') { $classList += 'fail' }
+if ($fsck -eq 'ok') { $classList += 'ok' } elseif ($fsck -like 'warn:*') { $classList += 'warn' } elseif ($fsck -like 'fail:*') { $classList += 'fail' }
 foreach ($c in $classList) { $classCounts[$c] = $classCounts[$c] + 1 }
 $fails = [int]$classCounts['fail']
 $exitCode = if ($fails -gt 0) { 1 } else { 0 }
@@ -352,6 +362,7 @@ if ($AsJson) {
         takenPerKind = (ConvertTo-SortedMap $perKind)
         pidCount = $pidSet.Count
         fsck = $fsck
+        fsckDetail = $fsckDetail
         entries = $entries.ToArray()
         exitCode = $exitCode
     }
@@ -375,7 +386,7 @@ if (-not $logExists) { Write-Host "no commit-route log at $LogPath; nothing to c
 foreach ($e in $entries) { Write-Host (Format-EntryLine $e) }
 if ($fsck -eq 'skipped') { Write-Host ('{0,-30} {1}' -f 'fsck', 'skipped (-SkipFsck)') }
 elseif ($fsck -eq 'ok') { Write-Host ('{0,-30} {1}' -f 'ok', 'fsck --no-dangling') }
-elseif ($fsck -eq 'fail') { Write-Host ('{0,-30} {1}' -f 'fail:fsck', $fsckDetail) }
+elseif ($fsck -like 'warn:*' -or $fsck -like 'fail:*') { Write-Host ('{0,-30} {1}' -f $fsck, $fsckDetail) }
 
 Write-Host ''
 Write-Host 'summary'

@@ -294,7 +294,7 @@ edits the Seam and Reads test files that Steps 16 and 17 also edit (7 before 16/
 - Done: 6fab1959
 - Files: `scripts/Test-CommitRouteLog.ps1` (new)
 - Depends on: none to write; Step 1 for the checks that use `ref`, `parent`, `kind`, `paths` (lines without those
-  fields are reported `unchecked: pre-step-1 line`, never FAIL)
+  fields are reported `unchecked:no-commit-fields` (formerly `unchecked: pre-step-1 line`), never FAIL)
 - Effect: text-neutral (outside the server)
 - Conventions: `scripts/` already holds `Test-*.ps1` pass/fail checks (`Test-GuidanceHygiene.ps1`,
   `Test-TelemetryRollup.ps1`) and report scripts (`Get-*.ps1`); no existing script reads this log, so there is no
@@ -584,7 +584,7 @@ a one-file staged diff and a 20-file staged diff: CLI patch (the exact command `
   commit); an amend (expect a decline); a commit while a merge is in progress (expect a decline); two sessions committing
   within the same second if a peer session is available.
 - Outcome classes reported, one per entry: `ok`, `unchecked:<why>`, `warn:reflog-expired`, `warn:branch-gone`,
-  `fail:missing`, `fail:parent-mismatch`, `fail:tree-outside-listed-paths`, `fail:duplicate`, `fail:fsck`; and per
+  `fail:missing`, `fail:parent-mismatch`, `fail:tree-outside-listed-paths`, `fail:duplicate`, `warn:fsck-commit-graph`, `fail:fsck-corrupt`; and per
   decline reason class a count. Then a table: each criterion D.1-D.5, measured value, pass/fail.
 - Done when: the table is in this plan and the criteria are judged against it. No FAIL is the bar to proceed; any
   FAIL stops Steps 19 until fixed. (The owner has accepted the criteria; the go to flip is the table passing.)
