@@ -555,6 +555,27 @@ public class TranscriptResumeTests
         Assert.That(TranscriptResume.NormalizeResultText(string.Empty), Is.EqualTo(string.Empty));
     }
 
+    [TestCase("\"", "\"")]
+    [TestCase("\\\"", "\\\"")]
+    [TestCase("\\u0022", "\\u0022")]
+    public void NormalizeResultText_ResultIdInEscapedQuotes_IsMasked(string open, string close)
+    {
+        var first = TranscriptResume.NormalizeResultText($"GetLargeResult(resultId: {open}7af89068ffd747e8ad3b974a1a09283a{close}, path: x)");
+        var second = TranscriptResume.NormalizeResultText($"GetLargeResult(resultId: {open}b2b713451c4344d9b4e3bd2568bfbcf6{close}, path: x)");
+
+        Assert.That(first, Is.EqualTo("GetLargeResult(resultId: <id>, path: x)"));
+        Assert.That(second, Is.EqualTo(first));
+    }
+
+    [Test]
+    public void NormalizeResultText_ResultIdUnquoted_StillMasked()
+    {
+        // The plain-quoted and backslash-quoted forms keep masking next to the " alternative.
+        var text = "resultId: \"7af89068ffd747e8ad3b974a1a09283a\" and resultId: \\\"b2b713451c4344d9b4e3bd2568bfbcf6\\\"";
+
+        Assert.That(TranscriptResume.NormalizeResultText(text), Is.EqualTo("resultId: <id> and resultId: <id>"));
+    }
+
     [Test]
     public async Task ReplayKeptCallsAsync_CountEqualsDetailedMismatches_OnDoctoredInput()
     {

@@ -29,7 +29,7 @@ public class ResumeScenariosTests
             Assert.That(scenario.ScenarioType, Is.EqualTo(2));
             Assert.That(scenario.Expected, Is.EqualTo(ExpectedOutcome.Recover));
             Assert.That(scenario.ExpectedRecoveryTool, Is.EqualTo("ReadFile"));
-            Assert.That(scenario.ResumeKeepTurns, Is.EqualTo(11));
+            Assert.That(scenario.ResumeKeepTurns, Is.EqualTo(12));
             Assert.That(scenario.ResumeTranscript, Is.EqualTo(CaptureFileName));
             Assert.That(scenario.TurnCap, Is.EqualTo(8));
             Assert.That(scenario.SourceRun, Is.Not.Empty);
@@ -56,7 +56,7 @@ public class ResumeScenariosTests
             Assert.That(scenario.ScenarioType, Is.EqualTo(4));
             Assert.That(scenario.Expected, Is.EqualTo(ExpectedOutcome.Recover));
             Assert.That(scenario.ResumeTranscript, Is.EqualTo(CaptureFileName));
-            Assert.That(scenario.ResumeKeepTurns, Is.EqualTo(11));
+            Assert.That(scenario.ResumeKeepTurns, Is.EqualTo(12));
             Assert.That(scenario.ResumeFaultTool, Is.EqualTo("ReplaceSnippet"));
             Assert.That(scenario.ResumeFaultSeeded, Is.False);
             Assert.That(scenario.ResumeFaultArguments, Does.Contain("{SOLUTION}"));
@@ -91,7 +91,7 @@ public class ResumeScenariosTests
             Assert.That(scenario.ScenarioType, Is.EqualTo(4));
             Assert.That(scenario.Expected, Is.EqualTo(ExpectedOutcome.Recover));
             Assert.That(scenario.ResumeTranscript, Is.EqualTo(CaptureFileName));
-            Assert.That(scenario.ResumeKeepTurns, Is.EqualTo(11));
+            Assert.That(scenario.ResumeKeepTurns, Is.EqualTo(12));
             Assert.That(scenario.ResumeFaultTool, Is.EqualTo("ReplaceSnippet"));
             Assert.That(scenario.ResumeFaultSeeded, Is.True);
             Assert.That(scenario.ResumeFaultArguments, Does.Contain("{SOLUTION}"));
@@ -188,15 +188,15 @@ public class ResumeScenariosTests
     }
 
     [Test]
-    public void Capture_LoadsWithElevenTurnsSchemasAndCommit()
+    public void Capture_LoadsWithTwelveTurnsSchemasAndCommit()
     {
         var source = TranscriptResume.Load(ResumeScenarios.CapturePath(CaptureFileName));
 
         Assert.Multiple(() =>
         {
-            Assert.That(source.Turns, Has.Count.EqualTo(11));
+            Assert.That(source.Turns, Has.Count.EqualTo(12));
             Assert.That(source.Turns[3].ToolCalls[0].ToolName, Is.EqualTo("RenameSymbol"));
-            Assert.That(source.Turns[10].ToolCalls[0].ToolName, Is.EqualTo("CreateFile"));
+            Assert.That(source.Turns[11].ToolCalls[0].ToolName, Is.EqualTo("CreateFile"));
             Assert.That(source.ToolSchemas, Is.Not.Null);
             Assert.That(source.ToolSchemas!.Keys, Does.Contain("ReplaceSnippet"));
             Assert.That(string.IsNullOrEmpty(source.CommitHash), Is.False);

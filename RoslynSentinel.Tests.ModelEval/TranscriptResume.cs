@@ -175,7 +175,7 @@ public static class TranscriptResume
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private static readonly Regex ResultIdProseRegex = new(
-        @"resultId:\s*(?:\\""|"")[0-9a-fA-F]{32}(?:\\""|"")",
+        @"resultId:\s*(?:\\u0022|\\""|"")[0-9a-fA-F]{32}(?:\\u0022|\\""|"")",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private static readonly Regex IsoTimestampRegex = new(
