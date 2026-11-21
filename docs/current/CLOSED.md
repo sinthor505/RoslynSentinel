@@ -8,6 +8,18 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## evalqueue -Model id form undocumented - resolved (2026-11-21)
+
+INBOX 2026-11-21 05:20: the procedure doc did not say which id form `-Model` needs (its `qwen3.5-9b-coder` examples would not match an Unsloth host's `unsloth/Qwen3.5-9B-MTP-GGUF`).
+
+Evidence: `Test-EvalModelMatch` (roslynsentinel-evalhosts.ps1:234) compares case-insensitively after the last `/`; reference_model_eval_procedure.md now states that under the evalqueue bullets.
+
+## Close-TodoItem.ps1 help text shifted by one parameter - resolved (2026-11-21)
+
+INBOX 2026-11-21 05:20: Get-Help showed each parameter with the previous parameter's description.
+
+Evidence: trailing `# comment` after a param is attached by Get-Help to the next one; moved the descriptions to `.PARAMETER` sections, verified with `Get-Help -Parameter *`.
+
 ## Store AfterSource in chokepoint operation blobs - resolved (2026-11-20)
 
 Store `AfterSource` in chokepoint operation blobs (2026-11-09, decided 2026-11-20) - goal: an exact per-operation after-edit snapshot without replaying edits; step 0 check `OperationBlobWriter` retention/size, slice 1 a written-text map on `ApplyChangesResult` from the `ApplyProposedChangesAsync` write loop, slice 2 both shared builders set `AfterSource`; `UndoLastApply` refuses when the EOL-normalised disk text differs from `AfterSource`; accept per Decisions; Medium - [doc](ideas/idea_store_aftersource_in_chokepoint_operation_blobs.md)

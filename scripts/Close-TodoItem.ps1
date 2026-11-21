@@ -9,13 +9,27 @@
     line endings and is written as UTF-8 without BOM. Fails without writing anything when the
     prefix matches zero or several lines.
 
+.PARAMETER Prefix
+    Exact start of the TODO.md line, including the status tag (e.g. '- [OPEN] MoveMember collateral').
+
+.PARAMETER Title
+    Heading text for the CLOSED.md entry, without the date.
+
+.PARAMETER Evidence
+    Commit hash(es), tests, or why the item is stale.
+
+.PARAMETER Date
+    Date in the heading (yyyy-MM-dd); defaults to today.
+
 .EXAMPLE
     .\scripts\Close-TodoItem.ps1 -Prefix '- [OPEN] MoveMember collateral' -Title 'MoveMember collateral tripwire' -Evidence 'f498d7f0; MoveMemberToolCollateralRefusalTests'
 #>
+# Parameter help lives in the .PARAMETER sections above: a trailing comment after a parameter is
+# attached by Get-Help to the NEXT parameter, which shifted every description by one.
 param(
-    [Parameter(Mandatory)][string]$Prefix,   # exact start of the TODO.md line
-    [Parameter(Mandatory)][string]$Title,    # heading text for CLOSED.md, without the date
-    [Parameter(Mandatory)][string]$Evidence, # commit hash(es), tests, or why it is stale
+    [Parameter(Mandatory)][string]$Prefix,
+    [Parameter(Mandatory)][string]$Title,
+    [Parameter(Mandatory)][string]$Evidence,
     [string]$Date = (Get-Date -Format 'yyyy-MM-dd')
 )
 $ErrorActionPreference = 'Stop'

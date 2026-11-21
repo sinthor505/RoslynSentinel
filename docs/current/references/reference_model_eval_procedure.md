@@ -209,6 +209,10 @@ runs jobs one at a time per machine and shows every session what is running and 
 ```
 
 - `-Model`, `-Session` (first line of `ListAgents`) and `-Purpose` are required.
+- `-Model` must match the id the host reports as loaded (`Get-EvalHostStatus.ps1 -Json`); the compare is
+  case-insensitive on the part after the last `/` (`Test-EvalModelMatch` in `roslynsentinel-evalhosts.ps1`),
+  so for `unsloth/Qwen3.5-9B-MTP-GGUF` pass the full id or `qwen3.5-9b-mtp-gguf`. The `qwen3.5-9b-coder`
+  examples above are placeholders for an LM Studio id.
 - `wait` prints each job's state, results folder (`<scratch>\ModelTestingResults\<host>\<TestName>\<timestamp>\`)
   and log. Exit code 0 = all passed, 1 = a run finished with failing tests, 2 = anything else.
 - Job ids are unique across hosts from 2026-11-20 on; older ids can repeat on two hosts. `wait` and `cancel`
