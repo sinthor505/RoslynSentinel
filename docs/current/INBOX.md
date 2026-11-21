@@ -11,3 +11,4 @@ close it with a reason in [CLOSED.md](./CLOSED.md), then delete the line here. C
 
 ## Untriaged
 
+- 2026-11-21 23:40 plan_document_changeset_type Step 3 deferred: widening IWorkspaceMutator.ApplyProposedChangesAsync to IReadOnlyDictionary is NOT zero-caller-edit - ReplaceSnippet validate of the batch gave 176 new errors (CS0144 x84 + CS0200 x90 from target-typed `new() { [k] = v }` at ~14 test files, CS9174 at RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs:154 `changes: []`) - code TODO: RoslynSentinel.Common/ValidateAndApplyHelper.cs:228 (copy kept until the chokepoint is widened)
