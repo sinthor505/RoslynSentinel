@@ -405,7 +405,7 @@ public class WorkspaceFileEditImpl
             }
 
             var failed = new List<string>();
-            var revertChanges = new Dictionary<FilePathWrapper, string>();
+            var revertChanges = new DocumentChangeSet();
             foreach (var item in revertable)
             {
                 if (solutionRoot != null && !item.FilePath.StartsWith(solutionRoot, StringComparison.OrdinalIgnoreCase))
@@ -1223,7 +1223,7 @@ public class WorkspaceFileEditImpl
     /// <paramref name="editedSpans"/> are the model's replacements per file as spans of the baseline text, so the rename also reaches old-name
     /// uses the model's snippets did not cover (a constructor or self-call elsewhere in an edited file).
     /// </summary>
-    private async Task<(ApplyChangesResult? Result, Dictionary<FilePathWrapper, string>? Changes, string Note, List<ImpactVerdict>? Verdicts, IReadOnlyDictionary<string, IReadOnlyList<(int Line, string OldText, string NewText)>>? Rewrites)?> TryLiftRenameAsync(
+    private async Task<(ApplyChangesResult? Result, DocumentChangeSet? Changes, string Note, List<ImpactVerdict>? Verdicts, IReadOnlyDictionary<string, IReadOnlyList<(int Line, string OldText, string NewText)>>? Rewrites)?> TryLiftRenameAsync(
         Dictionary<FilePathWrapper, string> candidateChanges, IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>> editedSpans, CancellationToken cancellationToken)
     {
         if (!LiftRenamesOptions.Enabled)
@@ -1547,7 +1547,7 @@ public class WorkspaceFileEditImpl
                         };
                     }
 
-                    var snippetChanges = new Dictionary<FilePathWrapper, string>
+                    var snippetChanges = new DocumentChangeSet
                     {
                         [targetPath] = normalizedContent
                     };
@@ -1595,7 +1595,7 @@ public class WorkspaceFileEditImpl
                         && await NearMissAutoCorrector.TryAutoCorrectAsync(_workspaceManager, snippetChanges, result.ValidationResult, "ReplaceSnippet", StaleReadPolicy.RefuseIfObservedStale, cancellationToken) is { } nearMissFix)
                     {
                         result = nearMissFix.ApplyResult;
-                        snippetChanges = new Dictionary<FilePathWrapper, string>(nearMissFix.CorrectedChanges);
+                        snippetChanges = new DocumentChangeSet(nearMissFix.CorrectedChanges);
                         nearMissFindings = nearMissFix.Findings;
                     }
                     if (result.IsError && result.ValidationResult != null && await TryLiftRenameAsync(snippetChanges, liftSpans, cancellationToken) is { } lift)
@@ -1774,7 +1774,7 @@ public class WorkspaceFileEditImpl
             .Select((edit, index) => (edit, index))
             .GroupBy(pair => _workspaceManager.ResolveFromWire(pair.edit.FilePath));
 
-        var finalContents = new Dictionary<FilePathWrapper, string>();
+        var finalContents = new DocumentChangeSet();
         // Per file, each edit's matched span in the baseline text and its replacement, for rename lifting.
         var liftSpans = new Dictionary<FilePathWrapper, IReadOnlyList<TextChange>>();
         var newContentsByFile = new Dictionary<string, List<(string? OldContent, string NewContent)>>(StringComparer.OrdinalIgnoreCase);
@@ -1956,7 +1956,7 @@ public class WorkspaceFileEditImpl
                 && await NearMissAutoCorrector.TryAutoCorrectAsync(_workspaceManager, finalContents, result.ValidationResult, "ReplaceSnippet", StaleReadPolicy.RefuseIfObservedStale, cancellationToken) is { } nearMissFix)
             {
                 result = nearMissFix.ApplyResult;
-                finalContents = new Dictionary<FilePathWrapper, string>(nearMissFix.CorrectedChanges);
+                finalContents = new DocumentChangeSet(nearMissFix.CorrectedChanges);
                 nearMissFindings = nearMissFix.Findings;
             }
             if (result.IsError && result.ValidationResult != null && await TryLiftRenameAsync(finalContents, liftSpans, cancellationToken) is { } lift)
@@ -2112,7 +2112,7 @@ public class WorkspaceFileEditImpl
             }
 
             // TODO a .cs file outside every project folder (e.g. the solution root) is written without compile validation: no project owns it, so the gate compiles nothing; WriteFile has the same gap
-            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = body };
+            var changes = new DocumentChangeSet { [filePathResolved] = body };
             var result = await _workspaceManager.ApplyProposedChangesAsync(changes, validateChanges: true, cancellationToken: cancellationToken);
             if (result.IsError && result.ValidationResult != null)
             {

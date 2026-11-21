@@ -20,7 +20,7 @@ namespace RoslynSentinel.Engines.Basic;
 /// <param name="UsesPerRename">Per entry of <paramref name="Renames"/>, how many uses outside the model's edited spans that rename rewrote (other files plus edited files); null when not collected.</param>
 public sealed record RenameLiftResult(
     IReadOnlyList<SymbolChange> Renames,
-    Dictionary<FilePathWrapper, string> Changes,
+    DocumentChangeSet Changes,
     IReadOnlyList<string> RenamedFiles,
     int CallSiteCount,
     int EditedFileUseCount = 0,
