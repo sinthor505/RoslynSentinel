@@ -1,3 +1,4 @@
+using RoslynSentinel.Common;
 using RoslynSentinel.Common.GitWorktree;
 
 namespace RoslynSentinel.Tools.Advanced;
@@ -13,7 +14,7 @@ namespace RoslynSentinel.Tools.Advanced;
 /// PlanStepRunner needs no suffix because each run is a distinct human-launched process; a live
 /// server can start several calls in the same millisecond.
 /// <para>
-/// The run directory is a sibling of the source repo (<c>../RoslynSentinel-TestRuns/SubAgentTool/&lt;runId&gt;</c>),
+/// The run directory is under the scratch root (<c>&lt;scratch&gt;/TestRuns/SubAgent/&lt;runId&gt;</c>),
 /// the same place PlanStepRunner defaults to, never inside the repo: a run folder inside the repo would
 /// show up as untracked content in the live session's own <c>git status</c>.
 /// </para>
@@ -22,8 +23,6 @@ public static class SubAgentRunNaming
 {
     /// <summary>Folder name, under the test-runs root, that owns every SubAgentTool run.</summary>
     public const string RunsFolderName = "SubAgent";
-
-    private const string TestRunsRootFolderName = "RoslynSentinel-TestRuns";
 
     /// <summary>Mints a fresh, collision-resistant run id.</summary>
     public static string NewRunId(DateTimeOffset? utcNow = null)
@@ -35,10 +34,14 @@ public static class SubAgentRunNaming
     /// <summary>The folder that owns this run's worktree, build output and logs.</summary>
     public static string RunDirectory(string sourceRepo, string runId)
     {
-        var trimmed = sourceRepo.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        var parent = Path.GetDirectoryName(trimmed);
-        var root = string.IsNullOrEmpty(parent) ? Path.GetTempPath() : parent;
-        return Path.Combine(root, TestRunsRootFolderName, RunsFolderName, runId);
+        try
+        {
+            return Path.Combine(ScratchRoot.TestRunsRoot(sourceRepo), RunsFolderName, runId);
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new SubAgentLaunchException(ToolErrorCode.InvalidArgument, ex.Message, inner: ex);
+        }
     }
 
     /// <summary>The disposable git branch the run's worktree is checked out on.</summary>

@@ -1,5 +1,6 @@
 using ModelContextProtocol.Protocol;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Server.Advanced;
 using RoslynSentinel.Tools.Advanced;
 
@@ -38,30 +39,99 @@ public class SubAgentLaunchTests
 
     [Test]
     [Category("SubAgentRunNaming")] // sentinel:auto-category
-    public void RunDirectory_IsASiblingOfTheRepo_NotInsideIt()
+    [NonParallelizable]
+    public void RunDirectory_IsUnderTheScratchRoot_NotInsideTheRepo()
     {
-        var repo = Path.Combine(Path.GetTempPath(), "somewhere", "RoslynSentinel");
-        var runDirectory = SubAgentRunNaming.RunDirectory(repo, "run-1");
-
-        Assert.Multiple(() =>
+        // Touches the ROSLYNSENTINEL_SCRATCH_ROOT environment variable, so it must not run in parallel.
+        var saved = Environment.GetEnvironmentVariable(ScratchRoot.EnvironmentVariable);
+        Environment.SetEnvironmentVariable(ScratchRoot.EnvironmentVariable, null);
+        try
         {
-            Assert.That(runDirectory, Does.Not.StartWith(repo + Path.DirectorySeparatorChar),
-                "a run folder inside the repo would appear as untracked content in the live session's own git status");
-            Assert.That(Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(runDirectory))),
-                Is.EqualTo(Path.GetDirectoryName(repo)));
-            Assert.That(Path.GetFileName(runDirectory), Is.EqualTo("run-1"));
-        });
+            var repo = Path.Combine(Path.GetTempPath(), "somewhere", "RoslynSentinel");
+            var runDirectory = SubAgentRunNaming.RunDirectory(repo, "run-1");
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(runDirectory, Does.Not.StartWith(repo + Path.DirectorySeparatorChar),
+                    "a run folder inside the repo would appear as untracked content in the live session's own git status");
+                Assert.That(Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(runDirectory)))),
+                    Is.EqualTo(Path.GetDirectoryName(repo)));
+                Assert.That(Path.GetFileName(Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(runDirectory)))),
+                    Is.EqualTo("RoslynSentinel-ScratchDir"));
+                Assert.That(Path.GetFileName(runDirectory), Is.EqualTo("run-1"));
+            });
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(ScratchRoot.EnvironmentVariable, saved);
+        }
     }
 
     [Test]
     [Category("SubAgentRunNaming")] // sentinel:auto-category
+    [NonParallelizable]
     public void RunDirectory_ToleratesATrailingSeparator()
     {
-        var repo = Path.Combine(Path.GetTempPath(), "somewhere", "RoslynSentinel") + Path.DirectorySeparatorChar;
+        // Touches the ROSLYNSENTINEL_SCRATCH_ROOT environment variable, so it must not run in parallel.
+        var saved = Environment.GetEnvironmentVariable(ScratchRoot.EnvironmentVariable);
+        Environment.SetEnvironmentVariable(ScratchRoot.EnvironmentVariable, null);
+        try
+        {
+            var repo = Path.Combine(Path.GetTempPath(), "somewhere", "RoslynSentinel") + Path.DirectorySeparatorChar;
 
-        Assert.That(
-            SubAgentRunNaming.RunDirectory(repo, "run-1"),
-            Is.EqualTo(SubAgentRunNaming.RunDirectory(repo.TrimEnd(Path.DirectorySeparatorChar), "run-1")));
+            Assert.That(
+                SubAgentRunNaming.RunDirectory(repo, "run-1"),
+                Is.EqualTo(SubAgentRunNaming.RunDirectory(repo.TrimEnd(Path.DirectorySeparatorChar), "run-1")));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(ScratchRoot.EnvironmentVariable, saved);
+        }
+    }
+
+    [Test]
+    [Category("SubAgentRunNaming")] // sentinel:auto-category
+    [NonParallelizable]
+    public void RunDirectory_ScratchRootEnvironmentOverride_IsUsed()
+    {
+        // Touches the ROSLYNSENTINEL_SCRATCH_ROOT environment variable, so it must not run in parallel.
+        var saved = Environment.GetEnvironmentVariable(ScratchRoot.EnvironmentVariable);
+        var scratch = Path.Combine(Path.GetTempPath(), "RoslynSentinel-ScratchOverrideTest");
+        Environment.SetEnvironmentVariable(ScratchRoot.EnvironmentVariable, scratch);
+        try
+        {
+            var repo = Path.Combine(Path.GetTempPath(), "somewhere", "RoslynSentinel");
+
+            Assert.That(
+                SubAgentRunNaming.RunDirectory(repo, "run-1"),
+                Is.EqualTo(Path.Combine(scratch, "TestRuns", "SubAgent", "run-1")));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(ScratchRoot.EnvironmentVariable, saved);
+        }
+    }
+
+    [Test]
+    [Category("SubAgentRunNaming")] // sentinel:auto-category
+    [NonParallelizable]
+    public void RunDirectory_RelativeScratchRoot_ThrowsSubAgentLaunchException()
+    {
+        // Touches the ROSLYNSENTINEL_SCRATCH_ROOT environment variable, so it must not run in parallel.
+        var saved = Environment.GetEnvironmentVariable(ScratchRoot.EnvironmentVariable);
+        Environment.SetEnvironmentVariable(ScratchRoot.EnvironmentVariable, @"relative\scratch");
+        try
+        {
+            var repo = Path.Combine(Path.GetTempPath(), "somewhere", "RoslynSentinel");
+
+            Assert.That(
+                () => SubAgentRunNaming.RunDirectory(repo, "run-1"),
+                Throws.TypeOf<SubAgentLaunchException>().With.Property("ErrorCode").EqualTo(ToolErrorCode.InvalidArgument));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(ScratchRoot.EnvironmentVariable, saved);
+        }
     }
 
     [Test]
