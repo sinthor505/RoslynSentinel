@@ -153,17 +153,25 @@ public class SymbolNavigationEngine
 {
     private readonly ISolutionProvider _workspaceManager;
     private readonly ILogger<SymbolNavigationEngine> _logger;
+    private readonly Func<string, bool>? _isCallable;
 
-    public SymbolNavigationEngine(ISolutionProvider workspaceManager)
+    /// <summary>
+    /// <paramref name="isCallable"/> says whether a tool name can be called on this server (production passes
+    /// <c>ActiveToolSurface.IsCallable</c>); null means every tool can, so hint text names FindReferences. When
+    /// FindReferences is not callable the next-call hints name a prefilled Search(mode: references) instead.
+    /// </summary>
+    public SymbolNavigationEngine(ISolutionProvider workspaceManager, Func<string, bool>? isCallable = null)
     {
         _workspaceManager = workspaceManager;
         _logger = NullLogger<SymbolNavigationEngine>.Instance;
+        _isCallable = isCallable;
     }
 
-    public SymbolNavigationEngine(ISolutionProvider workspaceManager, ILogger<SymbolNavigationEngine> logger)
+    public SymbolNavigationEngine(ISolutionProvider workspaceManager, ILogger<SymbolNavigationEngine> logger, Func<string, bool>? isCallable = null)
     {
         _workspaceManager = workspaceManager;
         _logger = logger;
+        _isCallable = isCallable;
     }
 
     /// <summary>
@@ -1615,7 +1623,7 @@ public class SymbolNavigationEngine
                 {
                     // The snippet locator throws (rather than returning null) when the snippet matches nothing;
                     // keep its detail and append the ready-to-run next call for the declaring file.
-                    throw new ToolNotFoundException(ex.Message + BuildFindReferencesNextCallForFile(symbolName, "callers", document.FilePath ?? filePath, decls), ex.MissingTargetKind, ex.MissingTargetName, ex.Snippet, ex.Candidates);
+                    throw new ToolNotFoundException(ex.Message + BuildFindReferencesNextCallForFile(symbolName, "callers", document.FilePath ?? filePath, decls, _isCallable), ex.MissingTargetKind, ex.MissingTargetName, ex.Snippet, ex.Candidates);
                 }
 
                 if (symbol == null)
@@ -1629,7 +1637,7 @@ public class SymbolNavigationEngine
                         "or omit contextSnippet if the symbolName is unambiguous in this file." +
                         (positionalRecord != null
                             ? $" '{symbolName}' is a positional parameter of record {positionalRecord.ContainingType.Name}; point contextSnippet at that line or omit it to resolve the property by name."
-                            : string.Empty) + BuildFindReferencesNextCallForFile(symbolName, "callers", document.FilePath ?? filePath, decls), MissingTargetKinds.Symbol, missingTargetName: symbolName); // hint-ok: names tools in prose
+                            : string.Empty) + BuildFindReferencesNextCallForFile(symbolName, "callers", document.FilePath ?? filePath, decls, _isCallable), MissingTargetKinds.Symbol, missingTargetName: symbolName); // hint-ok: names tools in prose
                 }
             }
             else
@@ -1775,7 +1783,7 @@ public class SymbolNavigationEngine
                         "across the solution. This is NOT a confirmed zero-references result - the lookup " +
                         "never ran. " + DescribeCandidateLocations(memberMatches) + DescribeTypeMatchHint(allMatches, symbolName) +
                         "Re-check the snippet against GetMethodSource/GetFileOutline output for the " +
-                        "specific candidate you meant, or supply filePath to pin resolution to one file." + BuildFindReferencesNextCall(symbolName, "callers", allMatches), MissingTargetKinds.Symbol, missingTargetName: symbolName); // hint-ok: names tools in prose
+                        "specific candidate you meant, or supply filePath to pin resolution to one file." + BuildFindReferencesNextCall(symbolName, "callers", allMatches, _isCallable), MissingTargetKinds.Symbol, missingTargetName: symbolName); // hint-ok: names tools in prose
                 }
             }
             else
@@ -1802,7 +1810,7 @@ public class SymbolNavigationEngine
 
         if (symbol == null)
         {
-            var missDetail = await DescribeSymbolMissInSolutionAsync(solution, symbolName, "callers", cancellationToken);
+            var missDetail = await DescribeSymbolMissInSolutionAsync(solution, symbolName, "callers", cancellationToken, _isCallable);
             throw new ToolNotFoundException(
                 $"symbolName '{symbolName}' could not be resolved anywhere in the solution" +
                 (contextSnippet != null ? " with the supplied contextSnippet" : "") + ". " +
@@ -1990,7 +1998,7 @@ public class SymbolNavigationEngine
                             .Select(c => c.Node)
                             .OfType<MemberDeclarationSyntax>()
                             .ToList();
-                        throw new ToolNotFoundException(ex.Message + BuildFindReferencesNextCallForFile(symbolName, "implementations", document.FilePath ?? filePath, snippetDecls), ex.MissingTargetKind, ex.MissingTargetName, ex.Snippet, ex.Candidates);
+                        throw new ToolNotFoundException(ex.Message + BuildFindReferencesNextCallForFile(symbolName, "implementations", document.FilePath ?? filePath, snippetDecls, _isCallable), ex.MissingTargetKind, ex.MissingTargetName, ex.Snippet, ex.Candidates);
                     }
                     if (symbol == null)
                     {
@@ -2176,7 +2184,7 @@ public class SymbolNavigationEngine
                         "across the solution. This is NOT a confirmed zero-implementations result - the " +
                         "lookup never ran. " + DescribeCandidateLocations(memberMatches) + DescribeTypeMatchHint(allMatches, symbolName) +
                         "Re-check the snippet against GetMethodSource/GetFileOutline output for the " +
-                        "specific candidate you meant, or supply filePath to pin resolution to one file." + BuildFindReferencesNextCall(symbolName, "implementations", allMatches), MissingTargetKinds.Symbol, missingTargetName: symbolName); // hint-ok: names tools in prose
+                        "specific candidate you meant, or supply filePath to pin resolution to one file." + BuildFindReferencesNextCall(symbolName, "implementations", allMatches, _isCallable), MissingTargetKinds.Symbol, missingTargetName: symbolName); // hint-ok: names tools in prose
                 }
             }
             else
@@ -2230,7 +2238,7 @@ public class SymbolNavigationEngine
         {
             var missDetail = scopedFailureNamesCandidates
                 ? string.Empty
-                : await DescribeSymbolMissInSolutionAsync(solution, symbolName, "implementations", cancellationToken, wholeSolutionMiss: scopedResolutionFailure == null);
+                : await DescribeSymbolMissInSolutionAsync(solution, symbolName, "implementations", cancellationToken, _isCallable, wholeSolutionMiss: scopedResolutionFailure == null);
             throw new ToolNotFoundException(
                 "FindImplementations: " + (scopedResolutionFailure ??
                     ($"symbolName '{symbolName}' could not be resolved anywhere in the solution" +
@@ -2814,18 +2822,15 @@ public class SymbolNavigationEngine
     /// FindReferences call for <paramref name="kind"/> pinned to the candidate's file) or, when none is similar, the no-similar-name
     /// fact and one orientation call. Replaces <see cref="DescribeNearMissCandidatesAsync"/>.
     /// </summary>
-    private static async Task<string> DescribeSymbolMissInSolutionAsync(Solution solution, string symbolName, string kind, CancellationToken cancellationToken, bool wholeSolutionMiss = true)
+    private static async Task<string> DescribeSymbolMissInSolutionAsync(Solution solution, string symbolName, string kind, CancellationToken cancellationToken, Func<string, bool>? isCallable, bool wholeSolutionMiss = true)
     {
         // wholeSolutionMiss: false when the resolution that missed was scoped to a file (FindImplementations with a filePath/contextSnippet); the candidates here are still solution-wide.
         var projects = solution.Projects.ToList();
 
-        // TODO isCallable: SymbolNavigationEngine has no ActiveToolSurface, so hints name tools unconditionally (as the old text did)
-        // TODO isCallable is null and nextCall names FindReferences, which is not on the lean ModelEval surface (plan_modeleval_lean_tool_surface Step 2e): a lean-surface text needs Search(mode: references) with a query/filePath/contextSnippet mapping; design needed; the BuildFindReferencesNextCall sites in FindCallers and FindImplementations share it
+        // isCallable decides whether the prefilled next call is FindReferences or, on a surface without it, Search(mode: references).
         return await SymbolNotFoundDetail.BuildAsync(
-            projects, symbolName, "any", $"{projects.Count} project(s)", null, isCallable: null,
-            nextCall: candidate => string.IsNullOrEmpty(candidate.FilePath)
-                ? ToolCallHint.Call("FindReferences", ("symbolName", candidate.Name), ("kind", kind))
-                : ToolCallHint.Call("FindReferences", ("symbolName", candidate.Name), ("kind", kind), ("filePath", candidate.FilePath)),
+            projects, symbolName, "any", $"{projects.Count} project(s)", null, isCallable: isCallable,
+            nextCall: candidate => FindReferencesCall(candidate.Name, kind, candidate.FilePath, isCallable),
             cancellationToken: cancellationToken, wholeSolution: wholeSolutionMiss);
     }
 
@@ -2854,7 +2859,7 @@ public class SymbolNavigationEngine
     /// (RankCandidate, stable). A type is pinned by filePath only (types resolve by name); a member also gets its
     /// verbatim declaration-line contextSnippet (plus lineBefore when that line is not unique in its file).
     /// </summary>
-    public static string BuildFindReferencesNextCall(string symbolName, string kind, IReadOnlyList<SemanticSymbolCandidate> candidates)
+    public static string BuildFindReferencesNextCall(string symbolName, string kind, IReadOnlyList<SemanticSymbolCandidate> candidates, Func<string, bool>? isCallable = null)
     {
         var best = candidates.OrderBy(c => RankCandidate(c.Symbol)).FirstOrDefault();
         if (best == null)
@@ -2864,11 +2869,11 @@ public class SymbolNavigationEngine
 
         var site = ResolveDeclarationSite(best);
         var isType = best.Symbol is INamedTypeSymbol;
-        return FormatFindReferencesNextCall(symbolName, kind, site.File, isType ? null : site.Snippet, site.IsUnique ? null : site.LineBefore);
+        return FormatFindReferencesNextCall(symbolName, kind, site.File, isType ? null : site.Snippet, site.IsUnique ? null : site.LineBefore, isCallable);
     }
 
     /// <summary>Same as the candidates overload for a file-pinned miss: the first declaration of symbolName in that file.</summary>
-    private static string BuildFindReferencesNextCallForFile(string symbolName, string kind, string filePath, IReadOnlyList<MemberDeclarationSyntax> declarations)
+    private static string BuildFindReferencesNextCallForFile(string symbolName, string kind, string filePath, IReadOnlyList<MemberDeclarationSyntax> declarations, Func<string, bool>? isCallable)
     {
         var decl = declarations.FirstOrDefault();
         if (decl?.SyntaxTree == null)
@@ -2892,17 +2897,21 @@ public class SymbolNavigationEngine
             lineBefore = lines[index - 1].ToString().Trim();
         }
 
-        return FormatFindReferencesNextCall(symbolName, kind, filePath, isType ? null : snippet, lineBefore);
+        return FormatFindReferencesNextCall(symbolName, kind, filePath, isType ? null : snippet, lineBefore, isCallable);
     }
 
-    private static string FormatFindReferencesNextCall(string symbolName, string kind, string filePath, string? contextSnippet, string? lineBefore)
+    private static string FormatFindReferencesNextCall(string symbolName, string kind, string filePath, string? contextSnippet, string? lineBefore, Func<string, bool>? isCallable)
     {
         if (string.IsNullOrWhiteSpace(filePath) || filePath == "?")
         {
             return string.Empty;
         }
 
-        var known = new List<(string Name, string Value)> { ("symbolName", symbolName), ("kind", kind), ("filePath", filePath) };
+        var findReferencesCallable = isCallable is null || isCallable("FindReferences");
+        // FindReferences takes symbolName and kind; the Search fallback takes query and mode (kind callers/implementations are Search modes too, anything else is references).
+        var known = findReferencesCallable
+            ? new List<(string Name, string Value)> { ("symbolName", symbolName), ("kind", kind), ("filePath", filePath) }
+            : new List<(string Name, string Value)> { ("mode", SearchModeForKind(kind)), ("query", symbolName), ("filePath", filePath) };
         if (!string.IsNullOrWhiteSpace(contextSnippet))
         {
             known.Add(("contextSnippet", contextSnippet));
@@ -2912,7 +2921,39 @@ public class SymbolNavigationEngine
             }
         }
 
-        return " " + ToolCallHint.Next("FindReferences", string.Empty, known.ToArray());
+        if (findReferencesCallable)
+        {
+            return " " + ToolCallHint.Next("FindReferences", string.Empty, known.ToArray());
+        }
+
+        return isCallable!("Search") ? " " + ToolCallHint.Next("Search", string.Empty, known.ToArray()) : string.Empty;
+    }
+
+    /// <summary>The Search mode equivalent to a FindReferences kind: callers and implementations map to themselves, anything else to references.</summary>
+    private static string SearchModeForKind(string kind) => kind is "callers" or "implementations" ? kind : "references";
+
+    /// <summary>
+    /// The call (no "Next:" prefix) that finds the references of a candidate: FindReferences, or, when FindReferences is
+    /// not callable per <paramref name="isCallable"/> (null = every tool is), a prefilled Search for the same symbol and file;
+    /// empty when neither is callable.
+    /// </summary>
+    private static string FindReferencesCall(string name, string kind, string? filePath, Func<string, bool>? isCallable)
+    {
+        if (isCallable is null || isCallable("FindReferences"))
+        {
+            return string.IsNullOrEmpty(filePath)
+                ? ToolCallHint.Call("FindReferences", ("symbolName", name), ("kind", kind))
+                : ToolCallHint.Call("FindReferences", ("symbolName", name), ("kind", kind), ("filePath", filePath));
+        }
+
+        if (!isCallable("Search"))
+        {
+            return string.Empty;
+        }
+
+        return string.IsNullOrEmpty(filePath)
+            ? ToolCallHint.Call("Search", ("mode", SearchModeForKind(kind)), ("query", name))
+            : ToolCallHint.Call("Search", ("mode", SearchModeForKind(kind)), ("query", name), ("filePath", filePath));
     }
 
     /// <summary>
@@ -3377,10 +3418,16 @@ public class SymbolNavigationEngine
             var searched = searchProjects.ToList();
             var scope = projectName != null ? $"project '{projectName}'" : $"{searched.Count} project(s)";
 
-            // TODO isCallable: SymbolNavigationEngine has no ActiveToolSurface, so hints name tools unconditionally (as the old text did)
+            // When GetTypeInfo is not callable on this surface, a type candidate gets a prefilled Search(mode: symbol) instead.
             var detail = await SymbolNotFoundDetail.BuildAsync(
-                searched, typeName, "type", scope, projectName, isCallable: null,
-                nextCall: candidate => candidate.Kind == "type" ? ToolCallHint.Call("GetTypeInfo", ("typeName", candidate.Name)) : string.Empty,
+                searched, typeName, "type", scope, projectName, isCallable: _isCallable,
+                nextCall: candidate => candidate.Kind != "type"
+                    ? string.Empty
+                    : _isCallable is null || _isCallable("GetTypeInfo")
+                        ? ToolCallHint.Call("GetTypeInfo", ("typeName", candidate.Name))
+                        : _isCallable("Search")
+                            ? ToolCallHint.Call("Search", ("mode", "symbol"), ("query", candidate.Name), ("symbolKind", "type"))
+                            : string.Empty,
                 cancellationToken: cancellationToken, wholeSolution: projectName == null);
             return new TypeHierarchyReport { Error = detail };
         }

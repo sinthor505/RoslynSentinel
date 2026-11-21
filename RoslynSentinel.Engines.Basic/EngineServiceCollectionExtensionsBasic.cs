@@ -1,6 +1,9 @@
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Common;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Microsoft.Extensions.DependencyInjection;
 
@@ -50,7 +53,11 @@ public static class EngineServiceCollectionExtensionsBasic
         services.AddSingleton<TestCategoryApplyEngine>();
         services.AddSingleton<MemberRefactoringEngine>();
         services.AddSingleton<StructuralRefinementEngine>();
-        services.AddSingleton<SymbolNavigationEngine>();
+        // Explicit factory: the callable predicate comes from ActiveToolSurface when the host registered one (null in test hosts = every tool callable).
+        services.AddSingleton<SymbolNavigationEngine>(sp => new SymbolNavigationEngine(
+            sp.GetRequiredService<ISolutionProvider>(),
+            sp.GetService<ILogger<SymbolNavigationEngine>>() ?? NullLogger<SymbolNavigationEngine>.Instance,
+            sp.GetService<ActiveToolSurface>() is { } surface ? surface.IsCallable : null));
         services.AddSingleton<SyntaxUpgradeEngine>();
         services.AddSingleton<TestRunEngine>();
         services.AddSingleton<TestInstanceLauncher>();
