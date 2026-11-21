@@ -782,13 +782,20 @@ public class CodeTransformTools
         return filePath.FailureReason == FilePathFailureReason.NoSolutionLoaded ? new ResultError(ToolErrorCode.SolutionNotLoaded, SolutionNotLoadedMessage.ForFilePath(kind, _workspaceManager.LoadState)) : new ResultError(ToolErrorCode.InvalidArgument, $"filePath is required for {kind}.");
     }
 
-    private static SentinelCallToolResult<object> GeneratorFailure(string code, string error)
+    private static SentinelCallToolResult<object> GeneratorFailure(string code, string error, string missingTargetKind)
     {
-        // TODO error-policy: ToolErrorCode.NotFound is mapped to a hint without a kind or NameCandidates detail (deferred from the Engines.Advanced not-found sweep, TODO.md); migrate onto MissingTargetKinds with facts and options only.
+        // The engine results carry only a code and a message, not the missing kind; the generator knows what it looked up (the caller passes the
+        // MissingTargetKinds constant), so the kind goes onto the call context the way ToolErrorMapper.ToResultError does for a thrown ToolNotFoundException
+        // (precedent: SymbolNavigationImpl records a result-level NotFound the same way). NameCandidates detail is not available from the engine result.
+        if (code == ToolErrorCode.NotFound)
+        {
+            ToolCallContext.Current?.RecordMissingTarget(missingTargetKind);
+        }
+
         var hint = code == ToolErrorCode.NotFound
-            ? $" Call {ToolCallHint.Call("GetFileOutline", ("filePath", "<the file>"))} to confirm the class name, then retry with that exact className."
+            ? $" {ToolCallHint.Call("GetFileOutline", ("filePath", "<the file>"))} lists the types declared in the file; className must match one of them exactly."
             : code == ToolErrorCode.TargetIneligible
-                ? " Add a settable property or a primary constructor parameter, or pick another class."
+                ? " Options: add a settable property or a primary constructor parameter, or pick another class."
                 : "";
         return new SentinelCallToolResult<object>()
         {
@@ -1217,7 +1224,7 @@ public class CodeTransformTools
                             var result = await _codeGenerationEngine.GenerateFluentBuilderAsync(resolvedFilePath, className, cancellationToken);
                             if (result.IsError)
                             {
-                                return GeneratorFailure(result.Code!, result.Error!);
+                                return GeneratorFailure(result.Code!, result.Error!, MissingTargetKinds.Type);
                             }
                             return new SentinelCallToolResult<object>()
                             {
@@ -1309,7 +1316,7 @@ public class CodeTransformTools
                         var result = await _testingEngine.GenerateTestScaffoldAsync(resolvedFilePath, className, framework, cancellationToken);
                         if (result.IsError)
                         {
-                            return GeneratorFailure(result.ErrorCode ?? ToolErrorCode.Exception, result.Error!);
+                            return GeneratorFailure(result.ErrorCode ?? ToolErrorCode.Exception, result.Error!, MissingTargetKinds.Class);
                         }
                         return new SentinelCallToolResult<object>()
                         {

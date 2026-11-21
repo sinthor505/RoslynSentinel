@@ -16,7 +16,9 @@ namespace RoslynSentinel.Tests.Basic;
 [Category("Ratchet")]
 public class ErrorPolicyKindRatchetTests
 {
-    private const int MinimumKindSites = 30;
+    // Exactly the number of kind sites CollectKindSites finds in ScannedProjects (measured 196 at HEAD 121e33c1 by running this class with the floor raised
+    // and reading the count from the assertion message). Lower it only with a deliberate site removal; a drop means the scan stopped matching throw sites.
+    private const int MinimumKindSites = 196;
     private const string FactoryType = "MemberRefactoringNotFound";
     private const string FactoryFile = "RoslynSentinel.Engines.Basic/MemberRefactoringNotFound.cs";
 
@@ -38,15 +40,28 @@ public class ErrorPolicyKindRatchetTests
 
     private static bool IsScannedProject(string directoryName) => ScannedProjects.Contains(directoryName, StringComparer.Ordinal);
 
-    // Parses every .cs file of the scanned projects, skipping bin, obj and Worktree folders. Returned in relative-path order for stable messages.
+    private static List<(string RelativePath, SyntaxNode Root)> ParseScannedSources() => ParseSources(IsScannedProject);
+
+    // Every production project: a RoslynSentinel.* directory holding a .csproj whose name does not start with RoslynSentinel.Tests (the test and test-support projects).
+    private static bool IsProductionProject(string directoryName)
+    {
+        if (!directoryName.StartsWith("RoslynSentinel.", StringComparison.Ordinal) || directoryName.StartsWith("RoslynSentinel.Tests", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return Directory.EnumerateFiles(Path.Combine(RepoRoot(), directoryName), "*.csproj", SearchOption.TopDirectoryOnly).Any();
+    }
+
+    // Parses every .cs file of the projects the predicate accepts (by directory name), skipping bin, obj and Worktree folders. Returned in relative-path order for stable messages.
     // TODO share the production-source scan helpers with BareFileWriteRatchetTests
-    private static List<(string RelativePath, SyntaxNode Root)> ParseScannedSources()
+    private static List<(string RelativePath, SyntaxNode Root)> ParseSources(Func<string, bool> includeProject)
     {
         var repo = RepoRoot();
         var result = new List<(string RelativePath, SyntaxNode Root)>();
         foreach (var projectDir in Directory.GetDirectories(repo))
         {
-            if (!IsScannedProject(Path.GetFileName(projectDir)))
+            if (!includeProject(Path.GetFileName(projectDir)))
             {
                 continue;
             }
@@ -214,6 +229,38 @@ public class ErrorPolicyKindRatchetTests
             literals,
             Is.Empty,
             "Missing-target kinds must be passed as MissingTargetKinds constants, not string literals:" + Environment.NewLine + string.Join(Environment.NewLine, literals));
+    }
+
+    // Ban: no production code (every non-test project, not just ScannedProjects) may build a ToolNotFoundException without a missing-target kind, because the
+    // error-policy filter needs the kind to classify a not-found. A kind is the second positional argument or a named missingTargetKind: argument; a named
+    // snippet:/candidates: argument in second position is not one. Scope: an explicit `new ToolNotFoundException(...)`, qualified or not. A target-typed
+    // `new(...)` is out of scope (the target type is not visible without a semantic model); the scan skips it.
+    [Test]
+    public void ToolNotFoundException_InProductionCode_AlwaysCarriesAMissingTargetKind()
+    {
+        var sources = ParseSources(IsProductionProject);
+        Assert.That(sources, Is.Not.Empty, "The scan found no .cs files in the production projects; the repo root lookup is broken.");
+
+        var offenders = new List<string>();
+        foreach (var (relativePath, root) in sources)
+        {
+            foreach (var creation in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
+            {
+                if (!IsToolNotFoundType(creation.Type) || ArgumentAt(creation.ArgumentList, 1, "missingTargetKind") is not null)
+                {
+                    continue;
+                }
+
+                var line = creation.SyntaxTree.GetLineSpan(creation.Span).StartLinePosition.Line + 1;
+                offenders.Add($"  {relativePath}:{line}");
+            }
+        }
+
+        Assert.That(
+            offenders,
+            Is.Empty,
+            "ToolNotFoundException built without a missing-target kind in production code. Pass a MissingTargetKinds constant as the second argument (or missingTargetKind:):"
+                + Environment.NewLine + string.Join(Environment.NewLine, offenders));
     }
 
     [Test]
