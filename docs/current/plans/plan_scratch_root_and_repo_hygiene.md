@@ -1,6 +1,6 @@
 # Plan: move all test/eval/run/scratch output to one out-of-repo scratch root, add runtime-state retention and a repo hygiene guard
 
-**Status:** IN PROGRESS 2026-11-20. Steps 1a-4 done (1520b74f, fe343823, 840c35a3, 37130409, a3f8b565, 09191c1a); batched run by session 3e5e7eba.
+**Status:** IN PROGRESS 2026-11-20. Steps 1a-10 except 8a done (1520b74f, fe343823, 840c35a3, 37130409, a3f8b565, 09191c1a, 43b98119, 7550685c, cc021d4e, 0d7efd6a, 7e4f5a36, 86a45912, 006b332f); batched run by session 3e5e7eba.
 
 ## Problem
 
@@ -319,6 +319,8 @@ function Get-RoslynSentinelBuildDir {
 - Done when: `RunTest` filter `ModelTestingResultsArchiverTests` passes (dispatcher).
 
 ### Step 5a - modeleval script
+
+- Done: 43b98119
 - Files: `scripts\roslynsentinel-modeleval.ps1`.
 - Depends on: 1b, 3a, 3b. Lane: implementer (1 file, about 7 edits). Commits before Step 5b (batch B).
 - Effect: behaviour-changing: builds go to `<scratch>\build\<suffix>`, results to `<scratch>\ModelTestingResults`.
@@ -330,6 +332,8 @@ function Get-RoslynSentinelBuildDir {
 - Done when: the file parses (`[System.Management.Automation.Language.Parser]::ParseFile(<path>, [ref]$null, [ref]$err)` with `$err.Count -eq 0`); `Select-String` finds no `_scratchbuild` and no `Join-Path $repoRoot 'ModelTestingResults'` left; dispatcher runs `pwsh scripts\roslynsentinel-evalqueue.Tests.ps1` after Step 7 (it lifts `Get-RunLeafDirs`/`Copy-NewRunDirectories` from modeleval by AST).
 
 ### Step 5b - errorvariants script
+
+- Done: cc021d4e
 - Files: `scripts\roslynsentinel-errorvariants.ps1`.
 - Depends on: 1b, 3a, 3b, 5a (same pattern, committed second). Lane: implementer (1 file, about 7 edits).
 - Effect: behaviour-changing: build to `<scratch>\build\ev_<suffix>`, results to `<scratch>\ModelTestingResults`.
@@ -339,6 +343,8 @@ function Get-RoslynSentinelBuildDir {
 - Done when: parses (as 5a); `Select-String` finds no `_scratchbuild` and no `ModelTestingResults\$suffix` built from `$repoRoot` left.
 
 ### Step 6 - Queue worker and checkout exclude
+
+- Done: 7550685c
 - Files: `scripts\roslynsentinel-evalqueue.ps1`, `scripts\roslynsentinel-evalcheckout.ps1`.
 - Depends on: 1b. Lane: implementer (2 files, about 14 edits).
 - Effect: behaviour-changing: every job (pinned or legacy) writes results under the job's scratch root; pinned build path is unchanged.
@@ -352,6 +358,8 @@ function Get-RoslynSentinelBuildDir {
 - Done when: both parse; `Select-String` shows no `Join-Path $Job.sourceRepoRoot 'ModelTestingResults'` and no `Join-Path $Job.repoRoot "_scratchbuild_` left in the queue script; dispatcher runs `pwsh scripts\roslynsentinel-evalqueue.Tests.ps1` after Step 7.
 
 ### Step 7 - Queue test scripts
+
+- Done: 0d7efd6a
 - Files: `scripts\roslynsentinel-evalqueue.Tests.ps1`, `scripts\roslynsentinel-evalqueue.TestHarness.ps1`, `scripts\roslynsentinel-evalqueue.Preflight.Tests.ps1`.
 - Depends on: 6. Lane: implementer (3 files, about 8 edits).
 - Effect: text-neutral.
@@ -371,6 +379,8 @@ function Get-RoslynSentinelBuildDir {
 - Done when: `Build` 0 errors; dispatcher runs `RunTest` filter `SubAgentLaunchTests` and `PlanStepRunnerSurfaceTests` (the latter calls `RunnerOptions.Parse(["--plan-dir","p","--repo","r"])`).
 
 ### Step 8b - planstep script and Test-Parallel
+
+- Done: 7e4f5a36
 - Files: `scripts\roslynsentinel-planstep.ps1`, `scripts\Test-Parallel.ps1`.
 - Depends on: 1b. Lane: implementer (2 files, about 8 edits).
 - Effect: behaviour-changing (output location).
@@ -379,6 +389,8 @@ function Get-RoslynSentinelBuildDir {
 - Done when: both parse (`[System.Management.Automation.Language.Parser]::ParseFile(<path>, [ref]$null, [ref]$err)` with `$err.Count -eq 0`); `Select-String -Path scripts\Test-Parallel.ps1 -Pattern 'Join-Path \$repoRoot "TestResults'` returns no hits. Do not run `Test-Parallel.ps1` itself (it runs the whole test suite and deletes its results folder); the first real run is in Step 17.
 
 ### Step 9 - Behavioural default roots in report scripts
+
+- Done: 86a45912
 - Files: `scripts\Archive-ModelTestingResults.ps1` (`:31`), `scripts\Convert-RunEscapes.ps1` (`:42`), `scripts\Get-ShippingKindTypoCounts.ps1` (`:75`).
 - Depends on: 1b. Lane: implementer (3 files, about 6 edits).
 - Effect: behaviour-changing (default scan root).
@@ -388,12 +400,14 @@ function Get-RoslynSentinelBuildDir {
 - Done when: all three parse; `pwsh scripts\Archive-ModelTestingResults.ps1 -WhatIf -Days 3650` reports the scratch path (after Step 18; before it, the script reports `Results root not found` with the scratch path - a clean failure).
 
 ### Step 10 - Help-text and example sweep
+
+- Done: 006b332f
 - Files: `scripts\Backfill-TranscriptSummary.ps1` (`:41, 44`), `scripts\Get-NotFoundRecoveryReport.ps1` (`:49, 50`), `scripts\Parse-AgentLog.ps1` (`:46, 59, 63, 70, 71`), `scripts\roslynsentinel-interrogate.ps1` (`:80, 88, 95`), `scripts\Get-BomAudit.ps1` (`:24`), `scripts\Get-EolAudit.ps1` (`:32`), `scripts\Probe-OvernightLogprobs.ps1` (`:19, 233`), `scripts\Get-ShippingKindTypoCounts.ps1` (help lines `:25, 54, 58`).
 - Depends on: 5a, 5b, 9 (same file as the ShippingKind default). Lane: implementer-sweep (one operation: rewrite a path in comment/help text; 8 files, about 22 sites; within sweep tier 0: 1 op, 8 files, 25 sites). Tool: `Edit` per site (non-C#). `Get-TodoMarkers.ps1:8` (a comment) is left as is to stay at 8 files.
 - Effect: text-neutral.
 - Change rules: `ModelTestingResults\<...>` in examples -> `<scratch>\ModelTestingResults\<...>` and one line under `.EXAMPLE` or `.NOTES` saying `<scratch>` is `ROSLYNSENTINEL_SCRATCH_ROOT` or `..\RoslynSentinel-ScratchDir` (only where no such line exists yet);
   `.scratch\bom.csv` / `.scratch\eol.csv` -> `<scratch>\bom.csv` / `<scratch>\eol.csv`; `.scratch/chat_template_probe.txt` and `.scratch/chat_template.txt` -> `<scratch>\probe-inputs\...` (folder exists; leave its contents).
-- Done when: `Select-String -Path scripts\*.ps1 -Pattern '\.scratch'` returns no hits; `Select-String -Path scripts\Get-ShippingKindTypoCounts.ps1 -Pattern 'ModelTestingResults\\113'` shows only `<scratch>`-prefixed lines; all eight files parse.
+- Done when: `Select-String -Path scripts\*.ps1 -Pattern '\.scratch[\\/]'` returns no hits; `Select-String -Path scripts\Get-ShippingKindTypoCounts.ps1 -Pattern 'ModelTestingResults\\113'` shows only `<scratch>`-prefixed lines; all eight files parse.
 
 ### Step 11 - Drop the `.scratch` fallback in the launcher test
 - Files: `RoslynSentinel.Tests.Tools.Basic\TestInstanceLauncherTests.cs`.
