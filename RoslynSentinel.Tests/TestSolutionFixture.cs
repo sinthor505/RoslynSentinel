@@ -24,6 +24,12 @@ public sealed class TestSolutionFixture : IDisposable
 {
     private static readonly string[] SourceExtensions = [".sln", ".csproj", ".cs", ".md"];
 
+    private static readonly string[] MsBuildPinnedVariables =
+    [
+        "MSBUILD_EXE_PATH", "MSBuildExtensionsPath", "MSBuildSDKsPath", "MSBuildLoadMicrosoftTargetsReadOnly",
+        "DOTNET_HOST_PATH", "DOTNET_MSBUILD_SDK_RESOLVER_SDKS_DIR", "DOTNET_MSBUILD_SDK_RESOLVER_CLI_DIR",
+    ];
+
     // Full/parallel test runs contend on MSBuild loads; the 30 s default of PersistentWorkspaceManager.LoadSolutionAsync
     // flakes with SolutionLoadTimeoutException under that load, so fixtures that load a solution use this instead.
     public static readonly TimeSpan LoadTimeout = TimeSpan.FromSeconds(120);
@@ -196,8 +202,17 @@ public sealed class TestSolutionFixture : IDisposable
         // A leaked MSBuild worker node (nodeReuse) keeps the redirected pipes open after restore exits, so stop it from being spawned.
         startInfo.ArgumentList.Add("-nodeReuse:false");
         startInfo.ArgumentList.Add("--disable-build-servers");
+        // The binlog lives under the scratch root (never in the repo) and is deleted after a successful restore, so only failures leave one.
+        var binlogPath = Path.Combine(ScratchRoot.Resolve(), "RestoreBinlogs", "restore_" + Guid.NewGuid().ToString("N") + ".binlog");
+        Directory.CreateDirectory(Path.GetDirectoryName(binlogPath)!);
+        startInfo.ArgumentList.Add("-bl:" + binlogPath);
         startInfo.Environment["MSBUILDDISABLENODEREUSE"] = "1";
         startInfo.Environment["DOTNET_CLI_USE_MSBUILD_SERVER"] = "0";
+        // MSBuildLocator.RegisterDefaults() in this test process pins MSBuild toolset variables; the restore child must resolve its own (same list as BuildEngine.RunFullBuildAsync).
+        foreach (var pinned in MsBuildPinnedVariables)
+        {
+            startInfo.Environment.Remove(pinned);
+        }
 
         using var process = System.Diagnostics.Process.Start(startInfo)
             ?? throw new InvalidOperationException("TestSolutionFixture could not start 'dotnet restore'.");
@@ -207,7 +222,6 @@ public sealed class TestSolutionFixture : IDisposable
             .RunAsync(process, TimeSpan.FromMinutes(5), System.Threading.CancellationToken.None)
             .GetAwaiter().GetResult();
 
-        // TODO Queue eval ShippingKindStepFinal on 85u: case (1) restores fine, cases (2)-(6) exit 1 after ~13 s with EMPTY output (jobs 20261121-012644-001 at f71c0122 and 20261121-013055-001 at pre-plan 41f195b5; last pass 8ccccff0) - capture why the output is empty and what differs after the first case.
         var output = result.StdOut + result.StdErr;
         var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
         var start = Math.Max(0, lines.Length - 40);
@@ -216,13 +230,27 @@ public sealed class TestSolutionFixture : IDisposable
         if (result.TimedOut)
         {
             throw new InvalidOperationException(
-                $"TestSolutionFixture 'dotnet restore' for '{solutionPath}' did not finish within 5 minutes (RootExited={result.RootExited}). Last 40 lines of output:{Environment.NewLine}{tail}");
+                $"TestSolutionFixture 'dotnet restore' for '{solutionPath}' did not finish within 5 minutes (RootExited={result.RootExited}, ExitCode={result.ExitCode?.ToString() ?? "none"}, DrainTimedOut={result.DrainTimedOut}, binlog '{binlogPath}'). Last 40 lines of output:{Environment.NewLine}{tail}");
         }
 
         if (result.ExitCode != 0)
         {
             throw new InvalidOperationException(
-                $"TestSolutionFixture 'dotnet restore' for '{solutionPath}' exited with code {result.ExitCode}. Last 40 lines of output:{Environment.NewLine}{tail}");
+                $"TestSolutionFixture 'dotnet restore' for '{solutionPath}' exited with code {result.ExitCode} (DrainTimedOut={result.DrainTimedOut}, binlog '{binlogPath}'). Last 40 lines of output:{Environment.NewLine}{tail}");
+        }
+
+        TryDeleteFile(binlogPath);
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A leaked scratch binlog is not a test failure.
         }
     }
 
