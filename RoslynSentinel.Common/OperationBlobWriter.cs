@@ -233,11 +233,15 @@ public static class OperationBlobWriter
         {
             string? before = null;
             result.PreImages?.TryGetValue(f, out before);
+            // No PostImages entry (no-op write, delete, or a result built without the map) leaves AfterSource null.
+            string? after = null;
+            result.PostImages?.TryGetValue(f, out after);
             return new OperationItemRecord
             {
                 FilePath = f,
                 Outcome = ItemRecordOutcome.Succeeded,
                 BeforeSource = before,
+                AfterSource = after,
             };
         }).ToList();
 

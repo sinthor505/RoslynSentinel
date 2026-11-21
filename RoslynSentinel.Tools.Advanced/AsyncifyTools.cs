@@ -1496,6 +1496,7 @@ public class AsyncifyTools
 
                     string? beforeSource782 = null;
                     applyResult.PreImages?.TryGetValue(target.FilePath, out beforeSource782);
+                    // TODO AfterSource not set here (punchlist #14 slice 3 decision)
 
                     items.Add(new OperationItemRecord
                     {
@@ -2195,6 +2196,7 @@ public class AsyncifyTools
 
                         string? beforeSource1135 = null;
                         applyResult1126.PreImages?.TryGetValue(f.FilePath, out beforeSource1135);
+                        // TODO AfterSource not set here (punchlist #14 slice 3 decision)
                         items.Add(new OperationItemRecord
                         {
                             FilePath = f.FilePath,
@@ -2713,6 +2715,7 @@ public class AsyncifyTools
 
                     string? beforeSource1339 = null;
                     applyResult1317.PreImages?.TryGetValue(f.FilePath, out beforeSource1339);
+                    // TODO AfterSource not set here (punchlist #14 slice 3 decision)
                     items.Add(new OperationItemRecord
                     {
                         FilePath = f.FilePath,

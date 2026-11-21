@@ -90,6 +90,42 @@ public class EditEffectChokepointTests
         }
     }
 
+    // Punchlist #14: the blob built from the real chokepoint's result carries the text the chokepoint wrote, not the proposed text.
+    [Test]
+    public async Task ApplyThroughTheChokepoint_BlobAfterSourceEqualsTheDiskText_AndBeforeSourceTheOldTextAsync()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            File.WriteAllBytes(file, Encoding.UTF8.GetBytes(CrlfSource));
+            using var manager = NewManager();
+
+            var result = await manager.ApplyProposedChangesAsync(
+                new()
+                {
+                    [file] = CrlfSource.Replace("X()", "Z()")
+                }, retryCount: 0, validateChanges: false);
+            Assert.That(result.IsError, Is.False, result.Summary);
+
+            var blob = await OperationBlobWriter.WriteApplyBlobAsync("RenameSymbol", "e2e12345", result, dir);
+
+            Assert.That(blob.Written, Is.True, blob.Diagnostic);
+            using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, ".roslynsentinel", "operations", blob.FileName!)));
+            var item = JsonSerializer.Deserialize<OperationItemRecord>(doc.RootElement.GetProperty("items")[0].GetRawText())!;
+            Assert.Multiple(() =>
+            {
+                Assert.That(item.AfterSource, Is.EqualTo(File.ReadAllText(file)), "AfterSource is the exact text now on disk");
+                Assert.That(item.AfterSource, Does.Contain("Z()"));
+                Assert.That(item.BeforeSource, Is.EqualTo(CrlfSource));
+            });
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
     [Test]
     public async Task RolledBackApply_CommitsNothing_AndDropsThePendingEffects()
     {

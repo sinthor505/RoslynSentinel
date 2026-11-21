@@ -171,6 +171,97 @@ public class OperationBlobWriterTests
         });
     }
 
+    // Items read back the way UndoLastApply / GetOperationDetail do: each element deserialised to OperationItemRecord.
+    private List<OperationItemRecord> ReadBlobItems(string changeId)
+    {
+        var path = OperationBlobWriter.FindBlobPath(changeId, _solutionRoot);
+        Assert.That(path, Is.Not.Null, "the blob must exist");
+        using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path!));
+        return doc.RootElement.GetProperty("items").EnumerateArray()
+            .Select(e => System.Text.Json.JsonSerializer.Deserialize<OperationItemRecord>(e.GetRawText())!)
+            .ToList();
+    }
+
+    private static ApplyChangesResult ResultWithImages(
+    IReadOnlyDictionary<string, string?>? preImages, IReadOnlyDictionary<string, string?>? postImages) =>
+    new(IsError: false, SucceededFiles: ["C:/fake/A.cs", "C:/fake/B.cs"], FailedFiles: new(), Summary: "ok",
+        PreImages: preImages, PostImages: postImages);
+
+    [Test]
+    public async Task WriteApplyBlobAsync_RecordsBeforeAndAfterSourceFromPreAndPostImagesAsync()
+    {
+        var result = ResultWithImages(
+            new Dictionary<string, string?> { ["C:/fake/A.cs"] = "// A before", ["C:/fake/B.cs"] = "// B before" },
+            new Dictionary<string, string?> { ["C:/fake/A.cs"] = "// A after\r\n", ["C:/fake/B.cs"] = "// B after" });
+
+        var blob = await OperationBlobWriter.WriteApplyBlobAsync("Member", "fff66666", result, _solutionRoot);
+
+        Assert.That(blob.Written, Is.True, blob.Diagnostic);
+        var items = ReadBlobItems("fff66666");
+        Assert.Multiple(() =>
+        {
+            Assert.That(items.Select(i => (i.FilePath, i.BeforeSource, i.AfterSource)), Is.EqualTo(new[]
+            {
+            ("C:/fake/A.cs", (string?)"// A before", (string?)"// A after\r\n"),
+            ("C:/fake/B.cs", (string?)"// B before", (string?)"// B after"),
+            }));
+        });
+    }
+
+    [Test]
+    public async Task WriteApplyBlobAsync_FileWithNoPostImageEntry_LeavesAfterSourceNullAsync()
+    {
+        // B is a no-op write (or a delete): the chokepoint recorded no PostImages entry for it.
+        var result = ResultWithImages(
+            new Dictionary<string, string?> { ["C:/fake/A.cs"] = "// A before", ["C:/fake/B.cs"] = "// B before" },
+            new Dictionary<string, string?> { ["C:/fake/A.cs"] = "// A after" });
+
+        await OperationBlobWriter.WriteApplyBlobAsync("Member", "ggg77777", result, _solutionRoot);
+
+        var items = ReadBlobItems("ggg77777");
+        Assert.Multiple(() =>
+        {
+            Assert.That(items.Single(i => i.FilePath == "C:/fake/A.cs").AfterSource, Is.EqualTo("// A after"));
+            Assert.That(items.Single(i => i.FilePath == "C:/fake/B.cs").AfterSource, Is.Null);
+            Assert.That(items.Single(i => i.FilePath == "C:/fake/B.cs").BeforeSource, Is.EqualTo("// B before"));
+        });
+    }
+
+    [Test]
+    public async Task WriteApplyBlobAsync_NullPostImages_LeavesEveryAfterSourceNullAsync()
+    {
+        var result = ResultWithImages(
+            new Dictionary<string, string?> { ["C:/fake/A.cs"] = "// A before", ["C:/fake/B.cs"] = "// B before" },
+            postImages: null);
+
+        await OperationBlobWriter.WriteApplyBlobAsync("Member", "hhh88888", result, _solutionRoot);
+
+        Assert.That(ReadBlobItems("hhh88888").Select(i => i.AfterSource), Is.All.Null);
+    }
+
+    [Test]
+    public async Task WriteBlobForApplyAsync_RecordsBeforeAndAfterSourceFromPreAndPostImagesAsync()
+    {
+        using var manager = Fakes.FakeWorkspaceManager.ReadWrite();
+        manager.SolutionPath = Path.Combine(_solutionRoot, "Test.sln");
+        var result = ResultWithImages(
+            new Dictionary<string, string?> { ["C:/fake/A.cs"] = "// A before", ["C:/fake/B.cs"] = "// B before" },
+            new Dictionary<string, string?> { ["C:/fake/A.cs"] = "// A after" });
+
+        var blob = await OperationBlobHelper.WriteBlobForApplyAsync(
+            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance, manager, "Member", result, "iii99999");
+
+        Assert.That(blob.Written, Is.True, blob.Diagnostic);
+        var items = ReadBlobItems("iii99999");
+        Assert.Multiple(() =>
+        {
+            Assert.That(items.Single(i => i.FilePath == "C:/fake/A.cs").BeforeSource, Is.EqualTo("// A before"));
+            Assert.That(items.Single(i => i.FilePath == "C:/fake/A.cs").AfterSource, Is.EqualTo("// A after"));
+            Assert.That(items.Single(i => i.FilePath == "C:/fake/B.cs").BeforeSource, Is.EqualTo("// B before"));
+            Assert.That(items.Single(i => i.FilePath == "C:/fake/B.cs").AfterSource, Is.Null, "no PostImages entry");
+        });
+    }
+
     [Test]
     public async Task WriteBatchBlobOrTripAsync_OnFailure_TripsTheBreakerAsync()
     {
