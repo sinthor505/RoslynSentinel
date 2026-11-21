@@ -1130,7 +1130,7 @@ public class BasicRefactoringEngine
 
             var shown = string.Join(", ", lines.Take(10).Select(line => $"{fileName}:{line}"));
             var more = lines.Count > 10 ? $" and {lines.Count - 10} more" : string.Empty;
-            messages.Add($"Cannot remove parameter '{name}' of '{methodName}': it is still used in the body at {shown}{more}. Make the body stop using it first, then retry the removal.");
+            messages.Add($"Cannot remove parameter '{name}' (originalIndex {index}): the body still uses it at {shown}{more}. Options: keep it by listing {{originalIndex: {index}}} in parameters (an entry with the same name but no originalIndex is a new parameter), or remove its uses from the body first.");
         }
 
         return messages.Count == 0 ? null : string.Join(" ", messages);

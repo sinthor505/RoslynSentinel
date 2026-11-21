@@ -146,7 +146,7 @@ public sealed class ChangeSignatureDescriptionAndRefusalTests
         var result = await tools.ChangeSignatureTool(reason: "test message", workspace.PathOf("Calc.cs"), "Add", new[] { new ChangeSignatureParameterInput(originalIndex: 0) }, dryRun: dryRun);
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
-        Assert.That(result.ErrorData?.Message, Does.Contain("Cannot remove parameter 'b' of 'Add'"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("Cannot remove parameter 'b' (originalIndex 1)"));
         Assert.That(workspace.ReadText("Calc.cs"), Is.EqualTo(source));
     }
 

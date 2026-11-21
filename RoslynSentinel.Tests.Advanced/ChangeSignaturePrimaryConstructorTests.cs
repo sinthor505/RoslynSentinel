@@ -163,7 +163,7 @@ public class ChangeSignaturePrimaryConstructorTests
         SetFiles(("Widget.cs", source));
         var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(() => Change("Widget.cs", "Widget", new ExistingParameterSpec(0)));
 
-        Assert.That(ex!.Message, Does.Contain("Cannot remove parameter 'b' of 'Widget'").And.Contain("Widget.cs:4"));
+        Assert.That(ex!.Message, Does.Contain("Cannot remove parameter 'b' (originalIndex 1)").And.Contain("Widget.cs:4"));
     }
 
     [Test]
