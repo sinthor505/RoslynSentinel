@@ -8,6 +8,18 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## ModelEval harness cleanups from the scenario-eval run - resolved (2026-11-20)
+
+ModelEval harness cleanups from the scenario-eval run (2026-11-11) - (a) both archivers write `Outcome: Unfinished (overwritten when the test ends)` instead of the early `Inconclusive`; (b) replace the `ErrorCodeOf`/`TryReadStringProperty` `// TODO` with a comment naming strict vs lenient; (c) one shared MCP environment helper for `ScenarioAgentTests`, `TranscriptResumeAgentTests` and `OrderPricingRefactorChainAgentTests` (staging as a delegate); the `Invoke-WorktreeTests.ps1` part is closed as by design; accept per Decisions 2026-11-20; Small-Medium - [plan](plans/closed/plan_targeted_tool_scenario_evals.md)
+
+Evidence: f8b5984a (a: Unfinished label), faf5b6c0 (b comment, c ModelEvalMcpEnvironment incl. ShippingKindResume); ResumeDriftProbeTests/ResumeFaultExecutionTests pass; ShippingKindSteppedAgentTests still has its own copy (TODO marker kept)
+
+## Fold the duplicate ModelTestingResultsArchiver - resolved (2026-11-20)
+
+Fold the duplicate `ModelTestingResultsArchiver` (2026-11-20) - `Tests.ModelEval/ModelTestingResultsArchiver.cs:5` and `Tests.ErrorVariants/ModelTestingResultsArchiver.cs` are copies, marked `// TODO fold the duplicate ModelTestingResultsArchiver`; one shared helper; same lane as the ModelEval harness cleanups above (part (a) edits both archivers); Small
+
+Evidence: a7fb54f0, f8b5984a; RunDirectoryArchiveTests (6, Tests.ErrorVariants), ModelTestingResultsArchiverTests (12, Tests.ModelEval) pass
+
 ## Comment survival check for the last NormalizeWhitespace sites - resolved (2026-11-20)
 
 Comment survival check for the last `NormalizeWhitespace` sites (2026-11-08, shrunk 2026-11-20) - the whole-root sites moved to annotate-and-format and no `PinnedC6_*` tests remain, so the `NormalizeNewRootWhitespaceKeepingComments` helper is not needed; add tests that a comment in a constraint clause/type parameter list survives `AlignPartialDeclaration` (`Engines.Advanced/AdvancedStructuralEngine.cs:1097/:1099`) and a member comment survives ExtractInterface; fix only a failing case (annotate-and-format); Small - [doc](proposals/closed/proposal_enforce_normalize_whole_subtree_whitespace_rule.md)

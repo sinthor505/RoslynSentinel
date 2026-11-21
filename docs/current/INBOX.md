@@ -11,3 +11,5 @@ close it with a reason in [CLOSED.md](./CLOSED.md), then delete the line here. C
 
 ## Untriaged
 
+- 2026-11-20 22:00 ShippingKindSteppedAgentTests and about eight other ModelEval tests (OrderPricingRefactorAgentTests, PlanOnlyAgentTests, WholeFileRewriteAgentTests, ...) still hand-wire the in-process MCP world that ModelEvalMcpEnvironment now provides for four classes - RoslynSentinel.Tests.ModelEval/ShippingKindSteppedAgentTests.cs:40 ("extract the shared ModelEval host setup (third copy)"); other classes may differ in services or tool surface - TODO in ShippingKindSteppedAgentTests.cs:40
+- 2026-11-20 22:00 Archiver test-result.txt written from a test body says "Unfinished (overwritten when the test ends)" but nothing rewrites it afterwards (body-called archivers: ScenarioAgentTests, TranscriptResume, ShippingKind*, ErrorVariantReplayTests) - RoslynSentinel.Common/AgentLoop/RunDirectoryArchive.cs UnfinishedOutcome; owner-chosen wording - no code spot
