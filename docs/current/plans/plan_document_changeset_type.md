@@ -1,6 +1,6 @@
 # Plan: Replace Dictionary<FilePathWrapper, string> with a named DocumentChangeSet type
 
-**Status:** IN PROGRESS 2026-11-21. Steps 1, 2, 4, 5 done (b0b1614a, 8849400f, 8a307227, a81c3ae7, c2f8c5c0); Step 3 dropped (Decision 10); Step 6 running.
+**Status:** IN PROGRESS 2026-11-21. Steps 1, 2, 4, 5 done (b0b1614a, 8849400f, 8a307227, a81c3ae7, c2f8c5c0); Step 3 dropped (Decision 10); Step 6 done except 6d-3 (moved into Step 7); Step 7 running.
 
 ## Problem
 
@@ -158,6 +158,13 @@ Re-measured 2026-11-21 (`Search(mode: text)` line matches, so approximate):
 - Effect: text-neutral (CLR type only; wire JSON unchanged)
 - Change: as above. Tuples keep their shape (only the element type changes).
 - Done when: Build 0 errors per slice; the Step 5 tests still pass after 6d.
+- Done (except 6d-3): 02ee960d, da0d2dcd, 58caba10 (6a); 6243ae30, ff71ac2f, 739623ed (6b); c3e352e6,
+  e13d92a8 (6c); beac0cc3, 3864db85 (`DocumentEditResult.Changes`), 02c39a0e (`Cache/TakePendingChangeset`) (6d).
+  `ApplyChangesResult.FailedFiles` skipped: it maps path -> failure reason, not content.
+- 6d-3 (`AppliedChangeSummary.ChangedContent`) moved to the end of Step 7: a positional record parameter and
+  its property must match (CS8866), and retyping the parameter plus both `From(...)` parameters breaks 63
+  callers (CS1503) in 9 files / 5 projects that pass plain `Dictionary` values returned by engine methods
+  outside Step 6. TODO at `AppliedChangeSummary.cs:23`.
 
 ### Step 7 - Remaining construction sites
 - Files: the remaining production `new Dictionary<FilePathWrapper, string>` expressions (about 195 before
@@ -167,6 +174,10 @@ Re-measured 2026-11-21 (`Search(mode: text)` line matches, so approximate):
 - Change: `implementer-sweep` slices at S0 (8 files, 25 sites), one repeated `ReplaceSnippet` batch pattern
   `new Dictionary<FilePathWrapper, string>(` -> `new DocumentChangeSet(` plus the declared local type where
   it is spelled out. Re-measure the inventory first and derive the slice map from it.
+  Then (added 2026-11-21) retype the production methods that return `Dictionary<FPW, string>` to
+  `DocumentChangeSet`, starting with those feeding `AppliedChangeSummary` (MoveTypeToFile, the
+  AdvancedStructuralEngine returns), and finish with 6d-3: `AppliedChangeSummary`'s `ChangedContent`
+  parameter and both `From(...)` `changedContent` parameters; the Step 5 tests must still pass.
 - Done when: `Search(mode: text, query: "new Dictionary<FilePathWrapper, string>")` returns zero in
   production code, or the remainder is listed here with a reason.
 
@@ -183,8 +194,11 @@ Re-measured 2026-11-21 (`Search(mode: text)` line matches, so approximate):
 ## Risks and open decisions
 
 
-- **`ChangeSetResult : IOperationResult` (deferred):** decide after Step 6 whether enough results repeat
-  the same `Changes` + error pair; record the evidence here.
+- **`ChangeSetResult : IOperationResult` (deferred):** evidence after Step 6: five results carry a
+  changes map plus an error (ChangeSignatureResult and RenameSymbolResult `string? Error`;
+  NamedArgumentsOutcome and SemanticReplaceOutcome `ResultError? Error`; OutParamConversionResult
+  `IsError` + `ErrorCode`). Three different error shapes, so a shared base needs a common error type
+  first. Recommendation: do not add it in this plan; unify the error shapes first if wanted.
 - **Derived-type serialization (unverified):** System.Text.Json should treat a `Dictionary` subclass as a
   dictionary, and no `JsonSerializerContext` exists in production; Step 1's serialization test checks it.
   `DetachedPayloads.IsMapLike` (`is IDictionary`) still matches the derived type.
