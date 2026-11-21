@@ -406,11 +406,19 @@ A bare pass/fail sends the analyst back into transcripts to learn what happened.
   Each golden must pass its own check and the previous golden must fail it.
 - Design and first numbers: `docs/current/plans/closed/plan_modeleval_stepped_shipping_kind_scenario.md`.
 
+## Where output goes
+
+- The scratch root is env `ROSLYNSENTINEL_SCRATCH_ROOT` (absolute), else `<parent of the repo>\RoslynSentinel-ScratchDir`.
+- `ROSLYNSENTINEL_RESULTS_ROOT` overrides only `<scratch>\ModelTestingResults`.
+- The eval scripts export `ROSLYNSENTINEL_REPO_ROOT`, so the testhost running from `<scratch>\build\<suffix>` finds the repo.
+- Build output goes to `<scratch>\build\<suffix>` (`ev_<suffix>` for errorvariants).
+- Pinned queue checkouts under `C:\rs-eval` stay there and build inside the checkout at `<checkout>\_scratchbuild_<suffix>`.
+- Full layout and retention table: [reference_working_conventions.md](reference_working_conventions.md).
+
 ## Output locations
 
-- Per-run transcripts + `agent.log`: `RoslynSentinel.Tests.ModelEval/bin/Debug/net10.0/model-eval/<TestName>/<timestamp>/`
-- `Model_SizeThresholdSweep` additionally appends to a running CSV:
-  `RoslynSentinel.Tests.ModelEval/bin/Debug/net10.0/model-eval/SizeThreshold/results.csv`
+- Per-run transcripts + `agent.log`: under `<scratch>\build\<suffix>\bin\RoslynSentinel.Tests.ModelEval\debug\model-eval\<TestName>\<timestamp>\`, before archiving to `<scratch>\ModelTestingResults\<host>\...`
+- `Model_SizeThresholdSweep` additionally appends to a running CSV under `<scratch>\build\<suffix>\bin\RoslynSentinel.Tests.ModelEval\debug\model-eval\SizeThreshold\results.csv` (archived to `<scratch>\ModelTestingResults\<host>\...` as well)
   (columns: `timestampUtc,promptVariant,unrelatedMethodCount,fileSizeChars,run,converged,fixCorrect,stopReason,turnCount,applyDiffErrorCount,transcriptPath`)
 - `agent.log` is written+flushed independently of `dotnet test`'s stdout buffering (which
   block-buffers when redirected to a file), so it can be tailed live during a long run even

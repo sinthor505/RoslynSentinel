@@ -26,7 +26,7 @@ respawned, so restart it before verifying fixes live.
   `.roslynsentinel/build/<instance>/` (one folder per server instance, git-ignored) and leaves the
   projects' own `bin/`/`obj/` untouched, so concurrent sessions do not block each other. It does not set
   the stale flag; use `fullBuild` only when you need the shared `bin/` updated. `RunTest` always builds
-  into the same instance folder. Within one server, Build/RunTest calls queue behind one gate.
+  into the same instance folder. Within one server, Build/RunTest calls queue behind one gate. Instance folders older than 7 days (current instance excepted) are swept when a server first resolves its build artifacts path (RuntimeStateRetention.SweepBuildInstances).
 - `McpServerStatus` gives `binaryStaleness.staleAssemblies`, `serverBinaryPath`,
   `serverBuildTimeUtc` (DLL mtime on disk) and `serverPid`. Old `bin-vscode` layout: if you edited
   server source but have not run a `fullBuild`, assume the live server is old. Instances layout
@@ -49,7 +49,7 @@ Set `ROSLYNSENTINEL_INSTANCES_ROOT` (or flip `$UseDefaultInstancesRootWhenUnset`
   build used if a build fails).
 - `instances\<id>\` is the server's `--working-dir`: `logs\` (file names carry the pid), `crash.log`,
   `tool_list*.json`, `stopped-by-script.marker`. Swept when its process is gone. Without `--working-dir` the
-  server writes beside its binary as before.
+  server writes beside its binary as before. Server logs there are also trimmed at logging start to 14 days or 50 files (the current log and crash.log are kept).
 - The build is stamped with `-p:SourceRevisionId=<sha>`; `McpServerStatus` shows `buildSha` and `workingDir`.
   `isServerBinaryStale` then means the loaded solution's repo has commits after that SHA touching
   `RoslynSentinel.Common/`, `Engines.*`, `Tools.*` or `Server.*`; they are listed in
