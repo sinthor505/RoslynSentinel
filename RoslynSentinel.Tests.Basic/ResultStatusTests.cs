@@ -1040,7 +1040,7 @@ public class ResultStatusTests
             hasFile ? new List<FilePathWrapper> { new FilePathWrapper("C:/x/f0.cs") } : new List<FilePathWrapper>(),
             "desc",
             dryRun,
-            ChangedContent: proposeOnly ? new Dictionary<FilePathWrapper, string>() : null);
+            ChangedContent: proposeOnly ? new DocumentChangeSet() : null);
 
     private static void AssertAppliedSummaryNotError(AppliedChangeSummary summary, ResultStatus expected)
     {
