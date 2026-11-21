@@ -1807,9 +1807,9 @@ public class SolutionStructureEngine
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var slnPath = _workspaceManager.SolutionPath ?? solution.FilePath
-            ?? throw new ToolPreconditionException("Solution path not found: no solution file path is known for the loaded workspace (SolutionPath and the solution's FilePath are both null), so a project cannot be placed next to the solution file. Load a solution from disk with LoadSolution(solutionPath: ...) and call again.");
+            ?? throw new ToolPreconditionException($"Solution path not found: no solution file path is known for the loaded workspace (SolutionPath and the solution's FilePath are both null), so a project cannot be placed next to the solution file. Call {ToolCallHint.Call("LoadSolution", ("solutionPath", "<path to a .sln or .slnx>"))} to load a solution from disk, then call again.");
         var slnDir = Path.GetDirectoryName(slnPath)
-            ?? throw new ToolPreconditionException($"Solution path not found: '{slnPath}' has no parent directory, so a project cannot be placed next to the solution file. Load a solution from disk with LoadSolution(solutionPath: ...) and call again.");
+            ?? throw new ToolPreconditionException($"Solution path not found: '{slnPath}' has no parent directory, so a project cannot be placed next to the solution file. Call {ToolCallHint.Call("LoadSolution", ("solutionPath", "<path to a .sln or .slnx>"))} to load a solution from disk, then call again.");
         var projectDir = Path.Combine(slnDir, projectName);
         Directory.CreateDirectory(projectDir);
 

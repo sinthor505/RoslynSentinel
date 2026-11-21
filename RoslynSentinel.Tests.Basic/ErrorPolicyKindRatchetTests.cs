@@ -18,7 +18,8 @@ public class ErrorPolicyKindRatchetTests
 {
     // Exactly the number of kind sites CollectKindSites finds in ScannedProjects (measured 196 at HEAD 121e33c1 by running this class with the floor raised
     // and reading the count from the assertion message). Lower it only with a deliberate site removal; a drop means the scan stopped matching throw sites.
-    private const int MinimumKindSites = 196;
+    // 196 -> 194: the two "Solution path not found" throws became ToolPreconditionException (no missing-target kind).
+    private const int MinimumKindSites = 194;
     private const string FactoryType = "MemberRefactoringNotFound";
     private const string FactoryFile = "RoslynSentinel.Engines.Basic/MemberRefactoringNotFound.cs";
 
