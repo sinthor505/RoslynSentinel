@@ -18,7 +18,8 @@
     Each rewritten file keeps its original creation and last-write times. Folders named Worktree are skipped.
 
 .PARAMETER Root
-    Folder to scan. Default: ModelTestingResults under the repo root.
+    Folder to scan. Default: `<scratch>\ModelTestingResults` (scratch = ROSLYNSENTINEL_SCRATCH_ROOT, else
+    `<parent of the repo>\RoslynSentinel-ScratchDir`; ROSLYNSENTINEL_RESULTS_ROOT overrides).
 
 .PARAMETER Kind
     All (default), Transcript or Log.
@@ -39,7 +40,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Root = (Join-Path (Split-Path -Parent $PSScriptRoot) 'ModelTestingResults'),
+    [string]$Root,
     [ValidateSet('All', 'Transcript', 'Log')]
     [string]$Kind = 'All',
     [switch]$Apply,
@@ -47,6 +48,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+. (Join-Path $PSScriptRoot 'roslynsentinel-scratch.ps1')
+if (-not $Root) { $Root = Get-RoslynSentinelResultsRoot }
 
 if (-not (Test-Path -LiteralPath $Root)) {
     throw "Root folder not found: $Root"

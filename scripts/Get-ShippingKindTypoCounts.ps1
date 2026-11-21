@@ -71,8 +71,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'roslynsentinel-scratch.ps1')
 $pathGiven = [bool]$Path
-if (-not $Path -and -not $ReplayResults) { $Path = @(Join-Path $repoRoot 'ModelTestingResults') }
+if (-not $Path -and -not $ReplayResults) { $Path = @(Get-RoslynSentinelResultsRoot -RepoRoot $repoRoot) }
 
 $fallbackNames = @('Standard', 'Express', 'Overnight', 'Pickup', 'SameDay', 'IsKnown', 'IsExpedited', 'IsPickup', 'All', 'Normalize')
 $placeholderNames = @('ConstantName', 'Name', 'Xxx', 'Foo', 'Member', 'Constant')

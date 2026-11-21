@@ -3,7 +3,7 @@
     Moves old model-eval run folders into a sibling Archived/ folder.
 
 .DESCRIPTION
-    Walks ModelTestingResults recursively and finds run folders, i.e. directories named with a
+    Walks <scratch>\ModelTestingResults recursively and finds run folders, i.e. directories named with a
     run timestamp (yyyyMMdd-HHmmss or yyyyMMdd-HHmmss-fff). A run older than -Days is moved into
     an Archived/ folder next to it:
 
@@ -14,7 +14,8 @@
     for nested runs, and existing Archived/ folders are skipped.
 
 .PARAMETER Root
-    Results root. Defaults to ModelTestingResults at the repo root.
+    Results root. Defaults to `<scratch>\ModelTestingResults` (scratch = ROSLYNSENTINEL_SCRATCH_ROOT, else
+    `<parent of the repo>\RoslynSentinel-ScratchDir`; ROSLYNSENTINEL_RESULTS_ROOT overrides).
 
 .PARAMETER Days
     Runs older than this many days are archived. Default 7.
@@ -28,12 +29,15 @@
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
-    [string]$Root = (Join-Path (Split-Path $PSScriptRoot -Parent) 'ModelTestingResults'),
+    [string]$Root,
     [ValidateRange(0, 3650)]
     [int]$Days = 7
 )
 
 $ErrorActionPreference = 'Stop'
+
+. (Join-Path $PSScriptRoot 'roslynsentinel-scratch.ps1')
+if (-not $Root) { $Root = Get-RoslynSentinelResultsRoot }
 
 if (-not (Test-Path -LiteralPath $Root -PathType Container)) {
     throw "Results root not found: $Root"
