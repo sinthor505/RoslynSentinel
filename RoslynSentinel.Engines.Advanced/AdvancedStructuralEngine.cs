@@ -1582,7 +1582,7 @@ public class StructuralRefactoringEngine
 
         // Every other document that holds an implementer (the target document, which may hold the interface, was handled above, in
         // the same pass).
-        var changes = new Dictionary<FilePathWrapper, string>();
+        var changes = new DocumentChangeSet();
         foreach (var otherDocumentId in implementersByDocument.Keys.Where(id => id != targetDocument.Id))
         {
             var otherDocument = solution.GetDocument(otherDocumentId)!;

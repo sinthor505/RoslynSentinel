@@ -1479,7 +1479,7 @@ public class MemberRefactoringEngine
             }
         }
 
-        var result = new Dictionary<FilePathWrapper, string>();
+        var result = new DocumentChangeSet();
         foreach (var (path, nodes) in editNodesByPath)
         {
             var fileDocument = documentByPath[path];
