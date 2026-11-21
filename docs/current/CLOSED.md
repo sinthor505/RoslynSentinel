@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Store AfterSource in chokepoint operation blobs - resolved (2026-11-20)
+
+Store `AfterSource` in chokepoint operation blobs (2026-11-09, decided 2026-11-20) - goal: an exact per-operation after-edit snapshot without replaying edits; step 0 check `OperationBlobWriter` retention/size, slice 1 a written-text map on `ApplyChangesResult` from the `ApplyProposedChangesAsync` write loop, slice 2 both shared builders set `AfterSource`; `UndoLastApply` refuses when the EOL-normalised disk text differs from `AfterSource`; accept per Decisions; Medium - [doc](ideas/idea_store_aftersource_in_chokepoint_operation_blobs.md)
+
+Evidence: d0e40aa3, 1c175adc, e2fc869f; ApplyPostImagesTests, OperationBlobWriterTests, EditEffectChokepointTests, UndoLastApplyConcurrentEditTests; self-building Asyncify sites left as TODO (INBOX)
+
 ## RunTest/Build take an optional repoPath - resolved (2026-11-20)
 
 `RunTest`/`Build` take an optional `repoPath` (2026-11-09, decided 2026-11-20) - absolute path to a git worktree of this repository (refused otherwise); build/test run in that tree with its own `bin/`/`obj/`, the result names the worktree HEAD commit, omitted = today's behaviour (`useScratchDir` is obsolete: on `Build` it equals `level=fullBuildThrowaway` and also escalates `fullBuild` to it, `RunTest` ignores it and always runs into the throwaway folder); `scripts/Invoke-WorktreeTests.ps1` stays the batch route; accept: `RunTest(repoPath: <worktree>)` reports the worktree commit and leaves the main tree's `bin/`/`obj/` untouched, and a non-worktree path is refused; Medium
