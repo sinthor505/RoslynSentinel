@@ -56,10 +56,9 @@ own cause.
   payloads (unlike `agent.log`, see offloading below). Query it with `python3`/`jq` rather than
   reading it whole — 350 KB in the measured sample.
 
-Runs live in `<repo>\..\PlanStepRunner-runs\<timestamp>\` (sibling of the repo since 2026-09-10);
-older runs are archived at `..\PlanStepRunner-archive\`.
+Runs live in `<scratch>\TestRuns\PlanStepRunner\<timestamp>\`, where `<scratch>` is env `ROSLYNSENTINEL_SCRATCH_ROOT` when set, else `<parent of the repo>\RoslynSentinel-ScratchDir`.
 
-**ModelEval** — `ModelTestingResults\<host>\<TestName>\<timestamp>\` containing the same
+**ModelEval** — `<scratch>\ModelTestingResults\<host>\<TestName>\<timestamp>\` containing the same
 `agent.log` + `transcript.json` pair, with the same division of labour. `PlanImplementVerify`-style tests add a `<plan|implement|verify>\` phase level,
 and some have a duplicated-timestamp folder (`<ts>\<ts>\<phase>\`) — an archiver quirk
 `Parse-AgentLog.ps1` already handles.
@@ -134,7 +133,7 @@ Consequences:
   for a halt and it is the easiest one to lose.
 - If a step **succeeded** but did something suspicious, the server log is already gone; say so
   explicitly rather than implying the server side was checked.
-- ModelEval runs likewise emit no server log into `ModelTestingResults\` — only agent-side files.
+- ModelEval runs likewise emit no server log into `<scratch>\ModelTestingResults\` — only agent-side files.
 
 ## Cross-referencing procedure
 

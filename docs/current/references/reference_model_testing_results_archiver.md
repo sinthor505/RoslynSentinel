@@ -3,22 +3,20 @@
 **Status:** IMPLEMENTED. Archiver 72326aa (2026-09-02); test-result.txt capture d0ab31c (2026-09-07).
 
 ## 1. Archive every run regardless of launch method (72326aa)
-The `ModelTestingResults\113\...` archive the user pointed a fresh pattern-analysis agent at was
+The `<scratch>\ModelTestingResults\113\...` archive the user pointed a fresh pattern-analysis agent at was
 only ever populated by `roslynsentinel-modeleval.ps1`'s own post-run copy step
 (`Copy-NewRunDirectories`, diffing timestamp-named leaf dirs under the scratch build's
 `--artifacts-path` before/after each `dotnet test` call). A run launched directly via
 `dotnet test`/VS Code's test explorer never went through the script, so its transcript stayed
-stranded under `_scratchbuild_<suffix>\bin\...\model-eval\` and was invisible to the archive.
+stranded under `<scratch>\build\<suffix>\bin\...\model-eval\` and was invisible to the archive.
 
 **What was built**: `RoslynSentinel.Tests.ModelEval/ModelTestingResultsArchiver.cs` —
 `ArchiveRunDirectory(runDirectory)` mirrors the script's own logic: derives `<host-suffix>` from
 `LlmOptions.BaseUrl` (112/113 known aliases, else sanitize the URL — same rule as the script's
-`$knownHosts` fallback), walks up from `AppContext.BaseDirectory` to find `RoslynSentinel.slnx`
-(same pattern as `TestSolutionFixture.FindRepoRoot`, confirmed to still resolve correctly under a
-non-default `--artifacts-path` since `_scratchbuild_<suffix>` sits directly under the repo root),
+`$knownHosts` fallback), resolves its base folder from `ScratchRoot.ResultsRoot()` (`<scratch>\ModelTestingResults`, or the folder named by env `ROSLYNSENTINEL_RESULTS_ROOT` when set; the archiver no longer walks up from `AppContext.BaseDirectory`, because the testhost runs from `<scratch>\build\<suffix>\bin\...`, outside the repo, and the repo root comes from `RoslynSentinel.Common.RepoRootLocator`: env `ROSLYNSENTINEL_REPO_ROOT` first, then walk-up),
 finds the `model-eval\` marker in `runDirectory` and keeps everything after it (preserves
 SizeThreshold's extra `n<size>` nesting level automatically, no shape-specific logic needed), and
-recursively copies to `ModelTestingResults\<suffix>\<that-relative-path>\`. No-ops quietly (logs
+recursively copies to `<scratch>\ModelTestingResults\<suffix>\<that-relative-path>\`. No-ops quietly (logs
 via `TestContext.Out`, never throws) if the source directory doesn't exist or the destination
 already does — an archive failure must never mask or replace the test's own pass/fail result.
 
@@ -32,8 +30,8 @@ Wired into `TearDown` (after existing cleanup, guarded by `_runDirectory is not 
 
 Verified the algorithm (repo-root walk, suffix derivation, recursive copy, both flat and
 3-phase-nested layouts) via a standalone throwaway console app against a hand-built fake
-`_scratchbuild_113\bin\...\model-eval\...` tree — confirmed output paths exactly match the
-script's existing `ModelTestingResults\113\...` layout. Build to 0 errors, committed `72326aa`.
+`<scratch>\build\113\bin\...\model-eval\...` tree — confirmed output paths exactly match the
+script's existing `<scratch>\ModelTestingResults\113\...` layout. Build to 0 errors, committed `72326aa`.
 
 **How to apply**: from here on, every model-eval run is archived automatically regardless of
 launch method — the script's own copy step becomes redundant (harmless, since `ArchiveRunDirectory`
@@ -56,7 +54,7 @@ all already call `ArchiveRunDirectory(_runDirectory)` from their own `TearDown`.
 OrderPricingRefactorChain7`) against .112 (qwen/qwen3.5-9b) via
 `roslynsentinel-modeleval.ps1`, using `run_in_background: true` per the concurrent-sessions
 Start-Job lesson. Run failed for real, and
-`ModelTestingResults\112\Model_AppliesSevenChainedRefactors\20260907-221833-481\test-result.txt`
+`<scratch>\ModelTestingResults\112\Model_AppliesSevenChainedRefactors\20260907-221833-481\test-result.txt`
 came back with the exact assertion: `UnrelatedCodeEquivalenceAssert` caught the model corrupting
 `DescribeOrder`'s string interpolation while reformatting a method the task said not to touch —
 `$"Order {id}: {label}"` became `$"Order {{id}}: {{label}}"` (doubled braces turn a real

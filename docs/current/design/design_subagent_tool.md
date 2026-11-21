@@ -448,6 +448,6 @@ read as unreadable), both fixed. Closed in `docs/current/CLOSED.md`.
 
 Deviations from this design as built: the child's tool surface is selected with `--mode=Claude` plus
 `--exclude-tools=SubAgentTools,SubAgentEvalTools` (Claude is a mode, not a tool class); the run
-directory is a sibling `RoslynSentinel-TestRuns/SubAgent/<runId>` outside the repo; the child build
+directory is a `<scratch>\TestRuns\SubAgent\<runId>` outside the repo; the child build
 output lives beside the worktree so it never shows in `GetDirtyPaths`; worktree teardown is forced and
 also deletes the run's disposable branch; `SubAgentEvalResult` gained a `Notes` field.

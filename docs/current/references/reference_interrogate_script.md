@@ -5,7 +5,7 @@ hand-written Python per investigation.
 
 Mirrors `roslynsentinel-modeleval.ps1`'s front-door conventions: same `-HostAddress` known-alias
 table (112/113, or any URL used verbatim), same doc-comment style. Takes `-TranscriptPath`
-(a run's `transcript.json` or its containing dir — matches `ModelTestingResults\<host>\<TestName>\<timestamp>\`
+(a run's `transcript.json` or its containing dir — matches `<scratch>\ModelTestingResults\<host>\<TestName>\<timestamp>\`
 layout), `-Question` (the follow-up asked after replaying the conversation), `-Model`,
 `-Temperature`/`-TopP` (default 0.1/0.7 per project_lmstudio_sampling_params_for_code),
 `-TimeoutSec` (default 1800 — CPU-only inference needs a long timeout), and `-DryRun` (skips
@@ -29,6 +29,6 @@ to `<host>/v1/chat/completions`, and writes request/response JSON plus prints th
 
 **How to apply**: whenever a ModelEval batch produces a failure worth understanding, run this
 against the failing run's archive dir instead of hand-reconstructing the message history —
-verified live 2026-09-07 against `ModelTestingResults\113\Model_AppliesSevenChainedRefactors\20260907-114903-737`
+verified live 2026-09-07 against `<scratch>\ModelTestingResults\113\Model_AppliesSevenChainedRefactors\20260907-114903-737`
 via `-DryRun`, producing a byte-comparable reconstruction to the equivalent hand-written Python
 script (49,743 vs 39,039 chars — difference is JSON formatting only, not missing content).

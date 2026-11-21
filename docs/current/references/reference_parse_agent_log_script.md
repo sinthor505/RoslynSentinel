@@ -31,22 +31,22 @@ per turn."
 
 ```powershell
 # One run
-.\scripts\Parse-AgentLog.ps1 -LogPath .\ModelTestingResults\113\Model_AppliesSevenChainedRefactors\20260905-104034-728\agent.log
+.\scripts\Parse-AgentLog.ps1 -LogPath <scratch>\ModelTestingResults\113\Model_AppliesSevenChainedRefactors\20260905-104034-728\agent.log
 
 # Every run under a rung's results directory (recursive) — piped analysis
-.\scripts\Parse-AgentLog.ps1 -LogPath .\ModelTestingResults\113\Model_AppliesSevenChainedRefactors | `
+.\scripts\Parse-AgentLog.ps1 -LogPath <scratch>\ModelTestingResults\113\Model_AppliesSevenChainedRefactors | `
     ForEach-Object { $_.Turns.ToolCalls } | Where-Object ToolName -eq 'ApplyDiff' | `
     Select-Object -ExpandProperty Args | Select-Object -ExpandProperty reason
 
 # Cache a whole batch as JSON for repeated offline querying without re-parsing
-.\scripts\Parse-AgentLog.ps1 -LogPath .\ModelTestingResults\113 -OutDir .\ModelTestingResults\_parsed
+.\scripts\Parse-AgentLog.ps1 -LogPath <scratch>\ModelTestingResults\113 -OutDir <scratch>\ModelTestingResults\_parsed
 ```
 
 `-LogPath` accepts a single file or a directory (searched recursively for `agent.log`). `-AsJson`
 emits JSON to stdout instead of PowerShell objects. `-OutDir` writes one
 `<TestName>_<RunTimestamp>[_<Phase>].json` file per run.
 
-## Known edge cases it already handles (found parsing the full historical `ModelTestingResults\113`
+## Known edge cases it already handles (found parsing the full historical `<scratch>\ModelTestingResults\113`
 tree, 993 runs, before committing)
 
 - **Empty (0-byte) `agent.log`** from a crashed/killed run before the logger flushed its first
