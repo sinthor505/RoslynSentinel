@@ -1641,7 +1641,7 @@ public class WorkspaceReadNavigationImpl
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"No operation blob found for changeId '{changeId}'. Verify the changeId, or check that a solution is loaded.")
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"No operation blob found for changeId '{changeId}'. Verify the changeId, or check that a solution is loaded. Operation blobs older than {RuntimeStateRetention.OperationsMaxAge.TotalDays:0} days, and all but the newest {RuntimeStateRetention.OperationsMaxCount}, are deleted when a solution loads (the newest 24 hours are always kept).")
                 };
             }
 

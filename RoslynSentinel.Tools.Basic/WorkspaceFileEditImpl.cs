@@ -362,7 +362,8 @@ public class WorkspaceFileEditImpl
                         "exists for that id here. Check the id against the value the applying tool returned, and " +
                         "that this is the same server session and solution; a changeId from an earlier session or " +
                         "a different solution root will not resolve. If the applying tool reported the change as " +
-                        "'not reversible', there is no undo record to find and the change must be reverted manually.")
+                        "'not reversible', there is no undo record to find and the change must be reverted manually. " +
+                        $"Operation blobs older than {RuntimeStateRetention.OperationsMaxAge.TotalDays:0} days, and all but the newest {RuntimeStateRetention.OperationsMaxCount}, are deleted when a solution loads (the newest 24 hours are always kept).")
                 };
             }
 

@@ -612,6 +612,23 @@ public static class ServerStartupHelpers
         "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [Run={RunId} Step={StepId}] {Message:lj}{NewLine}{Exception}";
 
     /// <summary>
+    /// Deletes old log files beside <paramref name="logPath"/> so the file count and age limits hold.
+    /// Serilog's retainedFileCountLimit does not apply to RollingInterval.Infinite, and each start writes
+    /// its own timestamped file, so this sweep enforces the limit.
+    /// </summary>
+    private static void SweepOldLogs(string logPath, string logFileName)
+    {
+        try
+        {
+            RuntimeStateRetention.SweepLogs(Path.GetDirectoryName(logPath)!, Path.GetFileNameWithoutExtension(logFileName), logPath, RuntimeStateRetention.LogMaxFiles, RuntimeStateRetention.LogMaxAge);
+        }
+        catch (Exception)
+        {
+            // Logging is not up yet when this runs, so a failure is swallowed rather than reported.
+        }
+    }
+
+    /// <summary>
     /// Configures Serilog for stdio servers: file-only, Information level.
     /// Stdout must stay clean for the MCP stdio transport.
     /// </summary>
@@ -624,6 +641,7 @@ public static class ServerStartupHelpers
         string logFileName = "server.log", string? logDirectory = null, string? runId = null, string? stepId = null)
     {
         var logPath = Path.Combine(ResolveLogDirectory(logDirectory), TimestampedLogFileName(logFileName));
+        SweepOldLogs(logPath, logFileName);
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Information()
             .Enrich.FromLogContext()
@@ -647,6 +665,7 @@ public static class ServerStartupHelpers
         string logFileName = "http-host.log", string? logDirectory = null, string? runId = null, string? stepId = null)
     {
         var logPath = Path.Combine(ResolveLogDirectory(logDirectory), TimestampedLogFileName(logFileName));
+        SweepOldLogs(logPath, logFileName);
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Verbose()
             .Enrich.FromLogContext()
