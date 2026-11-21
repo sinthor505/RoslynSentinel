@@ -54,7 +54,7 @@ public record ResidualMention(FilePathWrapper FilePath, int LineNumber, string L
 /// constructor's type and pass its arguments for runtime resolution: they are neither rewritten nor skipped call sites (they compile and fail at runtime), so they are
 /// reported for a manual check. LineNumber is 1-based in the ORIGINAL text; Reason names the API.
 /// </summary>
-public record ChangeSignatureResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites, string? Error = null, List<RewrittenCallSite>? MigratedCallSites = null, string? WrapperSignature = null, string? ReplacementSignature = null, ChangeSignatureOldSignature? OldSignatureOutcome = null, List<SkippedCallSite>? ReflectiveConstructionSites = null) : IOperationResult
+public record ChangeSignatureResult(DocumentChangeSet Changes, List<SkippedCallSite> SkippedCallSites, string? Error = null, List<RewrittenCallSite>? MigratedCallSites = null, string? WrapperSignature = null, string? ReplacementSignature = null, ChangeSignatureOldSignature? OldSignatureOutcome = null, List<SkippedCallSite>? ReflectiveConstructionSites = null) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => Error is not null;
@@ -69,7 +69,7 @@ public record ChangeSignatureResult(Dictionary<FilePathWrapper, string> Changes,
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Message => Error;
 }
-public record RenameSymbolResult(string OldName, string NewName, Dictionary<FilePathWrapper, string> PendingChanges, string? Error = null, SymbolHandle? UpdatedHandle = null, List<ResidualMention>? ResidualMentions = null) : IOperationResult
+public record RenameSymbolResult(string OldName, string NewName, DocumentChangeSet PendingChanges, string? Error = null, SymbolHandle? UpdatedHandle = null, List<ResidualMention>? ResidualMentions = null) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => Error is not null;
@@ -226,7 +226,7 @@ public class BasicRefactoringEngine
         var keepRequested = oldSignature == ChangeSignatureOldSignature.keepAsDeprecatedWrapper;
         var autoRequested = oldSignature == ChangeSignatureOldSignature.auto;
         // Every early exit names its reason: an empty result with no Error reads to the caller as a successful no-op.
-        static ChangeSignatureResult Refuse(string error) => new(new Dictionary<FilePathWrapper, string>(), new List<SkippedCallSite>(), error);
+        static ChangeSignatureResult Refuse(string error) => new(new DocumentChangeSet(), new List<SkippedCallSite>(), error);
 
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -290,7 +290,7 @@ public class BasicRefactoringEngine
                     .ToList();
                 if (implementers.Count > 0)
                 {
-                    return new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), new List<SkippedCallSite>(),
+                    return new ChangeSignatureResult(new DocumentChangeSet(), new List<SkippedCallSite>(),
                         $"'{methodName}' is declared on interface '{declaredSymbol.ContainingType.ToDisplayString()}', implemented by: " +
                         $"{string.Join(", ", implementers)}. ChangeSignature refuses this outright - it cannot cascade across the " +
                         "interface/implementer boundary, and calling it again on the interface or on any implementer hits this same " +
@@ -309,7 +309,7 @@ public class BasicRefactoringEngine
                     .ToList();
                 if (implementedInterfaceMembers.Count > 0)
                 {
-                    return new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), new List<SkippedCallSite>(),
+                    return new ChangeSignatureResult(new DocumentChangeSet(), new List<SkippedCallSite>(),
                         $"'{methodName}' implements {string.Join(", ", implementedInterfaceMembers)}. ChangeSignature refuses this " +
                         "outright - it cannot cascade across the interface/implementer boundary, and calling it again on the interface " +
                         "or on any implementer hits this same refusal. Edit the interface's and every implementer's parameter list " +
@@ -710,7 +710,7 @@ public class BasicRefactoringEngine
 
             lines.Add("Fix or remove those call sites first, or split the change.");
             var errorMessage = string.Join("; ", lines);
-            return new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), skippedCallSites, errorMessage);
+            return new ChangeSignatureResult(new DocumentChangeSet(), skippedCallSites, errorMessage);
         }
 
         // The declaration side. A kept wrapper declares every new parameter REQUIRED (defaultValue only fills call sites and the wrapper body): an optional one
@@ -775,7 +775,7 @@ public class BasicRefactoringEngine
         }
 
         // Apply every planned edit per document in one ReplaceNodes pass, then format.
-        var result = new Dictionary<FilePathWrapper, string>();
+        var result = new DocumentChangeSet();
         // The same texts keyed by the documents' own paths (result is keyed by the caller-supplied path for the declaration file), for the trial solution.
         var trialChanges = new Dictionary<FilePathWrapper, string>();
         var wrapperAnnotation = new SyntaxAnnotation();
@@ -1677,7 +1677,7 @@ public class BasicRefactoringEngine
 
     public async Task<RenameSymbolResult> RenameSymbolAsync(SymbolHandle handle, ISymbol symbol, string newName, CancellationToken cancellationToken = default)
     {
-        static RenameSymbolResult Err(string msg, string n) => new("", n, new Dictionary<FilePathWrapper, string>(), msg);
+        static RenameSymbolResult Err(string msg, string n) => new("", n, new DocumentChangeSet(), msg);
         if (!_config.IsFeatureEnabled("Rename"))
         {
             return Err("Feature 'Rename' is disabled.", newName);
@@ -1704,7 +1704,7 @@ public class BasicRefactoringEngine
             RenameInStrings = false,
         };
         var updated = await Microsoft.CodeAnalysis.Rename.Renamer.RenameSymbolAsync(solution, symbol, renameOptions, newName, cancellationToken);
-        var pendingChanges = new Dictionary<FilePathWrapper, string>();
+        var pendingChanges = new DocumentChangeSet();
         foreach (var pc in updated.GetChanges(solution).GetProjectChanges())
         {
             foreach (var docId in pc.GetChangedDocuments())

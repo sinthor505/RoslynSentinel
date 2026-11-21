@@ -428,8 +428,8 @@ public class ResultStatusTests
     [Test]
     public void ChangeSignatureResult_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
     {
-        IOperationResult ok = new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), [], null);
-        IOperationResult bad = new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), [], "boom");
+        IOperationResult ok = new ChangeSignatureResult(new DocumentChangeSet(), [], null);
+        IOperationResult bad = new ChangeSignatureResult(new DocumentChangeSet(), [], "boom");
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
@@ -449,8 +449,8 @@ public class ResultStatusTests
     [Test]
     public void RenameSymbolResult_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
     {
-        IOperationResult ok = new RenameSymbolResult("a", "b", new Dictionary<FilePathWrapper, string>());
-        IOperationResult bad = new RenameSymbolResult("a", "b", new Dictionary<FilePathWrapper, string>(), "boom");
+        IOperationResult ok = new RenameSymbolResult("a", "b", new DocumentChangeSet());
+        IOperationResult bad = new RenameSymbolResult("a", "b", new DocumentChangeSet(), "boom");
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
