@@ -585,14 +585,14 @@ public class AsyncBatchEngine
                     if (ctResult.Outcome == EditOutcome.Modified)
                     {
                         var ctValidation = await _validationEngine.ValidateChangesAsync(
-                            new Dictionary<FilePathWrapper, string> { { candidate.FilePath, ctResult.UpdatedText } },
+                            new DocumentChangeSet { { candidate.FilePath, ctResult.UpdatedText } },
                             cancellationToken);
                         if (!ctValidation.IsError)
                         {
                             string? beforeSource = File.Exists(candidate.FilePath)
                                 ? await File.ReadAllTextAsync(candidate.FilePath, cancellationToken) : null;
                             var ctApply = await _workspaceManager.ApplyProposedChangesAsync(
-                                new Dictionary<FilePathWrapper, string> { { candidate.FilePath, ctResult.UpdatedText } }, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
+                                new DocumentChangeSet { { candidate.FilePath, ctResult.UpdatedText } }, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                             if (ctApply.IsError)
                             {
                                 _logger.LogWarning("CT-add write refused for '{AsyncMethod}' in {File}: {Summary}",
@@ -641,14 +641,14 @@ public class AsyncBatchEngine
                                 "RunBridgeBatch: rewriting bridge-call body of '{AsyncMethod}' in {File}",
                                 asyncMethodName, candidate.FilePath);
                             var bodyValidation = await _validationEngine.ValidateChangesAsync(
-                                new Dictionary<FilePathWrapper, string> { { candidate.FilePath, bodyRewrite.UpdatedText } },
+                                new DocumentChangeSet { { candidate.FilePath, bodyRewrite.UpdatedText } },
                                 cancellationToken);
                             if (!bodyValidation.IsError)
                             {
                                 string? beforeSource = File.Exists(candidate.FilePath)
                                     ? await File.ReadAllTextAsync(candidate.FilePath, cancellationToken) : null;
                                 var bodyApply = await _workspaceManager.ApplyProposedChangesAsync(
-                                    new Dictionary<FilePathWrapper, string> { { candidate.FilePath, bodyRewrite.UpdatedText } }, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
+                                    new DocumentChangeSet { { candidate.FilePath, bodyRewrite.UpdatedText } }, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                                 if (bodyApply.IsError)
                                 {
                                     _logger.LogWarning("Body-rewrite write refused for '{AsyncMethod}' in {File}: {Summary}",
@@ -862,7 +862,7 @@ public class AsyncBatchEngine
             // Step C: validate in-memory -> no MSBuild required.
             Debug.WriteLine($"Validating in-memory for {candidate.MethodName} in {candidate.FilePath}...");
             var validation = await _validationEngine.ValidateChangesAsync(
-                new Dictionary<FilePathWrapper, string> { { candidate.FilePath, sourceToValidate } },
+                new DocumentChangeSet { { candidate.FilePath, sourceToValidate } },
                 cancellationToken);
 
             if (validation.IsError)
@@ -921,7 +921,7 @@ public class AsyncBatchEngine
                 : null;
 
             var bridgeApply = await _workspaceManager.ApplyProposedChangesAsync(
-                new Dictionary<FilePathWrapper, string> { { candidate.FilePath, sourceToValidate } }, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
+                new DocumentChangeSet { { candidate.FilePath, sourceToValidate } }, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
 
             // The chokepoint can refuse the write (EOL-style change, open ledger entry, I/O failure) without
             // throwing; recording such a bridge as applied would send the uplift and CT phases after a method
@@ -1271,7 +1271,7 @@ public class AsyncBatchEngine
                 }
 
                 var validation = await _validationEngine.ValidateChangesAsync(
-                    new Dictionary<FilePathWrapper, string> { { callerFilePath, transformed! } },
+                    new DocumentChangeSet { { callerFilePath, transformed! } },
                     cancellationToken);
 
                 if (validation.IsError)
@@ -1300,7 +1300,7 @@ public class AsyncBatchEngine
                     ? await File.ReadAllTextAsync(callerFilePath, cancellationToken) : null;
 
                 var upliftApply = await _workspaceManager.ApplyProposedChangesAsync(
-                    new Dictionary<FilePathWrapper, string> { { callerFilePath, transformed! } },
+                    new DocumentChangeSet { { callerFilePath, transformed! } },
                     cancellationToken: cancellationToken, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
 
                 if (upliftApply.IsError)
@@ -2048,7 +2048,7 @@ public class AsyncBatchEngine
 
             // Validate
             var validation = await _validationEngine.ValidateChangesAsync(
-                new Dictionary<FilePathWrapper, string> { { target.FilePath, updatedSource } },
+                new DocumentChangeSet { { target.FilePath, updatedSource } },
                 cancellationToken: cancellationToken);
 
             if (validation.IsError)
@@ -2110,7 +2110,7 @@ public class AsyncBatchEngine
                 : null;
 
             var ctApply = await _workspaceManager.ApplyProposedChangesAsync(
-                new Dictionary<FilePathWrapper, string> { { target.FilePath, updatedSource } },
+                new DocumentChangeSet { { target.FilePath, updatedSource } },
                 cancellationToken: cancellationToken, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
 
             if (ctApply.IsError)

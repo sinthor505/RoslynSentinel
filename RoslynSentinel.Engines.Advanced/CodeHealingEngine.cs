@@ -145,7 +145,7 @@ public class CodeHealingEngine
     public async Task<Dictionary<FilePathWrapper, string>> ModernizeExceptionsAsync(List<ExceptionTarget> targets, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var changes = new Dictionary<FilePathWrapper, string>();
+        var changes = new DocumentChangeSet();
 
         foreach (var target in targets)
         {

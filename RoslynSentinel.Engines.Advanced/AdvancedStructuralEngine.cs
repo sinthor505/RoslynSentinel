@@ -113,7 +113,7 @@ public class StructuralRefactoringEngine
     public async Task<Dictionary<FilePathWrapper, string>> ExtractSuperclassAsync(FilePathWrapper[] filePaths, string[] classNames, string newBaseClassName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var changes = new Dictionary<FilePathWrapper, string>();
+        var changes = new DocumentChangeSet();
         var firstFile = filePaths[0];
         var document = solution.GetDocumentIdsWithFilePath(firstFile).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
@@ -195,7 +195,7 @@ public class StructuralRefactoringEngine
         var semanticModel = await sourceDoc.GetSemanticModelAsync(cancellationToken);
         var classSymbol = semanticModel?.GetDeclaredSymbol(sourceClass, cancellationToken) as INamedTypeSymbol;
         var membersToInline = sourceClass.Members;
-        var result = new Dictionary<FilePathWrapper, string>();
+        var result = new DocumentChangeSet();
         string targetClassName;
         if (sameFile)
         {
@@ -987,7 +987,7 @@ public class StructuralRefactoringEngine
             // left byte-exact, only the synthesized namespace and class structure is formatted.
             var formattedCode = await RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync(document, newCompilationUnit, n => n is not (UsingDirectiveSyntax or MemberDeclarationSyntax { Parent: ClassDeclarationSyntax }), await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
 
-            return new Dictionary<FilePathWrapper, string>
+            return new DocumentChangeSet
             {
                 {
                     Path.Combine(Path.GetDirectoryName(filePath)!, $"{className}.Partial.cs"),
@@ -996,7 +996,7 @@ public class StructuralRefactoringEngine
             };
         }
 
-        return new Dictionary<FilePathWrapper, string>();
+        return new DocumentChangeSet();
     }
 
     /// <summary>
@@ -1020,7 +1020,7 @@ public class StructuralRefactoringEngine
         var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", className);
         if (root == null || classNode == null)
         {
-            return new Dictionary<FilePathWrapper, string>();
+            return new DocumentChangeSet();
         }
 
         // Source file: the moved members leave (their comments travelled with them into the new file) and the class becomes partial.
@@ -1037,7 +1037,7 @@ public class StructuralRefactoringEngine
         var partialPreImage = document!.WithText(Microsoft.CodeAnalysis.Text.SourceText.From(partialFiles[partialPath], (await document.GetTextAsync(cancellationToken)).Encoding));
         var alignedPartialText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(partialPreImage, alignedPartialRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
 
-        return new Dictionary<FilePathWrapper, string>
+        return new DocumentChangeSet
         {
             { partialPath, alignedPartialText },
             { filePath, rewrittenSource }
@@ -2254,7 +2254,7 @@ public class StructuralRefactoringEngine
             updatedRoots[document.Id] = RemoveMemberDeclaration(definingRoot, methodToRemove);
         }
 
-        var result = new Dictionary<FilePathWrapper, string>();
+        var result = new DocumentChangeSet();
         foreach (var (docId, updatedRoot) in updatedRoots)
         {
             var doc = solution.GetDocument(docId)!;
@@ -2307,7 +2307,7 @@ public class StructuralRefactoringEngine
         // formatted.
         var newMethodNode = methodNode.WithReturnType(SyntaxFactory.ParseTypeName(newClassName).WithTriviaFrom(methodNode.ReturnType).WithAdditionalAnnotations(Formatter.Annotation));
         var updatedRoot = root.ReplaceNode(methodNode, newMethodNode);
-        return new Dictionary<FilePathWrapper, string>
+        return new DocumentChangeSet
         {
             {
                 filePath,
@@ -2339,7 +2339,7 @@ public class StructuralRefactoringEngine
         var newPropNode = propNode.WithType(SyntaxFactory.ParseTypeName(newType).WithTrailingTrivia(SyntaxFactory.Space));
         var newRoot = root!.ReplaceNode(propNode, newPropNode);
         var updatedSolution = solution.WithDocumentSyntaxRoot(document.Id, newRoot);
-        var changes = new Dictionary<FilePathWrapper, string>();
+        var changes = new DocumentChangeSet();
         foreach (var docId in updatedSolution.GetChanges(solution).GetProjectChanges().SelectMany(pc => pc.GetChangedDocuments()))
         {
             var doc = updatedSolution.GetDocument(docId)!;
@@ -2452,7 +2452,7 @@ public class StructuralRefactoringEngine
             classRoot = classRoot.AddMembers(newClass);
         }
 
-        return new Dictionary<FilePathWrapper, string>
+        return new DocumentChangeSet
         {
             {
                 filePath,
