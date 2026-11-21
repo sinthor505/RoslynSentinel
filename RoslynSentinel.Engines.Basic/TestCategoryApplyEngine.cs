@@ -114,7 +114,7 @@ public sealed class TestCategoryApplyEngine
             }
         }
 
-        var changes = new Dictionary<FilePathWrapper, string>();
+        var changes = new DocumentChangeSet();
         var skipped = new List<TestCategoryEditSkip>();
         var classAdded = 0;
         var methodAdded = 0;

@@ -625,7 +625,7 @@ public class MsToolAugmentEngine
         if (writeToFile)
         {
             var apply = await _workspaceManager.ApplyProposedChangesAsync(
-                new Dictionary<FilePathWrapper, string> { [filePath] = updatedContent },
+                new DocumentChangeSet { [filePath] = updatedContent },
                 staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet, cancellationToken: cancellationToken);
             if (apply.IsError)
             {
@@ -774,7 +774,7 @@ public class MsToolAugmentEngine
                 // Solution is loaded -> route through the shared chokepoint so this write gets
                 // drift detection, pre-image capture, and workspace resync like every other tool.
                 var result = await _workspaceManager.ApplyProposedChangesAsync(
-                    new Dictionary<FilePathWrapper, string> { [filePath] = formatted },
+                    new DocumentChangeSet { [filePath] = formatted },
                     staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet, cancellationToken: cancellationToken);
                 if (result.IsError)
                 {

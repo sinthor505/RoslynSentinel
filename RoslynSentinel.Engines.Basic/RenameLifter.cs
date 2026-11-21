@@ -168,7 +168,7 @@ public static class RenameLifter
                 }
             }
 
-            var merged = new Dictionary<FilePathWrapper, string>(changes);
+            var merged = new DocumentChangeSet(changes);
             var renamedFiles = new List<string>();
             var callSites = 0;
             var editedFileUses = 0;

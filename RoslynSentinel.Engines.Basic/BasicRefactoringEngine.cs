@@ -777,7 +777,7 @@ public class BasicRefactoringEngine
         // Apply every planned edit per document in one ReplaceNodes pass, then format.
         var result = new DocumentChangeSet();
         // The same texts keyed by the documents' own paths (result is keyed by the caller-supplied path for the declaration file), for the trial solution.
-        var trialChanges = new Dictionary<FilePathWrapper, string>();
+        var trialChanges = new DocumentChangeSet();
         var wrapperAnnotation = new SyntaxAnnotation();
         var memberAnnotation = new SyntaxAnnotation();
         foreach (var (path, plans) in callSitePlansByPath)
@@ -1240,7 +1240,7 @@ public class BasicRefactoringEngine
     {
         if (!_config.IsFeatureEnabled("MoveTypeToFile"))
         {
-            return new Dictionary<FilePathWrapper, string>();
+            return new DocumentChangeSet();
         }
 
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
@@ -1251,7 +1251,7 @@ public class BasicRefactoringEngine
         var typeNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().Where(t => t.Identifier.Text == typeName).ToList() ?? new List<BaseTypeDeclarationSyntax>(), "Type", typeName);
         if (typeNode == null)
         {
-            return new Dictionary<FilePathWrapper, string>();
+            return new DocumentChangeSet();
         }
 
         // Guard: if the type's name already matches the source file name, it's already in its own file -> nothing to move
@@ -1262,12 +1262,12 @@ public class BasicRefactoringEngine
                 throw new ToolInvalidArgumentException($"'{typeName}' is already the only type declared in its own file '{Path.GetFileName(document.FilePath ?? filePath)}', so there is nothing to split out. MoveType does not move files, so targetFolder '{targetFolder}' has no effect here. Options: omit targetFolder (the call then reports no changes), or create the file in the new folder and delete the old one by hand.");
             }
 
-            return new Dictionary<FilePathWrapper, string>();
+            return new DocumentChangeSet();
         }
 
         // A nested type becomes a top-level type: qualified Outer.Nested references solution-wide (and in this file) are rewritten first,
         // so the declaration is taken from the rewritten root.
-        var referenceEdits = new Dictionary<FilePathWrapper, string>();
+        var referenceEdits = new DocumentChangeSet();
         if (typeNode.Parent is TypeDeclarationSyntax)
         {
             (root, typeNode) = await LiftNestedTypeReferencesAsync(solution, document, root!, typeNode, referenceEdits, cancellationToken);
@@ -1305,7 +1305,7 @@ public class BasicRefactoringEngine
         var updatedOrigDoc = document.WithSyntaxRoot(updatedOrig);
         var formattedOrigDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(updatedOrigDoc, eol, sourceText, cancellationToken);
         var updatedOrigContent = (await formattedOrigDoc.GetTextAsync(cancellationToken)).ToString();
-        var moveResult = new Dictionary<FilePathWrapper, string>
+        var moveResult = new DocumentChangeSet
         {
             {
                 filePath,
@@ -1395,13 +1395,13 @@ public class BasicRefactoringEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         if (root == null)
         {
-            return new Dictionary<FilePathWrapper, string>();
+            return new DocumentChangeSet();
         }
 
         var allTypes = root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().Where(t => t.Parent is CompilationUnitSyntax || t.Parent is BaseNamespaceDeclarationSyntax).ToList();
         if (allTypes.Count <= 1)
         {
-            return new Dictionary<FilePathWrapper, string>();
+            return new DocumentChangeSet();
         }
 
         var fileBaseName = Path.GetFileNameWithoutExtension(document.FilePath ?? document.Name);
@@ -1409,10 +1409,10 @@ public class BasicRefactoringEngine
         var typesToMove = allTypes.Where(t => t != primaryType).ToList();
         if (typesToMove.Count == 0)
         {
-            return new Dictionary<FilePathWrapper, string>();
+            return new DocumentChangeSet();
         }
 
-        var changes = new Dictionary<FilePathWrapper, string>();
+        var changes = new DocumentChangeSet();
         var sourceText = await document.GetTextAsync(cancellationToken);
         var eol = await _workspaceManager.ResolveEolAsync(document, cancellationToken);
         var sourceDirectory = Path.GetDirectoryName(document.FilePath) ?? "";
@@ -1523,7 +1523,7 @@ public class BasicRefactoringEngine
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var project = ProjectLookup.FindProject(solution, projectName, ignoreCase: true) ?? throw new ToolNotFoundException(ProjectNotFoundDetail.Build(projectName, solution.Projects.Select(p => p.Name).ToList()), MissingTargetKinds.Project, missingTargetName: projectName);
-        var allChanges = new Dictionary<FilePathWrapper, string>();
+        var allChanges = new DocumentChangeSet();
         foreach (var document in project.Documents.Where(d => d.FilePath?.EndsWith(".cs") == true))
         {
             foreach (var kvp in await MoveAllTypesToFilesForDocumentAsync(document, cancellationToken))
@@ -1544,7 +1544,7 @@ public class BasicRefactoringEngine
 
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var allChanges = new Dictionary<FilePathWrapper, string>();
+        var allChanges = new DocumentChangeSet();
         foreach (var document in solution.Projects.SelectMany(p => p.Documents).Where(d => d.FilePath?.EndsWith(".cs") == true))
         {
             foreach (var kvp in await MoveAllTypesToFilesForDocumentAsync(document, cancellationToken))
@@ -1662,7 +1662,7 @@ public class BasicRefactoringEngine
         var origDoc = document.WithSyntaxRoot(updatedOrig);
         var formattedOrigDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(origDoc, eol, await document.GetTextAsync(cancellationToken), cancellationToken);
         var origContent = (await formattedOrigDoc.GetTextAsync(cancellationToken)).ToString();
-        return new Dictionary<FilePathWrapper, string>
+        return new DocumentChangeSet
         {
             {
                 filePath,
