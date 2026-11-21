@@ -12,3 +12,4 @@ close it with a reason in [CLOSED.md](./CLOSED.md), then delete the line here. C
 ## Untriaged
 
 - 2026-11-20 17:32 Duplicate ModelTestingResultsArchiver in Tests.ModelEval and Tests.ErrorVariants should be one shared helper - RoslynSentinel.Tests.ModelEval\ModelTestingResultsArchiver.cs:5 and RoslynSentinel.Tests.ErrorVariants\ModelTestingResultsArchiver.cs - // TODO fold the duplicate ModelTestingResultsArchiver
+- 2026-11-20 17:39 ResumeScenariosTests.Capture_LoadsWithElevenTurnsSchemasAndCommit fails on master before and after the scratch-root plan (expects RenameSymbol at Turns[3], CreateFile at Turns[10]; capture was re-taken at 287d94d7 with RenameSymbol at turn 5); Tests.ModelEval is excluded from default runs so the 0-failure baseline never saw it - worktree run 71b4e8cc 'Expected RenameSymbol but was Search' - no code spot (stale assertions, owner to confirm which capture turns are intended)
