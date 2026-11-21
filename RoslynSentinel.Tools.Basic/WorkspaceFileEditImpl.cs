@@ -394,6 +394,16 @@ public class WorkspaceFileEditImpl
                 };
             }
 
+            var diskDrift = UndoDiskDriftConflict(revertable, solutionRoot, changeId);
+            if (diskDrift is not null)
+            {
+                return new SentinelCallToolResult<object>()
+                {
+                    IsError = true,
+                    ErrorData = new ResultError(ToolErrorCode.ConcurrentEditRefused, diskDrift)
+                };
+            }
+
             var failed = new List<string>();
             var revertChanges = new Dictionary<FilePathWrapper, string>();
             foreach (var item in revertable)
@@ -562,6 +572,82 @@ public class WorkspaceFileEditImpl
 
             return null;
         }
+    }
+
+    /// <summary>
+    /// Undo guard on the file text itself. Refuses the whole undo when, for a revertable item whose blob recorded the text the
+    /// operation wrote (AfterSource), the file on disk now differs from that text (EOL style and a leading BOM are ignored) or is
+    /// gone. This catches every later change whatever its source: another agent, the same agent, a raw disk edit, or a change
+    /// made before a server restart. An item with no AfterSource (an older blob, or a tool that builds its own items) is not
+    /// checked. Items outside the solution root are not checked because the undo skips them. The writer is named when the edit
+    /// attribution ledger or the operation blobs know one.
+    /// </summary>
+    private string? UndoDiskDriftConflict(IReadOnlyList<OperationItemRecord> items, string? solutionRoot, string changeId)
+    {
+        try
+        {
+            var drifted = new List<(string Path, bool Missing)>();
+            foreach (var item in items)
+            {
+                if (item.AfterSource is null
+                    || (solutionRoot != null && !item.FilePath.StartsWith(solutionRoot, StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                var absolute = new FilePathWrapper(item.FilePath).Absolute;
+                if (!File.Exists(absolute))
+                {
+                    drifted.Add((item.FilePath, true));
+                    continue;
+                }
+
+                if (!string.Equals(
+                        NormalizeForUndoCompare(File.ReadAllText(absolute)),
+                        NormalizeForUndoCompare(item.AfterSource),
+                        StringComparison.Ordinal))
+                {
+                    drifted.Add((item.FilePath, false));
+                }
+            }
+
+            if (drifted.Count == 0)
+            {
+                return null;
+            }
+
+            var driftedPaths = drifted.Select(d => d.Path).ToList();
+            var ledger = (_workspaceManager as IEditAttributionLedgerProvider)?.EditAttributions;
+            var writers = EditAttributionWording.LastWriters(ledger, solutionRoot, driftedPaths, DateTime.UtcNow);
+            var writerPart = writers.Count == 0
+                ? string.Empty
+                : " Last write the server recorded: "
+                  + string.Join("; ", writers.Select(w => $"{w.Key} by {EditAttributionWording.Describe(w.Value, DateTime.UtcNow, ToolCallContext.Current?.SessionId)}"))
+                  + ".";
+            var firstPath = driftedPaths[0];
+            return $"Undo refused, nothing was reverted: the text on disk now differs from what change '{changeId}' wrote for {drifted.Count} file(s): {string.Join("; ", drifted.Select(d => d.Missing ? $"{d.Path} (missing on disk)" : d.Path))}. "
+                + "Reverting would overwrite whatever was written there since." + writerPart
+                + " Options: " + ToolCallHint.Call("ReadFile", ("filePath", firstPath))
+                + " to see the current content and edit it back by hand, or "
+                + ToolCallHint.Call("GetOperationDetail", ("changeId", changeId))
+                + " for the operation's recorded before text.";
+        }
+        catch (Exception ex)
+        {
+            if (_logger.IsEnabled(LogLevel.Warning))
+            {
+                _logger.LogWarning(ex, "Undo disk drift check failed; the undo proceeds.");
+            }
+
+            return null;
+        }
+    }
+
+    /// <summary>EOL-insensitive, BOM-insensitive form of a file text, for comparing disk text with a blob's AfterSource.</summary>
+    private static string NormalizeForUndoCompare(string text)
+    {
+        var withoutBom = text.Length > 0 && text[0] == '﻿' ? text.Substring(1) : text;
+        return EolUtilities.NormalizeEol(withoutBom, "\n");
     }
 
     /// <summary>FileNotFound for ReadFile. <paramref name="isCallable"/> says whether a tool name can be called on this

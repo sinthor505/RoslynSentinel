@@ -271,8 +271,8 @@ public class UndoLastApplyConcurrentEditTests
     }
 
     [Test]
-    [Description("Undo without an agent id is not refused by the concurrent-edit guard")]
-    public async Task Undo_WithoutAgentId_IsNotRefusedByTheGuard()
+    [Description("Undo without an agent id is not refused by the agent-ledger guard; the disk-text guard still refuses because another write changed the file after the apply")]
+    public async Task Undo_WithoutAgentId_IsNotRefusedByTheLedgerGuard_ButTheDiskTextGuardRefuses()
     {
         await SeedAsync();
         var consumersFullPath = Path.Combine(_fixture!.SolutionDirectory, ConsumersPath);
@@ -301,6 +301,137 @@ public class UndoLastApplyConcurrentEditTests
             WriteToolAdviceHelper.WithAllToolsExposed());
         var undo = await editImpl.UndoLastApply(new ToolCallReason("testing undo without agent id"), changeId);
 
-        Assert.That(undo.ErrorData?.ErrorCode, Is.Not.EqualTo(ToolErrorCode.ConcurrentEditRefused));
+        // The ledger guard ("was changed after agent") needs an agent id and stays silent; the identity-free disk-text guard refuses.
+        Assert.That(undo.IsError, Is.True);
+        Assert.That(undo.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.ConcurrentEditRefused));
+        Assert.That(undo.ErrorData.Message, Does.Not.Contain("was changed after agent"));
+        Assert.That(undo.ErrorData.Message, Does.Contain("differs from what change"));
+        Assert.That(ReadSeeded(ConsumersPath), Is.EqualTo(agentBText));
+    }
+
+    private WorkspaceFileEditImpl NewEditImpl() => new(
+        _workspaceManager,
+        Battery.Basic.TestTools.WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
+        NullLogger.Instance,
+        _validationEngine,
+        Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+        WriteToolAdviceHelper.WithAllToolsExposed());
+
+    private async Task<string> ApplyAsAgentAAsync()
+    {
+        ToolCallContext.Set(new ToolCallContext("agent-a", "implementer", "SemanticFindReplace", "apply replaceConstruction", 0));
+        var data = Data(await RunAsync(SemanticReplaceMode.apply, WidgetType, CreateFactory));
+        return data.GetProperty("changeId").GetString()!;
+    }
+
+    [Test]
+    [Description("Undo refuses when the same agent changed the file through the chokepoint after the apply, names the last recorded write, and writes nothing")]
+    public async Task Undo_AfterSameAgentLaterChokepointEdit_IsRefused_AndWritesNothing()
+    {
+        await SeedAsync();
+        var consumersFullPath = Path.Combine(_fixture!.SolutionDirectory, ConsumersPath);
+        var changeId = await ApplyAsAgentAAsync();
+
+        var laterText = ReadSeeded(ConsumersPath) + "// later edit by the same agent\r\n";
+        var startSeq = ((IEditAttributionLedgerProvider)_workspaceManager).EditAttributions.CurrentSeq;
+        ToolCallContext.Set(new ToolCallContext("agent-a", "implementer", "ReplaceSnippet", "later edit same agent", startSeq));
+        var later = await ((PersistentWorkspaceManager)_workspaceManager).ApplyProposedChangesAsync(
+            new()
+            {
+                [consumersFullPath] = laterText
+            }, retryCount: 0, validateChanges: false);
+        Assert.That(later.IsError, Is.False, later.Summary);
+        var diskAfterLaterEdit = ReadSeeded(ConsumersPath);
+
+        var undo = await NewEditImpl().UndoLastApply(new ToolCallReason("testing undo refusal after a later edit by the same agent"), changeId);
+
+        Assert.That(undo.IsError, Is.True);
+        Assert.That(undo.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.ConcurrentEditRefused));
+        Assert.That(undo.ErrorData.Message, Does.Contain("differs from what change").And.Contain("Consumers.cs"));
+        Assert.That(undo.ErrorData.Message, Does.Contain("Last write the server recorded").And.Contain("agent-a"));
+        Assert.That(ReadSeeded(ConsumersPath), Is.EqualTo(diskAfterLaterEdit));
+    }
+
+    [Test]
+    [Description("Undo refuses when the file was edited on disk outside the server after the apply, and leaves the disk text untouched")]
+    public async Task Undo_AfterRawDiskEdit_IsRefused_AndDiskIsUntouched()
+    {
+        await SeedAsync();
+        var consumersFullPath = Path.Combine(_fixture!.SolutionDirectory, ConsumersPath);
+        var changeId = await ApplyAsAgentAAsync();
+
+        var rawText = ReadSeeded(ConsumersPath) + "// raw disk edit\r\n";
+        File.WriteAllText(consumersFullPath, rawText);
+
+        var undo = await NewEditImpl().UndoLastApply(new ToolCallReason("testing undo refusal after a raw disk edit"), changeId);
+
+        Assert.That(undo.IsError, Is.True);
+        Assert.That(undo.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.ConcurrentEditRefused));
+        Assert.That(undo.ErrorData.Message, Does.Contain("differs from what change").And.Contain("GetOperationDetail"));
+        Assert.That(ReadSeeded(ConsumersPath), Is.EqualTo(rawText));
+    }
+
+    [Test]
+    [Description("A blob item with no AfterSource (an older blob) is not checked against the disk text and undoes as before")]
+    public async Task Undo_ItemWithoutAfterSource_IsNotCheckedAgainstDisk_AndReverts()
+    {
+        await SeedAsync();
+        var consumersFullPath = Path.Combine(_fixture!.SolutionDirectory, ConsumersPath);
+        var changeId = await ApplyAsAgentAAsync();
+
+        // Make the blob look like one written before AfterSource existed: drop the property from every item.
+        var blobPath = OperationBlobWriter.FindBlobPath(changeId, _workspaceManager.GetSolutionRoot())!;
+        var blob = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(blobPath))!;
+        var strippedAny = false;
+        foreach (var item in blob["items"]!.AsArray())
+        {
+            var obj = item!.AsObject();
+            foreach (var name in obj.Select(p => p.Key).Where(k => string.Equals(k, "AfterSource", StringComparison.OrdinalIgnoreCase)).ToList())
+            {
+                obj.Remove(name);
+                strippedAny = true;
+            }
+        }
+
+        Assert.That(strippedAny, Is.True, "the apply is expected to have recorded AfterSource (slices 1-2); nothing to strip means the premise changed");
+        File.WriteAllText(blobPath, blob.ToJsonString());
+
+        // A later chokepoint write by no identified agent, so only the disk-text guard could object.
+        ToolCallContext.Set(null);
+        var laterText = ReadSeeded(ConsumersPath) + "// later edit\r\n";
+        var later = await ((PersistentWorkspaceManager)_workspaceManager).ApplyProposedChangesAsync(
+            new()
+            {
+                [consumersFullPath] = laterText
+            }, retryCount: 0, validateChanges: false);
+        Assert.That(later.IsError, Is.False, later.Summary);
+        ((PersistentWorkspaceManager)_workspaceManager).ClearExternalFileChanges();
+
+        var undo = await NewEditImpl().UndoLastApply(new ToolCallReason("testing undo of a blob item without AfterSource"), changeId);
+
+        Assert.That(undo.IsError, Is.False, undo.ErrorData?.Message);
+        Assert.That(ReadSeeded(ConsumersPath), Is.EqualTo(ConsumersSource));
+    }
+
+    [Test]
+    [Description("A line-ending-only difference between the disk text and the operation's recorded AfterSource does not refuse the undo")]
+    public async Task Undo_DiskTextDiffersOnlyInLineEndings_IsNotRefused()
+    {
+        await SeedAsync();
+        var consumersFullPath = Path.Combine(_fixture!.SolutionDirectory, ConsumersPath);
+        var changeId = await ApplyAsAgentAAsync();
+
+        var written = ReadSeeded(ConsumersPath);
+        var flipped = written.Contains("\r\n")
+            ? written.Replace("\r\n", "\n")
+            : written.Replace("\n", "\r\n");
+        Assert.That(flipped, Is.Not.EqualTo(written), "the rewrite must change the line endings, otherwise the test proves nothing");
+        File.WriteAllText(consumersFullPath, flipped);
+        ((PersistentWorkspaceManager)_workspaceManager).ClearExternalFileChanges();
+
+        var undo = await NewEditImpl().UndoLastApply(new ToolCallReason("testing undo after an EOL-only rewrite"), changeId);
+
+        Assert.That(undo.IsError, Is.False, undo.ErrorData?.Message);
+        Assert.That(ReadSeeded(ConsumersPath), Is.EqualTo(ConsumersSource));
     }
 }
