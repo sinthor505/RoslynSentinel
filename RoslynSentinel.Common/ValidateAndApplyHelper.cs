@@ -225,7 +225,8 @@ public static class ValidateAndApplyHelper
 
         recordEffects?.Invoke();
         var applyResult = await workspaceManager.ApplyProposedChangesAsync(
-            new Dictionary<FilePathWrapper, string>(changes), retryCount: 3, validateChanges: false, rollbackOnPartialFailure: true, // TODO widen ApplyProposedChangesAsync to IReadOnlyDictionary and drop this copy
+            // The chokepoint keeps its Dictionary parameter by design (plan_document_changeset_type, Decision 10), so copy the read-only input.
+            new DocumentChangeSet(changes), retryCount: 3, validateChanges: false, rollbackOnPartialFailure: true,
             progress: progress, cancellationToken: cancellationToken, deletePaths: deletePaths,
             operationLabel: operationName,
             staleReadPolicy: staleReadPolicy);

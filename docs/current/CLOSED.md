@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## plan_document_changeset_type Step 3 chokepoint widening - won't do (2026-11-21)
+
+Widening `IWorkspaceMutator.ApplyProposedChangesAsync` to `IReadOnlyDictionary` is not zero-caller-edit (176 errors from target-typed `new() { [k] = v }` and `[]` arguments). Owner ruling 2026-11-21: keep the `Dictionary` parameter; `DocumentChangeSet` already passes to it.
+
+Evidence: plan Decision 10 (37d98c99); `ValidateAndApplyHelper.ValidateAndApplyAsync` copies its read-only input with `new DocumentChangeSet(changes)` and the TODO is gone
+
 ## SymbolNavigationEngine convenience constructors assume every tool is callable - resolved (2026-11-21)
 
 `SymbolNavigationEngine` convenience constructors assume every tool is callable (2026-11-20) - hints are surface-aware only on the DI path; callers: AdvancedRefactoringEngine (3), DiscoveryEngine, AdvancedRefactoringTools, GenerationTools, CoreRefactoringTools; owner ruling 2026-11-21: `[Obsolete("Use X")]` the convenience constructors and migrate the callers in slices, remove last; Small

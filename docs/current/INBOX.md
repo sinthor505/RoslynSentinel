@@ -11,5 +11,4 @@ close it with a reason in [CLOSED.md](./CLOSED.md), then delete the line here. C
 
 ## Untriaged
 
-- 2026-11-21 23:40 plan_document_changeset_type Step 3 deferred: widening IWorkspaceMutator.ApplyProposedChangesAsync to IReadOnlyDictionary is NOT zero-caller-edit - ReplaceSnippet validate of the batch gave 176 new errors (CS0144 x84 + CS0200 x90 from target-typed `new() { [k] = v }` at ~14 test files, CS9174 at RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs:154 `changes: []`) - code TODO: RoslynSentinel.Common/ValidateAndApplyHelper.cs:228 (copy kept until the chokepoint is widened)
 - 2026-11-21 23:58 plan_document_changeset_type Step 6d-3 deferred: AppliedChangeSummary.ChangedContent cannot be retyped alone (positional record, CS8866) and retyping it with the From(...) changedContent parameters breaks 63 CS1503 callers in 9 files / 5 projects (Tools.Basic RefactoringStructuralImpl 11, RefactoringExtractionDocsImpl 7, RefactoringSignatureImpl 6, CoreRefactoringTools 2; Tools.Advanced AdvancedRefactoringTools 20; Tests.Basic AppliedChangeSummary*Tests ~12, ResultStatusTests:1043) - code TODO: RoslynSentinel.Common/AppliedChangeSummary.cs:23
