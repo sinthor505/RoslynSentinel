@@ -8,6 +8,24 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Not-found leftovers, slices 3-4 - resolved (2026-11-20)
+
+Not-found leftovers, slices 3-4 (2026-11-14, recounted 2026-11-20; Engines.Advanced slices 1-2 done 2026-11-20 in 041195df, a83f9978, fd6975ae, a179a1f5) - slice 3 (owner ruling 2026-11-20: also the Engines.Basic kind-less `ToolNotFoundException` throws: SyntaxUpgradeEngine x5 (:44/:123/:377/:601/:714), ProjectStructureEngine ~1810, DiscoveryEngine ~570, any others; the ratchet ban is solution-wide): `CodeTransformTools` GeneratorFailure (:785) and `GitImpl.ToResultStatus` (:92) NotFound mappings, a ratchet banning kind-less `new ToolNotFoundException(`, `MinimumKindSites` (`ErrorPolicyKindRatchetTests.cs:19`, 30) raised to the measured count; done: 0 `TODO not-found` markers and ratchets green; Small x3
+
+Evidence: 4bbc882a, 134b1303, 121e33c1, 6f1cdc27, 53f519d7; ratchet ToolNotFoundException_InProductionCode_AlwaysCarriesAMissingTargetKind, MinimumKindSites 196; Git PathNotFound/TargetNotFound classifier mapping and generator-engine candidates left as two INBOX lines
+
+## Git(commit) hook rejection and commit-route audit labels - resolved (2026-11-20)
+
+Git(commit) hook rejection and commit-route audit labels (2026-11-14) - (a) `GitImpl.CommitAsync` (`Tools.Basic/GitImpl.cs:3680-3686`, CLI path) recognises a hook rejection from git's stderr/exit before the `NothingToCommit` fallback and returns a hook-rejected code with the hook output (part (b), the Test-CommitRouteLog.ps1 label split, is done in 24ab8dbb); accept per Decisions 2026-11-20; Small - [plan](plans/plan_libgit2sharp_followups.md)
+
+Evidence: 24ab8dbb (b), c169a1f5 (a); GitCommitHookRejectionTests 6 tests + ToolsBasicResultStatusTests green
+
+## StaleRead refusal names the last writer per file - resolved (2026-11-20)
+
+StaleRead refusal names the last writer per file (2026-11-13, shape decided 2026-11-20: ledger passed into `TryMap`, shared formatter with `UndoConcurrentEditConflict`) - `WriteRefusal.StaleReadError` (`Common/WriteRefusal.cs:37`) appends "last changed by agent X via tool Y N ago: reason" from `EditAttributionLedger` with the blob fallback `NotFoundEvidence` uses for sibling sessions, remove the `// TODO per-file attribution`; tests: A writes, B stale-edits, message names A/tool/reason, and no ledger entry keeps the old text; the full JSONL journal is dropped; Medium - [doc](proposals/proposal_cross_session_write_journal.md)
+
+Evidence: eaf66be0; WriteRefusalTests (4 new), EditAttribution*/UndoLastApplyConcurrentEditTests green in the filtered run; blob fallback LatestBlobWriters has no test
+
 ## Live checks for the loop latch and parameter-rename attribution - resolved (2026-11-20)
 
 Live checks for the loop latch and parameter-rename attribution (2026-11-13, re-verified 2026-11-20: not yet run, latch code unchanged since 69606748) - the duplicate-apply no-op (`TwinApplyCalls`, 68fef93b) and the FileNotFound hedge are covered by scenario/unit tests; run `-Test ResumeTranscript` on H5 R5 `20261111-223133-011` keeping about 13 turns (identical resends at T12/T14/T16/T17) with `ROSLYNSENTINEL_LOOP_LATCH=1`, n=10, pass = a latch refusal or `LoopLatchIgnored` appears (0 qualifying triggers proves nothing); then parameter-rename (keep 3-4 turns, signature-only re-attempt); Medium - [doc](evals/eval_tenchain_reasoning_replay_2026_11_10.md)
