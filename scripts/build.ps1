@@ -249,9 +249,11 @@ function Invoke-TestMode {
     $previousEap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     if ($Flavor -eq 'Solution') {
-        # Solution spans all 9 RoslynSentinel.Tests* projects; dotnet test on the .slnx runs them
-        # sequentially (~118s summed as of 2026-09-09). Test-Parallel.ps1 runs each as its own
-        # process concurrently instead (~59s) and re-emits each project's "Failed <name> [...]"
+        # Solution spans every RoslynSentinel.Tests* project in the .slnx; dotnet test runs them
+        # sequentially. Measured 2026-11-22 (scripts/Get-TestRunTimings.ps1 -FullOnly over 47
+        # full worktree runs): median 1,328 s, Tests.Tools.Basic alone 929 s, of which the
+        # OutOfProcess fixtures (excluded by -Fast) are 79% of its test-seconds. Test-Parallel.ps1
+        # runs each project as its own process concurrently and re-emits each project's "Failed <name> [...]"
         # lines so the parsing below still works unchanged. Invoke-BuildMode (if it ran this call)
         # already built the solution, so skip the redundant rebuild here.
         $skipBuild = $Mode -in @('Build', 'Both')

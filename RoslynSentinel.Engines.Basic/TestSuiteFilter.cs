@@ -2,8 +2,9 @@ namespace RoslynSentinel.Engines.Basic;
 
 /// <summary>
 /// Composes the `dotnet test --filter` expression for a RunTest <see cref="TestSuite"/>. The fast suite excludes the
-/// fixtures that carry <c>[Category("OutOfProcess")]</c> (they start git, dotnet or powershell processes and take about
-/// 40% of the test time); the full suite passes the caller's filter through unchanged. The expression uses the NUnit
+/// fixtures that carry <c>[Category("OutOfProcess")]</c> (they start git, dotnet or powershell processes; measured
+/// 2026-11-22 with scripts/Get-TestRunTimings.ps1 over 47 full runs: a median 79% of Tests.Tools.Basic test-seconds and
+/// about 520 of its 628 serial seconds); the full suite passes the caller's filter through unchanged. The expression uses the NUnit
 /// adapter's <c>TestCategory</c> property; the engine applies it only to projects that reference the NUnit adapter
 /// (see <see cref="TestProjectDetector.UsesNUnitAdapter"/>), because another adapter rejects an unknown property.
 /// </summary>

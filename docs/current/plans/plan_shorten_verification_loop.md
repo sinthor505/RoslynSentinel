@@ -1,6 +1,6 @@
 # Plan: Shorten the build/test verification loop (measure, fast tier, serial-tail cuts, flake causes)
 
-**Status:** IN PROGRESS 2026-11-22. Steps 1-3 done (d07a4bdc, c0a82f6b, 68db5c28); Step 8 dropped (D5); Steps 13-14 stay open past this run.
+**Status:** IN PROGRESS 2026-11-22. Steps 1-4, 5b, 6, 9, 11a done (d07a4bdc, c0a82f6b, 68db5c28, 4754cde6, c6d8c55d); fast run 567 s; Step 8 dropped (D5); Steps 13-14 stay open past this run.
 
 ## Problem
 
@@ -256,6 +256,15 @@ the commit. The build warning-level work another session is doing is out of scop
   minus the `OutOfProcess` tests (about 1,300 in Tests.Tools.Basic alone), and `.roslynsentinel/full-test-marker.json` is
   unchanged. Outcome classes reported by that run: fast wall under 700 s (hypothesis met), 700-1,000 s (partly), above
   1,000 s (not met; the serial tail outside `OutOfProcess` is larger than measured). Lane: `implementer`. Pairs with: Step 1.
+- Done: 4754cde6. **Live check, 2026-11-22:** run `c6d8c55d-20261122-152032-35632` with `-Suite fast` and no filter, on a machine that was
+  not idle (two read-only agents running).
+  - **Result:** **567 s in total** (61 s of it the build). **Hypothesis met** (under 700 s).
+  - **Tests:** 9,588 tests, all green.
+  - **Marker:** `fastRunsSince` went from 0 to 1, and `lastFullRunUtc` was unchanged.
+  - **Per-project walls:** Tools.Basic 185 s (serial 112 s), Server 162 s (serial 141 s), Advanced 33 s, Tools.Advanced 28 s, Basic 21 s,
+    Battery.Basic 19 s, Battery.Advanced 16 s.
+  - **Next bound:** the remaining sequential cost is the Tools.Basic plus Server tails, so `-Parallel` (Step 12) should bound the run at
+    about the longer of the two plus the build.
 
 ### Step 5 - Stale run-time figures and the workflow wording
 - Files (5a): `docs/current/references/reference_changing_claude_lean_tools.md` (line 70: "A whole-solution run takes about 5.5
@@ -274,6 +283,7 @@ the commit. The build warning-level work another session is doing is out of scop
   per-batch paragraph (lines 112-117 on 2026-11-22; it says the script "covers every category") names `-Suite fast` and the D1 rule. Its
   line 105 ratchet count ("about 35 quick tests") matches the count after 11a. The conventions doc's "After each batch" names `-Suite fast`.
   5b: `Build` 0 errors. Lane: `implementer` for each. Pairs with: 5b with Step 6.
+- Done (5b): this commit (dispatcher edit, comments only; Engines.Basic `Build` 0 errors).
 - Deferred (review 2026-11-22): the `RunTest` `filter` parameter text at `RoslynSentinel.Tools.Basic/WorkspaceTools.cs:250` carries a
   stale "about 1.5 minute" figure. Changing it is a tool-schema edit (schema budget tests, generated docs), so it is out of this step.
 
@@ -294,6 +304,7 @@ the commit. The build warning-level work another session is doing is out of scop
   so far: none; `GitToolsSmokeTests.cs:1639` binds port 0).
 - Done when: Appendix A exists with one row per site and a column with the serial seconds, sorted by seconds, with the sum per
   fix class. Lane: `explore-tier2` (pass `model: sonnet` for the reason column). Pairs with: Step 8.
+- Done: 2026-11-22, Appendix A.
 
 ### Step 7 - Remove the cheap serial constraints (slices from Appendix A)
 - Files: per slice, at most 3 test files; first known slice: `RoslynSentinel.Tests.Tools.Basic/GitPatchParityHarness.cs`,
@@ -340,6 +351,7 @@ call sites in 60 files. It also found a second 30 s default, the `LoadSolution` 
   environment failure (NuGet or network; read the full TRX message, not the first line). Evidence per row: commit hashes, the
   asserting line, the TRX message. Unclassifiable rows say what is missing.
 - Done when: Appendix B has one row per test with class a, b or c and evidence. Lane: `explore-tier2` (`model: sonnet`).
+- Done: 2026-11-22, Appendix B.
 
 ### Step 10 - Fix or comment per Appendix B
 - Files: per slice, at most 3 test files (the failing fixtures).
@@ -359,6 +371,7 @@ call sites in 60 files. It also found a second 30 s default, the `LoadSolution` 
   lines 158 and 170). Files (11b): `scripts/Invoke-WorktreeTests.ps1`.
 - Depends on: 11a none; 11b Step 4 (Step 8 dropped)
 - Effect: 11a text-neutral; 11b behaviour-changing for full runs (a red ratchet stops the run early).
+- Done (11a): c6d8c55d (Tests.Server count under `-WithRatchets` and a non-matching filter: 16 -> 18).
 - Change: 11a: add `[Category("Ratchet")]` to those two methods only (the `_WhenUpdateEnvVarSet_RegeneratesFile` tests write files and stay
   untagged). They fail in 2 of the 8 ratchet-red runs (`069455d6`, `54e9052e`) but are missed by `-WithRatchets` today. 11b: for an
   unfiltered run, after the build and before the project loop, start `dotnet test <project> --no-build --filter TestCategory=Ratchet`
@@ -453,6 +466,16 @@ Decisions for the owner (each with a recommendation):
 - **D6 - Targets for Step 14.** Recommend the targets listed there, to be revised after Step 3 and Step 4's live run (they rest on the hypothesis in
   Problem item 5).
 
+- **Step 7 re-scope (2026-11-22, dispatcher, from Appendix A; owner away, so it is open for review).**
+  - **Taken now:** the parity P slice (81 s off the full run's tail).
+  - **Then:** a read-only pass over the five largest U rows outside `OutOfProcess`: `WorkspaceDebounceReloadTests`,
+    `WorkspaceBrokenProjectReloadTests`, `CreateFileDeleteFileTests`, `RelativePathInputAuditTests` and `HaltStampFilterTests`, 89 s
+    together. Any row whose cause turns out to be a static or a path becomes a slice; the rest stay serial.
+  - **Skipped:** the S slices outside `OutOfProcess`, about 12 s in total across 7 slices. The payoff does not justify the risk.
+  - **Left for a later decision:** splitting `ToolParameterAliasTests` (68 s in the Tests.Server tail) and the Server E rows (34 s). They
+    need either a fixture split or the Step 12 sharding.
+  - **Open question for the owner:** take the U-row fixes and the fixture split as Step 7b, or accept the fast-run tail.
+
 Risks and unverified points:
 
 - The `OutOfProcess` attribution in Step 1 is by source scan; `dotnet test --list-tests --filter TestCategory=OutOfProcess --no-build` could replace it but whether the
@@ -474,3 +497,139 @@ Risks and unverified points:
 - [plan_in_memory_test_tier_for_battery.md](./plan_in_memory_test_tier_for_battery.md)
 - [issue_process_spawn_test_flake.md](../issues/issue_process_spawn_test_flake.md)
 - `scripts/Invoke-WorktreeTests.ps1`, `scripts/Test-Parallel.ps1`, `scripts/build.ps1`, `RoslynSentinel.Engines.Basic/TestSuiteFilter.cs`
+
+## Appendix A - Serial-tail inventory (Step 6, 2026-11-22)
+
+**Sources.** `Get-TestRunTimings.ps1 -Run a3d98b2e -View Fixtures -Json`, cross-checked with `0a4dc923`. Both are isolated full runs, and
+per-fixture seconds agree within about 10%.
+
+**Where the tail starts.** Tools.Basic: 305 s (a3d98b2e) and 273 s (0a4dc923). Tests.Server: 23 s and 22 s.
+
+**Site counts.** `Search(mode: attribute, query: NonParallelizable)` finds 230 sites: 63 in Tools.Basic (34 classes), 21 in Tests.Server
+(19 classes), and 146 in other test projects (Battery.Advanced 95, ModelEval 15, Tests.Basic 12, ErrorVariants 7, Tools.Advanced 7,
+SubAgent 4, Tests 3, Advanced/PlanStepRunner/Battery.Basic 1 each).
+
+**How "Serial s" is counted.** For a class-level site it is the fixture's test-seconds; all of these fixtures are in the tail. For a
+method-level site, marked (m), it is the summed duration of the `[NonParallelizable]` methods only.
+
+**Fix classes.** E = process-wide environment variable or current directory. S = static option or singleton. P = shared fixed path.
+X = needs exclusivity. U = unknown. "hyp" marks a cause that was not traced.
+
+### Tools.Basic
+
+| Class (sites) | Serial s | OOP | Stated reason | Fix | Mutates / note |
+| --- | --- | --- | --- | --- | --- |
+| GitReaderEnvironmentTests (1) | 168.6 | yes | "set process-wide GIT_* variables" | E | GIT_* env |
+| GitInProcessCommitRouteTests (1) | 72.5 | yes | "GIT_TRACE2_EVENT is process-wide" | E | GIT_TRACE2_EVENT |
+| GitPatchParityCorpusMoreTests (1) | 51.8 | yes | "appends to one shared table" | P | `<tmp>/rs-patch-parity/table.tsv` |
+| WorkspaceDebounceReloadTests (10) | 31.8 | no | "real PersistentWorkspaceManager, cannot run in parallel" | U | hyp: debounce timer or watcher timing |
+| GitPatchParityCorpusTests (1) | 29.4 | yes | same | P | same table |
+| WorkspaceBrokenProjectReloadTests (6) | 22.2 | no | none stated | U | same family |
+| GitConfigOperationTests (1) | 22.1 | yes | "sets HOME and USERPROFILE" | E | HOME, USERPROFILE, GIT_* |
+| CreateProjectOwnWritesTests (1) | 19.7 | yes | "spawns dotnet new / dotnet sln" | X | dotnet CLI |
+| BuildScopeFullBuildTests (6) | 17.2 | yes | none stated | X | full builds; hyp: build timeouts under load |
+| CreateFileDeleteFileTests (3 m) | 14.8 | no | none stated | U | drift/debounce after a real reload |
+| WorkspaceBuildConfigAndFoldTests (1) | 10.9 | no | none stated | U | real manager, fold and reload |
+| WorkspaceStaleRefusalTests (1) | 10.3 | no | "loads a real solution through PersistentWorkspaceManager" | U | |
+| BuildEngineTests (1 m) | 10.2 | yes | TODO: build timeout under load | X | |
+| BuildIsolationTests (4 m) | 9.9 | yes | 2 methods "process-wide env var" | X / E | |
+| DebounceFoldWriteLockTests (4) | 9.0 | no | "real PersistentWorkspaceManager" | U | CrossProcessWriteLock |
+| RunTestTests (1 m) | 8.6 | yes | "diffs the shared temp dir" | P | `roslynsentinel_runtest_*.trx` |
+| GitInProcessCommitRouteSetupTests (1) | 7.2 | yes | "kept serial like ...RouteTests" | E | |
+| BuildCascadeFixtureTests (1 m) | 6.4 | yes | none stated | X | |
+| GitHooksGlobalConfigTests (2) | 6.2 | yes | "libgit2's config search path is process-wide" | S | libgit2 search path |
+| GitCasCommitEnvironmentTests (1) | 3.7 | yes | "process-wide GIT_* variables" | E | |
+| GitConfigReadParityTests (1) | 3.2 | yes | none stated | U | hyp: global git config |
+| GitToolsSmokeTests.Git_Pull... (1 m) | 2.4 | yes | "sets GIT_CONFIG_NOSYSTEM" | E | |
+| McpServerStatusGitBackendTests (1) | 2.3 | no | timing assertions need an unsaturated pool | X | |
+| BatteryTwentyTests (1) | 1.7 | no | "[SetUp] fields shared" | E | shared cwd |
+| ServerBinaryStalenessGitTests (1 m) | 1.0 | yes | "known flake" | X | |
+| RenameSymbolRenamesFileTests (1) | 0.5 | no | FileMoveMemory.Shared | S | |
+| BatteryEighteenTests (1) | 0.4 | no | wipes `*.cs` in the shared cwd | E | |
+| McpServerStatusOperatingModeTests (1) | 0.4 | no | "statics" | S | AgentOperatingModeOptions |
+| CompactResultDefaultTests (1) | 0.2 | no | one test flips it | S | ChangedContentOptions.InlineOnApply |
+| MoveMemberToolMultiAgentRefusalTests (1) | 0.1 | no | "process-wide static" | S | AgentOperatingModeOptions |
+| MemberAddResultSizeTests (1) | 0.1 | no | another fixture flips it | S | ChangedContentOptions.InlineOnApply |
+| KillOnCloseJobTests (1) | 0.0 | yes | none stated | U | hyp: X |
+| LaunchBuildMarkerTests (3 m) | 0.0 | no | once-only flag is process-global | S | |
+| FileMoveMemoryTests (1) | 0.0 | no | FileMoveMemory.Shared | S | |
+
+### Tests.Server
+
+| Class (sites) | Serial s | OOP | Stated reason | Fix | Mutates / note |
+| --- | --- | --- | --- | --- | --- |
+| RelativePathInputAuditTests (1) | 20.8 | no | none stated | U | in-process host, real solution |
+| HaltStampFilterTests (1) | 14.3 | no | none stated | U | in-process host |
+| LargeResultOffloadFilterTests (1) | 13.5 | no | flips ROSLYNSENTINEL_RESULT_MARSHALLER | E | |
+| ToolCallEchoFilterTests (1) | 11.3 | no | flips process-wide options | E | ToolCallEchoOptions.Enabled plus env |
+| WirePathRelativizeFilterTests (1) | 9.3 | no | test 4 flips ROSLYNSENTINEL_RELATIVE_PATHS | E | one test only |
+| McpToolsetControlTests (1) | 8.3 | no | "share process-wide statics" | S | SchemaCache, SchemaOptions |
+| WorkspaceStaleStampFilterTests (1) | 5.5 | no | none stated | U | |
+| SchemaLeanProfileTests (1) | 1.1 | no | mutates process-wide options | S | SchemaOptions |
+| (11 more S/U/E sites) | 0.0-0.4 each | no | | S, U, E | SchemaCache, LoopLatchOptions, ErrorPolicyOptions, ... |
+
+**Long tail members without `[NonParallelizable]`.** These are fixtures whose tests run one at a time inside the fixture; the remedy is to
+split the fixture, not to remove an attribute.
+- `ToolParameterAliasTests` (Server): 68.2 s, 26 of its 35 tests in the tail.
+- `GitWorktreeRepoLocalConfigTests`: 349.6 s, 8 tests in the tail.
+- `GitToolsSmokeTests`: 206 s.
+
+### Sums per fix class (serial s, a3d98b2e)
+
+| Fix | Tools.Basic OOP | Tools.Basic not OOP | Server (all not OOP) |
+| --- | --- | --- | --- |
+| E | 276.5 | 2.1 | 34.1 |
+| P | 89.8 | 0 | 0 |
+| X | 64.4 | 2.3 | 0 |
+| S | 6.2 | 1.3 | 11.0 |
+| U | 3.2 | 99.0 | 41.0 |
+| Total | 440.1 | 104.7 | 86.1 |
+
+### Fixed (non-Guid) paths
+
+Writes confirmed in source:
+- `GitPatchParityHarness.cs:238`: `<tmp>/rs-patch-parity/table.tsv`.
+- `ResumeDriftProbeTests.cs:134`: `<tmp>/rs-drift-probe/drift-probe.txt` (ModelEval).
+- `BatteryTwentyFourTests.cs:125`: `<tmp>/<dirName>` (Tools.Advanced).
+- `DocPathGuardTests.cs:199`: `<tmp>/DocPathGuardTests` (Tests).
+
+Other fixed names found are likely in-memory fake paths, unverified.
+
+Listening ports: none. The only listener binds port 0 (`GitToolsSmokeTests.cs:1639`).
+
+### Consequence for Step 7
+
+- **Small payoff from P and S outside `OutOfProcess`.** The P and S rows outside `OutOfProcess` total about 12 s, so Step 7 as written
+  recovers little for fast runs.
+- **What remains after `-Suite fast`.** It is mostly U rows: 99 s in Tools.Basic from the real-`PersistentWorkspaceManager`
+  reload/debounce fixtures, and 41 s in Server from the in-process-host fixtures. Server also has 34 s of E rows and the
+  `ToolParameterAliasTests` fixture.
+- **The parity P slice.** The `GitPatchParityHarness`, `GitPatchParityCorpusTests` and `GitPatchParityCorpusMoreTests` slice (81 s) is
+  `OutOfProcess`, so it shortens full runs only.
+- **Re-scoping.** See the 2026-11-22 entry under "Risks and open decisions".
+
+## Appendix B - Triage of the non-load reds (Step 9, 2026-11-22)
+
+Classes: a = a regression the next commit fixed; b = a load, ordering or shared-state flake; c = an environment or contention failure.
+Evidence comes from the TRX in each run folder and from `Git log` over the range between the failing run's commit and the next full run's.
+
+| Run -> next full run | Test | Class | Evidence |
+| --- | --- | --- | --- |
+| `b4d3cabf` -> `0a0b0ecc` | `ResolveVariants_WildcardAndBareIdAndRejections` | a | Extra arms H and I came from harvest `cf95c8ff`. Fixed by `57e9d4c8`, whose message reads "failed in the full run at b4d3cabf". |
+| `e4c186c5`, `e821013a` -> `e9013c37` | `MoveTypeToOuterScopeAsync_UnknownFile_ThrowsNotFound` | a | The not-found sweep `9b28f90b` changed the wording. Fixed by `e9013c37`. |
+| `e821013a` | `FlagOff_SameEdit_GetsTheFirstSliceRedirectAndNothingIsWritten` | b | Race on the static `ToolCallHint.Current` (`ToolCallHint.cs:18, 30`). `ToolCallHintTests.Current_NoOverride_UsesFallbackAndNullClearsTestCatalog` and `CurrentOverloads_UseCurrentCatalog` swap in a catalog without RenameSymbol, so the hint prints the bare name. The two tests overlap in TRX time. |
+| `72b419e1` -> `fff004a0` | `ReplaceSnippet_RenameDeclarationOnly_RejectsAndNamesTheUntouchedCaller` | b | The same `ToolCallHint.Current` race (TRX times overlap). No fix in the range. |
+| `72b419e1` -> `fff004a0` | `GetFileOutline_EnumOnlyFile_...`, `ListAll_EnumMemberKindFilter_...`, `ListAll_MultiFileSolution_...` | a | Qualified enum-member names came in as Step 7 fallout. Fixed by `fff004a0`. |
+| `96f9e660` -> `55d64dc5` | `RelativeFilePath_RoundTripsIntoReadFile` | a | The probe file grew past the inline limit, so the result was offloaded. Fixed by `3368d53b`, which now reads lines 1-20. |
+| `0fbe1aad` -> `b8ef6d71` | `RestoreFixture_ProducesAssetsForTheTestProject`, `QuickBuild_RestoredFixture_HasNoCs0246InTheTestProject` | a | The restore exits 1 deterministically under pinned MSBuild locator variables. It is not NuGet or the network. Fixed by `a1d28a75`, which also puts the exit code, the drain flag and the binlog in the message. |
+| `0fbe1aad` | `Capture_LoadsWithElevenTurnsSchemasAndCommit` | a | Stale turn positions. Fixed by `4d79e355`. ModelEval is not in later full runs, so no green run confirms it. |
+| `8036d20c` (rerun at the same commit green) | `Scenario03b_Rename_WithEditsAsync` | c | An `IOException` on `<tmp>/rs-patch-parity/table.tsv` (`GitPatchParityHarness.cs:240`). The in-process lock does not cover concurrent worktree runs. The other writer is inferred: 8 runs overlapped. |
+
+Process finding for the owner: 9 of the 13 red tests were regressions that the per-batch full run caught one or more commits late, and that the next
+commit fixed. That is the loop working as designed (owner rules 2026-11-09 and 2026-11-11), at the price of a re-run. A fast run per batch catches
+the same regressions sooner, since none of these 9 tests is `OutOfProcess`.
+
+Step 10 slices:
+- **10-1**, `RoslynSentinel.Tests/ToolCallHintTests.cs`: mark the two `Current` overriding tests `[NonParallelizable]` with a comment.
+  Lines 78 and 102 of the same file already do this for a similar static.
+- **10-2**, merged into Step 7's parity slice: a per-run table path removes both the serial constraint and the cross-process contention.
