@@ -6,10 +6,10 @@ namespace RoslynSentinel.Common.AgentLoop;
 /// </summary>
 public static class AgentToolAllowLists
 {
-    /// <summary>The lean 18-tool surface: the tools a model needs for read, edit, build and test work on a fixture.</summary>
+    /// <summary>The lean 19-tool surface: the tools a model needs for read, edit, build and test work on a fixture.</summary>
     public static readonly IReadOnlyList<string> Lean =
     [
-        "ReadFile", "GetFileOutline", "Search", "ListSolutionItems", "GetLargeResult", "ReplaceSnippet", "Member",
+        "ReadFile", "GetFileOutline", "Search", "ListSolutionItems", "GetLargeResult", "ReplaceSnippet", "ReplaceRange", "Member",
         "RenameSymbol", "CreateFile", "DeleteFile", "Build", "RunTest", "GetMethodSource", "UndoChange",
         "ChangeSignature", "ChangeAccessibility", "ModifyModifier", "UsingDirective",
     ];

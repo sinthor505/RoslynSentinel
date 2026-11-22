@@ -129,6 +129,7 @@ public static class ErrorPolicyIntentTable
         ["QuerySymbolRelationships"] = Fixed(L),
         ["ReadFile"] = Fixed(L),
         ["RenameSymbol"] = Fixed(E),
+        ["ReplaceRange"] = Fixed(E),
         ["ReplaceSnippet"] = Dispatch("action", E, lookup: "validate", edit: "apply"),
         ["ResetAsyncMigrationState"] = Fixed(E),
         ["ResetMutationBreaker"] = Fixed(E),
