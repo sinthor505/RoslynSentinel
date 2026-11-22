@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## MoveMember public-sibling probe - resolved (2026-11-21)
+
+`MoveMember` public-sibling probe (2026-10-03) - alias duplicates are fixed (`MoveMemberUsings.cs` ~103, dedup by alias name) and unmoved private/internal siblings are refused (`RequireNoUnmovedDependencies`, transitive since 121e33c1); add one probe test: an instance move whose body calls a public sibling or instance state by bare name; a clear compile-gate refusal -> close the alias half and park qualify-receivers (unpark on a real CS0103 after MoveMember), a confusing failure -> keep open and design the qualify pass; Small - [doc](issues/issue_movemember_open_followups.md)
+
+Evidence: #3: probe tests in MoveMemberSuccessTests pin the outcome: a bare call to a public sibling is refused by the compile gate (ValidationFailed, CS0103 detail naming Source.Helper) and a bare read of private instance state is refused up front (InvalidArgument via RequireNoUnmovedDependencies), both without writing; clear refusal, so the alias half is closed and qualify-receivers parked
+
 ## CS0103 "likely a typo" hint contradicts the parameter-rename attribution - resolved (2026-11-21)
 
 CS0103 "likely a typo" hint contradicts the parameter-rename attribution (2026-11-21) - after "renames parameter rate to discountRate ... 2 use(s) of rate are outside your edit" the CS0103 branch still appends "No symbol named 'rate' ... likely a typo ... Closest name: Byte" (K=3 run 20261121-050101-063, T4 of 10/10 samples); drop the typo hint when the attribution already explains the CS0103; `CompilerErrorLookupHelper.cs` CS0103 branch (~:273); Small

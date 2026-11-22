@@ -539,4 +539,37 @@ public sealed class MoveMemberSuccessTests
         var diagnostics = await GetDiagnosticsAsync(workspace);
         Assert.That(diagnostics.Where(d => d.StartsWith("Error", StringComparison.Ordinal)), Is.Empty, "The generated generic instance forwarder must compile.");
     }
+
+    // Observed 2026-11-21 (probe of the open follow-up in docs/current/issues/issue_movemember_open_followups.md, todo review 2026-11-21):
+    // a bare call to a public sibling is refused by the compile gate with ValidationFailed and a CS0103 detail naming Source.Helper;
+    // bare reads of private instance state are refused up front by RequireNoUnmovedDependencies (InvalidArgument).
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_InstanceBodyCallsPublicSiblingByBareName_RefusesWithoutWriting()
+    {
+        var original = "public class Source\n{\n    private readonly Target _impl = new Target();\n    public int Helper() { return 1; }\n    public int Foo(int x) { return Helper() + x; }\n}\n\npublic class Target\n{\n}\n";
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
+        var before = await ReadAllDocumentsAsync(workspace);
+        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
+        var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Foo"], "Target");
+        Assert.That(result.IsError, Is.True, $"Observed: {result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.ValidationFailed));
+        Assert.That(result.ErrorData?.Detail, Does.Contain("CS0103").And.Contain("'Helper'").And.Contain("Source.Helper"));
+        AssertDocumentsUnchanged(before, await ReadAllDocumentsAsync(workspace));
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_InstanceBodyReadsInstanceStateByBareName_RefusesWithoutWriting()
+    {
+        var original = "public class Source\n{\n    private readonly Target _impl = new Target();\n    private int _count;\n    public int Foo(int x) { return _count + x; }\n}\n\npublic class Target\n{\n}\n";
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
+        var before = await ReadAllDocumentsAsync(workspace);
+        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
+        var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Foo"], "Target");
+        Assert.That(result.IsError, Is.True, $"Observed: {result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData?.Message, Does.Contain("_count").And.Contain("memberNames"));
+        AssertDocumentsUnchanged(before, await ReadAllDocumentsAsync(workspace));
+    }
 }
