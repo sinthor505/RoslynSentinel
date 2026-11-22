@@ -1062,6 +1062,7 @@ function Invoke-Worker {
             $current = Read-Job (Get-JobPath $Job)
             if ($current -and $current.cancelRequested) { $stopAs = 'Cancelled'; break }
             if ([datetime]::UtcNow -gt $deadline) { $stopAs = 'TimedOut'; break }
+            # TODO SetupStalled misfires on any test longer than -NoRunFolderMinutes: run folders are copied to ModelTestingResults only after the test ends, not after SetUp (job 20261122-101641-001).
             if ($noRunFolderMinutes -gt 0 -and [datetime]::UtcNow -gt $nextFolderCheck) {
                 if (@(Get-RunFolders $Job | Where-Object { $_ -notin $before }).Count -eq 0) { $stopAs = 'SetupStalled'; break }
                 # A run folder exists, so the run is past SetUp: stop checking.
