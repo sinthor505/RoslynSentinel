@@ -51,7 +51,7 @@ public static class ToolClassRegistry
             "LoadSolution", "ReadFile", "GetFileOutline", "GetMethodSource", "GetLargeResult",
             "Search",
             "Build", "RunTest", "Git", "ReplaceSnippet", "ReplaceRange", "Member",
-            "RenameSymbol", "ChangeSignature", "CreateFile", "DeleteFile", "WriteFile",
+            "RenameSymbol", "ChangeSignature", "CreateFile", "DeleteFile", "MoveFile", "WriteFile",
             "UndoChange", "McpServerControl", "McpServerStatus", "ExternalFileDrift", "SemanticFindReplace", "InspectSymbol", "MoveMember", "UsingDirective", "GetDiagnostics",
             ToolsetCatalog.ControlToolName,
         ],

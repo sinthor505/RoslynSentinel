@@ -117,6 +117,7 @@ public static class ErrorPolicyIntentTable
         ["ModifyEnum"] = Fixed(E),
         ["ModifyModifier"] = Dispatch("action", E, lookup: "", edit: "add,remove"),
         ["MoveAllTypesToFiles"] = Fixed(E),
+        ["MoveFile"] = Fixed(E),
         ["MoveMember"] = Fixed(E),
         ["MoveType"] = Fixed(E),
         ["NamedArguments"] = Dispatch("mode", E, lookup: "preview", edit: "apply"),
