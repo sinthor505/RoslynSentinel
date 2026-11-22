@@ -1132,7 +1132,7 @@ public class WorkspaceFileEditImpl
     /// Refuses an edit that leaves a .cs file with no type declaration when it had one before (empty, whitespace or only
     /// usings/namespace/comments). Returns the refusal message, or null when the edit may proceed.
     /// </summary>
-    private string? DescribeNoTypeLeft(string path, string before, string after, bool batch)
+    private string? DescribeNoTypeLeft(string path, string before, string after, bool batch, string toolName = "ReplaceSnippet")
     {
         static bool HasTypeContent(string text) =>
             Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(text).GetRoot().DescendantNodes().Any(node =>
@@ -1170,7 +1170,7 @@ public class WorkspaceFileEditImpl
         }
         if (Callable("WriteFile")) steps.Add($"To replace the whole file, use {ToolCallHint.Call("WriteFile", ("operation", "ReplaceFile"))}.");
 
-        var prefix = batch ? "ReplaceSnippet batch: " : "ReplaceSnippet: ";
+        var prefix = batch ? $"{toolName} batch: " : $"{toolName}: ";
         var suffix = batch ? "; nothing in the batch was written" : "";
         var fact = names.Count == 0
             ? string.Empty
@@ -1189,7 +1189,7 @@ public class WorkspaceFileEditImpl
     /// <summary>
     /// Refusal text for ReplaceSnippet on an empty file. Names only the recovery tools this server can call.
     /// </summary>
-    private string DescribeEmptyFile(string relativePath)
+    private string DescribeEmptyFile(string relativePath, string toolName = "ReplaceSnippet")
     {
         bool Callable(string tool) => _activeToolSurface is null || _activeToolSurface.IsCallable(tool);
         var steps = new List<string>();
@@ -1207,7 +1207,8 @@ public class WorkspaceFileEditImpl
             steps.Add($"To write new content, use {ToolCallHint.Call("WriteFile", ("operation", "ReplaceFile"))}.");
         }
 
-        var head = $"ReplaceSnippet: '{relativePath}' is empty, so there is no text for oldContent to match.";
+        // ReplaceRange anchors on two lines, not oldContent, so the fact names them instead.
+        var head = $"{toolName}: '{relativePath}' is empty, so there is no text for {(toolName == "ReplaceSnippet" ? "oldContent" : "firstLineText and lastLineText")} to match.";
         return steps.Count == 0 ? head : head + " " + string.Join(" ", steps);
     }
 
@@ -1809,6 +1810,224 @@ public class WorkspaceFileEditImpl
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ReplaceSnippet")
             };
         }
+    }
+
+    // Zero-match anchor hints list at most this many nearby lines that contain the anchor text.
+    private const int MaxAnchorNearLines = 5;
+
+    /// <summary>
+    /// Replaces (or, with an empty <paramref name="newContent"/>, deletes) the whole lines from the single line matching
+    /// <paramref name="firstLineText"/> through the single line matching <paramref name="lastLineText"/>, inclusive
+    /// (proposal_replace_range_tool.md). An anchor that matches no line or several lines is refused with the count and every
+    /// matching line number; nothing is written. The write goes through <see cref="ApplyEditTailAsync"/> (compile gate,
+    /// stale-read refusal, undo).
+    /// </summary>
+    public async Task<SentinelCallToolResult<ReplaceSnippetResult>> ReplaceRange(
+        ToolCallReason reason,
+        string filePath,
+        string firstLineText,
+        string lastLineText,
+        string newContent,
+        CancellationToken cancellationToken = default)
+    {
+        static SentinelCallToolResult<ReplaceSnippetResult> Refuse(string code, string message) =>
+            new()
+            {
+                IsError = true,
+                ErrorData = new ResultError(code, message)
+            };
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(filePath))
+            {
+                return Refuse(ToolErrorCode.InvalidArgument, "ReplaceRange: 'filePath' is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(firstLineText) || string.IsNullOrWhiteSpace(lastLineText))
+            {
+                return Refuse(ToolErrorCode.InvalidArgument,
+                    "ReplaceRange: 'firstLineText' and 'lastLineText' are required and must not be blank (a blank line matches many lines).");
+            }
+
+            if (newContent is null)
+            {
+                return Refuse(ToolErrorCode.InvalidArgument, "ReplaceRange: 'newContent' is required (pass an empty string to delete the range).");
+            }
+
+            // Anchor comparison ignores leading/trailing whitespace (so a model that drops indentation still matches) and the line ending.
+            var firstAnchor = firstLineText.Trim();
+            var lastAnchor = lastLineText.Trim();
+            if (firstAnchor.AsSpan().IndexOfAny('\r', '\n') >= 0 || lastAnchor.AsSpan().IndexOfAny('\r', '\n') >= 0)
+            {
+                return Refuse(ToolErrorCode.InvalidArgument,
+                    "ReplaceRange: 'firstLineText' and 'lastLineText' must each be one line of text; one of them contains a line break.");
+            }
+
+            FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
+            // Same front matter as ReplaceSnippet: only a blank path is 'could not be resolved'; a misspelt path falls through to the lookup's near-match text.
+            if (!filePathResolved.Validated
+                && (filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded || string.IsNullOrWhiteSpace(filePathResolved.Absolute)))
+            {
+                return filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded
+                    ? Refuse(ToolErrorCode.SolutionNotLoaded, SolutionNotLoadedMessage.ForFilePath("ReplaceRange", _workspaceManager.LoadState))
+                    : Refuse(ToolErrorCode.InvalidArgument, "ReplaceRange: 'filePath' could not be resolved.");
+            }
+
+            var lookup = await _workspaceManager.GetDocumentAsync(filePathResolved, ReadSource.Committed, cancellationToken);
+            if (!lookup.TryGetDocument(out var document))
+            {
+                return new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = true, ErrorData = lookup.ToResultError() };
+            }
+
+            var oldText = await document.GetTextAsync(cancellationToken: cancellationToken);
+            if (string.IsNullOrWhiteSpace(oldText.ToString()))
+            {
+                return Refuse(ToolErrorCode.InvalidArgument, DescribeEmptyFile(DisplayPath(filePathResolved), "ReplaceRange"));
+            }
+
+            var leakedMarkup = DescribeLeakedNewContentMarkup(newContent, () => oldText.ToString());
+            if (leakedMarkup is not null)
+            {
+                return Refuse(ToolErrorCode.InvalidArgument, "ReplaceRange: " + leakedMarkup);
+            }
+
+            // Each anchor must match exactly one line in the whole file (owner rule); lastLineText is not searched only below the first match.
+            var firstHits = FindLinesEqualToAnchor(oldText, firstAnchor);
+            var lastHits = FindLinesEqualToAnchor(oldText, lastAnchor);
+            var anchorProblems = new List<(string Code, string Message)>();
+            if (DescribeAnchorMatchCount("firstLineText", firstAnchor, firstHits, oldText, DisplayPath(filePathResolved)) is { } firstProblem)
+            {
+                anchorProblems.Add(firstProblem);
+            }
+
+            if (DescribeAnchorMatchCount("lastLineText", lastAnchor, lastHits, oldText, DisplayPath(filePathResolved)) is { } lastProblem)
+            {
+                anchorProblems.Add(lastProblem);
+            }
+
+            if (anchorProblems.Count > 0)
+            {
+                return Refuse(anchorProblems[0].Code,
+                    "ReplaceRange: " + string.Join(" ", anchorProblems.Select(problem => problem.Message))
+                    + " Each anchor must match exactly one line (leading/trailing whitespace ignored). Nothing was written.");
+            }
+
+            var firstLine = firstHits[0];
+            var lastLine = lastHits[0];
+            if (lastLine < firstLine)
+            {
+                return Refuse(ToolErrorCode.InvalidArgument,
+                    $"ReplaceRange: lastLineText is on line {lastLine + 1} but firstLineText is on line {firstLine + 1}; the range runs from the first line down to the last. Nothing was written.");
+            }
+
+            // The range is whole lines, inclusive of both anchors, terminators included.
+            var rangeStart = oldText.Lines[firstLine].Start;
+            var rangeEnd = oldText.Lines[lastLine].EndIncludingLineBreak;
+            var rangeEndedWithTerminator = rangeEnd > oldText.Lines[lastLine].End;
+            var targetPath = document.FilePath ?? filePathResolved;
+            var targetEol = _workspaceManager.ResolveEol((string)targetPath, oldText.ToString());
+
+            // Only the replacement is normalized to the file's line ending; the chokepoint keeps the untouched lines as they are.
+            var replacement = EolUtilities.NormalizeEol(newContent, targetEol);
+            if (replacement.Length > 0)
+            {
+                var endsWithTerminator = replacement.EndsWith('\n') || replacement.EndsWith('\r');
+                if (rangeEndedWithTerminator && !endsWithTerminator)
+                {
+                    // The range ended with a line terminator, so the replacement does too (the next line stays on its own line).
+                    replacement += targetEol;
+                }
+                else if (!rangeEndedWithTerminator && endsWithTerminator)
+                {
+                    // The range ended the file without a terminator; keep that (drop one trailing terminator).
+                    replacement = replacement.EndsWith("\r\n", StringComparison.Ordinal) ? replacement[..^2] : replacement[..^1];
+                }
+            }
+
+            var oldTextString = oldText.ToString();
+            var newFileContent = string.Concat(oldTextString.AsSpan(0, rangeStart), replacement, oldTextString.AsSpan(rangeEnd));
+            var noTypeLeft = DescribeNoTypeLeft(DisplayPath(filePathResolved), oldTextString, newFileContent, batch: false, toolName: "ReplaceRange");
+            if (noTypeLeft is not null)
+            {
+                return Refuse(ToolErrorCode.TargetIneligible, noTypeLeft);
+            }
+
+            var rangeChanges = new DocumentChangeSet
+            {
+                [targetPath] = newFileContent
+            };
+            // The replaced span in the baseline text and its replacement, for impact attribution (same key instance as rangeChanges).
+            IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>> editedSpans = new Dictionary<FilePathWrapper, IReadOnlyList<TextChange>>
+            {
+                [rangeChanges.Keys.Single()] = [new TextChange(new TextSpan(rangeStart, rangeEnd - rangeStart), replacement)]
+            };
+            // Visible to parallel calls' impact analysis until this call ends (see InFlightEditMemory).
+            using var inFlight = _inFlightEdits.Register([((string)targetPath, newContent)]);
+
+            var lineCount = lastLine - firstLine + 1;
+            var rangeText = firstLine == lastLine ? $"line {firstLine + 1}" : $"lines {firstLine + 1}-{lastLine + 1}";
+            var replacementLines = replacement.Length == 0 ? 0 : replacement.Split('\n').Length - (replacement.EndsWith('\n') ? 1 : 0);
+            var rangeNote = replacement.Length == 0
+                ? $"ReplaceRange deleted {rangeText} ({lineCount} line(s))."
+                : $"ReplaceRange replaced {rangeText} ({lineCount} line(s)) with {replacementLines} line(s).";
+            // Near-miss correction and rename lift are tied to oldContent text and stay off; no edit memory (nothing to key on without oldContent).
+            return await ApplyEditTailAsync(
+                "ReplaceRange", "replace_range", (string)targetPath, rangeChanges, editedSpans,
+                "the anchors still match the file as it is now; fix newContent and send it again. ",
+                [rangeNote], validateOnApply: true, returnDiff: false,
+                enableNearMissCorrection: false, enableRenameLift: false, editMemory: null, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            if (ex is ToolException toolEx)
+                _logger.LogInformation("ReplaceRange refused for '{FilePath}': {Message}", filePath, toolEx.Message);
+            else
+                _logger.LogError(ex, "ReplaceRange unexpected exception for '{FilePath}'", filePath);
+            return new SentinelCallToolResult<ReplaceSnippetResult>()
+            {
+                IsError = true,
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ReplaceRange for '{filePath}'")
+            };
+        }
+    }
+
+    // 0-based indexes of the lines whose text equals the trimmed anchor once leading/trailing whitespace is ignored.
+    private static List<int> FindLinesEqualToAnchor(SourceText text, string trimmedAnchor)
+    {
+        var hits = new List<int>();
+        foreach (var line in text.Lines)
+        {
+            if (string.Equals(text.ToString(line.Span).Trim(), trimmedAnchor, StringComparison.Ordinal))
+            {
+                hits.Add(line.LineNumber);
+            }
+        }
+
+        return hits;
+    }
+
+    // Facts for an anchor that does not match exactly one line: the count, every matching 1-based line number, and (zero matches) nearby lines that contain the anchor text.
+    private static (string Code, string Message)? DescribeAnchorMatchCount(string parameterName, string trimmedAnchor, List<int> hits, SourceText text, string displayPath)
+    {
+        if (hits.Count == 1)
+        {
+            return null;
+        }
+
+        if (hits.Count > 1)
+        {
+            return (ToolErrorCode.Ambiguous,
+                $"{parameterName} matches {hits.Count} lines of '{displayPath}' (lines {string.Join(", ", hits.Select(hit => hit + 1))}).");
+        }
+
+        var near = text.Lines
+            .Where(line => text.ToString(line.Span).Contains(trimmedAnchor, StringComparison.OrdinalIgnoreCase))
+            .Take(MaxAnchorNearLines)
+            .Select(line => $"{line.LineNumber + 1}: {text.ToString(line.Span).Trim()}")
+            .ToList();
+        var nearText = near.Count == 0 ? "" : $" Lines containing that text (case-insensitive): {string.Join(" | ", near)}.";
+        return (ToolErrorCode.NotFound, $"{parameterName} matches 0 lines of '{displayPath}'.{nearText}");
     }
 
     private async Task<SentinelCallToolResult<ReplaceSnippetResult>> ReplaceSnippetBatch(

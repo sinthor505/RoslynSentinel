@@ -168,6 +168,19 @@ public class WorkspaceTools
         CancellationToken cancellationToken = default)
         => _fileEdit.ReplaceSnippet(reason, action, filePath, oldContent, newContent, lineBefore, lineAfter, withinMember, matchLine, batchEdits, validateOnApply, returnDiff, cancellationToken);
 
+    // ReplaceSnippet takes small exact text; ReplaceRange takes only the first and last line of a block, so no transcription of the block is needed.
+    [McpServerTool(Name = "ReplaceRange")]
+    [Produces(DataTag.ChangeId)]
+    [Description("Replaces or deletes the block of whole lines from firstLineText through lastLineText (each must match exactly one line). You send only those two lines, not the block; use ReplaceSnippet for small exact text. Compile-checked before writing.")]
+    public Task<SentinelCallToolResult<ReplaceSnippetResult>> ReplaceRangeTool(
+        [Description(ToolParams.Reason)] ToolCallReason reason,
+        [Consumes(DataTag.SourceFilepath, required: true)][Description("File to edit.")] string filePath,
+        [Description("The block's first line, verbatim (whitespace at its ends is ignored).")] string firstLineText,
+        [Description("The block's last line, same rule.")] string lastLineText,
+        [Description("Lines that replace the block; empty string deletes it.")] string newContent,
+        CancellationToken cancellationToken = default)
+        => _fileEdit.ReplaceRange(reason, filePath, firstLineText, lastLineText, newContent, cancellationToken);
+
     [McpServerTool(Name = "CreateFile")]
     [Produces(DataTag.ChangeId)]
     [Description("Creates a new file; fails if it already exists (never overwrites). Pass content to write the full body in one call, any file type. For a .cs file you may instead seed an empty type with typeKind and typeName, then add members with Member. Parent directories are created if missing.")]
