@@ -21,6 +21,9 @@ internal static class GitPatchParityHarness
     private const int DiffMaxBytes = 524288;
     private const int OutcomeDetailMax = 120;
 
+    // The folder is unique per test process: concurrent worktree runs (Invoke-WorktreeTests.ps1) shared one fixed table.tsv and raced with an IOException (plan_shorten_verification_loop Appendix B).
+    private static readonly string TableDirectory = Path.Combine(Path.GetTempPath(), "rs-patch-parity", Environment.ProcessId.ToString());
+
     /// <summary>Which production call a pin exercises: the diff text (staged or A..B) or the show text of one commit.</summary>
     internal enum PatchSurface
     {
@@ -229,13 +232,13 @@ internal static class GitPatchParityHarness
 
     internal static string Truncate(string value) => value.Length <= OutcomeDetailMax ? value : value[..OutcomeDetailMax];
 
-    /// <summary>Appends one scenario<TAB>target<TAB>outcome line to the shared table. Never truncates the file.</summary>
+    /// <summary>Appends one scenario<TAB>target<TAB>outcome line to this process's table under the temp directory: rs-patch-parity/&lt;pid&gt;/table.tsv. Never truncates the file.</summary>
     internal static void Record(string scenario, string target, string outcome)
     {
         var line = Sanitize(scenario) + "\t" + Sanitize(target) + "\t" + Sanitize(outcome) + "\n";
         lock (RecordLock)
         {
-            var directory = Path.Combine(Path.GetTempPath(), "rs-patch-parity");
+            var directory = TableDirectory;
             Directory.CreateDirectory(directory);
             File.AppendAllText(Path.Combine(directory, "table.tsv"), line, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
         }

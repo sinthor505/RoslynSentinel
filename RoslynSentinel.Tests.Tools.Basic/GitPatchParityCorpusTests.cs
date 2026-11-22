@@ -6,10 +6,10 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 /// Corpus for the libgit2-patch parity probe (see <c>GitPatchParityHarness</c>). Each scenario records the outcome for a
 /// staged diff and for the committed range, through the composite reader. A routed scenario must equal the CLI text with one libgit2 call;
 /// a declined one must show one counted planned decline with CLI-equal text. Routed scenarios that differ are [Explicit] production defects.
-/// The Measure test still writes the table to the temp directory <c>rs-patch-parity/table.tsv</c>.
+/// The Measure test still writes the table to the temp directory <c>rs-patch-parity/&lt;pid&gt;/table.tsv</c>.
 /// </summary>
 [TestFixture]
-[NonParallelizable] // starts git processes and appends to one shared table; kept serial.
+// Not [NonParallelizable] since plan_shorten_verification_loop Step 7: the table path is unique per test process (GitPatchParityHarness.TableDirectory) and each scenario uses its own temp git repo; Record is serialised by an in-process lock.
 [Category("OutOfProcess")] // starts git processes; excluded from RunTest suite "fast" (the default), run with suite "full"
 public class GitPatchParityCorpusTests
 {

@@ -10,7 +10,7 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 /// from the CLI is a production defect and is marked [Explicit] with the first differing line.
 /// </summary>
 [TestFixture]
-[NonParallelizable] // starts git processes and appends to one shared table; kept serial.
+// Not [NonParallelizable] since plan_shorten_verification_loop Step 7: the table path is unique per test process (GitPatchParityHarness.TableDirectory) and each scenario uses its own temp git repo; Record is serialised by an in-process lock.
 [Category("OutOfProcess")] // starts git processes; excluded from RunTest suite "fast" (the default), run with suite "full"
 public class GitPatchParityCorpusMoreTests
 {
