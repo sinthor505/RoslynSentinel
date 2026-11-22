@@ -220,7 +220,7 @@ Anchor review:
 6. CallerD.cs:9 holds.
 Methods: StoreChangedContent no longer exists in Writer.cs; the private method Store replaced it.
 Call sites of IWriter.Apply / Writer.Apply: 12 in 5 files (CallerA 2, CallerB 3, CallerC 3, CallerD 2, CallerE 2). The plan's 47 call sites in 9 files is wrong. Archive.Apply called from CallerF is an unrelated method and is not counted.
-Step 2 is not possible with zero caller edits: the target-typed new() { ... } arguments (CallerB.cs:9, CallerE.cs:8) and the [] argument (CallerC.cs:10) cannot target IReadOnlyDictionary<string, string> (CS0144, CS9174), so those three sites would break.
+Step 2 is not possible with zero caller edits: the target-typed new() arguments (CallerB.cs:9, CallerE.cs:8) and the [] argument (CallerC.cs:10) cannot target IReadOnlyDictionary<string, string> (CS0144, CS9174), so those three sites would break.
 """;
 
     private const string StepPrompt = """
@@ -265,7 +265,9 @@ review as your final message.
 
     /// <summary>
     /// No file changed; the final message says StoreChangedContent is gone, states the true total (12), names the five caller
-    /// files, gives the new lines of the two moved anchors (+-1) and says the new() and [] sites break the zero-edit widening.
+    /// files, gives the new lines of the two moved anchors (+-1) in the sentence/line naming each anchor, and says in a negative verdict that the
+    /// new() and [] sites break the zero-edit widening (a CS code, or each shape named as breaking; the bare word "error" is not evidence).
+    /// A message that says the widening is possible with no caller edits fails.
     /// </summary>
     private static string? CheckReview(ImplementationScenarioCheckContext ctx)
     {
@@ -299,26 +301,100 @@ review as your final message.
             }
         }
 
-        if (!Regex.IsMatch(message, @"Writer[^\r\n]{0,80}?(?<!\d)(10|11|12)(?!\d)"))
+        var segments = SplitIntoSegments(message);
+
+        // The anchor's new line must sit in the same sentence/line as the anchor name (a count line such as "CallerB.cs: 3 (lines 8, ...)" does not count).
+        if (!MovedAnchorLineIsInContext(segments, @"(?<![A-Za-z])Writer", 10, 12))
         {
-            return "the review does not give the new line of the moved Writer.cs anchor (11, +-1)";
+            return "the review does not give the new line of the moved Writer.cs anchor (11, +-1) in the sentence or line that names Writer.cs";
         }
 
-        if (!Regex.IsMatch(message, @"CallerB[^\r\n]{0,80}?(?<!\d)(7|8|9)(?!\d)"))
+        if (!MovedAnchorLineIsInContext(segments, "CallerB", 7, 9))
         {
-            return "the review does not give the new line of the moved CallerB.cs anchor (8, +-1)";
+            return "the review does not give the new line of the moved CallerB.cs anchor (8, +-1) in the sentence or line that names CallerB.cs";
         }
 
+        // The verdict on Step 2 must be negative: no sentence about the widening may assert it works without a denial in the same sentence, and one must deny it.
+        var wideningSegments = segments.Where(segment => Regex.IsMatch(segment, WideningClaimPattern, RegexOptions.IgnoreCase)).ToList();
+        if (wideningSegments.Any(segment => Regex.IsMatch(segment, AssertsWideningPossiblePattern, RegexOptions.IgnoreCase)
+                && !Regex.IsMatch(segment, DeniesWideningPattern, RegexOptions.IgnoreCase)))
+        {
+            return "the review asserts that the zero-edit widening is possible; the new() and [] call sites break it";
+        }
+
+        if (!wideningSegments.Any(segment => Regex.IsMatch(segment, DeniesWideningPattern, RegexOptions.IgnoreCase)))
+        {
+            return "the review does not say that Step 2 (widening with no caller edits) is not possible";
+        }
+
+        // Evidence: both shapes named, and either a CS code or each shape named as breaking (the bare word "error" is not evidence).
         var namesTargetTypedNew = message.Contains("new()", StringComparison.OrdinalIgnoreCase)
             || Regex.IsMatch(message, @"target[- ]typed", RegexOptions.IgnoreCase);
         var namesCollectionExpression = message.Contains("[]", StringComparison.Ordinal)
             || Regex.IsMatch(message, @"collection expression", RegexOptions.IgnoreCase);
-        var saysItBreaks = Regex.IsMatch(message, @"CS0144|CS9174|break|not possible|cannot|can't|impossible|not compile|fail|error", RegexOptions.IgnoreCase);
-        if (!(namesTargetTypedNew && namesCollectionExpression && saysItBreaks))
+        var namesErrorCode = Regex.IsMatch(message, @"CS\d{4}");
+        var newNamedAsBreaking = segments.Any(segment => (segment.Contains("new()", StringComparison.OrdinalIgnoreCase) || Regex.IsMatch(segment, @"target[- ]typed", RegexOptions.IgnoreCase))
+            && Regex.IsMatch(segment, BreakEvidencePattern, RegexOptions.IgnoreCase));
+        var collectionNamedAsBreaking = segments.Any(segment => (segment.Contains("[]", StringComparison.Ordinal) || Regex.IsMatch(segment, @"collection expression", RegexOptions.IgnoreCase))
+            && Regex.IsMatch(segment, BreakEvidencePattern, RegexOptions.IgnoreCase));
+        if (!(namesTargetTypedNew && namesCollectionExpression && (namesErrorCode || (newNamedAsBreaking && collectionNamedAsBreaking))))
         {
-            return "the review does not say that the new() and [] call sites break the zero-edit widening";
+            return "the review does not say that the new() and [] call sites break the zero-edit widening (name a CS code, or say each shape breaks)";
         }
 
         return null;
+    }
+
+    // Words that introduce the new position of a moved anchor; the line number must follow the last one in the same sentence/line as the anchor name.
+    // The arrow is written as a \u escape so this file stays ASCII.
+    private const string MoveKeywordPattern = @"\b(?:moved|shifted|now|new line|changed to|to line|is at)\b|→|->|=>";
+
+    // Sentences/lines that talk about Step 2 (the zero-edit widening).
+    private const string WideningClaimPattern = @"step 2|widen|IReadOnlyDictionary|read-only|zero[- ]edit|caller (?:edit|change)|no caller";
+
+    // A widening sentence that denies the zero-edit claim: a negation, a CS code, or "would break" wording, or a leading "No," / "No -".
+    private const string DeniesWideningPattern = @"not possible|impossible|isn't possible|cannot|can't|can not|would break|will break|\bbreak(?:s|ing)?\b|not compile|won't compile|does not compile|fails? to compile|CS\d{4}|not without|(?:^|[\s(])no\s*(?:[,:]|-|–|—)(?:\s|$)";
+
+    // A widening sentence that asserts the zero-edit claim holds.
+    private const string AssertsWideningPossiblePattern = @"\byes\b[^.\r\n]{0,40}\bpossible|(?<!not )(?<!n't )\bpossible\b[^.\r\n]{0,30}(?:\bwith (?:no|zero)\b|\bwithout\b)|\bno caller (?:edits?|changes?) (?:are |is )?(?:needed|required|necessary)|\bcallers? (?:need|needs|require) no (?:edit|change)|\bbuilds? (?:cleanly )?with (?:0|zero|no) (?:errors|caller)";
+
+    // Evidence that a call-site shape breaks the widening; the bare words "error" and "fail" do not count (a green build says "0 errors").
+    private const string BreakEvidencePattern = @"break|cannot|can't|not possible|impossible|not compile|does not compile|won't compile|fails? to compile|no (?:implicit )?conversion|not convert";
+
+    private static List<string> SplitIntoSegments(string message)
+    {
+        return Regex.Split(message, @"[\r\n]+|(?<=[.!?;])\s+")
+            .Where(segment => !string.IsNullOrWhiteSpace(segment))
+            .ToList();
+    }
+
+    /// <summary>
+    /// True when one sentence/line names the anchor (matched by <paramref name="anchorNamePattern"/>) and the first number after the
+    /// last move keyword in it lies in [fromLine, toLine]. A number elsewhere in the message does not count.
+    /// </summary>
+    private static bool MovedAnchorLineIsInContext(IReadOnlyList<string> segments, string anchorNamePattern, int fromLine, int toLine)
+    {
+        foreach (var segment in segments)
+        {
+            if (!Regex.IsMatch(segment, anchorNamePattern, RegexOptions.IgnoreCase))
+            {
+                continue;
+            }
+
+            var keywords = Regex.Matches(segment, MoveKeywordPattern, RegexOptions.IgnoreCase);
+            if (keywords.Count == 0)
+            {
+                continue;
+            }
+
+            var last = keywords[^1];
+            var number = Regex.Match(segment[(last.Index + last.Length)..], @"(?<!\d)\d{1,4}(?!\d)");
+            if (number.Success && int.TryParse(number.Value, out var line) && line >= fromLine && line <= toLine)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
