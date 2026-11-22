@@ -8,6 +8,16 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## INBOX lines folded into the core-change plans or fixed - resolved (2026-11-22)
+
+INBOX triage in todo review d6d7d3a2. Each line below is closed because a DRAFT plan already carries it as a step (tracked by that plan's TODO.md line) or it was fixed in the triage commit:
+- Tools.Advanced apply wrapper records no EditEffects; RefactoringExtractionDocsImpl wrapper the same; four apply callers pass no describers; WorkspaceBuildTestImpl drops typed ToolException codes; `reference_tool_response_pipeline.md` item 10 vs Gotchas and the stale `AddToolErrorFilter` comment -> plan_shared_tool_execution_pipeline.md (findings 1-4, Steps 7-8, 10, 14i, docs step).
+- AdvancedStructuralEngine error kinds and bare messages; legacy `Cannot edit:` prefix at `BasicRefactoringEngine.cs:2415,2560` -> plan_central_engine_throw_and_lookup_helpers.md (Steps 5b, 7b-7d).
+- Stale "5.5 minutes" full-run time (`reference_changing_claude_lean_tools.md:70`); stale `TestSuiteFilter.cs:6` and `build.ps1` run-time comments; full-run reds from the 30 s solution-load timeout and the fixed `rs-patch-parity` path -> plan_shorten_verification_loop.md (Step 5a and the isolation steps).
+- Stale "Latent" paragraph in `proposal_usage_based_core_split.md` (320/358 sites, three factories) -> fixed: rewritten to 108/76 sites, no static factories.
+- Misleading `[Category("AdvancedRefactoringTools")]` on ~31 core tests -> folded into the parked "Core split test-move remainder" TODO line.
+- Core-change cost review needs triage -> four TODO.md lines, one per DRAFT plan.
+
 ## Migrate hand-wired ModelEval MCP worlds onto shared helpers - resolved (2026-11-22)
 
 Migrate hand-wired ModelEval MCP worlds onto shared helpers (2026-11-20) - scope decided 2026-11-21: (a) the 8 live classes onto `ModelEvalMcpEnvironment` in slices: ShippingKindStepped (fits `beforeLoad`; fixes the stale "third copy" code TODO `ShippingKindSteppedAgentTests.cs:40`), a Basic-surface option + PlanThenExecute/PlanOnly/SizeThreshold, WholeFileRewrite + OrderPricingRefactor (edit-arm switch as in the Chain class's `ConfigureToolSurface`), LargeResultPaging, PlanImplementVerify (borrowed-fixture option); (b) the 11 fake-model runner classes onto a second small helper (fake HTTP handler, no live model); ShippingKindMappingProbe/Replay (agent client, no server) optional; acceptance: `Search(text, "AddMcpServer\(")` in Tests.ModelEval hits only the two helpers and the surface tests, one non-live tool-listing test per new option (pattern `ChainEvalToolSurfaceLeanTests`), Build 0 errors; Large

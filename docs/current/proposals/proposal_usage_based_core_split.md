@@ -212,10 +212,9 @@ These address the causes in the Motivation table. They apply after the split as 
 Rename sweeps (ca632e11, 2db3c5ac) are accepted. They are mechanical through `RenameSymbol`, and the
 split reduces how many projects they touch.
 
-Latent, not urgent: `new DocumentEditResult` appears about 320 times in Engines.Advanced and 358 times
-in Engines.Basic, all with object initializers (`Common/DocumentEditResult.cs:22`). Its three static
-factories are used twice (`StructuralRefinementEngine.cs:104,295`). Before any shape change to that
-type, move construction behind factories first.
+Latent, not urgent: `new DocumentEditResult` appears about 108 times in Engines.Advanced and 76 times
+in Engines.Basic (recounted 2026-11-21), all with object initializers; the type has no static
+factories. Before any shape change to that type, move construction behind factories first.
 
 ## Alternatives considered, not pursued
 
