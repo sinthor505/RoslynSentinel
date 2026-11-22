@@ -48,15 +48,23 @@
     project except Support libraries, ModelEval (needs a live LLM), PlanStepRunner and SubAgent.
 
 .PARAMETER Filter
-    Passed to `dotnet test --filter` for every project. A run with neither -Filter nor -Projects
-    that completes for every project resets the main tree's .roslynsentinel/full-test-marker.json
-    (the RunTest full-suite staleness marker).
+    Passed to `dotnet test --filter` for every project (combined with -Suite). A full unfiltered run
+    (no -Projects) that completes for every project resets the main tree's
+    .roslynsentinel/full-test-marker.json (the RunTest full-suite staleness marker). A fast one only
+    increments fastRunsSince in an existing marker.
+
+.PARAMETER Suite
+    full (the default) runs everything. fast excludes [Category("OutOfProcess")] fixtures, exactly as
+    RunTest's default does (the filter mirrors TestSuiteFilter.Compose). A fast unfiltered run with no
+    -Projects that completes for every project only increments fastRunsSince in an existing marker;
+    it never creates the marker or resets lastFullRunUtc. build.ps1 -Fast and Test-Parallel.ps1
+    -Filter apply the same category filter to every project.
 
 .PARAMETER WithRatchets
     With -Filter, also runs every test marked [Category("Ratchet")] in each selected project (the
-    effective filter becomes "<Filter>|TestCategory=Ratchet"). Ratchets scan the source tree and
-    have caught regressions that class-filtered runs missed. Ignored when -Filter is empty, since
-    an unfiltered run already runs everything.
+    effective filter becomes "(<suite-composed filter>)|TestCategory=Ratchet", keyed on -Filter).
+    Ratchets scan the source tree and have caught regressions that class-filtered runs missed.
+    Ignored when -Filter is empty, since an unfiltered run already runs everything.
 
 .PARAMETER Parallel
     Run the projects concurrently. Faster, but CPU contention makes the build-timeout tests
@@ -79,6 +87,9 @@
 
 .EXAMPLE
     pwsh -File scripts/Invoke-WorktreeTests.ps1 -WorktreeRoot c:\tmp\rs-testtrees -Ref HEAD -Projects RoslynSentinel.Tests.Tools.Basic -Filter "FullyQualifiedName~GitCommitSeamParityTests" -WithRatchets
+
+.EXAMPLE
+    pwsh -File scripts/Invoke-WorktreeTests.ps1 -WorktreeRoot c:\tmp\rs-testtrees -Ref HEAD -Suite fast
 #>
 [CmdletBinding()]
 param(
@@ -97,6 +108,9 @@ param(
 
     [string]$Filter,
 
+    [ValidateSet('full', 'fast')]
+    [string]$Suite = 'full',
+
     [switch]$WithRatchets,
 
     [ValidateSet('Debug', 'Release')]
@@ -109,8 +123,13 @@ param(
     [switch]$SkipBuild
 )
 
-# -WithRatchets only widens a filtered run; an empty filter already runs every test.
-$effectiveFilter = if ($WithRatchets -and $Filter) { "$Filter|TestCategory=Ratchet" } else { $Filter }
+# Suite filter mirrors TestSuiteFilter.Compose (RoslynSentinel.Engines.Basic). -WithRatchets keys on the
+# ORIGINAL -Filter: a fast unfiltered run already runs the ratchets, because the OutOfProcess exclusion
+# does not exclude them. The union is parenthesised because `&` binds tighter than `|` in vstest filters.
+$suiteFilter = if ($Suite -eq 'fast') {
+    if ([string]::IsNullOrWhiteSpace($Filter)) { 'TestCategory!=OutOfProcess' } else { "($($Filter.Trim()))&TestCategory!=OutOfProcess" }
+} else { $Filter }
+$effectiveFilter = if ($WithRatchets -and $Filter) { "($suiteFilter)|TestCategory=Ratchet" } else { $suiteFilter }
 
 $ErrorActionPreference = 'Stop'
 $mainRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path.TrimEnd('\')
@@ -329,6 +348,7 @@ $summary = [ordered]@{
     subject  = $subject
     worktree = $RepoPath
     filter   = $effectiveFilter
+    suite    = $Suite
     seconds  = [int]$sw.Elapsed.TotalSeconds
     projects = @()
 }
@@ -376,8 +396,9 @@ $summary | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $resultsDir 'summary
 # RoslynSentinel.Engines.Basic/FullTestMarkerStore.cs), so batch runs here silence the
 # fullSuiteStale warning just like RunTest(suite: "full") does.
 $allCompleted = -not ($summary.projects | Where-Object { $_.note })
-if (-not $Filter -and -not $Projects -and $allCompleted) {
-    $markerDir = Join-Path $mainRoot '.roslynsentinel'
+$markerPath = Join-Path (Join-Path $mainRoot '.roslynsentinel') 'full-test-marker.json'
+if (-not $Filter -and -not $Projects -and $allCompleted -and $Suite -eq 'full') {
+    $markerDir = Split-Path $markerPath -Parent
     New-Item -ItemType Directory -Path $markerDir -Force | Out-Null
     $marker = [ordered]@{
         lastFullRunUtc = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
@@ -385,11 +406,35 @@ if (-not $Filter -and -not $Projects -and $allCompleted) {
         failedCount    = [int](($summary.projects | ForEach-Object { $_.failed } | Measure-Object -Sum).Sum)
         fastRunsSince  = 0
     }
-    $markerPath = Join-Path $markerDir 'full-test-marker.json'
     $tmp = "$markerPath.$PID.tmp"
     $marker | ConvertTo-Json | Set-Content -Path $tmp -Encoding utf8
     Move-Item -Path $tmp -Destination $markerPath -Force
     Write-Host "Full-suite marker updated: $markerPath"
+} elseif ($Suite -eq 'fast' -and -not $Filter -and -not $Projects -and $allCompleted) {
+    # A fast run only counts toward an existing marker; it never creates one or resets lastFullRunUtc.
+    # Read lastFullRunUtc from the raw text so it is written back in its original form.
+    try {
+        if (Test-Path $markerPath) {
+            $raw = Get-Content -Path $markerPath -Raw
+            $old = $raw | ConvertFrom-Json
+            $fast = $old.fastRunsSince
+            $lastFullMatch = [regex]::Match($raw, '"lastFullRunUtc"\s*:\s*"([^"]*)"')
+            if (($fast -is [int] -or $fast -is [long] -or $fast -is [double]) -and $lastFullMatch.Success) {
+                $counted = [ordered]@{
+                    lastFullRunUtc = $lastFullMatch.Groups[1].Value
+                    totalCount     = [int]$old.totalCount
+                    failedCount    = [int]$old.failedCount
+                    fastRunsSince  = [int]$fast + 1
+                }
+                $tmp = "$markerPath.$PID.tmp"
+                $counted | ConvertTo-Json | Set-Content -Path $tmp -Encoding utf8
+                Move-Item -Path $tmp -Destination $markerPath -Force
+                Write-Host "Fast run counted in marker: fastRunsSince = $($counted.fastRunsSince)"
+            }
+        }
+    } catch {
+        Write-Host "Fast run not counted in marker: $($_.Exception.Message)"
+    }
 }
 
 Write-Host ''
