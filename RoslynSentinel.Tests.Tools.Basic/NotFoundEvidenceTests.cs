@@ -520,10 +520,10 @@ public class NotFoundEvidenceTests
         var findings = NotFoundEvidence.FindAcrossFiles(_root, "Widget", false, "main", "s1", DateTime.UtcNow);
 
         Assert.That(findings, Has.Count.EqualTo(1));
-        Assert.That(findings[0], Does.Contain("Widget"));
-        Assert.That(findings[0], Does.Contain("Bar.cs"));
-        Assert.That(findings[0], Does.Contain("b7"));
-        Assert.That(findings[0], Does.Contain("still in"));
+        Assert.That(findings[0].Message, Does.Contain("Widget"));
+        Assert.That(findings[0].Message, Does.Contain("Bar.cs"));
+        Assert.That(findings[0].Message, Does.Contain("b7"));
+        Assert.That(findings[0].Message, Does.Contain("still in"));
     }
 
     [Test]
