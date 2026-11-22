@@ -1,18 +1,11 @@
-using System.IO.Pipelines;
-
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 using ModelContextProtocol.Client;
-using ModelContextProtocol.Extensions.Tasks;
-using ModelContextProtocol.Protocol;
 
 using RoslynSentinel.Common.AgentLoop;
-using RoslynSentinel.Server.Advanced;
 using RoslynSentinel.Tests.ModelEval.Fixtures;
-using RoslynSentinel.Tools.Advanced;
 
 namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 
@@ -27,6 +20,7 @@ namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 /// pass/fail (a size flipping from reliable to unreliable is the expected, useful outcome here, not
 /// a bug in this harness).
 /// </summary>
+// TODO duplicated [TestFixture] attribute (pre-existing): drop one, checking first that the Explicit test is not discovered twice.
 [TestFixture]
 [TestFixture]
 public class SizeThresholdAgentTests
@@ -165,14 +159,12 @@ public class SizeThresholdAgentTests
           mechanism should change.
         """;
 
-    // "Refactor" (not "Refactoring") and "Workspace" are the exact mode strings
-    // AddRoslynSentinelToolsBasic checks -> see WholeFileRewriteAgentTests.cs's ActiveModes comment
-    // for why Basic is used instead of Advanced here.
-    private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Refactor", "Workspace",
-    };
+    // Tool surface: ModelEvalToolSurfaces.Basic (the "Refactor" and "Workspace" modes) -> see
+    // WholeFileRewriteAgentTests.cs for why Basic is used instead of Advanced here.
 
+    private ModelEvalMcpEnvironment? _environment;
+
+    // Aliases of _environment's members, assigned in SetUp so the test bodies keep their field names; _environment owns disposal.
     private IHost _host = null!;
     private McpClient _mcpClient = null!;
     private RoslynSentinel.Tests.TestSolutionFixture _fixture = null!;
@@ -191,21 +183,6 @@ public class SizeThresholdAgentTests
                 "server with a loaded model and are skipped rather than failed when unconfigured.");
         }
 
-        _fixture = new RoslynSentinel.Tests.TestSolutionFixture();
-
-        var clientToServer = new Pipe();
-        var serverToClient = new Pipe();
-
-        var services = new ServiceCollection();
-        services.AddRoslynSentinelEnginesBasic();
-
-        var mcpBuilder = services.AddMcpServer();
-        mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
-        mcpBuilder.WithTasks(
-            new InMemoryMcpTaskStore(),
-            o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
-        mcpBuilder.AddRoslynSentinelToolsBasic(services, ActiveModes);
-
         _runDirectory = Path.Combine(
             TestContext.CurrentContext.WorkDirectory,
             "model-eval",
@@ -213,71 +190,56 @@ public class SizeThresholdAgentTests
             $"n{_unrelatedMethodCount}",
             DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
 
-        var hostBuilder = Host.CreateApplicationBuilder();
-        hostBuilder.Services.AddLmStudioAgentClient(client =>
-        {
-            client.BaseAddress = new Uri(LlmOptions.BaseUrl.TrimEnd('/') + "/");
-            client.Timeout = TimeSpan.FromSeconds(Math.Max(LlmOptions.TimeoutSeconds * 4, 600));
-        });
-        foreach (var descriptor in services)
-        {
-            hostBuilder.Services.Add(descriptor);
-        }
+        // The agent.log sink in _runDirectory is created by the environment (a file sink that flushes on every write, since
+        // dotnet test's console logger block-buffers stdout when redirected, which would hide ModelAgentRunner's per-turn
+        // logging until the process exits).
+        _environment = await ModelEvalMcpEnvironment.CreateAsync(
+            _runDirectory,
+            restorePackages: false,
+            beforeLoad: null,
+            afterLoad: StageFilesAsync,
+            TestContext.CurrentContext.CancellationToken,
+            configureToolSurface: ModelEvalToolSurfaces.Basic);
+        _host = _environment.Host;
+        _mcpClient = _environment.Client;
+        _fixture = _environment.Fixture;
+        _agentClient = _environment.AgentClient;
+    }
 
-        // dotnet test's console logger block-buffers stdout when it's redirected to a file, so
-        // ModelAgentRunner's per-turn logging is invisible until the whole test process exits ->
-        // this file sink writes+flushes independently so a run can be tailed live.
-        hostBuilder.Logging.AddProvider(new FlushingFileLoggerProvider(Path.Combine(_runDirectory, "agent.log")));
-
-        _host = hostBuilder.Build();
-        _ = _host.RunAsync();
-
-        var workspaceManager = _host.Services.GetRequiredService<IWorkspaceManager>();
-        await workspaceManager.LoadSolutionAsync(_fixture.SolutionPath, TestContext.CurrentContext.CancellationToken);
-
-        await _fixture.AddFileToSolution(
+    // Instance method: reads _unrelatedMethodCount, which Model_SizeThresholdSweep sets before each SetUp.
+    private async Task StageFilesAsync(
+        RoslynSentinel.Tests.TestSolutionFixture fixture,
+        IWorkspaceManager workspaceManager,
+        CancellationToken cancellationToken)
+    {
+        await fixture.AddFileToSolution(
             workspaceManager,
             Path.Combine("ContosoOrders.Core", "FixtureHelpers", "BlockEditHelpers.cs"),
             SizeGraduatedReproducer.HelperFileContent,
             reloadSolution: false,
-            cancellationToken: TestContext.CurrentContext.CancellationToken);
-        await _fixture.AddFileToSolution(
+            cancellationToken: cancellationToken);
+        await fixture.AddFileToSolution(
             workspaceManager,
             Path.Combine("ContosoOrders.Core", "FixtureHelpers", "BlockConverter.cs"),
             SizeGraduatedReproducer.BuildBuggyFileContent(_unrelatedMethodCount),
             reloadSolution: false,
-            cancellationToken: TestContext.CurrentContext.CancellationToken);
-        await _fixture.AddFileToSolution(
+            cancellationToken: cancellationToken);
+        await fixture.AddFileToSolution(
             workspaceManager,
             Path.Combine("ContosoOrders.Core", "FixtureHelpers", "Shape.cs"),
             SizeGraduatedReproducer.TargetAbstractClassFileContent,
             reloadSolution: true,
-            cancellationToken: TestContext.CurrentContext.CancellationToken);
-
-        var clientTransport = new StreamClientTransport(
-            serverInput: clientToServer.Writer.AsStream(),
-            serverOutput: serverToClient.Reader.AsStream(),
-            loggerFactory: NullLoggerFactory.Instance);
-
-        _mcpClient = await McpClient.CreateAsync(clientTransport, cancellationToken: TestContext.CurrentContext.CancellationToken);
-        _agentClient = _host.Services.GetRequiredService<LmStudioAgentClient>();
+            cancellationToken: cancellationToken);
     }
 
     [TearDown]
     public async Task TearDown()
     {
-        if (_mcpClient is not null)
+        if (_environment is not null)
         {
-            await _mcpClient.DisposeAsync();
+            await _environment.DisposeAsync();
+            _environment = null;
         }
-
-        if (_host is not null)
-        {
-            await _host.StopAsync();
-            _host.Dispose();
-        }
-
-        _fixture?.Dispose();
 
         if (_runDirectory is not null)
         {

@@ -1,19 +1,13 @@
-using System.IO.Pipelines;
-
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 using ModelContextProtocol.Client;
-using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
 using RoslynSentinel.Common.AgentLoop;
-using RoslynSentinel.Server.Advanced;
 using RoslynSentinel.Tests.ModelEval.Fixtures;
-using RoslynSentinel.Tools.Advanced;
 
 namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 
@@ -66,16 +60,9 @@ public class PlanOnlyAgentTests
         to the bug.
         """;
 
-    // "Refactor" (not "Refactoring") and "Workspace" are the exact mode strings
-    // AddRoslynSentinelToolsBasic checks -> see WholeFileRewriteAgentTests.ActiveModes for why both
-    // modes are needed even though this fixture blocks every mutating tool they'd otherwise expose:
-    // ApplyDiffTool/BuildTool/ReadFileTool/ListAllTool/Search all live in SentinelWorkspaceTools (gated by
-    // "Workspace"), so there is no mode combination that yields read-only tools without ApplyDiffTool ->
-    // the BlockedToolFilter below is what actually enforces "no edits", not the mode selection.
-    private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Refactor", "Workspace",
-    };
+    // Tool surface: ModelEvalToolSurfaces.Basic (the "Refactor" and "Workspace" modes, see WholeFileRewriteAgentTests for why
+    // both are needed even though this fixture blocks every mutating tool they'd otherwise expose) -> the request filter in
+    // ConfigureToolSurface is what actually enforces "no edits", not the mode selection.
 
     // Tool names blocked for this fixture. Matches WholeFileRewriteAgentTests's fixture (BlockConverter/
     // BlockEditHelpers/Shape.cs) so the same investigation surface is available read-only; blocks every
@@ -88,6 +75,9 @@ public class PlanOnlyAgentTests
         "WriteFile", "DeleteFile",
     };
 
+    private ModelEvalMcpEnvironment? _environment;
+
+    // Aliases of _environment's members, assigned in SetUp so the test bodies keep their field names; _environment owns disposal.
     private IHost _host = null!;
     private McpClient _mcpClient = null!;
     private RoslynSentinel.Tests.TestSolutionFixture _fixture = null!;
@@ -105,26 +95,34 @@ public class PlanOnlyAgentTests
                 "server with a loaded model and are skipped rather than failed when unconfigured.");
         }
 
-        _fixture = new RoslynSentinel.Tests.TestSolutionFixture();
+        _runDirectory = Path.Combine(
+            TestContext.CurrentContext.WorkDirectory,
+            "model-eval",
+            TestContext.CurrentContext.Test.Name,
+            DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
 
-        var clientToServer = new Pipe();
-        var serverToClient = new Pipe();
+        _environment = await ModelEvalMcpEnvironment.CreateAsync(
+            _runDirectory,
+            restorePackages: false,
+            beforeLoad: null,
+            afterLoad: StageFilesAsync,
+            TestContext.CurrentContext.CancellationToken,
+            configureToolSurface: ConfigureToolSurface);
+        _host = _environment.Host;
+        _mcpClient = _environment.Client;
+        _fixture = _environment.Fixture;
+        _agentClient = _environment.AgentClient;
+    }
 
-        var services = new ServiceCollection();
-        services.AddRoslynSentinelEnginesBasic();
+    // The Basic tool surface, plus a request filter that blocks every mutating tool in BlockedToolNames before it reaches
+    // the real implementation, returning an error the model can read and reason about (rather than an unhandled protocol
+    // exception) -> mirrors the shape of the centralized filters AddRoslynSentinelToolsBasic itself registers (see
+    // ServiceRegistrationExtensionsBasic.cs), just test-local instead of shared, since only this experiment needs a
+    // read-only toolset.
+    private static void ConfigureToolSurface(IMcpServerBuilder mcpBuilder, IServiceCollection services)
+    {
+        ModelEvalToolSurfaces.Basic(mcpBuilder, services);
 
-        var mcpBuilder = services.AddMcpServer();
-        mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
-        mcpBuilder.WithTasks(
-            new InMemoryMcpTaskStore(),
-            o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
-        mcpBuilder.AddRoslynSentinelToolsBasic(services, ActiveModes);
-
-        // Blocks every mutating tool in BlockedToolNames before it reaches the real implementation,
-        // returning an error the model can read and reason about (rather than an unhandled protocol
-        // exception) -> mirrors the shape of the centralized filters AddRoslynSentinelToolsBasic
-        // itself registers (see ServiceRegistrationExtensionsBasic.cs), just test-local instead of
-        // shared, since only this experiment needs a read-only toolset.
         mcpBuilder.WithRequestFilters(filters =>
         {
             filters.AddCallToolFilter(next => new McpRequestHandler<CallToolRequestParams, CallToolResult>(
@@ -150,75 +148,41 @@ public class PlanOnlyAgentTests
                     return await next(context, cancellationToken);
                 }));
         });
+    }
 
-        _runDirectory = Path.Combine(
-            TestContext.CurrentContext.WorkDirectory,
-            "model-eval",
-            TestContext.CurrentContext.Test.Name,
-            DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
-
-        var hostBuilder = Host.CreateApplicationBuilder();
-        hostBuilder.Services.AddLmStudioAgentClient(client =>
-        {
-            client.BaseAddress = new Uri(LlmOptions.BaseUrl.TrimEnd('/') + "/");
-            client.Timeout = TimeSpan.FromSeconds(Math.Max(LlmOptions.TimeoutSeconds * 4, 600));
-        });
-        foreach (var descriptor in services)
-        {
-            hostBuilder.Services.Add(descriptor);
-        }
-
-        hostBuilder.Logging.AddProvider(new FlushingFileLoggerProvider(Path.Combine(_runDirectory, "agent.log")));
-
-        _host = hostBuilder.Build();
-        _ = _host.RunAsync();
-
-        var workspaceManager = _host.Services.GetRequiredService<IWorkspaceManager>();
-        await workspaceManager.LoadSolutionAsync(_fixture.SolutionPath, TestContext.CurrentContext.CancellationToken);
-
-        await _fixture.AddFileToSolution(
+    private static async Task StageFilesAsync(
+        RoslynSentinel.Tests.TestSolutionFixture fixture,
+        IWorkspaceManager workspaceManager,
+        CancellationToken cancellationToken)
+    {
+        await fixture.AddFileToSolution(
             workspaceManager,
             Path.Combine("ContosoOrders.Core", "FixtureHelpers", "BlockEditHelpers.cs"),
             WholeFileRewriteReproducer.HelperFileContent,
             reloadSolution: false,
-            cancellationToken: TestContext.CurrentContext.CancellationToken);
-        await _fixture.AddFileToSolution(
+            cancellationToken: cancellationToken);
+        await fixture.AddFileToSolution(
             workspaceManager,
             Path.Combine("ContosoOrders.Core", "FixtureHelpers", "BlockConverter.cs"),
             WholeFileRewriteReproducer.BuggyFileContent,
             reloadSolution: false,
-            cancellationToken: TestContext.CurrentContext.CancellationToken);
-        await _fixture.AddFileToSolution(
+            cancellationToken: cancellationToken);
+        await fixture.AddFileToSolution(
             workspaceManager,
             Path.Combine("ContosoOrders.Core", "FixtureHelpers", "Shape.cs"),
             WholeFileRewriteReproducer.TargetAbstractClassFileContent,
             reloadSolution: true,
-            cancellationToken: TestContext.CurrentContext.CancellationToken);
-
-        var clientTransport = new StreamClientTransport(
-            serverInput: clientToServer.Writer.AsStream(),
-            serverOutput: serverToClient.Reader.AsStream(),
-            loggerFactory: NullLoggerFactory.Instance);
-
-        _mcpClient = await McpClient.CreateAsync(clientTransport, cancellationToken: TestContext.CurrentContext.CancellationToken);
-        _agentClient = _host.Services.GetRequiredService<LmStudioAgentClient>();
+            cancellationToken: cancellationToken);
     }
 
     [TearDown]
     public async Task TearDown()
     {
-        if (_mcpClient is not null)
+        if (_environment is not null)
         {
-            await _mcpClient.DisposeAsync();
+            await _environment.DisposeAsync();
+            _environment = null;
         }
-
-        if (_host is not null)
-        {
-            await _host.StopAsync();
-            _host.Dispose();
-        }
-
-        _fixture?.Dispose();
 
         if (_runDirectory is not null)
         {
