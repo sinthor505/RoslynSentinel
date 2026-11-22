@@ -189,8 +189,7 @@ public class TestingEngine
 
         if (classNode == null)
         {
-            return new TestScaffoldResult(className, $"{className}Tests", "Global.Tests", "", $"Class '{className}' not found in {filePath}")
-            { ErrorCode = ToolErrorCode.NotFound };
+            throw new ToolNotFoundException($"Class '{className}' not found in {Path.GetFileName(filePath)}. " + RoslynSentinel.Engines.Basic.DeclarationNotFoundDetail.Build("class", "className", className, root.DescendantNodes().OfType<ClassDeclarationSyntax>().Select(classDecl => classDecl.Identifier.Text), filePath.ToString()), MissingTargetKinds.Class, className);
         }
 
         var ns = classNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault()?.Name.ToString() ?? "Global";

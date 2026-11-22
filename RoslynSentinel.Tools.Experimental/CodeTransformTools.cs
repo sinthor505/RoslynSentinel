@@ -782,19 +782,11 @@ public class CodeTransformTools
         return filePath.FailureReason == FilePathFailureReason.NoSolutionLoaded ? new ResultError(ToolErrorCode.SolutionNotLoaded, SolutionNotLoadedMessage.ForFilePath(kind, _workspaceManager.LoadState)) : new ResultError(ToolErrorCode.InvalidArgument, $"filePath is required for {kind}.");
     }
 
-    private static SentinelCallToolResult<object> GeneratorFailure(string code, string error, string missingTargetKind)
+    private static SentinelCallToolResult<object> GeneratorFailure(string code, string error)
     {
-        // The engine results carry only a code and a message, not the missing kind; the generator knows what it looked up (the caller passes the
-        // MissingTargetKinds constant), so the kind goes onto the call context the way ToolErrorMapper.ToResultError does for a thrown ToolNotFoundException
-        // (precedent: SymbolNavigationImpl records a result-level NotFound the same way). NameCandidates detail is not available from the engine result.
-        if (code == ToolErrorCode.NotFound)
-        {
-            ToolCallContext.Current?.RecordMissingTarget(missingTargetKind);
-        }
-
-        var hint = code == ToolErrorCode.NotFound
-            ? $" {ToolCallHint.Call("GetFileOutline", ("filePath", "<the file>"))} lists the types declared in the file; className must match one of them exactly."
-            : code == ToolErrorCode.TargetIneligible
+        // NotFound is not produced here: the engines throw ToolNotFoundException and the tool boundary maps it (ToolErrorMapper), which also
+        // records the missing kind. This method only carries coded results such as TargetIneligible.
+        var hint = code == ToolErrorCode.TargetIneligible
                 ? " Options: add a settable property or a primary constructor parameter, or pick another class."
                 : "";
         return new SentinelCallToolResult<object>()
@@ -1224,7 +1216,7 @@ public class CodeTransformTools
                             var result = await _codeGenerationEngine.GenerateFluentBuilderAsync(resolvedFilePath, className, cancellationToken);
                             if (result.IsError)
                             {
-                                return GeneratorFailure(result.Code!, result.Error!, MissingTargetKinds.Type);
+                                return GeneratorFailure(result.Code!, result.Error!);
                             }
                             return new SentinelCallToolResult<object>()
                             {
@@ -1316,7 +1308,7 @@ public class CodeTransformTools
                         var result = await _testingEngine.GenerateTestScaffoldAsync(resolvedFilePath, className, framework, cancellationToken);
                         if (result.IsError)
                         {
-                            return GeneratorFailure(result.ErrorCode ?? ToolErrorCode.Exception, result.Error!, MissingTargetKinds.Class);
+                            return GeneratorFailure(result.ErrorCode ?? ToolErrorCode.Exception, result.Error!);
                         }
                         return new SentinelCallToolResult<object>()
                         {

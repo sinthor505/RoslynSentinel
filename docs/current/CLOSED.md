@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Generator not-found errors have no name candidates - resolved (2026-11-21)
+
+Generator not-found errors have no name candidates (2026-11-21) - generate_fluent_builder / generate_test_scaffold record a kind via `CodeTransformTools.GeneratorFailure` but FluentBuilderResult/TestScaffoldResult hold only Code and Error; have both engines throw `ToolNotFoundException(kind, name, candidates)` like the other Engines.Advanced lookups and drop the result-level NotFound path; Small
+
+Evidence: #5: generate_fluent_builder and generate_test_scaffold engines throw ToolNotFoundException (typed kind + name, DeclarationNotFoundDetail hint text, owner ruling: hint text not candidate objects); result-level NotFound and GeneratorFailure NotFound branch removed; CodeTransformToolsOutcomeTests + generator battery tests + ErrorPolicyKindRatchetTests green (155 tests)
+
 ## MoveMember public-sibling probe - resolved (2026-11-21)
 
 `MoveMember` public-sibling probe (2026-10-03) - alias duplicates are fixed (`MoveMemberUsings.cs` ~103, dedup by alias name) and unmoved private/internal siblings are refused (`RequireNoUnmovedDependencies`, transitive since 121e33c1); add one probe test: an instance move whose body calls a public sibling or instance state by bare name; a clear compile-gate refusal -> close the alias half and park qualify-receivers (unpark on a real CS0103 after MoveMember), a confusing failure -> keep open and design the qualify pass; Small - [doc](issues/issue_movemember_open_followups.md)

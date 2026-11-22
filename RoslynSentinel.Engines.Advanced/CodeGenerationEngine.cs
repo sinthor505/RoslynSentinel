@@ -620,9 +620,7 @@ public class CodeGenerationEngine
 
         if (typeNode == null)
         {
-            return new FluentBuilderResult("", "", "",
-                Error: $"Class or record '{className}' not found in '{filePath}'. Check spelling and that the file contains this type.")
-            { ErrorCode = ToolErrorCode.NotFound };
+            throw new ToolNotFoundException($"Class or record '{className}' not found in {Path.GetFileName(filePath)}. " + DeclarationNotFoundDetail.Build("class or record", "className", className, root?.DescendantNodes().OfType<TypeDeclarationSyntax>().Where(t => t is ClassDeclarationSyntax or RecordDeclarationSyntax).Select(t => t.Identifier.Text) ?? Enumerable.Empty<string>(), filePath.ToString()), MissingTargetKinds.Type, className);
         }
 
         var ns = root?.DescendantNodes()
