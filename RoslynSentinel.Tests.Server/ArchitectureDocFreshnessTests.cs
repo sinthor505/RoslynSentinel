@@ -155,6 +155,7 @@ public class ArchitectureDocFreshnessTests
     }
 
     [Test]
+    [Category("Ratchet")]
     public void ToolsArchitectureDocFreshness_WhenCommittedFileExists_MatchesRegeneratedContent()
     {
         AssertCommittedFileIsFresh("architecture_tools.md", ArchitectureDocGenerator.GenerateToolsMarkdown());
@@ -167,6 +168,7 @@ public class ArchitectureDocFreshnessTests
     }
 
     [Test]
+    [Category("Ratchet")]
     public void ProjectsArchitectureDocFreshness_WhenCommittedFileExists_MatchesRegeneratedContent()
     {
         AssertCommittedFileIsFresh("architecture_projects.md", ArchitectureDocGenerator.GenerateProjectsMarkdown());
