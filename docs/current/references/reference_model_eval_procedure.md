@@ -43,6 +43,9 @@ shows, per endpoint, whether it is reachable, which model ids are loaded, the co
 - Machine keys are `112`, `113` and `85`. Each has a `<machine>u` alias (Unsloth llama-server, port 8888)
   and a `<machine>lms` alias (LM Studio, port 1234). Exactly one entry per machine is `default: true`,
   currently the llama-server one.
+- Unsloth per-request sampler fields (probed 2026-11-22): `/v1/chat/completions` honours top_k, min_p,
+  `repetition_penalty` (not `repeat_penalty`) and enable_thinking; `/v1/responses` (the eval client) honours
+  only temperature/top_p. Details: [finding](../findings/finding_overnight_token_path_slips.md) item 7.
 - A bare machine key (`-HostAddress 113`) means that machine's default entry. Use `113lms` for LM Studio.
 - Address resolution: a table alias, a bare machine key (its default entry), or a base URL equal to an
   entry's `baseUrl`; any other base URL is used verbatim.

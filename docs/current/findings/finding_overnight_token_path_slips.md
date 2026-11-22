@@ -259,8 +259,14 @@ Open (TODO.md):
    on defaults, a model loaded on demand can skip its preset), and "repeat penalty off for code" was
    already a recorded result months earlier (MEMORY_CLOSED: "Repeat Penalty A/B test results", "LM Studio
    sampling params for code"), so a written rule has not held. Options: the eval client sends the sampler
-   per request on `/v1/chat/completions` (repeat_penalty and presence_penalty verified honoured there;
-   min_p not verified), or the harness reads the effective sampler per run and records or refuses a mismatch.
+   per request on `/v1/chat/completions` (LM Studio: repeat_penalty and presence_penalty verified honoured
+   there), or the harness reads the effective sampler per run and records or refuses a mismatch.
+   Unsloth hosts (85u Qwen3.5-4B, 113u Ornith-1.5-9B, probed 2026-11-22; script and output in
+   `<scratch>\unsloth-sampler-probe\`): `/v1/chat/completions` honours temperature, top_p, top_k, min_p,
+   `repetition_penalty` and enable_thinking; `repeat_penalty` and presence_penalty (2.0, greedy) have no
+   effect; no sampler field is echoed. `/v1/responses` honours temperature and top_p (both echoed) and
+   ignores top_k, min_p, both penalty spellings and enable_thinking. So per-request enforcement on Unsloth
+   needs the chat endpoint (or the host preset) for everything beyond temperature/top_p.
 8. **Lower-temperature arm (run 2026-11-18).** tiel step 4: 6.0% at 0.6, 1.25% at 0.4, 1.0% at 0.3. Open: the
    effect on pass rates and on other models and replay points.
 
