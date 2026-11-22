@@ -3,8 +3,6 @@ using System.Text.RegularExpressions;
 
 using Microsoft.Extensions.Logging;
 
-using RoslynSentinel.Common.AgentLoop;
-
 namespace RoslynSentinel.Common;
 
 /// <summary>One latched tool of one agent, as McpServerStatus reports it (only when --loop-latch is on).</summary>
@@ -123,7 +121,7 @@ public sealed class ToolLoopLatch
                 return false;
             }
 
-            state.Latched[toolName] = new LatchedTool(errorCode ?? "", count, errorMessage is null ? null : LoopAssistTracker.ExtractNextStep(errorMessage));
+            state.Latched[toolName] = new LatchedTool(errorCode ?? "", count, errorMessage is null ? null : NextStepText.Extract(errorMessage));
             _logger?.LogWarning(
                 "Loop latch TRIPPED for agent {Agent}: {Tool} failed the same way {Count} times (error code {ErrorCode}).",
                 key, toolName, count, errorCode ?? "(none)");

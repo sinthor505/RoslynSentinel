@@ -77,8 +77,6 @@ public sealed class LoopAssistTracker(LoopAssistOptions options)
         @"\((?:\d+s|\d+ min|\d+h \d+ min) ago\)",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
-    private const string NextStepMarker = "Next step: ";
-
     private sealed class RepeatGroup(string toolName)
     {
         public string ToolName { get; } = toolName;
@@ -228,19 +226,7 @@ public sealed class LoopAssistTracker(LoopAssistOptions options)
     }
 
     /// <summary>The text after "Next step: " to the end of its line, verbatim; null when the error has none.</summary>
-    internal static string? ExtractNextStep(string errorText)
-    {
-        var start = errorText.IndexOf(NextStepMarker, StringComparison.Ordinal);
-        if (start < 0)
-        {
-            return null;
-        }
-
-        start += NextStepMarker.Length;
-        var end = errorText.IndexOfAny(['\r', '\n'], start);
-        var step = (end < 0 ? errorText[start..] : errorText[start..end]).Trim();
-        return step.Length == 0 ? null : step;
-    }
+    internal static string? ExtractNextStep(string errorText) => NextStepText.Extract(errorText);
 
     private static string WithSentenceEnd(string text) => text[^1] is '.' or '!' or '?' ? text : text + ".";
 
