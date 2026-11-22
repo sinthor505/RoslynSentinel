@@ -12,7 +12,9 @@
     2. With -Ref, moves the worktree to that commit (detached; refuses a dirty worktree).
     3. Builds RoslynSentinel.slnx once (no MSBuild node reuse, no build servers, so it cannot hold
        locks that the main tree's builds would trip over).
-    4. Runs `dotnet test --no-build` per test project, sequentially by default, one TRX each.
+    4. Runs `dotnet test --no-build` per test project, one TRX each: concurrently for -Suite fast (unless
+       -Sequential), one at a time for -Suite full (unless -Parallel). An unfiltered full run first runs
+       the [Category("Ratchet")] tests and stops on a ratchet failure (see -NoFailFast).
     5. Prints a per-project summary plus each failed test's name and first message line, writes
        summary.json beside the TRX files, and exits 0 (all passed), 1 (test failures) or 2 (build
        failed or setup error).
@@ -66,9 +68,19 @@
     Ratchets scan the source tree and have caught regressions that class-filtered runs missed.
     Ignored when -Filter is empty, since an unfiltered run already runs everything.
 
+.PARAMETER NoFailFast
+    An unfiltered -Suite full run first runs every [Category("Ratchet")] test, concurrently per project.
+    A ratchet failure stops the run, so it costs seconds instead of a whole full run.
+    -NoFailFast skips this stage.
+    Fast runs have no such stage, because they already finish in about 4-5 minutes.
+
 .PARAMETER Parallel
-    Run the projects concurrently. Faster, but CPU contention makes the build-timeout tests
-    (BuildCascadeFixtureTests.FullBuild_* and similar) time out more often.
+    The projects run concurrently. This is the default for -Suite fast.
+    Measured 2026-11-22 at cc990855, 3 runs each, all green, no load timeouts: fast sequential 548-563 s, fast parallel 258-294 s.
+    For -Suite full it stays opt-in, because CPU contention makes the OutOfProcess build-timeout fixtures (BuildCascadeFixtureTests.FullBuild_* and similar) time out more often.
+
+.PARAMETER Sequential
+    Forces one project at a time for -Suite fast. Cannot be combined with -Parallel.
 
 .PARAMETER HangTimeoutMinutes
     Optional per-project `--blame-hang-timeout`; a hung test is killed and reported.
@@ -118,9 +130,13 @@ param(
 
     [switch]$Parallel,
 
+    [switch]$Sequential,
+
     [int]$HangTimeoutMinutes = 0,
 
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+
+    [switch]$NoFailFast
 )
 
 # Suite filter mirrors TestSuiteFilter.Compose (RoslynSentinel.Engines.Basic). -WithRatchets keys on the
@@ -156,6 +172,8 @@ function Fail([string]$message) {
 }
 
 if ([bool]$RepoPath -eq [bool]$WorktreeRoot) { Fail "pass exactly one of -RepoPath (reusable worktree) or -WorktreeRoot (fresh worktree per run)." }
+if ($Parallel -and $Sequential) { Fail "pass at most one of -Parallel and -Sequential" }
+$runParallel = $Parallel -or ($Suite -eq 'fast' -and -not $Sequential)
 if ($WorktreeRoot) {
     if (-not [System.IO.Path]::IsPathRooted($WorktreeRoot)) { Fail "-WorktreeRoot must be absolute: $WorktreeRoot" }
     $WorktreeRoot = [System.IO.Path]::GetFullPath($WorktreeRoot).TrimEnd('\')
@@ -319,10 +337,74 @@ function Get-FailureLogLine([string]$path) {
     return $pick.Trim()
 }
 
+# --- Ratchet-first stage (unfiltered -Suite full only) ---------------------------------------
+# Every [Category("Ratchet")] test in every selected project runs concurrently before the project
+# loop, so a red ratchet stops the run in seconds. Unlike the project loop below, a missing TRX
+# counts as a pass here: a project with no ratchet tests matches zero tests and writes no TRX.
+$ratchetStageSeconds = $null
+if ($Suite -eq 'full' -and -not $Filter -and -not $NoFailFast) {
+    $ratchetStart = Get-Date
+    $ratchetDir = Join-Path $resultsDir 'ratchet-stage'
+    New-Item -ItemType Directory -Path $ratchetDir -Force | Out-Null
+    $ratchetJobs = foreach ($p in $selected) {
+        $leaf = Split-Path $p -LeafBase
+        $log = Join-Path $ratchetDir "$leaf.log"
+        $proc = Start-Process -FilePath 'dotnet' -ArgumentList @('test', $p, '-c', $Configuration, '--no-build', '--nologo',
+            '--results-directory', $ratchetDir, '--logger', "trx;LogFileName=$leaf.trx", '--filter', 'TestCategory=Ratchet') `
+            -RedirectStandardOutput $log -RedirectStandardError "$log.err" -NoNewWindow -PassThru
+        [pscustomobject]@{ leaf = $leaf; proc = $proc }
+    }
+    $ratchetJobs.proc | Wait-Process
+    $ratchetRows = @()
+    foreach ($j in $ratchetJobs) {
+        $row = [ordered]@{ project = $j.leaf; total = 0; passed = 0; failed = 0; failures = @() }
+        $trx = Join-Path $ratchetDir "$($j.leaf).trx"
+        if (Test-Path $trx) {
+            [xml]$x = Get-Content $trx -Raw
+            $ns = @{ t = 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010' }
+            $c = (Select-Xml -Xml $x -XPath '//t:ResultSummary/t:Counters' -Namespace $ns).Node
+            $row.total = [int]$c.total
+            $row.passed = [int]$c.passed
+            $row.failed = [int]$c.failed + [int]$c.error + [int]$c.timeout + [int]$c.aborted
+            foreach ($r in (Select-Xml -Xml $x -XPath "//t:UnitTestResult[@outcome='Failed']" -Namespace $ns)) {
+                $msg = $r.Node.Output.ErrorInfo.Message
+                $first = if ($msg) { ($msg -split "`r?`n" | Where-Object { $_.Trim() } | Select-Object -First 1).Trim() } else { '' }
+                $row.failures += [ordered]@{ test = $r.Node.testName; message = $first }
+            }
+        }
+        $ratchetRows += $row
+    }
+    $ratchetStageSeconds = [int]((Get-Date) - $ratchetStart).TotalSeconds
+    $ratchetCount = [int](($ratchetRows | ForEach-Object { $_.total } | Measure-Object -Sum).Sum)
+    $ratchetFailCount = [int](($ratchetRows | ForEach-Object { $_.failed } | Measure-Object -Sum).Sum)
+    Write-Host "Ratchet stage: $ratchetCount tests, $ratchetFailCount failed in $($ratchetStageSeconds)s"
+    if ($ratchetFailCount -gt 0) {
+        foreach ($row in @($ratchetRows | Where-Object { $_.failed -gt 0 })) {
+            Write-Host ''
+            Write-Host "Failed in $($row.project):"
+            foreach ($f in $row.failures) { Write-Host "  $($f.test)`n      $($f.message)" }
+        }
+        $ratchetSummary = [ordered]@{
+            commit   = $head
+            subject  = $subject
+            worktree = $RepoPath
+            filter   = $effectiveFilter
+            suite    = $Suite
+            parallel = $runParallel
+            stage    = 'ratchet'
+            seconds  = $ratchetStageSeconds
+            projects = @($ratchetRows)
+        }
+        $ratchetSummary | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $resultsDir 'summary.json') -Encoding utf8
+        Write-Host 'Ratchet failure: stopping before the project loop (pass -NoFailFast to run everything)'
+        Finish 1
+    }
+}
+
 # project leaf name -> dotnet exit code (set for both the parallel and sequential paths)
 $exitCodes = @{}
 
-if ($Parallel) {
+if ($runParallel) {
     $jobs = foreach ($p in $selected) {
         $leaf = Split-Path $p -LeafBase
         $log = Join-Path $resultsDir "$leaf.log"
@@ -349,7 +431,9 @@ $summary = [ordered]@{
     worktree = $RepoPath
     filter   = $effectiveFilter
     suite    = $Suite
+    parallel = $runParallel
     seconds  = [int]$sw.Elapsed.TotalSeconds
+    ratchetStageSeconds = $ratchetStageSeconds
     projects = @()
 }
 $anyFailed = $false

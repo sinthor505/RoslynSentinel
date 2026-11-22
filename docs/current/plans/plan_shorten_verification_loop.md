@@ -418,6 +418,23 @@ call sites in 60 files. It also found a second 30 s default, the `LoadSolution` 
 - Done when: 12a table of 6 runs (wall, red or green, timeouts) in this plan; 12b parse check and a worktree run reporting the new wall.
   Outcome classes: parallel fast run equal failure sets and faster (adopt), faster but new failures (keep opt-in, record causes), no
   faster (record why; the serial tail is the bound). Lane: 12a dispatcher, 12b `implementer`.
+- Done (12a), 2026-11-22. Six `-Suite fast` runs at `cc990855`, one at a time, alternating modes. No run of mine overlapped them; a peer
+  session was active on the box.
+
+| Run | Mode | Seconds (incl. build) | Tests | Failed | Load timeouts |
+| --- | --- | --- | --- | --- | --- |
+| `cc990855-20261122-154110-38724` | sequential | 562 | 9,588 | 0 | 0 |
+| `cc990855-20261122-155038-51164` | `-Parallel` | 294 | 9,588 | 0 | 0 |
+| `cc990855-20261122-155536-32772` | sequential | 563 | 9,588 | 0 | 0 |
+| `cc990855-20261122-160504-46336` | `-Parallel` | 272 | 9,588 | 0 | 0 |
+| `cc990855-20261122-160941-1456` | sequential | 548 | 9,588 | 0 | 0 |
+| `cc990855-20261122-161854-11888` | `-Parallel` | 258 | 9,588 | 0 | 0 |
+
+  - **Outcome:** adopt. The failure sets are equal and the parallel median is 272 s against 562 s sequential, under the 450 s threshold.
+  - **12b:** makes parallel the default for `-Suite fast`. `-Sequential` opts out; full runs stay opt-in.
+  - **Not done:** the E-row sharding for full runs, which needs a measured parallel full run first.
+- Re-scope of 11b (dispatcher, 2026-11-22). With fast runs at about 270 s, a ratchet-first stage that starts 10 test processes would cost
+  fast runs more than it saves. It is applied to unfiltered `-Suite full` runs only (median 1,328 s), and `-NoFailFast` skips it.
 
 ### Step 13 - Affected-test selection gate (no code in this plan)
 - Files: this plan; possibly a new plan from `proposal_runtest_tests_for_members.md`.
