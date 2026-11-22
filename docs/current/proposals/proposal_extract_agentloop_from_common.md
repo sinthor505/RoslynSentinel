@@ -1,6 +1,6 @@
 # Extract the agent-loop harness from RoslynSentinel.Common into RoslynSentinel.AgentLoop
 
-**Status:** PROPOSED 2026-11-20. Awaiting owner decision; requested during the 2026-11-20 TODO review, not yet approved or scheduled.
+**Status:** APPROVED 2026-11-21. Open questions a-g settled in the todo review (see Decisions); ready to slice. Earlier: PROPOSED 2026-11-20.
 
 ## Motivation
 
@@ -233,3 +233,19 @@ g. **Test relocation.** Whether to move the stranded tests to `Tests.ModelEval`/
   question e).
 - `docs/current/references/reference_parse_agent_log_script.md` (log categories that depend on the
   kept namespace).
+
+## Decisions (todo review 2026-11-21)
+
+Approved by the owner; unblocked because the 2026-11-20 punchlist is done. Review notes: `Common/AgentLoop`
+now holds 18 files (`RunDirectoryArchive.cs`, `LlamaServerModels.cs` added since the inventory); a third,
+cosmetic back-edge exists (`LlmOptions.cs:19,65` crefs to `LmStudioAgentClient`); the ratchet has 4 path
+pins (`BareFileWriteRatchetTests.cs:23-27`), not 2.
+
+- **a. Measure MSBuild reference-assembly skipping first?** Choice: no pre-measure; the measure is the acceptance check. Why: the parallel-dispatch goal does not depend on it.
+- **b. Name and namespace.** Choice: project `RoslynSentinel.AgentLoop`, namespace kept. Why: keeps ~90 test usings and the `Parse-AgentLog.ps1` categories.
+- **c. Combine with a SubAgent project split?** Choice: no. Why: SubAgent's place is settled by the tool-surface review (stays in main) and the Advanced cluster split.
+- **d. Reflection tests over Common types.** Choice: none found; a full test run in the move slice is enough.
+- **e. Scripts and frozen trees.** Choice: fix the path comments in `scripts/Backfill-TranscriptSummary.ps1` only.
+- **f. Package flow.** Choice: declare nothing; add a package reference only on a build error.
+- **g. Stranded tests** (`LoopAssistTrackerTests`, `ReasoningReplayPolicyTests`, `AgentTranscriptFinalMessageTests`, `LmStudioAgentClientInputItemsTests`, `ErrorPolicyWiringTests`, `ErrorPolicyDocumentTests`). Choice: move to Tests.ModelEval / Tests.ErrorVariants. Why: Tests and Tests.Basic stop rebuilding on harness edits.
+- **Acceptance:** `scripts/build.ps1 -Flavor Solution` 0 errors; no new test failures against the baselines; touching one private and one public `AgentTranscript` member recompiles fewer projects than before the move.

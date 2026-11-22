@@ -1,6 +1,6 @@
 # MoveFile tool: move or rename a text file as one semantic operation
 
-**Status:** OPEN 2026-11-10. Stub; design in a fresh chat. Scope, signature, slicing, placement and git behaviour are decided (below); the open questions are not.
+**Status:** APPROVED 2026-11-21. Slice 1 (keep) and slice 2 (copyAndObsolete with best-effort caller migration) decided in the todo review (see Decisions 2026-11-21); `update` is still open. Earlier: OPEN 2026-11-10 stub.
 
 ## Motivation
 No MCP tool moves or renames a file, so an agent that needs to has to leave the tool surface. The
@@ -134,3 +134,27 @@ through model output.
 - **Choice:** Refuse with a facts+options error when `targetFolder` differs from the source folder (nothing to split; `MoveType` does not move files; options: create/delete by hand, or `MoveFile` once built). No or same `targetFolder` keeps `no_changes`. Fix the hardcoded description "Moves 'X' to its own file." (`AdvancedRefactoringTools.cs:1132`) for the `no_changes` case.
 - **Why:** Honouring it would duplicate `MoveFile`, which this proposal says is not a type operation.
 - **Acceptance:** In `MoveTypeToFileTests`, `Solo.cs` with `class Solo` plus a differing `targetFolder` gives an error naming `targetFolder`. The two existing empty-return tests (`REG_MoveTypeToFile_SingleTypeFile_ReturnsEmpty` in `BugFixTests.cs`, `MoveTypeToFile_SingleTypeFile_ReturnsEmptyDict` in `RegressionTests.cs`) stay green. Once `MoveFile` exists, update the error to name it.
+
+## Decisions (todo review 2026-11-21)
+
+Settles open questions 1, 2, 4 and 6; question 3 (`update`) stays open (TODO.md line, NOT DESIGNED); question 5
+follows the undo redesign (proposals/proposal_undo_change_last_only_validated.md: a created file is undone by
+deleting it). Infrastructure confirmed by the review: `ApplyProposedChangesAsync(changes, deletePaths, ...)`
+writes and deletes in one operation (`DeleteFileTool` in `WholeFileWriteTools.cs` is the template),
+`TypeFileRename.MoveInto`, `PreviewMoveFileToNamespaceFolder` (folder-derived namespace).
+
+### Slice 1 (keep)
+
+- **Cross-project moves (q1):** allowed; the compile gate refuses a move that breaks the build, with a facts-only error naming the source and destination projects. Why: the fold already adds the file to the containing project, and the core-split test move needs it.
+- **Git(status) rename hint (q2):** tiers 1 and 2 - the server's own MoveFile operation record (definitive), plus "renamed (identical content)" when an untracked file's blob hash equals a deleted file's HEAD blob (`GitImpl.cs` status path). Tier 3 (similarity) not built.
+- **Byte preservation (q6):** the first slice-1 test moves a CRLF+BOM file and an LF file and asserts identical bytes; add a move-only bypass of the EOL pre-pass only if it fails.
+- **Acceptance:** in-project and cross-project moves keep identical bytes; both paths appear in the operation blob; undo restores the source and removes the destination; refusals for a binary file, a directory, an existing destination and a missing source; `update`/`copyAndObsolete` refused as not yet supported; Git(status) shows the move as a rename before staging.
+
+### Slice 2 (copyAndObsolete)
+
+- **Collisions (q4):** the destination's folder-derived namespace must differ from the old one, else refused (facts: both namespaces). Different full names make CS0101/CS0433 impossible; no class is renamed. A caller that later imports both namespaces can hit CS0104; the fixpoint below handles it.
+- **Scope:** every top-level type in the file is copied and each old one gets `[Obsolete("Use <NewNs>.<Type>")]`; refused when a type is partial with parts outside the file; types with static fields are listed in the result (state now exists twice). `.cs` only (non-`.cs` files accept only `keep`).
+- **Callers:** best-effort migration, always on (no new parameter): rewrite each caller file to the new namespace (add `using <NewNs>` or requalify), compile in memory, revert each caller file that gained errors, recompile, repeat until no new errors (bounded rounds). The copy gets `using <OldNs>` when it uses other old-namespace types.
+- **Apply:** one atomic `DocumentChangeSet` (copy + `[Obsolete]` edits + migrated callers), compile-gated, one blob and changeId; no scoped operation ledger. Why: the fixpoint runs in memory, so a single write keeps undo and drift guards simple.
+- **Result:** migrated files, remaining obsolete callers (file:line plus the blocking error id per file), types with duplicated static state; facts only.
+- **Acceptance:** a two-caller fixture where one caller compiles against the new namespace and one cannot (e.g. an ambiguous name) ends with one migrated and one obsolete caller listed; same-namespace destination refused; split-partial refused; Build of the fixture shows only CS0618 for the remaining caller.

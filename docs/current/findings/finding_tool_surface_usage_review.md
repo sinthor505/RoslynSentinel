@@ -1,6 +1,6 @@
 # Finding: 37 of 121 tools carry all measured use; 7 are duplicates and 77 can leave the main solution
 
-**Status:** OPEN 2026-11-15. Review done and verdicts recommended; the owner has not yet decided the split, the tier-2 layout or the four open decisions below.
+**Status:** DECISION 2026-11-21. The four open decisions and the tier-2 layout are settled (see Decisions); the owner amends the 37/7/77 lists before step 1. Earlier: OPEN 2026-11-15.
 
 ## Context
 
@@ -318,3 +318,13 @@ references, and can be split out later. The owner raised a separate repo; this i
 - "Injected but never called" constructor parameters (ModernizationTools takes 10 unused services,
   QualityTools 5, IntelligenceTools 3) were judged from `_field.Method(` calls only.
 - Rewording the proposal's slices against this finding; that follows the owner's decisions.
+
+## Decisions (todo review 2026-11-21)
+
+- **SubAgent:** stays in main. Why: the delegation path to local models; depends only on Common.
+- **Eval lean list ChangeAccessibility / ModifyModifier:** both stay. Why: 110 and 36 eval calls; dropping them breaks baseline comparability.
+- **Features:** stays in main (owner; differs from the review's tier-2 recommendation).
+- **Claude-mode gating:** kept. Why: `McpToolsetControl` is heavily used (114 calls) and the tab-scoped persistence plan is in flight; revisit when the core reaches its post-move size.
+- **Tier-2 layout:** a second solution in this repo, excluded from default searches and builds.
+- **The 37 / 7 / 77 split:** not accepted yet; the owner amends the lists here first. Then step 1 (delete the 7 duplicates; update guidance and the not-found text that offers ListAll, `SymbolNotFoundDetail.RenderNoCandidates`, with its golden tests) becomes READY. Acceptance for step 1: the 7 are gone from `docs/generated/architecture_tools.md` and the Tests.Server by-name tables pass.
+- Note since the review: the claude-lean schema budget was raised to 46,500 chars (d2dcdc33), and ReplaceRange (proposals/proposal_replace_range_tool.md) and MoveFile (proposals/proposal_move_file_tool.md) are decided as new core tools.

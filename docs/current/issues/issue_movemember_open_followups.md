@@ -67,3 +67,10 @@ or should the `TryOpen` path be removed?
 - Amended (implement run 2026-11-10): array entries are the bare name when unique and the signature form
   (`Save(int)`, which already round-trips) when overloaded; shared companions are listed separately, not in
   the array.
+
+## Decisions (todo review 2026-11-21)
+
+- **Question:** the qualify-receivers pass and alias-using duplicates - still needed? Evidence: aliases are carried and deduplicated by alias name (`MoveMemberUsings.cs` ~103-106, key ~177-182); unmoved private/internal siblings are refused (`MemberRefactoringEngine.RequireNoUnmovedDependencies` ~3603, transitive companions since 121e33c1); no journal entry hit either gap. Unverified: a bare call to a public sibling or instance state from the moved body.
+- **Choice:** probe first. Add one test: an instance move whose body calls a public sibling (or reads instance state) by bare name. A clear compile-gate refusal -> close the alias half and park qualify-receivers (unpark on a real CS0103 after a MoveMember); a confusing failure -> keep the item open and design the qualify pass.
+- **Why:** the remaining case is unproven and has no demand; a probe is cheaper than the pass.
+- **Acceptance:** the probe test exists and its outcome is recorded here and in TODO.md.

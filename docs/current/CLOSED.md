@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Live checks SERIAL and ROUTER left from plan_eval_host_table_and_liveness - resolved (2026-11-21)
+
+Live checks left from plan_eval_host_table_and_liveness (2026-11-20) - SERIAL (LM Studio and Unsloth jobs back to back on one machine; LM Studio :1234 was unreachable) and ROUTER (does Unsloth Studio load a listed-but-unloaded model on /v1/responses? may swap VRAM, owner present); Small - [plan](plans/closed/plan_eval_host_table_and_liveness.md)
+
+Evidence: closed by owner 2026-11-21 (todo review): verify when it bites; SERIAL is guaranteed by the per-machine folder/lock/worker (scripts/roslynsentinel-evalqueue.ps1:286, roslynsentinel-evalqueue.Hosts.Tests.ps1); ROUTER is covered on the queue path by the worker preflight (Get-EvalModelLoadState, evalqueue.ps1:1282) and matters only for direct modeleval/interrogate/planstep runs
+
 ## plan_document_changeset_type Step 6d-3 AppliedChangeSummary.ChangedContent retype - resolved (2026-11-21)
 
 `AppliedChangeSummary.ChangedContent` (positional parameter and property) and both `From(...)` `changedContent` parameters now take `DocumentChangeSet?`. The 63-caller break measured earlier shrank to 4 production sites (CoreRefactoringTools `MoveAllTypesToFilesCore` parameter, RefactoringSignatureImpl `MethodSignature` local) plus 17 test sites once the engine method returns and construction sites moved first (plan Step 7). The INBOX line and the `// TODO` at AppliedChangeSummary.cs:23 are removed.
