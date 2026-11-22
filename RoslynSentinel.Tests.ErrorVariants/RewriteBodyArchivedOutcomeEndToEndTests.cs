@@ -53,6 +53,6 @@ public sealed class RewriteBodyArchivedOutcomeEndToEndTests
         Assert.That(_runDirectory, Is.Not.Null, "BodyArchivesWhileUnfinished must have run first");
         var text = File.ReadAllText(Path.Combine(_runDirectory!, "test-result.txt"));
         Assert.That(text, Does.StartWith("Outcome: Passed"));
-        Assert.That(text, Does.Not.Contain("Unfinished"));
+        Assert.That(text, Does.Not.Contain(RunDirectoryArchive.UnfinishedOutcome));
     }
 }
