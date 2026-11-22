@@ -126,6 +126,9 @@ public class OrderPricingRefactorAgentTests
     // hatch available, keeping ApplyDiffTool/ApplyUnifiedDiffTool/RenameSymbolTool/ChangeSignatureTool exposed.
     private static readonly bool BlockWriteFile = false;
 
+    private ModelEvalMcpEnvironment? _environment;
+
+    // Aliases of _environment's members, assigned in SetUp so the test bodies keep their field names; _environment owns disposal.
     private IHost _host = null!;
     private McpClient _mcpClient = null!;
     private RoslynSentinel.Tests.TestSolutionFixture _fixture = null!;
@@ -144,20 +147,43 @@ public class OrderPricingRefactorAgentTests
                 "server with a loaded model and are skipped rather than failed when unconfigured.");
         }
 
+        _runDirectory = Path.Combine(
+            TestContext.CurrentContext.WorkDirectory,
+            "model-eval",
+            TestContext.CurrentContext.Test.Name,
+            DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
+
         // restorePackages: ContosoOrders.Tests needs restore assets or a solution-scope build reports CS0246 for every Xunit file
-        _fixture = new RoslynSentinel.Tests.TestSolutionFixture(restorePackages: true);
+        _environment = await ModelEvalMcpEnvironment.CreateAsync(
+            _runDirectory,
+            restorePackages: true,
+            beforeLoad: null,
+            afterLoad: StageFilesAndRunBaselineAsync,
+            TestContext.CurrentContext.CancellationToken,
+            configureToolSurface: ConfigureToolSurface);
+        _host = _environment.Host;
+        _mcpClient = _environment.Client;
+        _fixture = _environment.Fixture;
+        _agentClient = _environment.AgentClient;
+    }
 
-        var clientToServer = new Pipe();
-        var serverToClient = new Pipe();
+    [TearDown]
+    public async Task TearDown()
+    {
+        if (_environment is not null)
+        {
+            await _environment.DisposeAsync();
+            _environment = null;
+        }
 
-        var services = new ServiceCollection();
-        services.AddRoslynSentinelEnginesBasic();
+        if (_runDirectory is not null)
+        {
+            ModelTestingResultsArchiver.ArchiveRunDirectory(_runDirectory);
+        }
+    }
 
-        var mcpBuilder = services.AddMcpServer();
-        mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
-        mcpBuilder.WithTasks(
-            new InMemoryMcpTaskStore(),
-            o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
+    private static void ConfigureToolSurface(IMcpServerBuilder mcpBuilder, IServiceCollection services)
+    {
         // A/B arm switch for proposal_edit_snippets_batch_only_ab_test; unset = arm A (ReplaceSnippet).
         var editArm = Environment.GetEnvironmentVariable("ROSLYNSENTINEL_MODELEVAL_EDIT_ARM");
         var editSnippetsArm = string.Equals(editArm, "EditSnippets", StringComparison.OrdinalIgnoreCase);
@@ -171,7 +197,7 @@ public class OrderPricingRefactorAgentTests
         }
         else
         {
-            mcpBuilder.AddRoslynSentinelToolsBasic(services, ActiveModes);
+            ModelEvalToolSurfaces.Basic(mcpBuilder, services);
         }
 
         if (BlockWriteFile)
@@ -202,83 +228,34 @@ public class OrderPricingRefactorAgentTests
                     }));
             });
         }
+    }
 
-        _runDirectory = Path.Combine(
-            TestContext.CurrentContext.WorkDirectory,
-            "model-eval",
-            TestContext.CurrentContext.Test.Name,
-            DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
-
-        var hostBuilder = Host.CreateApplicationBuilder();
-        hostBuilder.Services.AddLmStudioAgentClient(client =>
-        {
-            client.BaseAddress = new Uri(LlmOptions.BaseUrl.TrimEnd('/') + "/");
-            client.Timeout = TimeSpan.FromSeconds(Math.Max(LlmOptions.TimeoutSeconds * 4, 600));
-        });
-        foreach (var descriptor in services)
-        {
-            hostBuilder.Services.Add(descriptor);
-        }
-
-        hostBuilder.Logging.AddProvider(new FlushingFileLoggerProvider(Path.Combine(_runDirectory, "agent.log")));
-
-        _host = hostBuilder.Build();
-        _ = _host.RunAsync();
-
-        var workspaceManager = _host.Services.GetRequiredService<IWorkspaceManager>();
-        await workspaceManager.LoadSolutionAsync(_fixture.SolutionPath, TestContext.CurrentContext.CancellationToken);
-
-        await _fixture.AddFileToSolution(
+    private async Task StageFilesAndRunBaselineAsync(
+        RoslynSentinel.Tests.TestSolutionFixture fixture,
+        IWorkspaceManager workspaceManager,
+        CancellationToken cancellationToken)
+    {
+        await fixture.AddFileToSolution(
             workspaceManager,
             Path.Combine("ContosoOrders.Core", "FixtureHelpers", "OrderPricingCalculator.cs"),
             OrderPricingRefactorReproducer.StartingCalculatorFileContent,
             reloadSolution: false,
-            cancellationToken: TestContext.CurrentContext.CancellationToken);
-        await _fixture.AddFileToSolution(
+            cancellationToken: cancellationToken);
+        await fixture.AddFileToSolution(
             workspaceManager,
             Path.Combine("ContosoOrders.Core", "FixtureHelpers", "OrderCheckout.cs"),
             OrderPricingRefactorReproducer.CheckoutCallerFileContent,
             reloadSolution: false,
-            cancellationToken: TestContext.CurrentContext.CancellationToken);
-        await _fixture.AddFileToSolution(
+            cancellationToken: cancellationToken);
+        await fixture.AddFileToSolution(
             workspaceManager,
             Path.Combine("ContosoOrders.Tests", "ModelEvalGenerated", "OrderCheckoutTests.cs"),
             OrderPricingRefactorReproducer.CheckoutFrontDoorTestsFileContent,
             reloadSolution: true,
-            cancellationToken: TestContext.CurrentContext.CancellationToken);
+            cancellationToken: cancellationToken);
 
-        var testProjectPath = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Tests", "ContosoOrders.Tests.csproj");
-        _testBaseline = await DotnetTestRunner.RunAsync(testProjectPath, TestContext.CurrentContext.CancellationToken);
-
-        var clientTransport = new StreamClientTransport(
-            serverInput: clientToServer.Writer.AsStream(),
-            serverOutput: serverToClient.Reader.AsStream(),
-            loggerFactory: NullLoggerFactory.Instance);
-
-        _mcpClient = await McpClient.CreateAsync(clientTransport, cancellationToken: TestContext.CurrentContext.CancellationToken);
-        _agentClient = _host.Services.GetRequiredService<LmStudioAgentClient>();
-    }
-
-    [TearDown]
-    public async Task TearDown()
-    {
-        if (_mcpClient is not null)
-        {
-            await _mcpClient.DisposeAsync();
-        }
-
-        if (_host is not null)
-        {
-            await _host.StopAsync();
-            _host.Dispose();
-        }
-
-        _fixture?.Dispose();
-
-        if (_runDirectory is not null)
-        {
-            ModelTestingResultsArchiver.ArchiveRunDirectory(_runDirectory);
-        }
+        var testProjectPath = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Tests", "ContosoOrders.Tests.csproj");
+        _testBaseline = await DotnetTestRunner.RunAsync(testProjectPath, cancellationToken);
     }
 
     [Test]

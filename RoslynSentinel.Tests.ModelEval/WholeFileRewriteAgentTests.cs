@@ -281,6 +281,9 @@ public class WholeFileRewriteAgentTests
         "Refactor", "Workspace",
     };
 
+    private ModelEvalMcpEnvironment? _environment;
+
+    // Aliases of _environment's members, assigned in SetUp so the test bodies keep their field names; _environment owns disposal.
     private IHost _host = null!;
     private McpClient _mcpClient = null!;
     private RoslynSentinel.Tests.TestSolutionFixture _fixture = null!;
@@ -299,19 +302,47 @@ public class WholeFileRewriteAgentTests
                 "server with a loaded model and are skipped rather than failed when unconfigured.");
         }
 
-        _fixture = new RoslynSentinel.Tests.TestSolutionFixture();
+        _runDirectory = Path.Combine(
+            TestContext.CurrentContext.WorkDirectory,
+            "model-eval",
+            TestContext.CurrentContext.Test.Name,
+            DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
 
-        var clientToServer = new Pipe();
-        var serverToClient = new Pipe();
+        _environment = await ModelEvalMcpEnvironment.CreateAsync(
+            _runDirectory,
+            restorePackages: false,
+            beforeLoad: null,
+            afterLoad: StageFilesAsync,
+            TestContext.CurrentContext.CancellationToken,
+            configureToolSurface: ConfigureToolSurface);
+        _host = _environment.Host;
+        _mcpClient = _environment.Client;
+        _fixture = _environment.Fixture;
+        _agentClient = _environment.AgentClient;
 
-        var services = new ServiceCollection();
-        services.AddRoslynSentinelEnginesBasic();
+        var testProjectPath = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Tests", "ContosoOrders.Tests.csproj");
+        _testBaseline = await DotnetTestRunner.RunAsync(testProjectPath, TestContext.CurrentContext.CancellationToken);
+    }
 
-        var mcpBuilder = services.AddMcpServer();
-        mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
-        mcpBuilder.WithTasks(
-            new InMemoryMcpTaskStore(),
-            o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
+    [TearDown]
+    public async Task TearDown()
+    {
+        // SetUp calls Assert.Ignore (throwing) before the environment is created when LM Studio isn't
+        // configured -> TearDown still runs in that case, so guard rather than NRE.
+        if (_environment is not null)
+        {
+            await _environment.DisposeAsync();
+            _environment = null;
+        }
+
+        if (_runDirectory is not null)
+        {
+            ModelTestingResultsArchiver.ArchiveRunDirectory(_runDirectory);
+        }
+    }
+
+    private static void ConfigureToolSurface(IMcpServerBuilder mcpBuilder, IServiceCollection services)
+    {
         // A/B arm switch for proposal_edit_snippets_batch_only_ab_test; unset = arm A (ReplaceSnippet).
         var editArm = Environment.GetEnvironmentVariable("ROSLYNSENTINEL_MODELEVAL_EDIT_ARM");
         var editSnippetsArm = string.Equals(editArm, "EditSnippets", StringComparison.OrdinalIgnoreCase);
@@ -325,100 +356,39 @@ public class WholeFileRewriteAgentTests
         }
         else
         {
-            mcpBuilder.AddRoslynSentinelToolsBasic(services, ActiveModes);
+            ModelEvalToolSurfaces.Basic(mcpBuilder, services);
         }
+    }
 
-        _runDirectory = Path.Combine(
-            TestContext.CurrentContext.WorkDirectory,
-            "model-eval",
-            TestContext.CurrentContext.Test.Name,
-            DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
-
-        var hostBuilder = Host.CreateApplicationBuilder();
-        hostBuilder.Services.AddLmStudioAgentClient(client =>
-        {
-            client.BaseAddress = new Uri(LlmOptions.BaseUrl.TrimEnd('/') + "/");
-            // A slow local GPU (e.g. a GTX 1080) can take several minutes per completion on
-            // larger prompts/diffs -> floor well above LlmOptions.TimeoutSeconds's default-30s*4
-            // so per-turn latency alone never trips the HTTP timeout ahead of the runner's own
-            // wall-clock cap.
-            client.Timeout = TimeSpan.FromSeconds(Math.Max(LlmOptions.TimeoutSeconds * 4, 600));
-        });
-        foreach (var descriptor in services)
-        {
-            hostBuilder.Services.Add(descriptor);
-        }
-
-        // dotnet test's console logger block-buffers stdout when it's redirected to a file, so
-        // ModelAgentRunner's per-turn logging is invisible until the whole test process exits ->
-        // this file sink writes+flushes independently so a run can be tailed live.
-        hostBuilder.Logging.AddProvider(new FlushingFileLoggerProvider(Path.Combine(_runDirectory, "agent.log")));
-
-        _host = hostBuilder.Build();
-        _ = _host.RunAsync();
-
-        var workspaceManager = _host.Services.GetRequiredService<IWorkspaceManager>();
-        await workspaceManager.LoadSolutionAsync(_fixture.SolutionPath, TestContext.CurrentContext.CancellationToken);
-
-        await _fixture.AddFileToSolution(
+    private static async Task StageFilesAsync(
+        RoslynSentinel.Tests.TestSolutionFixture fixture,
+        IWorkspaceManager workspaceManager,
+        CancellationToken cancellationToken)
+    {
+        await fixture.AddFileToSolution(
             workspaceManager,
             Path.Combine("ContosoOrders.Core", "FixtureHelpers", "BlockEditHelpers.cs"),
             WholeFileRewriteReproducer.HelperFileContent,
             reloadSolution: false,
-            cancellationToken: TestContext.CurrentContext.CancellationToken);
-        await _fixture.AddFileToSolution(
+            cancellationToken: cancellationToken);
+        await fixture.AddFileToSolution(
             workspaceManager,
             Path.Combine("ContosoOrders.Core", "FixtureHelpers", "BlockConverter.cs"),
             WholeFileRewriteReproducer.BuggyFileContent,
             reloadSolution: false,
-            cancellationToken: TestContext.CurrentContext.CancellationToken);
-        await _fixture.AddFileToSolution(
+            cancellationToken: cancellationToken);
+        await fixture.AddFileToSolution(
             workspaceManager,
             Path.Combine("ContosoOrders.Core", "FixtureHelpers", "Shape.cs"),
             WholeFileRewriteReproducer.TargetAbstractClassFileContent,
             reloadSolution: false,
-            cancellationToken: TestContext.CurrentContext.CancellationToken);
-        await _fixture.AddFileToSolution(
+            cancellationToken: cancellationToken);
+        await fixture.AddFileToSolution(
             workspaceManager,
             Path.Combine("ContosoOrders.Tests", "ModelEvalGenerated", "BlockConverterTests.cs"),
             WholeFileRewriteReproducer.ModifiedAndUnrelatedMemberTestsFileContent,
             reloadSolution: true,
-            cancellationToken: TestContext.CurrentContext.CancellationToken);
-
-        var testProjectPath = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Tests", "ContosoOrders.Tests.csproj");
-        _testBaseline = await DotnetTestRunner.RunAsync(testProjectPath, TestContext.CurrentContext.CancellationToken);
-
-        var clientTransport = new StreamClientTransport(
-            serverInput: clientToServer.Writer.AsStream(),
-            serverOutput: serverToClient.Reader.AsStream(),
-            loggerFactory: NullLoggerFactory.Instance);
-
-        _mcpClient = await McpClient.CreateAsync(clientTransport, cancellationToken: TestContext.CurrentContext.CancellationToken);
-        _agentClient = _host.Services.GetRequiredService<LmStudioAgentClient>();
-    }
-
-    [TearDown]
-    public async Task TearDown()
-    {
-        // SetUp calls Assert.Ignore (throwing) before these are assigned when LM Studio isn't
-        // configured -> TearDown still runs in that case, so guard rather than NRE.
-        if (_mcpClient is not null)
-        {
-            await _mcpClient.DisposeAsync();
-        }
-
-        if (_host is not null)
-        {
-            await _host.StopAsync();
-            _host.Dispose();
-        }
-
-        _fixture?.Dispose();
-
-        if (_runDirectory is not null)
-        {
-            ModelTestingResultsArchiver.ArchiveRunDirectory(_runDirectory);
-        }
+            cancellationToken: cancellationToken);
     }
 
     [Test]
