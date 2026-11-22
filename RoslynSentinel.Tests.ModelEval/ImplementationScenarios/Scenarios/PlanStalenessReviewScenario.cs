@@ -315,7 +315,7 @@ review as your final message.
         }
 
         // The verdict on Step 2 must be negative: no sentence about the widening may assert it works without a denial in the same sentence, and one must deny it.
-        var wideningSegments = segments.Where(segment => Regex.IsMatch(segment, WideningClaimPattern, RegexOptions.IgnoreCase)).ToList();
+        var wideningSegments = SelectWideningSegments(message);
         if (wideningSegments.Any(segment => Regex.IsMatch(segment, AssertsWideningPossiblePattern, RegexOptions.IgnoreCase)
                 && !Regex.IsMatch(segment, DeniesWideningPattern, RegexOptions.IgnoreCase)))
         {
@@ -356,7 +356,7 @@ review as your final message.
     private const string DeniesWideningPattern = @"not possible|impossible|isn't possible|cannot|can't|can not|would break|will break|\bbreak(?:s|ing)?\b|not compile|won't compile|does not compile|fails? to compile|CS\d{4}|not without|(?:^|[\s(])no\s*(?:[,:]|-|–|—)(?:\s|$)";
 
     // A widening sentence that asserts the zero-edit claim holds.
-    private const string AssertsWideningPossiblePattern = @"\byes\b[^.\r\n]{0,40}\bpossible|(?<!not )(?<!n't )\bpossible\b[^.\r\n]{0,30}(?:\bwith (?:no|zero)\b|\bwithout\b)|\bno caller (?:edits?|changes?) (?:are |is )?(?:needed|required|necessary)|\bcallers? (?:need|needs|require) no (?:edit|change)|\bbuilds? (?:cleanly )?with (?:0|zero|no) (?:errors|caller)";
+    private const string AssertsWideningPossiblePattern = @"\byes\b[^.\r\n]{0,60}(?:\bpossible|widen|compile|\bbuild)|(?<!not )(?<!n't )\bpossible\b[^.\r\n]{0,30}(?:\bwith (?:no|zero)\b|\bwithout\b)|\bno caller (?:edits?|changes?) (?:are |is )?(?:needed|required|necessary)|\bcallers? (?:need|needs|require) no (?:edit|change)|\b(?:builds?|compiles?|works?) (?:cleanly )?with (?:0|zero|no) (?:errors|caller)";
 
     // Evidence that a call-site shape breaks the widening; the bare words "error" and "fail" do not count (a green build says "0 errors").
     private const string BreakEvidencePattern = @"break|cannot|can't|not possible|impossible|not compile|does not compile|won't compile|fails? to compile|no (?:implicit )?conversion|not convert";
@@ -369,8 +369,44 @@ review as your final message.
     }
 
     /// <summary>
-    /// True when one sentence/line names the anchor (matched by <paramref name="anchorNamePattern"/>) and the first number after the
-    /// last move keyword in it lies in [fromLine, toLine]. A number elsewhere in the message does not count.
+    /// The sentences/lines that talk about the zero-edit widening: every one matching <see cref="WideningClaimPattern"/>, plus every
+    /// sentence under a markdown heading that mentions Step 2 or the widening (until the next heading), because a verdict paragraph such as
+    /// "Yes - it compiles with no caller edits." under "### 4. Is Step 2 possible?" may not repeat the words itself.
+    /// </summary>
+    private static List<string> SelectWideningSegments(string message)
+    {
+        var selected = new List<string>();
+        var inWideningSection = false;
+        foreach (var line in Regex.Split(message, @"[\r\n]+"))
+        {
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            var isHeading = line.TrimStart().StartsWith('#');
+            if (isHeading)
+            {
+                inWideningSection = Regex.IsMatch(line, @"step 2|widen", RegexOptions.IgnoreCase);
+            }
+
+            foreach (var sentence in SplitIntoSegments(line))
+            {
+                if (isHeading ? inWideningSection : inWideningSection || Regex.IsMatch(sentence, WideningClaimPattern, RegexOptions.IgnoreCase))
+                {
+                    selected.Add(sentence);
+                }
+            }
+        }
+
+        return selected;
+    }
+
+    /// <summary>
+    /// True when one sentence/line/table row names the anchor (matched by <paramref name="anchorNamePattern"/>) and some number after its
+    /// first move word lies in [fromLine, toLine]. A signed delta ("+3", "-2") never counts, so "now at line 8, shifted +3" passes and
+    /// "now on line 6" fails; the anchor's own old "File.cs:N" token is outside the accepted range. A number in a sentence that does not
+    /// name the anchor does not count.
     /// </summary>
     private static bool MovedAnchorLineIsInContext(IReadOnlyList<string> segments, string anchorNamePattern, int fromLine, int toLine)
     {
@@ -381,17 +417,18 @@ review as your final message.
                 continue;
             }
 
-            var keywords = Regex.Matches(segment, MoveKeywordPattern, RegexOptions.IgnoreCase);
-            if (keywords.Count == 0)
+            var firstKeyword = Regex.Match(segment, MoveKeywordPattern, RegexOptions.IgnoreCase);
+            if (!firstKeyword.Success)
             {
                 continue;
             }
 
-            var last = keywords[^1];
-            var number = Regex.Match(segment[(last.Index + last.Length)..], @"(?<!\d)\d{1,4}(?!\d)");
-            if (number.Success && int.TryParse(number.Value, out var line) && line >= fromLine && line <= toLine)
+            foreach (Match number in Regex.Matches(segment[firstKeyword.Index..], @"(?<![\d+\-±])\d{1,4}(?!\d)"))
             {
-                return true;
+                if (int.TryParse(number.Value, out var line) && line >= fromLine && line <= toLine)
+                {
+                    return true;
+                }
             }
         }
 
