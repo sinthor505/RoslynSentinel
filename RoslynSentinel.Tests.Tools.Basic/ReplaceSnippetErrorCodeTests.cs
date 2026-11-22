@@ -425,6 +425,33 @@ public class ReplaceSnippetErrorCodeTests
     }
 
     [Test]
+    public async Task ReplaceSnippet_Single_ReturnDiff_EmitsOneHunkWithCountsThatMatchTheFileAsync()
+    {
+        // Protects the diff step of the apply tail that single-edit ReplaceSnippet shares with ReplaceRange (BuildDiffFromPreImages).
+        using var h = CreateHarness();
+        var original = h.Workspace.ReadText(MemberDupRelativePath);
+        const string replacement = "        Log(Compute());";
+        var (_, firstLine) = LocateRepeatedBlock(original, 0);
+
+        var result = await h.Tools.ReplaceSnippetTool(
+            reason: "single returnDiff hunk shape",
+            ProposedChangeAction.apply,
+            filePath: h.Workspace.PathOf(MemberDupRelativePath),
+            oldContent: MemberDupRepeatedBlock,
+            newContent: replacement,
+            matchLine: firstLine,
+            returnDiff: true);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var diff = result.SuccessData!.DiffContent;
+        Assert.That(diff, Is.Not.Null.And.Not.Empty);
+        Assert.That(diff, Does.Not.Contain("\r"), "diff text must use \\n only");
+        var originalLines = original.Split('\n');
+        Assert.That(diff!.Split('\n').Where(l => l.StartsWith("@@ ", StringComparison.Ordinal)), Is.EqualTo(new[] { $"@@ -{firstLine},2 +{firstLine},1 @@" }));
+        Assert.That(diff, Does.Contain($"-{originalLines[firstLine - 1]}\n-{originalLines[firstLine]}\n+{replacement}\n"));
+    }
+
+    [Test]
     public async Task ReplaceSnippet_TopLevelSelectorWithBatchEdits_IsRejectedAsInvalidArgumentAsync()
     {
         using var h = CreateHarness();
