@@ -37,6 +37,7 @@ internal sealed class ModelEvalMcpEnvironment : IAsyncDisposable
     private McpClient? _client;
     private RoslynSentinel.Tests.TestSolutionFixture? _fixture;
     private bool _ownsFixture;
+    private LmStudioAgentClient? _agentClient;
 
     private ModelEvalMcpEnvironment()
     {
@@ -46,7 +47,8 @@ internal sealed class ModelEvalMcpEnvironment : IAsyncDisposable
 
     public McpClient Client => _client!;
 
-    public LmStudioAgentClient AgentClient { get; private set; } = null!;
+    /// <summary>Resolved on first use, so a world built only to list tools needs no model name.</summary>
+    public LmStudioAgentClient AgentClient => _agentClient ??= _host!.Services.GetRequiredService<LmStudioAgentClient>();
 
     public RoslynSentinel.Tests.TestSolutionFixture Fixture => _fixture!;
 
@@ -153,7 +155,6 @@ internal sealed class ModelEvalMcpEnvironment : IAsyncDisposable
             serverOutput: serverToClient.Reader.AsStream(),
             loggerFactory: NullLoggerFactory.Instance);
         _client = await McpClient.CreateAsync(clientTransport, cancellationToken: cancellationToken);
-        AgentClient = _host.Services.GetRequiredService<LmStudioAgentClient>();
     }
 
     public async ValueTask DisposeAsync()
