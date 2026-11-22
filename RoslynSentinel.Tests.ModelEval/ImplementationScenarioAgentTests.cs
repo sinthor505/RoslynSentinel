@@ -14,7 +14,7 @@ namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 /// Data-driven implementation scenarios: one test case per scenario step. Each case checks out the previous step's golden
 /// commit (tag step-(k-1)) into the sample solution, loads the solution, gives the model that step's prompt and grades the
 /// resulting tree with <see cref="ImplementationScenarioChecks"/>. Runner settings and outcome mapping follow
-/// ShippingKindSteppedAgentTests.RunStepAsync. See docs/current/plans/plan_modeleval_implementation_scenarios.md.
+/// ShippingKindSteppedAgentTests.RunStepAsync. See docs/current/plans/closed/plan_modeleval_implementation_scenarios.md.
 /// </summary>
 [TestFixture]
 public class ImplementationScenarioAgentTests

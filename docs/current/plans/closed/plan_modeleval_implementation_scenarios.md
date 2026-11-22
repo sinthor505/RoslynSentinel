@@ -1,6 +1,6 @@
 # Plan: Data-driven model-eval family of 14 implementation scenarios distilled from real plan/punchlist runs
 
-**Status:** IN PROGRESS 2026-11-22. Steps 1-9 done (786a1c89, 6000b8d2, 8f15d902, 214af126, a57a43e6, 73e8e44e, 4581f2e7, 356f3ab7, e6b0bc83); Step 10 live runs in progress.
+**Status:** IMPLEMENTED 2026-11-22. 786a1c89, 6000b8d2, 8f15d902, 214af126, a57a43e6, 73e8e44e, 4581f2e7, 356f3ab7, e6b0bc83; live refinements 9fcc737d, e5a01d82, 43f04e5f, 821034a6, 1e0471f4. All 14 scenarios built and run live; none parked.
 
 ## Problem
 
@@ -178,6 +178,42 @@ reduced to a small self-contained fixture rather than a checkout of this repo.
   when the transcript shows it.
 - Done when: every unparked scenario step has one live result per its host, refinements committed, and a results
   table is in the tracker.
+- Done 2026-11-22. Model ornith-ai/Ornith-1.5-9B-GGUF (llama-server, context 70000) on both hosts. Final result per
+  scenario (after refinements):
+
+  | # | Scenario | Host | Outcome | Turns | Wall |
+  |---|---|---|---|---|---|
+  | 1 | PlanStalenessReview | 113 | CheckFailed - model claims the zero-edit widening works (3 of 3 runs) | 6 | 10m |
+  | 2 | WidenToReadOnlyDictionary | 112 | Pass | 14 | 6m |
+  | 3 | WideningRejectedByGate | 113 | BuildBroken - model forced the gate-rejected edit with validateOnApply:false | - | 19m |
+  | 4 | ChangeSetTypeFromSpec | 113 | Pass | 11 | 16m |
+  | 5 | RetypeSliceExactLines | 112 | Pass | 8 | 9m |
+  | 6 | SweepConstructionSites | 113 | Pass | - | 13m |
+  | 7 | PropertyFirstRetype | 112 | Pass | 13 | 5m |
+  | 8 | RemovePinnedSentence | 112 | Pass (reframed) | 6 | 2m |
+  | 9 | ThreadOptionalParameter | 113 | Pass (after check fix) | 11 | 8m |
+  | 10 | NotFoundToTypedThrow (2 steps) | 113 | Pass / Pass | 15 / 12 | 9m / 3m |
+  | 11 | BreakCycleWithForwarders | 113 | Pass | 12 | 15m |
+  | 12 | ShareHelperDifferingRules | 112 | Pass | 6 | 6m |
+  | 13 | ObsoleteNamespaceCopy | 113 | PassedAfterCap (correct tree, 30m cap hit; one 19-min CreateFile turn) | 8 | 30m |
+  | 14 | MigrateOntoEnvironmentHelper | 113 | CheckFailed - `_environment` never assigned, dispose never runs | 18 | 15m |
+
+- Refinements from live runs (environment, not model):
+  - PlanStalenessReview: keyword check gave a false pass, then a false fail on a correct anchor line; now anchor lines
+    are matched in context (non-delta number after a move word), the Step 2 verdict is scoped to its heading's
+    paragraph and must be negative, evidence must be a CS code or named `new()`/`[]` (9fcc737d, 821034a6).
+  - RemovePinnedSentence: a `.md` is not a Roslyn document, so ReplaceSnippet/ReplaceRange refuse it while
+    DeleteFile/CreateFile accept it; reframed onto `PolicyDocument.cs` (raw-string const) (e5a01d82).
+  - ThreadOptionalParameter: accept the new argument positionally or named (43f04e5f).
+  - ObsoleteNamespaceCopy: no BOM requirement on the new file (CreateFile has no BOM option); moved to 113 (1e0471f4).
+  - Run settings: 15-min default cap too short on 112 (~5 min per reasoning-heavy turn); use 45m (112) / 30m (113),
+    `-NoRunFolderMinutes 0` (evalqueue SetupStalled kills any test over 20 min, TODO 6e0fc80e) and `-Commit HEAD`.
+- Tool findings recorded in docs/current/INBOX.md: SetupStalled misfire; .md editable by Delete/CreateFile but not
+  ReplaceSnippet/ReplaceRange; validateOnApply:false lets a model override the compile gate; batchEdits ordering and
+  per-item field discoverability; CreateFile compiles .txt as C# and has no BOM option; outcome turns off by one.
+- Full `RoslynSentinel.Tests.ModelEval` run at 1e0471f4: 592 passed, 2 failed, 213 skipped; the 2 failures
+  (`LiveTurnsFor_ResumeScenarioExcludesKeptTurns`, `LiveTurnsFor_SeededResumeScenarioExcludesKeptTurnsAndFaultTurn`)
+  also fail at the pre-plan commit 0feac026, so they are not from this plan (INBOX).
 
 ## Scenario table
 

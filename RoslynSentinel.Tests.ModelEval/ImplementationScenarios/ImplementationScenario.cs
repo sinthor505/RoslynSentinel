@@ -36,7 +36,7 @@ internal sealed record ImplementationScenarioStep(
     string? CannedFinalMessage);
 
 /// <summary>
-/// A data-driven implementation scenario (see docs/current/plans/plan_modeleval_implementation_scenarios.md).
+/// A data-driven implementation scenario (see docs/current/plans/closed/plan_modeleval_implementation_scenarios.md).
 /// <paramref name="SeedFiles"/> is the step-0 overlay on the ContosoOrders sample. A parked scenario carries
 /// <paramref name="ParkedReason"/> and its test cases are reported Ignored.
 /// </summary>
@@ -60,7 +60,7 @@ internal sealed record ImplementationScenario(
             id,
             id,
             "placeholder",
-            "docs/current/plans/plan_modeleval_implementation_scenarios.md",
+            "docs/current/plans/closed/plan_modeleval_implementation_scenarios.md",
             new Dictionary<string, string>(),
             Array.Empty<ImplementationScenarioStep>(),
             ParkedReason: reason);

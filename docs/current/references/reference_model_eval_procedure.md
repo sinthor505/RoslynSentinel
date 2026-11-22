@@ -434,7 +434,11 @@ Data-driven family of small implementation tasks distilled from real plan and pu
   the explicit class even when named). Per scenario: `Golden_` (golden passes its check), `Previous_` (previous
   state fails it), `Budget_` (seed + longest prompt <= 24,000 chars).
 - A scenario too complicated to build is parked: `ParkedReason` set, its cases report Ignored with the reason.
-- Plan and scenario specs: `docs/current/plans/plan_modeleval_implementation_scenarios.md`.
+- Plan, scenario specs and first live results (Ornith-1.5-9B on 112/113):
+  `docs/current/plans/closed/plan_modeleval_implementation_scenarios.md`.
+- Live-run settings: queue with `-Commit HEAD`, `-NoRunFolderMinutes 0` (the evalqueue SetupStalled check kills any
+  test longer than 20 min) and `-EvalArgs "-Scenario <Id> -StepWallClockMinutes 30"` on 113 (45 on 112).
+- Prefer tree-state or syntax checks; final-message keyword checks needed two refinement rounds.
 
 ## Where output goes
 

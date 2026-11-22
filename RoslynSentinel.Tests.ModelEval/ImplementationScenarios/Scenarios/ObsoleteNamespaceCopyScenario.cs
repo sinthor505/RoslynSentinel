@@ -244,7 +244,7 @@ directive, do not edit Consumer.cs or any test, and leave the copy without any O
                 ExtraCheck: static ctx => Task.FromResult<string?>(CheckBytesAndAttributes(ctx)),
                 CannedFinalMessage: null),
         },
-        PreferredHost: "112");
+        PreferredHost: "113"); // 112 truncated after 42 min (whole-file CreateFile turns are long); 113 passed after the cap
 
     /// <summary>Byte checks (BOM on Legacy, zero or one on Modern, uniform CRLF, no added using), attribute placement and text, copy fidelity, untouched consumer and tests.</summary>
     private static string? CheckBytesAndAttributes(ImplementationScenarioCheckContext ctx)
