@@ -354,11 +354,12 @@ public class WholeFileWriteTools
             var changes = new DocumentChangeSet { [destination] = text };
             IReadOnlyCollection<FilePathWrapper> deletePaths = [source];
 
-            // TODO 11-3: pass verbatim: true once the chokepoint parameter exists
+            // verbatim: the decoded text (BOM kept as a leading U+FEFF) is written back byte-exact; no EOL or BOM normalization, every other chokepoint guard still applies.
             var apply = await ValidateAndApplyHelper.ValidateAndApplyAsync(
                 _validationEngine, _workspaceManager, _logger, changes, "move_file",
                 cancellationToken: cancellationToken,
                 deletePaths: deletePaths,
+                verbatim: true,
                 describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable),
                 describeEditImpact: EditImpactGate.Describer(_workspaceManager, changes, _activeToolSurface, null, deletePaths),
                 recordEffects: () => ToolCallContext.Current?.RecordEffect(

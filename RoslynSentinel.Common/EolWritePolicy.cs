@@ -7,10 +7,11 @@ public static class EolWritePolicy
     /// content through unchanged (undo writes the pre-image byte-for-byte); (2) otherwise the whole
     /// file is converted to the EolResolver target, so mixed, CR-only, no-newline and new files
     /// converge; (3) the converted text must be a single line-ending style, or the call is refused.
+    /// verbatim (a file move) passes the content through unchanged exactly like exactRestore: no conversion and no mixed-style refusal.
     /// </summary>
-    public static bool TryComputeContentToWrite(EolMode mode, string filePath, string? preImage, string newContent, string? editorConfigEol, bool exactRestore, out string contentToWrite, out string? refusalMessage)
+    public static bool TryComputeContentToWrite(EolMode mode, string filePath, string? preImage, string newContent, string? editorConfigEol, bool exactRestore, out string contentToWrite, out string? refusalMessage, bool verbatim = false)
     {
-        if (exactRestore)
+        if (exactRestore || verbatim)
         {
             contentToWrite = newContent;
             refusalMessage = null;

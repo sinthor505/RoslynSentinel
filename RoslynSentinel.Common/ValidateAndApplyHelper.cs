@@ -107,7 +107,9 @@ public static class ValidateAndApplyHelper
         // expectedEdits is set, re-checks them for collateral change; a correction that fails either is dropped and the normal rejection stands.
         // A correction that lands is surfaced as findings on the success outcome (dry run included) and recorded as applied only on a real write.
         // TODO no caller passes tryAutoCorrect yet: the helper-based tools (Member, MethodSignature, MoveMember, refactorings) call EditImpactGate.Describer only; wire them like ReplaceSnippet (NearMissAutoCorrector) if the eval arms need auto-correction there
-        Func<DiagnosticReport, CancellationToken, Task<NearMissCorrection?>>? tryAutoCorrect = null)
+        Func<DiagnosticReport, CancellationToken, Task<NearMissCorrection?>>? tryAutoCorrect = null,
+        // Forwarded to the chokepoint: writes the given text byte-exact (skips only EOL/BOM normalization; every other guard still applies). For MoveFile.
+        bool verbatim = false)
     {
         // The pre-images feed the per-file changed-line counts and the collateral-change tripwire below.
         // EOL conversion is done by the chokepoint (PersistentWorkspaceManager.ApplyProposedChangesAsync).
@@ -229,7 +231,8 @@ public static class ValidateAndApplyHelper
             new DocumentChangeSet(changes), retryCount: 3, validateChanges: false, rollbackOnPartialFailure: true,
             progress: progress, cancellationToken: cancellationToken, deletePaths: deletePaths,
             operationLabel: operationName,
-            staleReadPolicy: staleReadPolicy);
+            staleReadPolicy: staleReadPolicy,
+            verbatim: verbatim);
 
         if (applyResult.IsError)
         {

@@ -97,6 +97,17 @@ public class EolWritePolicyTests
         Assert.That(refusal, Is.Null);
     }
 
+    [Test]
+    public void Verbatim_MixedEolAndBomText_ReturnedByteForByte([Values(EolMode.Crlf, EolMode.Lf, EolMode.Auto)] EolMode mode)
+    {
+        const string mixed = "﻿a\r\nb\nc\r\n";
+        var ok = EolWritePolicy.TryComputeContentToWrite(mode, "f.cs", "p\nq\n", mixed, "lf", false, out var content, out var refusal, verbatim: true);
+
+        Assert.That(ok, Is.True);
+        Assert.That(content, Is.EqualTo(mixed));
+        Assert.That(refusal, Is.Null);
+    }
+
     [TestCase(EolMode.Crlf)]
     [TestCase(EolMode.Auto)]
     public void NoLineBreaks_ReturnedUnchanged(EolMode mode)

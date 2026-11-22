@@ -548,6 +548,9 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     // cryptographic strength matters here.
     private static string ComputeContentHash(string content) => ContentFingerprint.Compute(content);
 
+    // The text a File.ReadAllText of the written file returns: a verbatim write of text that starts with U+FEFF emits the UTF-8 BOM, which that read drops.
+    private static string DiskReadView(string writtenText, bool verbatim) => verbatim && writtenText.Length > 0 && writtenText[0] == '﻿' ? writtenText[1..] : writtenText;
+
     private static string ObservedAgentKey() => ToolCallContext.Current?.AgentId ?? "";
 
     public void RecordObserved(FilePathWrapper path, string text) => _observedHashes[(ObservedAgentKey(), path)] = ContentFingerprint.Compute(text);
@@ -2228,13 +2231,13 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         IProgress<EngineProgress>? progress = default,
         CancellationToken cancellationToken = default,
         IReadOnlyCollection<FilePathWrapper>? deletePaths = null,
-        bool exactRestore = false, string? operationLabel = null, StaleReadPolicy staleReadPolicy = StaleReadPolicy.None)
+        bool exactRestore = false, string? operationLabel = null, StaleReadPolicy staleReadPolicy = StaleReadPolicy.None, bool verbatim = false)
     {
         try
         {
             return await ApplyProposedChangesCoreAsync(
                 changes, retryCount, validateChanges, rollbackOnPartialFailure, progress, cancellationToken,
-                deletePaths, exactRestore, operationLabel, staleReadPolicy);
+                deletePaths, exactRestore, operationLabel, staleReadPolicy, verbatim);
         }
         finally
         {
@@ -2256,7 +2259,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         IReadOnlyCollection<FilePathWrapper>? deletePaths,
         bool exactRestore,
         string? operationLabel,
-        StaleReadPolicy staleReadPolicy)
+        StaleReadPolicy staleReadPolicy,
+        bool verbatim)
     {
         // A long single tool call (batch edits) keeps resetting the idle clock at every write.
         ServerActivityTracker.Shared.Touch();
@@ -2533,7 +2537,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
 
             // Resolver-based EOL pre-pass: computes the bytes to write per file and any attribution findings, and
             // refuses (before any delete or write) only on a non-uniform result.
-            var prePass = ComputeEolPrePass(changes, preImages, exactRestore, operationLabel);
+            var prePass = ComputeEolPrePass(changes, preImages, exactRestore, operationLabel, verbatim);
             if (prePass.Refusal is not null)
             {
                 return new ApplyChangesResult(
@@ -2631,13 +2635,16 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
 
                 // The EOL pre-pass above already computed the bytes to write for this file.
                 var contentToWrite = contentsToWrite[filePath];
+                // What a disk read of the written bytes returns: File.ReadAllText drops the BOM, so a verbatim text that starts
+                // with U+FEFF is compared against (watcher), hashed and recorded without it. Identical to contentToWrite otherwise.
+                var contentAsRead = DiskReadView(contentToWrite, verbatim);
 
                 // Mark as internal change before writing to avoid FileSystemWatcher loop.
                 // Content is recorded alongside the timestamp so the watcher handler can verify
                 // an incoming event actually matches what we wrote, rather than suppressing by
                 // path+timing alone (see OnFileSystemChanged). Use the EOL-normalized content
                 // so the watcher sees what we actually wrote to disk.
-                _internalChanges[filePath] = (DateTime.UtcNow, contentToWrite);
+                _internalChanges[filePath] = (DateTime.UtcNow, contentAsRead);
 
                 for (int attempt = 0; attempt <= retryCount; attempt++)
                 {
@@ -2649,23 +2656,25 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                         // Changed-event branch above).
                         // Determine the encoding to use: if the file originally had a UTF-8 BOM, preserve it.
                         System.Text.Encoding? encoding = null;
-                        if (_knownFileBomPresence.TryGetValue(filePath, out var hadBom) && hadBom)
+                        // verbatim writes with no BOM encoder: a leading U+FEFF in the text is itself the BOM and must be emitted once, not twice, and the
+                        // file's previous BOM state must not add or drop one.
+                        if (!verbatim && _knownFileBomPresence.TryGetValue(filePath, out var hadBom) && hadBom)
                         {
                             encoding = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true);
                         }
                         await FileIoHelper.WriteAllTextAsync(filePath, contentToWrite, encoding, cancellationToken);
                         success = true;
                         succeeded.Add(filePath);
-                        postImages[filePath] = contentToWrite;
+                        postImages[filePath] = contentAsRead;
                         if (missingBeforeWrite.Contains(filePath))
                         {
                             createdFiles.Add(filePath);
                         }
                         // Update the hash baseline with what we just wrote -> no extra I/O, contentToWrite
                         // is already in memory. See _knownFileHashes's declaration-site comment.
-                        _knownFileHashes[filePath] = ComputeContentHash(contentToWrite);
+                        _knownFileHashes[filePath] = ComputeContentHash(contentAsRead);
                         // Hash of contentToWrite (the EOL-normalized text that reached disk), not newContent.
-                        RefreshObservedForWriter(filePath, ComputeContentHash(contentToWrite));
+                        RefreshObservedForWriter(filePath, ComputeContentHash(contentAsRead));
                         if (_logger.IsEnabled(LogLevel.Information))
                         {
                             _logger.LogInformation("Wrote changes to {FilePathWrapper} (Attempt {Attempt})", filePath, attempt + 1);
@@ -2755,7 +2764,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 {
                     continue;
                 }
-                RefreshObservedForWriter(filePath, ComputeContentHash(contentsToWrite[filePath]), createIfMissing: true);
+                RefreshObservedForWriter(filePath, ComputeContentHash(DiskReadView(contentsToWrite[filePath], verbatim)), createIfMissing: true);
             }
 
             if (succeeded.Count > 0)
@@ -3117,7 +3126,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         IReadOnlyDictionary<FilePathWrapper, string> changes,
         IReadOnlyDictionary<string, string?> preImages,
         bool exactRestore,
-        string? operationLabel)
+        string? operationLabel,
+        bool verbatim = false)
     {
         var mode = EolModeOverride ?? EolPolicyOptions.Mode;
         var contentsToWrite = new Dictionary<string, string>();
@@ -3129,7 +3139,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             var editorConfigEol = EditorConfigEolReader.Read(filePath);
             preImages.TryGetValue(filePath, out var pre);
 
-            if (!EolWritePolicy.TryComputeContentToWrite(mode, filePath, pre, change.Value, editorConfigEol, exactRestore, out var contentToWrite, out var refusalMessage))
+            if (!EolWritePolicy.TryComputeContentToWrite(mode, filePath, pre, change.Value, editorConfigEol, exactRestore, out var contentToWrite, out var refusalMessage, verbatim))
             {
                 if (_logger.IsEnabled(LogLevel.Warning))
                 {
@@ -3141,7 +3151,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
 
             contentsToWrite[filePath] = contentToWrite;
 
-            if (exactRestore || pre is null)
+            // A verbatim write keeps the text as given, so a differing pre-image style is not an attribution concern either.
+            if (exactRestore || verbatim || pre is null)
             {
                 continue;
             }

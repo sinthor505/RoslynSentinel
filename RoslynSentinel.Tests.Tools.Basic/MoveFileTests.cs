@@ -8,7 +8,7 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 // MoveFile (WholeFileWriteTools.MoveFileTool), slice 11-1 (namespaceHandling keep): the move runs through ValidateAndApplyAsync as one
 // change {destination: text} + deletePaths [source], so it is compile-gated, undoable and recorded in one operation blob. Refusals are
 // facts-only and leave every file as it was. Runs on a real PersistentWorkspaceManager over a TestSolutionFixture copy of ContosoOrders
-// (two projects: ContosoOrders.Core and ContosoOrders.Tests). Byte identity (BOM, mixed EOL) is slice 11-3 and not tested here.
+// (two projects: ContosoOrders.Core and ContosoOrders.Tests). Byte identity (BOM, LF-only, mixed EOL) is covered by the *_KeepsTheBytesExact tests (slice 11-3, the chokepoint's verbatim parameter).
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
 [Category("WholeFileWriteTools")]
@@ -131,6 +131,49 @@ public sealed class MoveFileTests
         Assert.That(File.Exists(source), Is.False);
         Assert.That(File.ReadAllText(destination), Is.EqualTo(text));
         Assert.That(result.SuccessData!.Description, Does.Not.Contain("was kept"), "The namespace fact is for .cs files only.");
+    }
+
+    // Seeds the file with exactly `text` (a leading U+FEFF is written as the UTF-8 BOM), records its bytes, moves it and asserts the destination bytes
+    // are identical and the source is gone: MoveFile writes through the chokepoint with verbatim, so no EOL or BOM normalization applies.
+    private static async Task AssertMoveKeepsBytesAsync(string relativeSource, string relativeDestination, string text)
+    {
+        using var fixture = new TestSolutionFixture();
+        using var manager = await LoadAsync(fixture);
+        var tools = BuildTools(manager);
+        await fixture.AddFileToSolution(manager, relativeSource, text);
+        var source = Path.Combine(fixture.SolutionDirectory, relativeSource);
+        var destination = Path.Combine(fixture.SolutionDirectory, relativeDestination);
+        var originalBytes = File.ReadAllBytes(source);
+
+        var result = await tools.MoveFileTool(reason: "test message", source, destination, MoveFileNamespaceHandling.keep);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(File.Exists(source), Is.False, "The source is gone.");
+        Assert.That(File.ReadAllBytes(destination), Is.EqualTo(originalBytes), "The destination holds the original bytes exactly.");
+    }
+
+    [Test]
+    public async Task MoveFile_CsFileWithBomAndCrlf_KeepsTheBytesExactAsync()
+    {
+        const string text = "﻿namespace ContosoOrders.Core;\r\n\r\npublic class BomMover\r\n{\r\n}\r\n";
+
+        await AssertMoveKeepsBytesAsync(Path.Combine(CoreFolder, "BomMover.cs"), Path.Combine(CoreFolder, "Sub", "BomMover.cs"), text);
+    }
+
+    [Test]
+    public async Task MoveFile_CsFileWithLfOnly_KeepsTheBytesExactAsync()
+    {
+        const string text = "namespace ContosoOrders.Core;\n\npublic class LfMover\n{\n}\n";
+
+        await AssertMoveKeepsBytesAsync(Path.Combine(CoreFolder, "LfMover.cs"), Path.Combine(CoreFolder, "Sub", "LfMover.cs"), text);
+    }
+
+    [Test]
+    public async Task MoveFile_TextFileWithMixedEol_KeepsTheBytesExactAsync()
+    {
+        const string text = "first\r\nsecond\nthird\r\nfourth\n";
+
+        await AssertMoveKeepsBytesAsync(Path.Combine("docs", "mixed.txt"), Path.Combine("docs", "archive", "mixed.txt"), text);
     }
 
     [Test]
