@@ -416,6 +416,26 @@ A bare pass/fail sends the analyst back into transcripts to learn what happened.
   Each golden must pass its own check and the previous golden must fail it.
 - Design and first numbers: `docs/current/plans/closed/plan_modeleval_stepped_shipping_kind_scenario.md`.
 
+## Implementation scenarios (`-Test ImplementationScenario`)
+
+Data-driven family of small implementation tasks distilled from real plan and punchlist runs, each sized for a
+70k-token context. Same runner settings and outcome classes as the ShippingKind stepped scenario.
+
+- Run: `.\scripts\roslynsentinel-modeleval.ps1 -HostAddress 113 -Test ImplementationScenario -Scenario <Id> [-Step <k>]`
+  (queue it on a shared host). No `-Scenario` runs every scenario. Cases are named `ImplScenario_<Id>_Step<k>`.
+- Where things live: `RoslynSentinel.Tests.ModelEval/ImplementationScenarios/` - `ImplementationScenario.cs` (records,
+  check context), `ImplementationScenarioChecks.cs` (hidden xUnit test + `dotnet test`, extra check, scope),
+  `ImplementationScenarioRegistry.cs`, one `Scenarios/<Id>Scenario.cs` per scenario (seed files, per-step goldens,
+  prompt, allowed paths, hidden test, extra check, canned reply for read-only steps, preferred host). Scenario files
+  overlay `Samples/ContosoOrders` under `ContosoOrders.Core/Evals/<Id>/` and `ContosoOrders.Tests/Evals/<Id>/`.
+- Outcome classes: Pass, PassedAfterCap, NotConverged, Blocked, CheckFailed, BuildBroken, OutOfScopeEdit.
+- No-model self-test after changing a scenario or the framework: `ImplementationScenarioGoldenTests` (`[Explicit]`;
+  RunTest scope project `RoslynSentinel.Tests.ModelEval`, filter `Name~<Id>`, **suite full** - the fast suite skips
+  the explicit class even when named). Per scenario: `Golden_` (golden passes its check), `Previous_` (previous
+  state fails it), `Budget_` (seed + longest prompt <= 24,000 chars).
+- A scenario too complicated to build is parked: `ParkedReason` set, its cases report Ignored with the reason.
+- Plan and scenario specs: `docs/current/plans/plan_modeleval_implementation_scenarios.md`.
+
 ## Where output goes
 
 - The scratch root is env `ROSLYNSENTINEL_SCRATCH_ROOT` (absolute), else `<parent of the repo>\RoslynSentinel-ScratchDir`.

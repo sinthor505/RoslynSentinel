@@ -139,7 +139,9 @@
     constant names such as `case Overnight:`; compare steps 4 and 5 against ShippingKindStepFinal) |
     ShippingKindStepPriorityOvernight (Model_RunsShippingKindStepPromptPriorityOvernight: the Final prompts with
     the constant Overnight renamed PriorityOvernight in goldens, prompts and check sources; its value stays
-    "overnight"; compare against ShippingKindStepFinal). Required. Accepts multiple values (e.g.
+    "overnight"; compare against ShippingKindStepFinal) | ImplementationScenario (Model_CompletesImplementationScenario:
+    the data-driven implementation scenarios in ImplementationScenarioRegistry, each a small ContosoOrders overlay
+    with golden steps; -Scenario <Id> picks one (default all), -Step narrows to its steps). Required. Accepts multiple values (e.g.
     -Test OrderPricingRefactor,OrderPricingRefactorChain4,OrderPricingRefactorChain5) to run
     each one in turn, in the order given, all under the same -HostAddress/-Model/-Repeats -
     this is the supported way to queue a multi-test overnight sequence: it reuses this script's
@@ -268,6 +270,7 @@
 
 .PARAMETER Scenario
     Scenario only (required there): id of a scenario in ScenarioRegistry (RoslynSentinel.Tests.ModelEval). Runs it for -Samples samples, each on a fresh fixture, and writes one scored CSV line per sample to results.csv in the run folder (ROSLYNSENTINEL_MODELEVAL_SCENARIO).
+    ImplementationScenario (optional there): id of a scenario in ImplementationScenarioRegistry; selects its ImplScenario_<Id>_Step<k> cases by test filter (no env var). Omit to run every scenario.
 
 .PARAMETER TurnCap
     Scenario only: replaces the scenario definition's TurnCap (maximum live model turns) for this run. Default 0 = unset, the
@@ -297,7 +300,8 @@
 .PARAMETER Step
     ShippingKindStep only: step numbers 1-6 to run (for example -Step 4,5 runs steps 4 and 5). Default: all six
     for ShippingKindStep (ShippingKindStepV2..V13 have steps 1-5 only, so use -Step there when you want fewer).
-    Each listed step is one Model_CompletesShippingKindStep test case.
+    Each listed step is one Model_CompletesShippingKindStep test case. ImplementationScenario: the scenario's step numbers
+    (most scenarios have one step); needs -Scenario.
 
 .EXAMPLE
     .\roslynsentinel-modeleval.ps1 -HostAddress 112 -Test SizeThreshold -Size 60
@@ -323,7 +327,7 @@ param(
     [string]$HostAddress,
 
     [Parameter(Position = 1, Mandatory)]
-    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'LargeResultPaging', 'LargeResultPagingReadFileOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor', 'OrderPricingRefactorChain4', 'OrderPricingRefactorChain5', 'OrderPricingRefactorChain6', 'OrderPricingRefactorChain7', 'OrderPricingRefactorChain8', 'OrderPricingRefactorChain9', 'OrderPricingRefactorChain10', 'ResumeTranscript', 'ScoreTranscript', 'Scenario', 'ShippingKindStep', 'ShippingKindStepV2', 'ShippingKindStepV3', 'ShippingKindStepV4', 'ShippingKindStepV5', 'ShippingKindStepV6', 'ShippingKindStepV7', 'ShippingKindStepV8', 'ShippingKindStepV9', 'ShippingKindStepV10', 'ShippingKindStepV11', 'ShippingKindStepV12', 'ShippingKindStepV13', 'ShippingKindStepV14', 'ShippingKindStepFinal', 'ShippingKindStepUsingStatic', 'ShippingKindStepPriorityOvernight', 'ShippingKindResume', 'ShippingKindMappingProbe', 'ShippingKindReplay')]
+    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'LargeResultPaging', 'LargeResultPagingReadFileOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor', 'OrderPricingRefactorChain4', 'OrderPricingRefactorChain5', 'OrderPricingRefactorChain6', 'OrderPricingRefactorChain7', 'OrderPricingRefactorChain8', 'OrderPricingRefactorChain9', 'OrderPricingRefactorChain10', 'ResumeTranscript', 'ScoreTranscript', 'Scenario', 'ShippingKindStep', 'ShippingKindStepV2', 'ShippingKindStepV3', 'ShippingKindStepV4', 'ShippingKindStepV5', 'ShippingKindStepV6', 'ShippingKindStepV7', 'ShippingKindStepV8', 'ShippingKindStepV9', 'ShippingKindStepV10', 'ShippingKindStepV11', 'ShippingKindStepV12', 'ShippingKindStepV13', 'ShippingKindStepV14', 'ShippingKindStepFinal', 'ShippingKindStepUsingStatic', 'ShippingKindStepPriorityOvernight', 'ShippingKindResume', 'ShippingKindMappingProbe', 'ShippingKindReplay', 'ImplementationScenario')]
     [string[]]$Test,
 
     [Parameter(Position = 2)]
@@ -459,10 +463,17 @@ $testNames = @{
     'ShippingKindMappingProbe'      = 'ShippingKindMappingProbe_SamplesTheMapping'
     # Stateless replay of a saved ShippingKind transcript: no fixture or tool execution, one live turn per sample; needs -ResumeTranscript, optional -LiteralCase.
     'ShippingKindReplay'            = 'ShippingKindReplay_SamplesTheDecisionTurn'
+    # Data-driven implementation scenarios (ImplementationScenarioRegistry); cases are named ImplScenario_<Id>_Step<k> via SetName.
+    # -Scenario <Id> picks one scenario (default: all), -Step narrows to its steps.
+    'ImplementationScenario'        = 'Model_CompletesImplementationScenario'
 }
 
-if ($Step -and -not ($Test | Where-Object { $_ -like 'ShippingKindStep*' })) {
-    throw "-Step applies only to -Test ShippingKindStep or ShippingKindStepV2..V6."
+if ($Step -and -not ($Test | Where-Object { $_ -like 'ShippingKindStep*' -or $_ -eq 'ImplementationScenario' })) {
+    throw "-Step applies only to -Test ShippingKindStep, ShippingKindStepV2..V6 or ImplementationScenario."
+}
+
+if ($Step -and $Test -contains 'ImplementationScenario' -and -not $Scenario) {
+    throw "-Test ImplementationScenario -Step needs -Scenario <scenario id> (see ImplementationScenarioRegistry in RoslynSentinel.Tests.ModelEval)."
 }
 
 if ($Test -contains 'ShippingKindResume' -and ($ResumeStep -lt 1 -or $ResumeStep -gt 6)) {
@@ -773,6 +784,18 @@ for ($i = 1; $i -le $Repeats; $i++) {
         }
         else {
             "Name~$testName"
+        }
+    }
+    elseif ($currentTest -eq 'ImplementationScenario') {
+        # SetName replaces the method name in the VSTest name, so the filter matches ImplScenario_<Id>_Step<k>, not $testName.
+        $testFilter = if ($Scenario -and $Step) {
+            (($Step | Sort-Object -Unique | ForEach-Object { "Name~ImplScenario_$($Scenario)_Step$_" }) -join '|')
+        }
+        elseif ($Scenario) {
+            "Name~ImplScenario_$($Scenario)_"
+        }
+        else {
+            "Name~ImplScenario_"
         }
     }
     & dotnet test $csproj -c Debug `
