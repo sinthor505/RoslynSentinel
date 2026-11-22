@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## MoveFile slice 2 (copyAndObsolete) - resolved (2026-11-22)
+
+MoveFile slice 2: copyAndObsolete with best-effort caller migration (2026-11-21) - copy with the folder-derived namespace (refused when it equals the old one), `[Obsolete("Use <NewNs>.<Type>")]` on every top-level type of the old file (refused for partials split across files), migrate callers to the new namespace by in-memory fixpoint (revert caller files that gain errors), one atomic apply, result lists migrated files and remaining obsolete callers with their blocking error; decisions in the proposal; Medium-Large - [doc](proposals/proposal_move_file_tool.md)
+
+Evidence: 3c7ea6a1, 98e77c6e, 57e42f47, 8b3e2388, e642f5c3, 733dc716; tests CopyAndObsolete*Tests (Tests.Basic), MoveFileCopyAndObsoleteTests (Tests.Tools.Basic)
+
 ## Archived-outcome rewrite duplicated in two test projects - resolved (2026-11-22)
 
 Archived-outcome rewrite duplicated in two test projects (2026-11-21) - `PendingArchivedOutcomes` and `RewriteBodyArchivedOutcomeAttribute` exist in both Tests.ModelEval and Tests.ErrorVariants (batch F F4); fold into Common/AgentLoop beside `RunDirectoryArchive` (as #3 did) and add an end-to-end test that the ITestAction runs after TearDown; Small
