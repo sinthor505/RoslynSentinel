@@ -35,6 +35,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\RoslynSentinel.AgentLoop\RoslynSentinel.AgentLoop.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Common\RoslynSentinel.Common.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Server.Advanced\RoslynSentinel.Server.Advanced.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Tests\RoslynSentinel.Tests.csproj" />

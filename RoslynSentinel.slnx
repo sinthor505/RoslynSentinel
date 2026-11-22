@@ -8,6 +8,7 @@
     <File Path=".editorconfig" />
   </Folder>
   <Project Path="RoslynSentinel.Common/RoslynSentinel.Common.csproj" Id="fbd51816-ef10-4c4c-a0fa-7792a6fe7db7" />
+  <Project Path="RoslynSentinel.AgentLoop/RoslynSentinel.AgentLoop.csproj" />
   <Project Path="RoslynSentinel.Engines.Advanced/RoslynSentinel.Engines.Advanced.csproj" />
   <Project Path="RoslynSentinel.Engines.Basic/RoslynSentinel.Engines.Basic.csproj" />
   <Project Path="RoslynSentinel.Server.Advanced/RoslynSentinel.Server.Advanced.csproj" Id="c76d7d9f-da14-4474-a0ef-fa7e59bb0986" />
