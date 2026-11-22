@@ -1,6 +1,6 @@
 # Plan: Data-driven model-eval family of 14 implementation scenarios distilled from real plan/punchlist runs
 
-**Status:** APPROVED 2026-11-22. Owner approved the 14-scenario list, the ContosoOrders overlay and running it in this session.
+**Status:** IN PROGRESS 2026-11-22. Steps 1-2 done (786a1c89, 6000b8d2).
 
 ## Problem
 
@@ -36,7 +36,13 @@ reduced to a small self-contained fixture rather than a checkout of this repo.
 
 - Implementers write scenario files and `Build` only (`RoslynSentinel.Tests.ModelEval`); the dispatcher runs
   the offline self-tests (`RunTest`, one at a time): `ImplementationScenarioGoldenTests` filtered to the
-  scenario (`Name~<Id>`).
+  scenario (`Name~<Id>`), with `suite: "full"` (the default fast suite skips the `[Explicit]` class even when
+  the filter names it). Fixture copy + restore measured at 2.2 s, so one fixture per scenario is fine.
+- Framework as built (Step 1): `FilesForStep` normalises CRLF; an `AllowedPaths` entry ending in `/` allows the
+  whole folder; `ReadText` strips a BOM (use `ReadBytes` for byte checks); parked scenarios yield one Ignored
+  case each; test methods `Golden_StepPassesItsCheck`, `Previous_StepFailsTheCheck`, `Budget_FitsContextWindow`.
+- Briefs put the full fixture source, hidden-test and check specs inline (the Step 2 implementer passed first
+  time that way).
 - A scenario slice is done when, for that scenario: `Golden_<Id>_Step<k>` passes for every step,
   `Previous_<Id>_Step<k>` passes (the previous state fails the step's check) and `Budget_<Id>` passes.
 - Seed code must compile in ContosoOrders and its own seed tests must pass; hidden tests use xUnit
@@ -102,6 +108,7 @@ reduced to a small self-contained fixture rather than a checkout of this repo.
     `Registry_IdsUniqueAndMatchClassNames`. Parked scenarios yield Ignored cases.
 - Done when: Build of `RoslynSentinel.Tests.ModelEval` 0 errors; `RunTest` `ImplementationScenarioGoldenTests`
   shows `Registry_IdsUniqueAndMatchClassNames` passing and 14 ignored placeholders.
+- Done: 786a1c897c6b7314911e74dcf42b60ac84dba56d
 
 ### Step 2 - Pilot scenario 2 (WidenToReadOnlyDictionary)
 - Files: `ImplementationScenarios/Scenarios/WidenToReadOnlyDictionaryScenario.cs`
@@ -111,6 +118,7 @@ reduced to a small self-contained fixture rather than a checkout of this repo.
 - Change: spec in the scenario table below. Proves the framework end to end; fix framework defects found here
   in this step (resume the Step 1 agent if needed).
 - Done when: Build 0 errors; `ImplementationScenarioGoldenTests` `Name~WidenToReadOnlyDictionary` all pass.
+- Done: 6000b8d26faf8a8eb09dd8c359955f5a76a56d50
 
 ### Steps 3-8 - Remaining scenarios, two per slice
 - Files: two `ImplementationScenarios/Scenarios/<Id>Scenario.cs` per slice
