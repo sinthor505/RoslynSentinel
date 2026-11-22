@@ -8,6 +8,18 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## UndoLastApply redesigned as UndoChange (last-only, validated, creation-aware) - resolved (2026-11-21)
+
+Redesign `UndoLastApply` as `UndoChange`: last-only, validated, creation-aware (2026-11-21) - refuse a changeId that is not the newest blob for every file it touched, validate the restored tree before writing and refuse on new compile errors, undo of a created file deletes it (blob records Created), CreateFile/WriteFile/DeleteFile and the diff tools return the changeId and undo hint, rename the tool and its hints to `UndoChange`; decisions and acceptance in the proposal; Medium - [proposal](proposals/proposal_undo_change_last_only_validated.md)
+
+Evidence: 9f9424b4, 3dad2927, cf239ec4, 85fe833e, 7b0c6a05, 7c088de5, c40e72de, a6d253f5, 24dd7f2d; UndoChange, UndoLastOnlyGuard, ApplyDeleteValidation, ApplyPostImages tests + ratchets green; proposal moved to proposals/closed
+
+## Reflective and DI ctor callers in Search and blast radius - resolved (2026-11-21)
+
+Reflective and DI ctor callers in Search and blast radius (2026-11-21) - ChangeSignature already lists reflective construction sites (`BasicRefactoringEngine.FindReflectiveConstructionSitesAsync`, :838, 8f144404); move that finder to a shared Engines.Basic helper and have Search(references/callers) on a ctor or type (`SymbolNavigationEngine.FindCallersAsync` :1543) and InspectSymbol(blastRadius) (`ImpactAnalyzer.AnalyzeImpactAsync` :28) list its sites as findings (not hits), plus a separately labelled "DI registration" kind for `IServiceCollection` extension calls with the type as a type argument (AddSingleton<T> etc.) (owner 2026-11-21); acceptance: a fixture with `ActivatorUtilities.CreateInstance<T>(sp)` and `AddSingleton<T>()` shows both kinds in Search and blastRadius, the existing ChangeSignature reflective test stays green; Small
+
+Evidence: e57e1196; Tests.Advanced ConstructionSiteFindingsTests (8) + ChangeSignatureReflectionConstructionTests green
+
 ## Settle Build's 0 warnings vs workspace nullable warnings - resolved (2026-11-21)
 
 Settle Build's 0 warnings vs 210 workspace nullable warnings (2026-11-21) - the 3 CS8604 baseline sites are gone and the [Obsolete] ctor case is moot (ctor removed 86c26b43), but workspace diagnostics show 210 nullable warnings in test projects (e.g. Tests.Advanced `ChangeSignatureWrapperTests.cs:313` CS8602) while Build (`--no-incremental`, BuildEngine.cs ~380) says 0; run one raw `dotnet build RoslynSentinel.Tests.Advanced --no-incremental` and compare with Build's WarningCount: mismatch = Build defect (blocker doc, fix output handling/ParseDiagnostics), match = workspace over-reports; then refresh docs/known-build-warnings.*.txt via scripts/build.ps1; acceptance: a known CS8602 site appears in both outputs or neither, baseline matches a fresh run; Small
