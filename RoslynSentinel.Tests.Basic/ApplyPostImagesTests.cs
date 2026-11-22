@@ -134,6 +134,78 @@ public class ApplyPostImagesTests
     }
 
     [Test]
+    public async Task NewFile_IsListedInCreatedFiles_AndExistingFileIsNot()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var existing = Path.Combine(dir, "A.cs");
+            var created = Path.Combine(dir, "B.cs");
+            File.WriteAllBytes(existing, Encoding.UTF8.GetBytes(CrlfSource));
+            var proposed = CrlfSource.Replace("=> 1", "=> 2");
+            using var manager = NewManager();
+
+            var result = await manager.ApplyProposedChangesAsync(
+                new()
+                {
+                    [existing] = proposed,
+                    [created] = CrlfSource
+                }, retryCount: 0, validateChanges: false);
+
+            Assert.That(result.IsError, Is.False, result.Summary);
+            Assert.That(result.SucceededFiles, Does.Contain(created));
+            Assert.That(result.CreatedFiles, Is.Not.Null);
+            Assert.That(result.CreatedFiles!, Is.EquivalentTo(new[] { created }));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task CreatedFile_ThroughApplyBlobHelper_BlobItemHasCreatedTrue()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var existing = Path.Combine(dir, "A.cs");
+            var created = Path.Combine(dir, "B.cs");
+            File.WriteAllBytes(existing, Encoding.UTF8.GetBytes(CrlfSource));
+            var proposed = CrlfSource.Replace("=> 1", "=> 2");
+            using var manager = NewManager();
+            var result = await manager.ApplyProposedChangesAsync(
+                new()
+                {
+                    [existing] = proposed,
+                    [created] = CrlfSource
+                }, retryCount: 0, validateChanges: false);
+            Assert.That(result.IsError, Is.False, result.Summary);
+
+            var blob = await OperationBlobWriter.WriteApplyBlobAsync("RenameSymbol", "abcd1234", result, dir);
+
+            Assert.That(blob.Written, Is.True, blob.Diagnostic);
+            var operations = Path.Combine(dir, ".roslynsentinel", "operations");
+            var blobFiles = Directory.GetFiles(operations, "*_abcd1234.json");
+            Assert.That(blobFiles, Has.Length.EqualTo(1));
+            using var doc = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(blobFiles[0]));
+            var items = doc.RootElement.GetProperty("items").EnumerateArray().ToList();
+
+            var createdItem = items.Single(i => i.GetProperty("FilePath").GetString() == created);
+            var existingItem = items.Single(i => i.GetProperty("FilePath").GetString() == existing);
+            Assert.Multiple(() =>
+            {
+                Assert.That(createdItem.GetProperty("Created").GetBoolean(), Is.True);
+                Assert.That(existingItem.GetProperty("Created").GetBoolean(), Is.False);
+            });
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
     public async Task RolledBackBatch_HasNoPostImageEntries()
     {
         var dir = NewTempDir();

@@ -242,6 +242,8 @@ public static class OperationBlobWriter
                 Outcome = ItemRecordOutcome.Succeeded,
                 BeforeSource = before,
                 AfterSource = after,
+                // Created comes from the chokepoint's did-not-exist signal; a null BeforeSource alone also means the pre-image read failed.
+                Created = result.CreatedFiles?.Contains(f, StringComparer.OrdinalIgnoreCase) == true,
             };
         }).ToList();
 
