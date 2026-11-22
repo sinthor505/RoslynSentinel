@@ -8,6 +8,18 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Archived-outcome rewrite duplicated in two test projects - resolved (2026-11-22)
+
+Archived-outcome rewrite duplicated in two test projects (2026-11-21) - `PendingArchivedOutcomes` and `RewriteBodyArchivedOutcomeAttribute` exist in both Tests.ModelEval and Tests.ErrorVariants (batch F F4); fold into Common/AgentLoop beside `RunDirectoryArchive` (as #3 did) and add an end-to-end test that the ITestAction runs after TearDown; Small
+
+Evidence: 5f2cef60; shared RoslynSentinel.AgentLoop/PendingArchivedOutcomes.cs, ITestAction shim per assembly, AfterTest-after-TearDown end-to-end tests
+
+## Extract the agent-loop harness from Common into RoslynSentinel.AgentLoop - resolved (2026-11-22)
+
+Extract the agent-loop harness from Common into `RoslynSentinel.AgentLoop` (2026-11-20) - unblocked (2026-11-20 punchlist done); open questions a-g settled 2026-11-21 (project RoslynSentinel.AgentLoop, namespace kept, no SubAgent split, stranded tests move to Tests.ModelEval/ErrorVariants, recompile count is the acceptance measure); break the back-edges first (ToolLoopLatch -> LoopAssistTracker.ExtractNextStep, SubAgentEvalResult.Build, LlmOptions crefs), refresh the stale 18-file inventory and the 4 ratchet pins; do the archived-outcome fold (L38 item) after it; Medium - [proposal](proposals/proposal_extract_agentloop_from_common.md)
+
+Evidence: 4b5db8de, 722be986, ae8937ab, 945170d9, 5f286df9, cab94f30, 1ec5ff24, b9232eb4, 7532633d, aa1dbdfd; public-API edit recompile fan-out 24 -> 14 projects (reference graph); proposal_extract_agentloop_from_common.md BUILT
+
 ## MoveFile slice 1 (keep) - resolved (2026-11-22)
 
 MoveFile slice 1: keep (TOOL-GAP, 2026-11-10) - `MoveFile(sourcePath, destinationPath, namespaceHandling)` all mandatory, any text file, claude-lean core beside CreateFile; slice 1 = keep (update/copyAndObsolete refused as not yet supported), cross-project allowed with the compile gate refusing a breaking move, Git(status) rename hint from the server's own MoveFile record plus identical-content blob-hash pairs, byte-identity test first (EOL bypass only if it fails); unblocks the core-split test move; decisions and acceptance in the proposal; Medium - [doc](proposals/proposal_move_file_tool.md)

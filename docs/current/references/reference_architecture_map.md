@@ -19,7 +19,7 @@ pointers: open the cited file for detail, and trust the source over this doc if 
 | Engines | `Engines.Basic`, `Engines.Advanced` | Roslyn analysis/refactoring logic. No MCP types |
 | Tools | `Tools.Basic`, `Tools.Advanced`, `Tools.Experimental` | `[McpServerToolType]` classes plus the `*Impl` classes behind the Basic tools |
 | Server | `Server.Advanced` (the only server project; the former `Server.Basic` was folded in) | Entry points, arg parsing, mode resolution, DI + request filters. No tool/engine logic |
-| Harness | `Utilities.PlanStepRunner` | Plan-step runner exe; references only `Common` |
+| Harness | `AgentLoop` (`RoslynSentinel.AgentLoop`, namespace `RoslynSentinel.Common.AgentLoop` kept), `Utilities.PlanStepRunner` | `AgentLoop`: the agent-loop harness (runner, transcript, `LmStudioAgentClient`, tool hosts, run archive); references only `Common`. `Utilities.PlanStepRunner`: plan-step runner exe; references only `Common` and `AgentLoop`. Consumers of `AgentLoop`: `Tools.Advanced` (SubAgent), `PlanStepRunner` and test projects; `ToolLoopLatch`, `LoopLatchOptions` and `ErrorPolicyDocument` stay in `Common` (server-side) |
 
 Sibling projects cannot see each other (`Tools.Advanced` cannot reach `Tools.Basic`; `Engines.Basic`
 cannot reach `Engines.Advanced`): shared helpers go one layer down. Advanced builds on Basic, it is

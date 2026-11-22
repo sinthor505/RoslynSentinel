@@ -1,6 +1,6 @@
 # ReplaceRange: replace or delete a block of lines identified by its first and last line text
 
-**Status:** APPROVED 2026-11-21. The owner settled placement (claude-lean core plus the eval lean list), the shared apply helper, the result type and the eval scope in a todo review; nothing is built.
+**Status:** BUILT 2026-11-22 (ReplaceRange tool, commits 8ef5e730, 692ac902, 06c37c66, ab42b7e2; live after a server restart). The owner settled placement (claude-lean core plus the eval lean list), the shared apply helper, the result type and the eval scope in a todo review.
 
 ## Motivation
 

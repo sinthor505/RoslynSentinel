@@ -14,7 +14,7 @@
         (PlanStepRunner harness clones).
       - A transcript that already has a Summary property is skipped.
       - Writes in place. The first time a transcript is changed, its original is kept as transcript.json.bak (never overwritten).
-      - Summary is computed from Turns exactly like RunTotals.FromTranscript in RoslynSentinel.Common/AgentLoop/AgentTranscript.cs
+      - Summary is computed from Turns exactly like RunTotals.FromTranscript in RoslynSentinel.AgentLoop/AgentTranscript.cs
         (keep the two in step) and carries "Backfilled": true.
       - DURATIONS: TotalDuration is the first turn's StartedAt to the last turn's CompletedAt. It MISSES setup time (tool listing,
         seeding, context-length lookup) and any time after the last turn, so it is slightly shorter than the live wall clock a new
@@ -55,7 +55,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-# Names in the AgentStopReason enum order (RoslynSentinel.Common/AgentLoop/AgentTranscript.cs); the file stores the number.
+# Names in the AgentStopReason enum order (RoslynSentinel.AgentLoop/AgentTranscript.cs); the file stores the number.
 $StopReasonNames = @(
     'ModelFinished', 'TurnCapExceeded', 'WallClockCapExceeded', 'UnknownToolRequested', 'RepeatedToolFailure',
     'LoopLatchIgnored', 'ContextExhausted', 'StreamRunaway', 'MalformedToolCall', 'RepeatedIdenticalCall', 'TargetReached',
