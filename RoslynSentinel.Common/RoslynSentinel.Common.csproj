@@ -35,6 +35,8 @@
 		<InternalsVisibleTo Include="RoslynSentinel.Tools.Basic" />
 			<!-- ModelEvalAssemblySetUp stamps runs via the internal GitReaders.Default. -->
 			<InternalsVisibleTo Include="RoslynSentinel.Tests.ModelEval" />
+			<!-- AgentLoop files moved out of Common still use Common internals (AgentChatMessage.IsLoopAssistNote, LoopAssistTracker.CanonicalArguments) until those types move too; remove if the final build shows it is unused. -->
+			<InternalsVisibleTo Include="RoslynSentinel.AgentLoop" />
 	</ItemGroup>
 
 </Project>
