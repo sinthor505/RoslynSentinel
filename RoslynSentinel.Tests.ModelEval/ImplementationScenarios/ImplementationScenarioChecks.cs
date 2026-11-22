@@ -43,7 +43,10 @@ internal static class ImplementationScenarioChecks
         }
         finally
         {
-            File.Delete(testFile);
+            if (File.Exists(testFile))
+            {
+                File.Delete(testFile);
+            }
         }
 
         // With a hidden test every test must pass (it counts the seed tests too). Without one the run is only the build proof:
