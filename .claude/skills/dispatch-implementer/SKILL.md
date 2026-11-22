@@ -102,19 +102,25 @@ Implementers never run tests; dispatchers run them in the background so no slice
   `Start-Process pwsh -ArgumentList '-NoProfile','-File','<repo>\scripts\Invoke-WorktreeTests.ps1','-WorktreeRoot','c:\tmp\rs-testtrees','-Ref','<commit>','-Filter','FullyQualifiedName~<ClassA>|FullyQualifiedName~<ClassB>','-WithRatchets' -WindowStyle Hidden`.
   `-WithRatchets` appends `|TestCategory=Ratchet`: the ratchet tests (marked `[Category("Ratchet")]` in Tests.Basic,
   Tests.Server and Tests.Tools.Basic) scan the source tree and caught regressions that class-filtered runs missed;
-  they add about 35 quick tests, so leave `-Projects` off to run them in every project (a measured run took 96 s including the build).
+  they add about 38 quick tests (18 Tests.Basic, 18 Tests.Server, 2 Tests.Tools.Basic; counted 2026-11-22), so leave `-Projects` off to run them in every project (a measured run took 96 s including the build).
   Each run gets a fresh worktree (own bin/obj, removed afterwards); at most 2 run at once machine-wide,
   the rest queue. Results: `c:\tmp\rs-testtrees\_results\<commit8>-<timestamp>-<pid>\summary.json`.
   Keep the filter to the touched classes (a namespace-wide filter like `~.Git` ran 800 tests).
 - **Collect results without waiting:** before each later commit and at the end of the batch, read the
   `summary.json` files that exist and log them. A failure: re-run that test alone; still red means a
   fix slice ahead of the next queue item. A run with exit 2 or no `summary.json` is a setup failure: report it.
-- **Per batch: one full run** of each affected test project, NOT by the orchestrator: when a batch
+- **Per batch: one fast run** of each affected test project, NOT by the orchestrator: when a batch
   reports, the main session starts the same script with `-WorktreeRoot c:\tmp\rs-testtrees -Ref <last
-  commit>` (no `-Filter`; `-Projects` optional) in the background and dispatches the next batch at once
-  (the script calls `dotnet test` directly, so it covers every category). Re-run failures alone; known
-  full-run flakes are commented in their tests. A failure found late is narrowed by bisecting the
-  batch's commits (the script takes any `-Ref`).
+  commit> -Suite fast` (no `-Filter`; `-Projects` optional) in the background and dispatches the next batch
+  at once. Measured 2026-11-22 (`scripts/Get-TestRunTimings.ps1`): a full run has a median of 1,328 s over
+  47 runs; one fast run took 567 s, build included. Re-run failures alone; known full-run flakes are
+  commented in their tests. A failure found late is narrowed by bisecting the batch's commits (the script
+  takes any `-Ref`).
+- **A full run** (`-Suite full`, the script's default, covers the `[Category("OutOfProcess")]` fixtures) is
+  required: before a push; when `.roslynsentinel/full-test-marker.json` is stale (2 days, or 40 fast runs;
+  the script counts fast unfiltered runs in `fastRunsSince`); and when the batch touched git, `RunTest`/`Build`
+  or process-spawning code (`GitProcess`, `ChildProcessCapture`, `TestRunEngine`, the `Git*` tools,
+  `scripts/Invoke-WorktreeTests.ps1`).
 
 The agent re-measures before editing and replies `RESCOPE:` (with its numbers) if the real blast radius
 exceeds the brief's; the dispatcher then re-slices.

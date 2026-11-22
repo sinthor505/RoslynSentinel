@@ -97,9 +97,13 @@ Status values: `TODO` / `WIP` / `DONE (hash)` / `PARTIAL (what is left)` / `DEFE
 
 ### After each batch (or each Direct step that changed code)
 
-One full run per affected test project after a batch, started by the main session in the background
-with `scripts/Invoke-WorktreeTests.ps1 -WorktreeRoot c:\tmp\rs-testtrees -Ref <batch's last commit>` (fresh
-worktree per run, so it does not block the next batch's builds or other runs); the next batch is dispatched at once. Inside a batch and
+One fast run per affected test project after a batch, started by the main session in the background
+with `scripts/Invoke-WorktreeTests.ps1 -WorktreeRoot c:\tmp\rs-testtrees -Ref <batch's last commit> -Suite fast` (fresh
+worktree per run, so it does not block the next batch's builds or other runs); the next batch is dispatched at once.
+Measured 2026-11-22 (`scripts/Get-TestRunTimings.ps1`): a full run has a median of 1,328 s over 47 runs; a fast run took 567 s, build included.
+Use `-Suite full` (the default) before a push; when `.roslynsentinel/full-test-marker.json` is stale (2 days, or 40 fast
+runs; the script counts fast unfiltered runs); and when the batch touched git, `RunTest`/`Build` or process-spawning code
+(`GitProcess`, `ChildProcessCapture`, `TestRunEngine`, the `Git*` tools, `scripts/Invoke-WorktreeTests.ps1`). Inside a batch and
 after a Direct step, detached filtered runs of the touched test classes only, started by the dispatcher,
 never by an implementer (owner rules 2026-11-09 and 2026-11-11: catching a failure late is acceptable;
 bisect the commits to locate it). Baseline is 0 failures. Re-run a failure alone: if it passes, record it as a flake; if

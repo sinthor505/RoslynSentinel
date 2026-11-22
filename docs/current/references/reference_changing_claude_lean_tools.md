@@ -67,7 +67,7 @@ All are in `RoslynSentinel.Tests.Server` unless noted. Rows marked B pin behavio
 2. Make the code edit. In this repo implementation is dispatched to `implementer`/`implementer-senior`; the brief must name the registry and test files.
 3. Run the fast loop: `.\scripts\Test-ClaudeLeanSurface.ps1`. Expect any first failure to name what to edit.
 4. Regenerate the docs: `.\scripts\Test-ClaudeLeanSurface.ps1 -Regenerate` (or `.\scripts\Generate-ArchitectureMap.ps1`). Review the diff of `docs/generated/architecture_tools.md`, then commit it with the change.
-5. `Build(fullBuild)` with 0 errors, then `RunTest` on `RoslynSentinel.Tests.Server`. Add `Tests.Tools.Basic` / `Tests.Tools.Advanced` for behaviour or description changes. A whole-solution run takes about 5.5 minutes and is only needed for wide changes.
+5. `Build(fullBuild)` with 0 errors, then `RunTest` on `RoslynSentinel.Tests.Server`. Add `Tests.Tools.Basic` / `Tests.Tools.Advanced` for behaviour or description changes. A whole-solution full run takes a median of 1,328 s (about 22 minutes, 47 runs); a fast run (`-Suite fast`, skips `[Category("OutOfProcess")]` fixtures) took 567 s once, build included (measured 2026-11-22; source: `scripts/Get-TestRunTimings.ps1`). Run one only for wide changes.
 6. Compare failures with the baseline (no known failures per `reference_known_failing_tests`). Before blaming your change, check `git status` for uncommitted work from another session.
 7. A live check needs a server restart: `McpServerControl(StopServer)`, then `LoadSolution`. `Build(fullBuild)` makes the running binary stale.
 8. Commit only the files you changed, including `docs/generated/*`.
