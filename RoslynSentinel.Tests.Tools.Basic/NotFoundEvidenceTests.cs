@@ -49,7 +49,7 @@ public class NotFoundEvidenceTests
         Directory.Delete(path, recursive: true);
     }
 
-    private async Task WriteBlobAsync(string? agentId, string? sessionId, string? before, string reason = "rename for test")
+    private async Task WriteBlobAsync(string? agentId, string? sessionId, string? before, string reason = "rename for test", string? after = null)
     {
         ToolCallContext.Set(new ToolCallContext(agentId, "implementer", "RenameSymbol", reason, 0) { SessionId = sessionId });
         try
@@ -58,7 +58,7 @@ public class NotFoundEvidenceTests
             await OperationBlobWriter.WriteAsync(
                 "RenameSymbol",
                 Guid.NewGuid().ToString("N")[..8],
-                [new OperationItemRecord { FilePath = Path.Combine(_root, "Foo.cs"), Outcome = ItemRecordOutcome.Succeeded, BeforeSource = before }],
+                [new OperationItemRecord { FilePath = Path.Combine(_root, "Foo.cs"), Outcome = ItemRecordOutcome.Succeeded, BeforeSource = before, AfterSource = after }],
                 _root);
         }
         finally
@@ -87,7 +87,7 @@ public class NotFoundEvidenceTests
         }
     }
 
-    private async Task WriteBlobForFileAsync(string fileName, string agentId, string sessionId, DateTime stamp, string before)
+    private async Task WriteBlobForFileAsync(string fileName, string agentId, string sessionId, DateTime stamp, string before, string? after = null)
     {
         var context = new ToolCallContext(agentId, "implementer", "RenameSymbol", "stamped write", 0) { SessionId = sessionId };
         context.MarkWritten(stamp);
@@ -97,7 +97,7 @@ public class NotFoundEvidenceTests
             await OperationBlobWriter.WriteAsync(
                 "RenameSymbol",
                 Guid.NewGuid().ToString("N")[..8],
-                [new OperationItemRecord { FilePath = Path.Combine(_root, fileName), Outcome = ItemRecordOutcome.Succeeded, BeforeSource = before }],
+                [new OperationItemRecord { FilePath = Path.Combine(_root, fileName), Outcome = ItemRecordOutcome.Succeeded, BeforeSource = before, AfterSource = after }],
                 _root);
         }
         finally
@@ -488,5 +488,50 @@ public class NotFoundEvidenceTests
 
         Assert.That(findings, Has.Count.EqualTo(1));
         Assert.That(findings[0].Message, Does.Not.Contain("outside the searched scope"));
+    }
+
+    [Test]
+    public async Task Find_ForeignWriteLeftTermInAfterSource_NamesWriterAndSaysGone()
+    {
+        await WriteBlobAsync("b7", "s1", "class Foo { }", after: "class Foo { void Bar() { } }");
+
+        var findings = Find("Bar");
+
+        Assert.That(findings, Has.Count.EqualTo(1));
+        Assert.That(findings[0].Message, Does.Contain("`Bar`"));
+        Assert.That(findings[0].Message, Does.Contain("`b7`"));
+        Assert.That(findings[0].Message, Does.Contain("still in"));
+        Assert.That(findings[0].Message, Does.Contain("not in the file now"));
+    }
+
+    [Test]
+    public async Task Find_OwnWriteLeftTermInAfterSource_NoNote()
+    {
+        await WriteBlobAsync("main", "s1", "class Foo { }", after: "class Foo { void Bar() { } }");
+
+        Assert.That(Find("Bar", agentId: "main", sessionId: "s1"), Is.Empty);
+    }
+
+    [Test]
+    public async Task AcrossFiles_ForeignAfterSourceHoldsTerm_DiskLacksIt_Note()
+    {
+        await WriteBlobForFileAsync("Bar.cs", "b7", "s1", DateTime.UtcNow.AddMinutes(-5), "class Bar { }", after: "class Bar { void Widget() { } }");
+
+        var findings = NotFoundEvidence.FindAcrossFiles(_root, "Widget", false, "main", "s1", DateTime.UtcNow);
+
+        Assert.That(findings, Has.Count.EqualTo(1));
+        Assert.That(findings[0], Does.Contain("Widget"));
+        Assert.That(findings[0], Does.Contain("Bar.cs"));
+        Assert.That(findings[0], Does.Contain("b7"));
+        Assert.That(findings[0], Does.Contain("still in"));
+    }
+
+    [Test]
+    public async Task AcrossFiles_ForeignAfterSourceHoldsTerm_DiskHasIt_NoNote()
+    {
+        await WriteBlobForFileAsync("Bar.cs", "b7", "s1", DateTime.UtcNow.AddSeconds(-40), "class Bar { }", after: "class Bar { void Widget() { } }");
+        File.WriteAllText(Path.Combine(_root, "Bar.cs"), "class Bar { void Widget() { } }");
+
+        Assert.That(NotFoundEvidence.FindAcrossFiles(_root, "Widget", false, "main", "s1", DateTime.UtcNow), Is.Empty);
     }
 }

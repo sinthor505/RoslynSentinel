@@ -178,18 +178,26 @@ public static class NotFoundEvidence
                 var writerAgent = StringOf(item, "AppliedByAgentId");
                 var kind = Classify(writerSession, writerAgent, sessionId, agentId);
                 callerWrote |= kind == WriterKind.Self;
-                if (!Holds(StringOf(item, "BeforeSource"), term))
+                var afterHolds = Holds(StringOf(item, "AfterSource"), term);
+                var beforeHolds = Holds(StringOf(item, "BeforeSource"), term);
+                if (!beforeHolds && !afterHolds)
                 {
                     continue;
                 }
 
                 // Walking newest first, the first pre-image that still holds the term belongs to the write that removed it.
+                // An AfterSource that holds the term means the file still had it after that write, so its removal is in a later write or in none.
                 if (kind != WriterKind.Foreign)
                 {
                     return (null, callerWrote);
                 }
 
                 var otherSession = writerSession is not null && sessionId is not null && !string.Equals(writerSession, sessionId, StringComparison.Ordinal);
+                if (afterHolds)
+                {
+                    return (AfterNote(term, filePath, writerAgent, StringOf(item, "AppliedByAgentType"), otherSession, StringOf(document.RootElement, "toolName"), StringOf(item, "AppliedByReason"), utcNow - blob.Written!.Value), callerWrote);
+                }
+
                 return (BlobNote(term, filePath, writerAgent, StringOf(item, "AppliedByAgentType"), otherSession, StringOf(document.RootElement, "toolName"), StringOf(item, "AppliedByReason"), utcNow - blob.Written!.Value), callerWrote);
             }
         }
@@ -351,9 +359,15 @@ public static class NotFoundEvidence
                 var age = utcNow - blob.Written!.Value;
                 var agentType = StringOf(item, "AppliedByAgentType");
                 var otherSession = writerSession is not null && sessionId is not null && !string.Equals(writerSession, sessionId, StringComparison.Ordinal);
-                if (TermHeld(StringOf(item, "BeforeSource"), term, isRegex))
+                var afterHeld = TermHeld(StringOf(item, "AfterSource"), term, isRegex);
+                if (TermHeld(StringOf(item, "BeforeSource"), term, isRegex) && !afterHeld)
                 {
                     notes.Add(BlobNote(term, itemPath, writerAgent, agentType, otherSession, StringOf(document.RootElement, "toolName"), StringOf(item, "AppliedByReason"), age) + scopeLabel);
+                    notedFiles.Add(fullPath);
+                }
+                else if (afterHeld && !TermHeld(ReadSmallFileOrNull(fullPath), term, isRegex))
+                {
+                    notes.Add(AfterNote(term, itemPath, writerAgent, agentType, otherSession, StringOf(document.RootElement, "toolName"), StringOf(item, "AppliedByReason"), age) + scopeLabel);
                     notedFiles.Add(fullPath);
                 }
                 else if (age < AddedWindow && TermHeld(ReadSmallFileOrNull(fullPath), term, isRegex))
@@ -421,6 +435,23 @@ public static class NotFoundEvidence
 
         var because = reason is null ? string.Empty : $": {Clip(reason, MaxReasonChars)}";
         return $"`{ShortTerm(term)}` was in `{Path.GetFileName(filePath)}` before {who} changed it {EditAttributionFindings.FormatAge(age)} ago via {tool ?? "an unnamed tool"}{because}";
+    }
+
+    private static string AfterNote(string term, string filePath, string? agent, string? agentType, bool otherSession, string? tool, string? reason, TimeSpan age)
+    {
+        var who = agent is null ? "an unidentified writer" : $"agent `{agent}`";
+        if (agentType is not null)
+        {
+            who += $" (type {agentType})";
+        }
+
+        if (otherSession)
+        {
+            who += " in another session";
+        }
+
+        var because = reason is null ? string.Empty : $": {Clip(reason, MaxReasonChars)}";
+        return $"`{ShortTerm(term)}` was still in `{Path.GetFileName(filePath)}` after {who} changed it {EditAttributionFindings.FormatAge(age)} ago via {tool ?? "an unnamed tool"}{because}; it is not in the file now, so a change that no operation blob records removed it";
     }
 
     // Only reached when no blob explains the removal, so it covers edits made outside any server and writes older than the window.
