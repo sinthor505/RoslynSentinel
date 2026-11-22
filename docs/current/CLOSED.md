@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Revert the error-policy described-not-named sentence - resolved (2026-11-21)
+
+Revert the error-policy described-not-named sentence (2026-11-14) - remove the 4b9f0a94 sentence ("If the task also describes what the symbol does, make one Search or ReadFile ...") from both bodies in `RoslynSentinel.Tests.ModelEval/error-policy.md` (:12, :15) and its pins in `ErrorPolicyFileTests.ExpectedBodies` (measured no effect at n=30; no further eval or not-found rewording, owner 2026-11-21); acceptance: ErrorPolicyFileTests green; Small - [plan](plans/closed/plan_error_policy_pointer.md)
+
+Evidence: #1: sentence removed from both SymbolNotFound bodies in error-policy.md and ErrorPolicyFileTests.ExpectedBodies; Build 0 errors
+
 ## Live checks SERIAL and ROUTER left from plan_eval_host_table_and_liveness - resolved (2026-11-21)
 
 Live checks left from plan_eval_host_table_and_liveness (2026-11-20) - SERIAL (LM Studio and Unsloth jobs back to back on one machine; LM Studio :1234 was unreachable) and ROUTER (does Unsloth Studio load a listed-but-unloaded model on /v1/responses? may swap VRAM, owner present); Small - [plan](plans/closed/plan_eval_host_table_and_liveness.md)
