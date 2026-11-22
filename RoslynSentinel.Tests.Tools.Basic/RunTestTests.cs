@@ -10,6 +10,8 @@ using RoslynSentinel.Tools.Basic;
 
 namespace RoslynSentinel.Tests.Battery.Basic;
 
+// The RunTest tests that load a solution time out under full/parallel-run load with the 30 s default (SolutionLoadTimeoutException; worktree run 9b00b68c-20261120-215553-56016 failed, passed alone), so they pass TestSolutionFixture.LoadTimeout.
+// Treat a timeout failure on a full run as a suspected flake; re-run the class alone first.
 // KNOWN FLAKE on full/parallel runs (spawns child processes through ChildProcessCapture): disregard a failure here when the change did not touch process spawning; re-run the class alone first.
 // Suspected cause: ChildProcessCapture's pool-backed async pipe reads starved under load. Reference fix to copy if confirmed: GitProcess.TryRun dedicated reader threads (docs/current/issues/issue_process_spawn_test_flake.md).
 [TestFixture]
@@ -76,7 +78,7 @@ public class RunTestTests
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath, null, TestSolutionFixture.LoadTimeout);
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "FailingOutputTests.cs"), FailingTestWithOutputSource);
         var workspaceTools = BuildTools(workspaceManager);
 
@@ -104,7 +106,7 @@ public class RunTestTests
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath, null, TestSolutionFixture.LoadTimeout);
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "FailingTests.cs"), FailingTestSource);
         var workspaceTools = BuildTools(workspaceManager);
 
@@ -129,7 +131,7 @@ public class RunTestTests
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath, null, TestSolutionFixture.LoadTimeout);
         var workspaceTools = BuildTools(workspaceManager);
 
         var result = await workspaceTools.RunTestTool(reason: "test message", ToolScope.solution, timeoutSeconds: 120);
@@ -147,7 +149,7 @@ public class RunTestTests
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath, null, TestSolutionFixture.LoadTimeout);
         var workspaceTools = BuildTools(workspaceManager);
 
         var result = await workspaceTools.RunTestTool(reason: "test message", ToolScope.project, scopeName: "DoesNotExist");
@@ -162,7 +164,7 @@ public class RunTestTests
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath, null, TestSolutionFixture.LoadTimeout);
         var workspaceTools = BuildTools(workspaceManager);
 
         var result = await workspaceTools.RunTestTool(reason: "test message", ToolScope.file);
@@ -180,7 +182,7 @@ public class RunTestTests
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath, null, TestSolutionFixture.LoadTimeout);
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "FailingTests.cs"), FailingTestSource);
         var workspaceTools = BuildTools(workspaceManager);
 
@@ -204,7 +206,7 @@ public class RunTestTests
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath, null, TestSolutionFixture.LoadTimeout);
         var workspaceTools = BuildTools(workspaceManager);
 
         var result = await workspaceTools.RunTestTool(reason: "test message", ToolScope.solution, filter: "FullyQualifiedName~NoSuchTestNameAnywhere", timeoutSeconds: 120);
@@ -247,7 +249,7 @@ public class RunTestTests
 
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath, null, TestSolutionFixture.LoadTimeout);
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "FailingTests.cs"), FailingTestSource);
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "SharedFailureTests.cs"), sharedFailureSource);
         var workspaceTools = BuildTools(workspaceManager);
@@ -268,7 +270,7 @@ public class RunTestTests
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath, null, TestSolutionFixture.LoadTimeout);
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "FailingTests.cs"), FailingTestSource);
         var workspaceTools = BuildTools(workspaceManager);
 
@@ -285,7 +287,7 @@ public class RunTestTests
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath, null, TestSolutionFixture.LoadTimeout);
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "FailingTests.cs"), FailingTestSource);
         var workspaceTools = BuildTools(workspaceManager);
 
@@ -303,7 +305,7 @@ public class RunTestTests
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath, null, TestSolutionFixture.LoadTimeout);
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "FailingTests.cs"), FailingTestSource);
         var workspaceTools = BuildTools(workspaceManager);
 
@@ -321,7 +323,7 @@ public class RunTestTests
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath, null, TestSolutionFixture.LoadTimeout);
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "FailingTests.cs"), FailingTestSource);
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "FailingOutputTests.cs"), FailingTestWithOutputSource);
         var workspaceTools = BuildTools(workspaceManager);
@@ -340,7 +342,7 @@ public class RunTestTests
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath, null, TestSolutionFixture.LoadTimeout);
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "FailingTests.cs"), FailingTestSource);
         var workspaceTools = BuildTools(workspaceManager);
 
@@ -359,7 +361,7 @@ public class RunTestTests
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath, null, TestSolutionFixture.LoadTimeout);
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "FailingTests.cs"), FailingTestSource);
         var workspaceTools = BuildTools(workspaceManager);
 
@@ -381,7 +383,7 @@ public class RunTestTests
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath, null, TestSolutionFixture.LoadTimeout);
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "FailingTests.cs"), FailingTestSource);
         var workspaceTools = BuildTools(workspaceManager);
 
@@ -412,7 +414,7 @@ public class RunTestTests
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath, null, TestSolutionFixture.LoadTimeout);
         var workspaceTools = BuildTools(workspaceManager);
 
         string? rateLimitError = null;
@@ -437,7 +439,7 @@ public class RunTestTests
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath, null, TestSolutionFixture.LoadTimeout);
         var workspaceTools = BuildTools(workspaceManager);
 
         // Diffs against a "before" snapshot (rather than asserting the directory is empty) so this
@@ -461,7 +463,7 @@ public class RunTestTests
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath, null, TestSolutionFixture.LoadTimeout);
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "BrokenTests.cs"),
             "namespace ContosoOrders.Tests; public class BrokenTests { this does not compile }");
         var workspaceTools = BuildTools(workspaceManager);
@@ -558,7 +560,7 @@ public class RunTestTests
             """;
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath, null, TestSolutionFixture.LoadTimeout);
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "EnvPassthroughTests.cs"), envProbeSource);
         var workspaceTools = BuildTools(workspaceManager);
 

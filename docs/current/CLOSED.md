@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Tests.Tools.Basic RunTest tests time out loading the solution under load - resolved (2026-11-21)
+
+Tests.Tools.Basic RunTest tests time out loading the solution under machine load (2026-11-20) - RunTest_FailedTestWithCapturedOutput_..., RunTest_CleanRun_..., RunTest_EnvironmentParameter_... failed worktree run 9b00b68c-20261120-215553-56016 with SolutionLoadTimeoutException (30 s) and passed alone (9b00b68c-20261120-222435-45652); raise the fixture's load timeout and add a flaky-test comment; Small
+
+Evidence: #2: RunTestTests passes TestSolutionFixture.LoadTimeout (120 s) to its 19 LoadSolutionAsync calls plus flaky-test comment; Build 0 errors
+
 ## Revert the error-policy described-not-named sentence - resolved (2026-11-21)
 
 Revert the error-policy described-not-named sentence (2026-11-14) - remove the 4b9f0a94 sentence ("If the task also describes what the symbol does, make one Search or ReadFile ...") from both bodies in `RoslynSentinel.Tests.ModelEval/error-policy.md` (:12, :15) and its pins in `ErrorPolicyFileTests.ExpectedBodies` (measured no effect at n=30; no further eval or not-found rewording, owner 2026-11-21); acceptance: ErrorPolicyFileTests green; Small - [plan](plans/closed/plan_error_policy_pointer.md)
