@@ -1,6 +1,6 @@
 # Plan: Shorten the build/test verification loop (measure, fast tier, serial-tail cuts, flake causes)
 
-**Status:** IN PROGRESS 2026-11-22. Steps 1-4, 5b, 6, 9, 11a done (d07a4bdc, c0a82f6b, 68db5c28, 4754cde6, c6d8c55d); fast run 567 s; Step 8 dropped (D5); Steps 13-14 stay open past this run.
+**Status:** IN PROGRESS 2026-11-22. Steps 1-6, 9, 10, 11a and the Step 7 parity slice done (d07a4bdc, c0a82f6b, 68db5c28, 4754cde6, c6d8c55d, 93da26c3, b42f4ea5, 107517e6, cc990855); fast run 567 s; Step 8 dropped (D5); Steps 13-14 stay open past this run.
 
 ## Problem
 
@@ -283,7 +283,8 @@ the commit. The build warning-level work another session is doing is out of scop
   per-batch paragraph (lines 112-117 on 2026-11-22; it says the script "covers every category") names `-Suite fast` and the D1 rule. Its
   line 105 ratchet count ("about 35 quick tests") matches the count after 11a. The conventions doc's "After each batch" names `-Suite fast`.
   5b: `Build` 0 errors. Lane: `implementer` for each. Pairs with: 5b with Step 6.
-- Done (5b): this commit (dispatcher edit, comments only; Engines.Basic `Build` 0 errors).
+- Done (5a): cc990855 (lean-tools reference, dispatch-implementer skill, autonomous-run conventions; ratchet count about 38).
+- Done (5b): 93da26c3 (dispatcher edit, comments only; Engines.Basic `Build` 0 errors).
 - Deferred (review 2026-11-22): the `RunTest` `filter` parameter text at `RoslynSentinel.Tools.Basic/WorkspaceTools.cs:250` carries a
   stale "about 1.5 minute" figure. Changing it is a tool-schema edit (schema budget tests, generated docs), so it is out of this step.
 
@@ -320,6 +321,18 @@ the commit. The build warning-level work another session is doing is out of scop
   (`-Filter FullyQualifiedName~<Class>`) with the same result each time, then one full worktree run shows the project's serial
   seconds fall by about the slice's inventory seconds. Lane: `implementer` per slice (`test-writer` where the class needs new
   fixture design). Slices that touch different projects can pair.
+- Done (parity slice, merged with Step 10-2): b42f4ea5.
+  - **Change:** the table is now `<tmp>/rs-patch-parity/<pid>/table.tsv` (`GitPatchParityHarness.TableDirectory`), and both corpus
+    fixtures dropped `[NonParallelizable]`. No other reader of `table.tsv` exists.
+  - **Check:** `GitPatchParityCorpus` ran 41/41 in three worktree runs (`107517e6-20261122-153452-*`).
+- Read-only U-row pass (2026-11-22, Batch D). None of the five fixtures is serial because of a static, a shared path, an environment
+  variable or the current directory. The likely cause is timing or CPU sensitivity (real debounces, polls, a quickBuild); this is
+  inferred, and no flake rate was measured.
+  - **Low-risk group:** `HaltStampFilterTests` and `RelativePathInputAuditTests` (one attribute each), plus the 3
+    `CreateFileDeleteFileTests` methods, whose siblings with the same watcher already run in parallel. About 50 s.
+  - **Debounce group:** `WorkspaceDebounceReloadTests` (drop the attribute on the 4 tests that touch no watcher, widen 10 s waits to
+    about 30 s) and `WorkspaceBrokenProjectReloadTests` (3 `LoadSolution_*` tests have no timers).
+  - **Deferred:** owner decision Q-7b under "Risks and open decisions".
 
 ### Step 8 - One chokepoint for the solution-load timeout
 
@@ -365,6 +378,8 @@ call sites in 60 files. It also found a second 30 s default, the `LoadSolution` 
   message if missing). `GitHooksLaunchTests.SubdirectoryAndLinkedWorktree_RunTheHookInTheirOwnWorkTreeRoot` is already commented
   (`GitHooksLaunchTests.cs:98`); do not add a second comment.
 - Done when: `Build` 0 errors; each touched class passes three times in a worktree run. Lane: `implementer` or `test-writer` per slice.
+- Done: 10-1 107517e6 (the two `ToolCallHint.Current` overriding tests `[NonParallelizable]`; 47/47 three times). 10-2 merged into
+  b42f4ea5. Three green repeats do not prove the race is gone; the next full runs will show it.
 
 ### Step 11 - Ratchets first (owner decision D3; skip if declined)
 - Files (11a): `RoslynSentinel.Tests.Server/ArchitectureDocFreshnessTests.cs` (the two `_WhenCommittedFileExists_MatchesRegeneratedContent` tests,
@@ -475,6 +490,11 @@ Decisions for the owner (each with a recommendation):
   - **Left for a later decision:** splitting `ToolParameterAliasTests` (68 s in the Tests.Server tail) and the Server E rows (34 s). They
     need either a fixture split or the Step 12 sharding.
   - **Open question for the owner:** take the U-row fixes and the fixture split as Step 7b, or accept the fast-run tail.
+- **Q-7b (deferred, owner away).** Remove `[NonParallelizable]` from the U-row fixtures in two groups?
+  - **Groups:** the low-risk group first (`HaltStampFilterTests`, `RelativePathInputAuditTests`, 3 `CreateFileDeleteFileTests` methods;
+    about 50 s of fast-run tail), then the debounce group with widened waits.
+  - **Recommendation:** yes, each group gated on 3 green fast runs, because the cause is inferred, not measured.
+  - **Risk:** new timing flakes. Under the D5 rule a flake costs one re-run of the failing tests.
 
 Risks and unverified points:
 
