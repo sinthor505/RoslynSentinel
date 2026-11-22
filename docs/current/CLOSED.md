@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Migrate hand-wired ModelEval MCP worlds onto shared helpers - resolved (2026-11-22)
+
+Migrate hand-wired ModelEval MCP worlds onto shared helpers (2026-11-20) - scope decided 2026-11-21: (a) the 8 live classes onto `ModelEvalMcpEnvironment` in slices: ShippingKindStepped (fits `beforeLoad`; fixes the stale "third copy" code TODO `ShippingKindSteppedAgentTests.cs:40`), a Basic-surface option + PlanThenExecute/PlanOnly/SizeThreshold, WholeFileRewrite + OrderPricingRefactor (edit-arm switch as in the Chain class's `ConfigureToolSurface`), LargeResultPaging, PlanImplementVerify (borrowed-fixture option); (b) the 11 fake-model runner classes onto a second small helper (fake HTTP handler, no live model); ShippingKindMappingProbe/Replay (agent client, no server) optional; acceptance: `Search(text, "AddMcpServer\(")` in Tests.ModelEval hits only the two helpers and the surface tests, one non-live tool-listing test per new option (pattern `ChainEvalToolSurfaceLeanTests`), Build 0 errors; Large
+
+Evidence: slices 0feac026 (15-1), d2ab0b21 (15-2), 4305e389 (15-3), 46fa8c1c (15-4), 4d1ae40f (15-5), 24b3ea48/f5164314/bfa3e98a/bedc1150 (15-6a-d; ModelEvalFakeModelEnvironment); AddMcpServer( in Tests.ModelEval now only in the two helpers plus ChainEvalToolSurface and ChainEvalToolSurfaceLeanTests; 57 non-live tests green in worktree run d5d09914 (+ lean count fix 98d53a1d); ShippingKindMappingProbe/Replay left as-is (optional, no server).
+
 ## MoveFile slice 2 (copyAndObsolete) - resolved (2026-11-22)
 
 MoveFile slice 2: copyAndObsolete with best-effort caller migration (2026-11-21) - copy with the folder-derived namespace (refused when it equals the old one), `[Obsolete("Use <NewNs>.<Type>")]` on every top-level type of the old file (refused for partials split across files), migrate callers to the new namespace by in-memory fixpoint (revert caller files that gain errors), one atomic apply, result lists migrated files and remaining obsolete callers with their blocking error; decisions in the proposal; Medium-Large - [doc](proposals/proposal_move_file_tool.md)
