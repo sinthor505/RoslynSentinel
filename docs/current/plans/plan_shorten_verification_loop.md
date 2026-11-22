@@ -1,6 +1,6 @@
 # Plan: Shorten the build/test verification loop (measure, fast tier, serial-tail cuts, flake causes)
 
-**Status:** APPROVED 2026-11-22. Batched run, owner away; Step 8 dropped (D5: timeouts documented as a contention flake), Steps 13-14 stay open past this run.
+**Status:** IN PROGRESS 2026-11-22. Steps 1-3 done (d07a4bdc, c0a82f6b, 68db5c28); Step 8 dropped (D5); Steps 13-14 stay open past this run.
 
 ## Problem
 
@@ -70,6 +70,39 @@ Findings from that run, each checked against the TRX files:
    unused Advanced tools out of the solution.
 5. **Hypothesis, to be tested by Steps 4 and 14:** a fast-suite full run needs about 640 s sequentially (Tools.Basic
    non-`OutOfProcess` busy time is 264 s; others unchanged) and about 350 s with projects run concurrently.
+
+**Baseline over all full runs (Step 3, 2026-11-22).** Produced by `scripts/Get-TestRunTimings.ps1 -FullOnly -View Projects -Json`, with
+the medians computed per project, and by `-View Runs` and `-View Failures`. It covers 47 full runs (2026-11-12 to 2026-11-22), 18 of them
+red. Each project's median is taken over the runs that included it.
+
+- **Run totals:** the run median is 1,328 s and p90 is 1,695 s. The 17 runs that overlapped no other run took 900 to 1,328 s, median 1,229 s.
+
+| Project | Tests | Wall s | Test-seconds | Serial s | `OutOfProcess` test-s (share) | Serial s outside `OutOfProcess` |
+| --- | --- | --- | --- | --- | --- | --- |
+| Tests.Tools.Basic | 3,398 | 929 | 4,850 | 628 | 3,812 (79%) | 108 |
+| Tests.Server | 892 | 159 | 243 | 138 | 0 | 138 |
+| Tests.Advanced | 1,691 | 33 | 262 | 17 | 0 | 17 |
+| Tests.Tools.Advanced | 684 | 29 | 103 | 19 | 0 | 19 |
+| Tests.Basic | 1,774 | 20 | 234 | 1 | 2 (1%) | 1 |
+| Tests.Battery.Basic | 237 | 19 | 127 | 12 | 0 | 12 |
+| Tests.Battery.Advanced | 440 | 16 | 16 | 16 | 0 | 16 |
+| Tests | 1,041 | 13 | 107 | 6 | 12 (11%) | 0 |
+| Tests.Asyncify | 155 | 4 | 24 | 0 | 0 | 0 |
+| Tests.ErrorVariants | 225 | 1 | 1 | 1 | 0 | 1 |
+
+Corrections and additions from the script:
+
+- **Run counts:** 47 full runs and 18 red, not 40 and 16. 450 result folders, not 408. The run median is 1,328 s, not 1,317 s.
+- **The Advanced four** are 82 s median wall.
+- **Tests.Tools.Basic serial tail:** about 520 of its 628 serial seconds are `OutOfProcess` tests, which `-Suite fast` drops. The 108 s left
+  is Step 6's target, together with Tests.Server's 138 s.
+- **Test-seconds inflate under overlap:** the 18 runs since 2026-11-20 have a Tests.Tools.Basic test-seconds median of 6,047, against 4,906
+  in the isolated `a3d98b2e`. So test-seconds measure contention as well as test cost.
+- **Two red runs after the plan was written:**
+  - `8036d20c` (first run): an `IOException` on a locked file in `Scenario03b_Rename_WithEditsAsync`, the same file-lock class as `6dda31f3`.
+  - `10eef7a0`: `ToolsArchitectureDocFreshness_WhenCommittedFileExists_MatchesRegeneratedContent`, an untagged freshness ratchet. It is the
+    third red run from these two tests, so "no ratchet-class failure since 2026-11-15" no longer holds. Step 11a tags them.
+- **Load-timeout victims:** the three `SolutionLoadTimeoutException` tests in `9b00b68c` are all `RunTest_*` tests in Tests.Tools.Basic.
 
 **Flakes (the 8 non-ratchet red runs), by the failure text stored in `summary.json`:**
 
@@ -165,6 +198,7 @@ the commit. The build warning-level work another session is doing is out of scop
   `Get-TestRunTimings.ps1 -Run a3d98b2e -View Projects` reproduces Tests.Tools.Basic: 3,438 tests, wall 921 s, test-seconds 4,906,
   serial about 618 s (within 2%); `-FullOnly -View Failures` lists the red full runs (16 on 2026-11-21, 18 of 47 on 2026-11-22).
   Lane: `implementer` (2 files, one new file each). Pairs with: Step 2.
+- Done: 1a d07a4bdc, 1b c0a82f6b (a3d98b2e Tools.Basic: 3,438 tests, wall 921.5 s, test-seconds 4,906.1, serial 617.9 s; 18 of 47 full runs red).
 - Review 2026-11-22: split into **1a** (Runs and Projects views, script skeleton with all parameters, tests for those views) and
   **1b** (Fixtures and Failures views plus their tests); 1b depends on 1a. `summary.json` has no timestamp, no `suite` and no class name
   (`failures[].test` is the method name with arguments). Facts: overlap windows come from each TRX's `<Times start= finish=>`, falling back to
@@ -181,6 +215,7 @@ the commit. The build warning-level work another session is doing is out of scop
   `filter` is non-empty. Add a test with a canned `RunTest` payload.
 - Done when: `pwsh -NoProfile -File .claude/hooks/journal-hooks.Tests.ps1` exits 0 (dispatcher runs it); a parse check of the
   hook script passes. Lane: `implementer`. Pairs with: Step 1.
+- Done: 68db5c28.
 - Review 2026-11-22: copy the fields only for `RunTest` and `Build` (line 103 strips the `mcp__*__` prefix; line 104 copies `operation`
   the same way, so use it as the model). The tests run the hook under `powershell.exe` 5.1, so the change must not use pwsh-only syntax.
 - Why: the journal cannot say whether the 474 `RunTest` calls of 120 s or more are `suite: full`, `scope: solution` or fast
@@ -196,6 +231,7 @@ the commit. The build warning-level work another session is doing is out of scop
   Problem that the script contradicts and say which.
 - Done when: Problem names the per-project medians over all full runs and the script command that produced them. Lane:
   dispatcher (no agent; one command and one doc edit).
+- Done: 2026-11-22, the "Baseline over all full runs" subsection in Problem.
 
 ### Step 4 - `-Suite fast|full` in the worktree script
 - Files: `scripts/Invoke-WorktreeTests.ps1`.
