@@ -489,7 +489,7 @@ public static class CopyAndObsoleteCallerRewrite
         INamespaceSymbol? scope = compilation.GlobalNamespace;
         foreach (var part in newNamespace.Split('.'))
         {
-            scope = scope?.GetNamespaceMembers().FirstOrDefault(member => string.Equals(member.Name, part, StringComparison.Ordinal));
+            scope = scope?.GetMembers(part).OfType<INamespaceSymbol>().FirstOrDefault();
         }
 
         if (scope is null)

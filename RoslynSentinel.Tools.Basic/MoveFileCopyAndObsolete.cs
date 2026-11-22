@@ -177,7 +177,7 @@ internal static class MoveFileCopyAndObsolete
             lines.Add($"Remaining callers on the old obsolete types ({migration.RemainingCallers.Count}): text unchanged, the compiler reports CS0618 warnings there; the error that blocked each file's rewrite:");
             lines.AddRange(migration.RemainingCallers.Take(MaxListed).Select(caller =>
                 $"  {Display(caller.FilePath)}:{caller.FirstReferenceLine}  {caller.ErrorCode} {caller.ErrorMessage}"
-                + (caller.BlockingFile == caller.FilePath ? string.Empty : $" [reported in {Display(caller.BlockingFile)}:{caller.BlockingLine}]")));
+                + (PathComparison.Comparer.Equals(caller.BlockingFile.Absolute, caller.FilePath.Absolute) ? string.Empty : $" [reported in {Display(caller.BlockingFile)}:{caller.BlockingLine}]")));
             AddMore(lines, migration.RemainingCallers.Count);
         }
 

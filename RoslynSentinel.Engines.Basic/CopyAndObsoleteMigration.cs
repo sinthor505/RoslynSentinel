@@ -108,9 +108,11 @@ public static class CopyAndObsoleteMigration
                 var (finalErrors, _) = await ValidateSetAsync(baseline, baseSet, current, cancellationToken);
                 if (finalErrors.Count > 0)
                 {
+                    // The lookup key is a FilePathWrapper, so the match ignores path case like every other path comparison here.
+                    var finalByPath = finalErrors.ToLookup(error => error.FilePath);
                     foreach (var path in current.Keys.ToList())
                     {
-                        blocked[path] = finalErrors.FirstOrDefault(error => error.FilePath == path) ?? finalErrors[0];
+                        blocked[path] = finalByPath[path].FirstOrDefault() ?? finalErrors[0];
                     }
 
                     current.Clear();
@@ -281,7 +283,7 @@ public static class CopyAndObsoleteMigration
                 foreach (var declaringPath in DeclaringPaths(info.Symbol ?? info.CandidateSymbols.FirstOrDefault()))
                 {
                     var wrapped = new FilePathWrapper(declaringPath);
-                    if (wrapped != error.FilePath && rewrittenSet.Contains(wrapped))
+                    if (!PathComparison.Comparer.Equals(declaringPath, error.FilePath.Absolute) && rewrittenSet.Contains(wrapped))
                     {
                         found.Add(wrapped);
                     }
