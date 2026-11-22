@@ -23,4 +23,16 @@ internal static class ModelEvalToolSurfaces
     /// </summary>
     public static void Basic(IMcpServerBuilder mcpBuilder, IServiceCollection services) =>
         mcpBuilder.AddRoslynSentinelToolsBasic(services, NewBasicModes());
+
+    /// <summary>Fresh set per call: the registration call may keep the instance.</summary>
+    public static HashSet<string> NewWorkspaceAndSymbolNavigationModes() =>
+        new(new[] { "Workspace", "SymbolNavigation" }, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The small Advanced surface the fake-model runner tests use (<see cref="ModelEvalFakeModelEnvironment"/>'s default):
+    /// <c>AddRoslynSentinelToolsAdvanced</c> with the "Workspace" and "SymbolNavigation" modes (McpServerStatus,
+    /// LocateSymbol, GetFileOutline; "Workspace" alone no longer covers LocateSymbol since the DI split) and no hidden tools.
+    /// </summary>
+    public static void WorkspaceAndSymbolNavigation(IMcpServerBuilder mcpBuilder, IServiceCollection services) =>
+        mcpBuilder.AddRoslynSentinelToolsAdvanced(services, NewWorkspaceAndSymbolNavigationModes());
 }

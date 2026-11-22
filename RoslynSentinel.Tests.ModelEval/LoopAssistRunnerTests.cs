@@ -27,67 +27,25 @@ namespace RoslynSentinel.Tests.ModelEval;
 [TestFixture]
 public class LoopAssistRunnerTests
 {
-    private static readonly HashSet<string> ActiveModes =
-        new(StringComparer.OrdinalIgnoreCase) { "Workspace", "SymbolNavigation" };
-
-    private IHost _host = null!;
+    private ModelEvalFakeModelEnvironment? _environment;
     private McpClient _mcpClient = null!;
     private string _runDirectory = null!;
 
     [SetUp]
     public async Task SetUp()
     {
-        _runDirectory = Path.Combine(Path.GetTempPath(), "rs-loopassist-" + Guid.NewGuid().ToString("N")[..8]);
-        Directory.CreateDirectory(_runDirectory);
-
-        var clientToServer = new Pipe();
-        var serverToClient = new Pipe();
-
-        var services = new ServiceCollection();
-        services.AddRoslynSentinelEnginesAdvanced();
-
-        var mcpBuilder = services.AddMcpServer();
-        mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
-        mcpBuilder.WithTasks(
-            new InMemoryMcpTaskStore(),
-            o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
-        mcpBuilder.AddRoslynSentinelToolsAdvanced(services, ActiveModes);
-
-        var hostBuilder = Host.CreateApplicationBuilder();
-        foreach (var descriptor in services)
-        {
-            hostBuilder.Services.Add(descriptor);
-        }
-
-        _host = hostBuilder.Build();
-        _ = _host.RunAsync();
-
-        var clientTransport = new StreamClientTransport(
-            serverInput: clientToServer.Writer.AsStream(),
-            serverOutput: serverToClient.Reader.AsStream(),
-            loggerFactory: NullLoggerFactory.Instance);
-
-        _mcpClient = await McpClient.CreateAsync(
-            clientTransport, cancellationToken: TestContext.CurrentContext.CancellationToken);
+        _environment = await ModelEvalFakeModelEnvironment.CreateAsync(
+            TestContext.CurrentContext.CancellationToken, runDirectoryPrefix: "rs-loopassist-");
+        _mcpClient = _environment.Client;
+        _runDirectory = _environment.RunDirectory!;
     }
 
     [TearDown]
     public async Task TearDown()
     {
-        if (_mcpClient is not null)
+        if (_environment is not null)
         {
-            await _mcpClient.DisposeAsync();
-        }
-
-        if (_host is not null)
-        {
-            await _host.StopAsync();
-            _host.Dispose();
-        }
-
-        if (Directory.Exists(_runDirectory))
-        {
-            Directory.Delete(_runDirectory, recursive: true);
+            await _environment.DisposeAsync();
         }
     }
 
