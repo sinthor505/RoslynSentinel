@@ -43,6 +43,17 @@ public class GitTools
         return EditAttributionFindings.ForCurrentCaller(_workspaceManager, paths);
     }
 
+    /// <summary>
+    /// Info findings naming a deleted path and an untracked path that are one moved file (git shows an unstaged move as D plus untracked).
+    /// Tier 1 reads this server's MoveFile operation blobs, so it applies only when the status is of the loaded solution's own repo
+    /// (<paramref name="includeMoveRecords"/>); tier 2 compares content and works for any repo. See <see cref="GitStatusRenameHints"/>.
+    /// </summary>
+    private IReadOnlyList<Finding> StatusRenameHintFindings(string gitRoot, GitStatusResult status, bool includeMoveRecords)
+    {
+        var movePairs = includeMoveRecords ? GitStatusRenameHints.ReadMovePairs(_workspaceManager.GetSolutionRoot(), gitRoot) : null;
+        return GitStatusRenameHints.Findings(gitRoot, status, movePairs, GitReaders.Default);
+    }
+
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "Git")]
     [Produces(DataTag.Report)]
@@ -187,13 +198,21 @@ public class GitTools
 
         if (!((GitResult)result).IsError)
         {
-            if (operation == GitOperation.status && string.IsNullOrWhiteSpace(repoPath) && result is GitStatusResult statusResult)
+            if (operation == GitOperation.status && result is GitStatusResult statusResult)
             {
-                // Never attribute for another repo: the edit attribution ledger keys are paths of this solution.
-                var foreignEdits = StatusForeignEditFindings(gitRoot, statusResult);
-                if (foreignEdits.Count > 0)
+                var ownRepo = string.IsNullOrWhiteSpace(repoPath);
+                var statusFindings = new List<Finding>();
+                if (ownRepo)
                 {
-                    return new SentinelCallToolResult<object> { IsError = false, SuccessData = result, Findings = foreignEdits };
+                    // Never attribute for another repo: the edit attribution ledger keys are paths of this solution.
+                    statusFindings.AddRange(StatusForeignEditFindings(gitRoot, statusResult));
+                }
+
+                // The MoveFile operation record is this solution's, so tier 1 is skipped for another repo; tier 2 (identical content) is not.
+                statusFindings.AddRange(StatusRenameHintFindings(gitRoot, statusResult, includeMoveRecords: ownRepo));
+                if (statusFindings.Count > 0)
+                {
+                    return new SentinelCallToolResult<object> { IsError = false, SuccessData = result, Findings = statusFindings };
                 }
             }
 
