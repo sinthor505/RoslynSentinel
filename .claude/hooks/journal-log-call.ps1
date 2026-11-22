@@ -102,6 +102,13 @@ try {
         $entry.kind = 'mcp'
         $entry.tool = $toolName -replace '^mcp__.*?__', ''
         if ($payload.tool_input.operation) { $entry.operation = [string]$payload.tool_input.operation }
+        # Test runs: record the selection shape (suite/scope/level) and whether a filter was used, never the filter text.
+        if ($entry.tool -eq 'RunTest' -or $entry.tool -eq 'Build') {
+            if ($payload.tool_input.suite) { $entry.suite = [string]$payload.tool_input.suite }
+            if ($payload.tool_input.scope) { $entry.scope = [string]$payload.tool_input.scope }
+            if ($payload.tool_input.level) { $entry.level = [string]$payload.tool_input.level }
+            if ([string]$payload.tool_input.filter) { $entry.hasFilter = $true }
+        }
         $entry.ok = $ok
         if ($code) { $entry.errorCode = $code }
         if ($failed -and $payload.is_interrupt) { $entry.interrupted = $true }

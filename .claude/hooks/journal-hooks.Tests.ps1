@@ -127,6 +127,17 @@ try {
     $l = (Get-CallLines)[-1]
     Check 'log: subagent call tagged with agent' ($l.agent -eq 'implementer:a06a86')
 
+    $runInput = @{ reason = 'test call here'; suite = 'full'; scope = 'solution'; level = 'Detailed'; filter = 'FullyQualifiedName~Foo' }
+    $null = Mcp 'RunTest' $okText 'PostToolUse' @{ tool_input = $runInput }
+    $l = (Get-CallLines)[-1]
+    Check 'log: RunTest carries suite/scope/level and hasFilter' ($l.tool -eq 'RunTest' -and $l.suite -eq 'full' -and $l.scope -eq 'solution' -and $l.level -eq 'Detailed' -and $l.hasFilter -eq $true) ($l | ConvertTo-Json -Compress)
+    $rawLog = Get-Content -Raw "$(Get-Base).calls.jsonl"
+    Check 'log: RunTest filter text never written' (-not $rawLog.Contains('FullyQualifiedName~Foo'))
+
+    $null = Mcp 'Search' $okText 'PostToolUse' @{ tool_input = @{ reason = 'test call here'; suite = 'full'; scope = 'solution'; level = 'Detailed'; filter = 'x' } }
+    $l = (Get-CallLines)[-1]
+    Check 'log: non-test tool gets no suite/scope/level/hasFilter' ($l.tool -eq 'Search' -and -not ($l.PSObject.Properties.Name -contains 'suite') -and -not ($l.PSObject.Properties.Name -contains 'scope') -and -not ($l.PSObject.Properties.Name -contains 'level') -and -not ($l.PSObject.Properties.Name -contains 'hasFilter')) ($l | ConvertTo-Json -Compress)
+
     # --- Stop nudge --------------------------------------------------------------------
     # Journal written now -> everything above is "already journaled".
     Add-Content -LiteralPath "$base.md" -Value '- 10:00 + ReadFile: test entry'
