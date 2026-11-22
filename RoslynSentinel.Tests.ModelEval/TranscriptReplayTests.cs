@@ -43,6 +43,7 @@ public class TranscriptReplayTests
 
     private static readonly Regex SizeFromPathRegex = new(@"[/\\]n(\d+)[/\\]", RegexOptions.Compiled);
 
+    private ModelEvalFakeModelEnvironment _environment = null!;
     private IHost _host = null!;
     private McpClient _mcpClient = null!;
     private RoslynSentinel.Tests.TestSolutionFixture _fixture = null!;
@@ -50,53 +51,22 @@ public class TranscriptReplayTests
     [SetUp]
     public async Task SetUp()
     {
-        _fixture = new RoslynSentinel.Tests.TestSolutionFixture();
-
-        var clientToServer = new Pipe();
-        var serverToClient = new Pipe();
-
-        var services = new ServiceCollection();
-        services.AddRoslynSentinelEnginesAdvanced();
-
-        var mcpBuilder = services.AddMcpServer();
-        mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
-        mcpBuilder.WithTasks(
-            new InMemoryMcpTaskStore(),
-            o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
-        mcpBuilder.AddRoslynSentinelToolsAdvanced(services, ActiveModes);
-
-        var hostBuilder = Host.CreateApplicationBuilder();
-        foreach (var descriptor in services)
-        {
-            hostBuilder.Services.Add(descriptor);
-        }
-
-        _host = hostBuilder.Build();
-        _ = _host.RunAsync();
-
-        var clientTransport = new StreamClientTransport(
-            serverInput: clientToServer.Writer.AsStream(),
-            serverOutput: serverToClient.Reader.AsStream(),
-            loggerFactory: NullLoggerFactory.Instance);
-
-        _mcpClient = await McpClient.CreateAsync(clientTransport, cancellationToken: TestContext.CurrentContext.CancellationToken);
+        _environment = await ModelEvalFakeModelEnvironment.CreateAsync(
+            TestContext.CurrentContext.CancellationToken,
+            withFixture: true,
+            configureToolSurface: (mcpBuilder, services) => mcpBuilder.AddRoslynSentinelToolsAdvanced(services, ActiveModes));
+        _host = _environment.Host;
+        _fixture = _environment.Fixture!;
+        _mcpClient = _environment.Client;
     }
 
     [TearDown]
     public async Task TearDown()
     {
-        if (_mcpClient is not null)
+        if (_environment is not null)
         {
-            await _mcpClient.DisposeAsync();
+            await _environment.DisposeAsync();
         }
-
-        if (_host is not null)
-        {
-            await _host.StopAsync();
-            _host.Dispose();
-        }
-
-        _fixture?.Dispose();
     }
 
     /// <summary>

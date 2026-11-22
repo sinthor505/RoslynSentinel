@@ -28,6 +28,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 [NonParallelizable]
 public class ToolResultTrailingBlockRunnerTests
 {
+    private ModelEvalFakeModelEnvironment _environment = null!;
     private IHost _host = null!;
     private McpClient _mcpClient = null!;
     private string _runDirectory = null!;
@@ -35,52 +36,21 @@ public class ToolResultTrailingBlockRunnerTests
     [SetUp]
     public async Task SetUp()
     {
-        _runDirectory = Path.Combine(Path.GetTempPath(), "rs-trailingblock-" + Guid.NewGuid().ToString("N")[..8]);
-        Directory.CreateDirectory(_runDirectory);
-
-        var clientToServer = new Pipe();
-        var serverToClient = new Pipe();
-
-        var services = new ServiceCollection();
-        var mcpBuilder = services.AddMcpServer();
-        mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
-        mcpBuilder.WithTools<TrailingBlockTestTools>();
-
-        var hostBuilder = Host.CreateApplicationBuilder();
-        foreach (var descriptor in services)
-        {
-            hostBuilder.Services.Add(descriptor);
-        }
-
-        _host = hostBuilder.Build();
-        _ = _host.RunAsync();
-
-        var clientTransport = new StreamClientTransport(
-            serverInput: clientToServer.Writer.AsStream(),
-            serverOutput: serverToClient.Reader.AsStream(),
-            loggerFactory: NullLoggerFactory.Instance);
-
-        _mcpClient = await McpClient.CreateAsync(
-            clientTransport, cancellationToken: TestContext.CurrentContext.CancellationToken);
+        _environment = await ModelEvalFakeModelEnvironment.CreateAsync(
+            TestContext.CurrentContext.CancellationToken,
+            runDirectoryPrefix: "rs-trailingblock-",
+            configureToolSurface: (mcpBuilder, services) => mcpBuilder.WithTools<TrailingBlockTestTools>());
+        _host = _environment.Host;
+        _mcpClient = _environment.Client;
+        _runDirectory = _environment.RunDirectory!;
     }
 
     [TearDown]
     public async Task TearDown()
     {
-        if (_mcpClient is not null)
+        if (_environment is not null)
         {
-            await _mcpClient.DisposeAsync();
-        }
-
-        if (_host is not null)
-        {
-            await _host.StopAsync();
-            _host.Dispose();
-        }
-
-        if (Directory.Exists(_runDirectory))
-        {
-            Directory.Delete(_runDirectory, recursive: true);
+            await _environment.DisposeAsync();
         }
     }
 
