@@ -102,6 +102,7 @@
 | WholeFileWriteTools | ApplyDiff | Claude, claude-lean (on demand), WholeFileWrite | - | Applies or validates a change set as either full file contents (changesetFormat=files) or a unified diff... |
 | WholeFileWriteTools | ApplyUnifiedDiff | Claude, claude-lean (on demand), WholeFileWrite | - | Applies or validates a unified diff against a single file; mismatched hunk lines are re-anchored nearby. |
 | WholeFileWriteTools | DeleteFile | Claude, claude-lean, WholeFileWrite | - | Deletes a file from disk; fails if it doesn't exist. |
+| WholeFileWriteTools | MoveFile | Claude, claude-lean, WholeFileWrite | - | Moves or renames a text file in one step that is checked against the build (the destination may be in another... |
 | WholeFileWriteTools | WriteFile | Claude, claude-lean, WholeFileWrite | - | Writes a whole file to disk, creating or overwriting it. |
 | WorkspaceReadNavigationTools | GetFileOutline | Claude, claude-lean, Workspace, WorkspaceReadNav | Allowed | Returns a structural outline of a file's types and members with 1-based line ranges (no bodies). |
 | WorkspaceReadNavigationTools | GetLargeResult | Claude, claude-lean, Workspace, WorkspaceReadNav | - | Pages a stored large result (the largeResult pointer). offset counts units of its sequence (list records interleaved,... |
@@ -121,6 +122,7 @@
 | WorkspaceTools | ListWorkspaceSolutions | Claude, claude-lean (on demand), Workspace | - | Lists .sln/.slnx files under a directory, for use with LoadSolution. |
 | WorkspaceTools | LoadSolution | Claude, claude-lean, Workspace | - | Loads a .NET solution into memory; required before any tool that needs a loaded solution. |
 | WorkspaceTools | ReadFile | Claude, claude-lean, Workspace | Allowed | Returns a file's raw text verbatim, or a 1-based line-range slice via startLine/endLine. |
+| WorkspaceTools | ReplaceRange | Claude, claude-lean, Workspace | - | Replaces or deletes the block of whole lines from firstLineText through lastLineText (each must match exactly one line). |
 | WorkspaceTools | ReplaceSnippet | Claude, claude-lean, Workspace | - | Replaces one text block with another in a file, for small localized edits. |
 | WorkspaceTools | RetryFailedChanges | Claude, claude-lean (on demand), Workspace | - | Retries failed file writes using server-cached content. |
 | WorkspaceTools | RunTest | Claude, claude-lean, Workspace | - | Runs `dotnet test` on the solution or one project. |

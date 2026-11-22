@@ -172,7 +172,8 @@ and fix the map.
 
 - **Layering is one-way:** `Common` <- `Engines.*` <- `Tools.*` <- `Server.*` (`RoslynSentinel.<Layer>.<Flavor>`).
   Engines hold Roslyn logic with no MCP types; Tools hold `[McpServerToolType]` classes; Server is
-  hosting/DI only. `Utilities.PlanStepRunner` references only `Common`.
+  hosting/DI only. `AgentLoop` (agent harness) references only `Common`; `Utilities.PlanStepRunner`
+  references only `Common` and `AgentLoop`.
 - **Sibling projects cannot see each other** (`Tools.Advanced` not `Tools.Basic`; `Engines.Basic` not
   `Engines.Advanced`). Shared helpers go one layer down: `Engines.Basic` for engine logic, `Common` for
   result/MCP plumbing. Advanced is additive, not a fork: verify with `scripts/build.ps1 -Flavor Solution`.
