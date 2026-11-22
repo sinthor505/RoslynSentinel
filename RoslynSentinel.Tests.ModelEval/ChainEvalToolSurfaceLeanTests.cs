@@ -73,13 +73,13 @@ public class ChainEvalToolSurfaceLeanTests
     }
 
     [Test]
-    public void LeanAllowList_HasExactly18DistinctNames_AllDiscovered()
+    public void LeanAllowList_HasExactly19DistinctNames_AllDiscovered()
     {
         var allow = ChainEvalToolSurface.LeanAllowList;
         var discovered = DiscoveredToolNames();
 
-        Assert.That(allow, Has.Count.EqualTo(18));
-        Assert.That(allow.Distinct(StringComparer.OrdinalIgnoreCase).Count(), Is.EqualTo(18));
+        Assert.That(allow, Has.Count.EqualTo(19));
+        Assert.That(allow.Distinct(StringComparer.OrdinalIgnoreCase).Count(), Is.EqualTo(19));
         Assert.That(allow.Where(n => !discovered.Contains(n)), Is.Empty, "allow-list names not discovered");
     }
 
