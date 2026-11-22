@@ -378,11 +378,8 @@ public class CreateFileDeleteFileTests
         Assert.That(!deleteResult.IsError, Is.True);
         Assert.That(File.Exists(newFile), Is.False);
 
-        // changeId isn't exposed on ApplyChangesResult directly -> recover it from the blob
-        // filename ({toolName}_{timestamp}_{changeId}.json), same as UndoLastApplyTests does.
-        var blobDir = Path.Combine(fixture.SolutionDirectory, ".roslynsentinel", "operations");
-        var blobFile = Directory.EnumerateFiles(blobDir, "delete_file_*").OrderByDescending(f => f).First();
-        var changeId = Path.GetFileNameWithoutExtension(blobFile).Split('_').Last();
+        var changeId = ((RoslynSentinel.Common.ApplyChangesResult)deleteResult.SuccessData!).ChangeId!;
+        Assert.That(changeId, Is.Not.Null.And.Not.Empty);
 
         var undoResult = await workspaceTools.UndoLastApplyTool(reason: "test message", changeId);
 
@@ -1288,5 +1285,66 @@ public class CreateFileDeleteFileTests
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         Assert.That(result.Findings.Count(f => f.Source == "DiffHunkAnalyzer"), Is.EqualTo(1), "the hunk-analyzer warning must reach the ApplyDiff response");
+    }
+
+    [Test]
+    public async Task CreateFile_Result_CarriesChangeIdOfWrittenBlobAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var newFile = Path.Combine(fixture.SolutionDirectory, "Notes.txt");
+
+        var result = await workspaceTools.CreateFileTool(reason: "test message", newFile);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var changeId = ((RoslynSentinel.Common.ApplyChangesResult)result.SuccessData!).ChangeId;
+        Assert.That(changeId, Is.Not.Null.And.Not.Empty);
+        Assert.That(RoslynSentinel.Common.OperationBlobWriter.FindBlobPath(changeId!, fixture.SolutionDirectory), Is.Not.Null);
+    }
+
+    [Test]
+    public async Task DeleteFile_Result_CarriesChangeIdOfWrittenBlobAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+        var diffEngine = Basic.TestEngines.DiffEngine();
+        var validationEngine = Basic.TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        WholeFileWriteTools wholeFileWriteTools = Basic.TestTools.WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+
+        var newFile = Path.Combine(fixture.SolutionDirectory, "BlobDelete.cs");
+        await fixture.AddFileToSolution(workspaceManager, "BlobDelete.cs", "public class BlobDelete { }");
+
+        var result = await wholeFileWriteTools.DeleteFileTool(reason: "test message", newFile);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var changeId = ((RoslynSentinel.Common.ApplyChangesResult)result.SuccessData!).ChangeId;
+        Assert.That(changeId, Is.Not.Null.And.Not.Empty);
+        Assert.That(RoslynSentinel.Common.OperationBlobWriter.FindBlobPath(changeId!, fixture.SolutionDirectory), Is.Not.Null);
+    }
+
+    [Test]
+    public async Task WriteFile_Result_CarriesChangeIdOfWrittenBlobAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+        var diffEngine = Basic.TestEngines.DiffEngine();
+        var validationEngine = Basic.TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        WholeFileWriteTools wholeFileWriteTools = Basic.TestTools.WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+
+        var newFile = Path.Combine(fixture.SolutionDirectory, "Written.cs");
+
+        var result = await wholeFileWriteTools.WriteFileTool(reason: "test message", WriteFileOperation.CreateFile, newFile, "public class Written { }");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var changeId = ((RoslynSentinel.Common.ApplyChangesResult)result.SuccessData!).ChangeId;
+        Assert.That(changeId, Is.Not.Null.And.Not.Empty);
+        Assert.That(RoslynSentinel.Common.OperationBlobWriter.FindBlobPath(changeId!, fixture.SolutionDirectory), Is.Not.Null);
     }
 }
