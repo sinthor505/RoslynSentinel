@@ -1,6 +1,6 @@
 # UndoChange: a last-only, compile-validated, creation-aware undo (replaces UndoLastApply)
 
-**Status:** APPROVED 2026-11-21. The owner settled last-only semantics, validate-before-write, delete-on-undo for created files and the rename to UndoChange in a todo review; nothing is built.
+**Status:** BUILT 2026-11-22 (slices 12-1..12-8; commits 9f9424b4, 3dad2927, cf239ec4, 85fe833e, 7b0c6a05, 7c088de5, c40e72de, a6d253f5). The tool is UndoChange (no alias for the old name).
 
 ## Motivation
 

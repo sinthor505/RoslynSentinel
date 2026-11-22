@@ -210,7 +210,7 @@ inverted range (last anchor above the first) and a one-line range (both anchors 
 
 - `TODO.md` - the TOOL-GAP entry that raised this (2026-11-09) and the general edit-tool comparison entry
   (Large, not designed); both link here.
-- `proposals/proposal_undo_change_last_only_validated.md` - the undo tool this result's hint points at.
+- `proposals/closed/proposal_undo_change_last_only_validated.md` - the undo tool this result's hint points at.
 - `ideas/idea_editlines_and_anchor_attributes.md` - the parked predecessor.
 - `findings/finding_tool_surface_usage_review.md` - records ReplaceRange and MoveFile as decided core tools
   and the 46,500-char budget.

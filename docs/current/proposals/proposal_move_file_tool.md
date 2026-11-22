@@ -138,7 +138,7 @@ through model output.
 ## Decisions (todo review 2026-11-21)
 
 Settles open questions 1, 2, 4 and 6; question 3 (`update`) stays open (TODO.md line, NOT DESIGNED); question 5
-follows the undo redesign (proposals/proposal_undo_change_last_only_validated.md: a created file is undone by
+follows the undo redesign (proposals/closed/proposal_undo_change_last_only_validated.md: a created file is undone by
 deleting it). Infrastructure confirmed by the review: `ApplyProposedChangesAsync(changes, deletePaths, ...)`
 writes and deletes in one operation (`DeleteFileTool` in `WholeFileWriteTools.cs` is the template),
 `TypeFileRename.MoveInto`, `PreviewMoveFileToNamespaceFolder` (folder-derived namespace).
