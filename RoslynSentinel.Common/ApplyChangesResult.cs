@@ -12,6 +12,7 @@ namespace RoslynSentinel.Common;
 /// (after the EOL pre-pass, so it can differ from the proposed text). No-op writes, deleted files and files rolled back
 /// after a partial failure have no entry. Null on refusals. In-process only: never serialised to tool output, so
 /// callers read it when building operation blobs (<see cref="OperationItemRecord.AfterSource"/>).</para>
+/// <para><see cref="CreatedFiles"/> lists files the chokepoint created on this call: no file existed before, the pre-image read did not fail, and the write landed. Null on refusals, empty when none. Keys match <see cref="SucceededFiles"/> entries.</para>
 /// <para><see cref="NoOpFiles"/> lists files included in <see cref="SucceededFiles"/> whose
 /// proposed content was skipped rather than re-written -> either byte-for-byte identical to what
 /// was already on disk, or (for .cs files) semantically identical after whitespace
@@ -39,7 +40,8 @@ public record ApplyChangesResult(
     string? RefusalCode = null,
     List<Finding>? Findings = null,
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)] bool NeedsFullReload = false,
-    [property: System.Text.Json.Serialization.JsonIgnore] IReadOnlyDictionary<string, string?>? PostImages = null
+    [property: System.Text.Json.Serialization.JsonIgnore] IReadOnlyDictionary<string, string?>? PostImages = null,
+    [property: System.Text.Json.Serialization.JsonIgnore] IReadOnlyList<string>? CreatedFiles = null
 ) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]

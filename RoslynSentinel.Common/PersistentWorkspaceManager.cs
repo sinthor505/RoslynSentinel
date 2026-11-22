@@ -2436,11 +2436,20 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             // exist (undo should delete it rather than restore content).
             // Must run inside the lock and before the first write.
             var preImages = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            // Keys whose pre-image read returned null without throwing, i.e. the file did not exist. A failed read
+            // also leaves preImages[key] null, so null alone cannot tell absent from unreadable: the catch block
+            // below leaves this set alone, so a file that may exist is never reported as created.
+            var missingBeforeWrite = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var key in changes.Keys.Concat(deletePaths))
             {
                 try
                 {
-                    preImages[key] = await FileIoHelper.ReadAllTextIfExistsAsync(key, cancellationToken);
+                    var preImage = await FileIoHelper.ReadAllTextIfExistsAsync(key, cancellationToken);
+                    preImages[key] = preImage;
+                    if (preImage is null && changes.ContainsKey(key) && !deletePaths.Contains(key))
+                    {
+                        missingBeforeWrite.Add(key);
+                    }
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
@@ -2575,6 +2584,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
 
             // Exact text written per file (post EOL pre-pass). No-op writes, deletes and failed writes get no entry; rollback clears it.
             var postImages = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            var createdFiles = new List<string>();
 
             foreach (var change in changes)
             {
@@ -2646,6 +2656,10 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                         success = true;
                         succeeded.Add(filePath);
                         postImages[filePath] = contentToWrite;
+                        if (missingBeforeWrite.Contains(filePath))
+                        {
+                            createdFiles.Add(filePath);
+                        }
                         // Update the hash baseline with what we just wrote -> no extra I/O, contentToWrite
                         // is already in memory. See _knownFileHashes's declaration-site comment.
                         _knownFileHashes[filePath] = ComputeContentHash(contentToWrite);
@@ -2727,6 +2741,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 }
                 succeeded.Clear();
                 postImages.Clear();
+                createdFiles.Clear();
             }
 
             // Ledger creation happens here, after the rollback decision, not in the write loop above:
@@ -2823,7 +2838,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 noOp.Count > 0 ? noOp : null,
                 Findings: resultFindings is { Count: > 0 } ? resultFindings : null,
                 NeedsFullReload: needsFullReload,
-                PostImages: postImages);
+                PostImages: postImages,
+                CreatedFiles: createdFiles);
         }
         finally
         {

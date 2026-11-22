@@ -50,4 +50,10 @@ public class OperationItemRecord
     {
         get; set;
     }
+
+    /// <summary>True when the chokepoint created this file (it did not exist before the write). Not inferred from a null BeforeSource: a failed pre-image read also leaves BeforeSource null. Read by UndoChange to delete the file.</summary>
+    public bool Created
+    {
+        get; set;
+    }
 }
