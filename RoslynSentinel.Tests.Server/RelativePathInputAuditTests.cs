@@ -24,7 +24,7 @@ namespace RoslynSentinel.Tests.Server;
 /// this step (out of scope).
 /// </summary>
 [TestFixture]
-[NonParallelizable]
+// Parallel since 2026-11-22 (plan_shorten_verification_loop Q-7b): no static, shared path, env var or cwd found; if this flakes only in full/parallel runs, restore [NonParallelizable] and note the run id.
 public class RelativePathInputAuditTests
 {
     private IHost _host = null!;

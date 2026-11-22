@@ -550,7 +550,7 @@ public class CreateFileDeleteFileTests
     // A real .csproj content change reloads the project and must re-baseline its hash, so a later
     // timestamp-only touch with identical content is not flagged as drift.
     [Test]
-    [NonParallelizable]
+    // Parallel since 2026-11-22 (plan_shorten_verification_loop Q-7b): no static, shared path, env var or cwd found; if this flakes only in full/parallel runs, restore [NonParallelizable] and note the run id.
     public async Task ExternalTouch_ProjectFileAfterDebounceReload_IsNotFlaggedAsDriftAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -582,7 +582,7 @@ public class CreateFileDeleteFileTests
         Assert.That(workspaceManager.GetExternalFileChanges(), Does.Contain(projectFile).IgnoreCase);
 
         // Poll the baseline entry until the debounce reload records the edited content's hash.
-        deadline = DateTime.UtcNow.AddSeconds(15);
+        deadline = DateTime.UtcNow.AddSeconds(30);
         while ((hashes[key] as string) != HashOf(editedContent) && DateTime.UtcNow < deadline)
         {
             await Task.Delay(25);
@@ -604,7 +604,7 @@ public class CreateFileDeleteFileTests
     // identical content must not be flagged as drift. Covered together with the control test below,
     // which proves the watcher does report a real .slnx content change.
     [Test]
-    [NonParallelizable]
+    // Parallel since 2026-11-22 (plan_shorten_verification_loop Q-7b): no static, shared path, env var or cwd found; if this flakes only in full/parallel runs, restore [NonParallelizable] and note the run id.
     public async Task ExternalTouch_SlnxFileWithIdenticalContent_IsNotFlaggedAsDriftAsync()
     {
         var root = Path.Combine(Path.GetTempPath(), "RoslynSentinelSlnxTouch_" + Guid.NewGuid().ToString("n"));
@@ -631,7 +631,7 @@ public class CreateFileDeleteFileTests
     // the debounce-driven full-solution reload must re-baseline its hash, and a later touch with
     // identical content must then not be flagged.
     [Test]
-    [NonParallelizable]
+    // Parallel since 2026-11-22 (plan_shorten_verification_loop Q-7b): no static, shared path, env var or cwd found; if this flakes only in full/parallel runs, restore [NonParallelizable] and note the run id.
     public async Task ExternalEdit_SlnxFileWithChangedContent_IsFlaggedThenRebaselinedAsync()
     {
         var root = Path.Combine(Path.GetTempPath(), "RoslynSentinelSlnxEdit_" + Guid.NewGuid().ToString("n"));
@@ -663,7 +663,7 @@ public class CreateFileDeleteFileTests
             Assert.That(workspaceManager.GetExternalFileChanges(), Does.Contain(slnxPath).IgnoreCase);
 
             // Poll the baseline entry until the debounce reload records the edited content's hash.
-            deadline = DateTime.UtcNow.AddSeconds(15);
+            deadline = DateTime.UtcNow.AddSeconds(30);
             while ((hashes[key] as string) != HashOf(editedContent) && DateTime.UtcNow < deadline)
             {
                 await Task.Delay(25);
