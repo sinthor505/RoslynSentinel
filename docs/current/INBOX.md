@@ -11,3 +11,4 @@ close it with a reason in [CLOSED.md](./CLOSED.md), then delete the line here. C
 
 ## Untriaged
 
+- 2026-11-21 16:39 SemanticFindReplace replaceConstruction cannot retype `new Dictionary<FilePathWrapper, string>` -> `new DocumentChangeSet` (needs a non-generic factory; skips object/collection-initializer sites); plan_document_changeset_type Step 7 fell back to batched ReplaceSnippet over ~140 sites - evidence: Batch C orchestrator report, .claude/journal/implementer-ledger.md 7a-7g lines - no code spot

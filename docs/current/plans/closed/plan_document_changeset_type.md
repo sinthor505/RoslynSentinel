@@ -1,6 +1,6 @@
 # Plan: Replace Dictionary<FilePathWrapper, string> with a named DocumentChangeSet type
 
-**Status:** IN PROGRESS 2026-11-21. Steps 1, 2, 4, 5 done (b0b1614a, 8849400f, 8a307227, a81c3ae7, c2f8c5c0); Step 3 dropped (Decision 10); Step 6 done except 6d-3 (moved into Step 7); Step 7 running.
+**Status:** IMPLEMENTED 2026-11-21. Steps 1, 2, 4-7 done (b0b1614a, 8849400f, 8a307227, a81c3ae7, c2f8c5c0, 02ee960d..02c39a0e, 269ec636..36b4a43c); Step 3 dropped (Decision 10); full run at a3d98b2e green.
 
 ## Problem
 
@@ -178,6 +178,14 @@ Re-measured 2026-11-21 (`Search(mode: text)` line matches, so approximate):
   `DocumentChangeSet`, starting with those feeding `AppliedChangeSummary` (MoveTypeToFile, the
   AdvancedStructuralEngine returns), and finish with 6d-3: `AppliedChangeSummary`'s `ChangedContent`
   parameter and both `From(...)` `changedContent` parameters; the Step 5 tests must still pass.
+- Done: construction sites 269ec636, 86fa11ae, 5ee97c5a, 3dd7de7c, dda6db40, 41cf3282, b78db6f4, d4501b98
+  (`RenameLiftResult.Changes`); method returns dc940195 (`BasicRefactoringEngine`, MoveTypeToFile family),
+  7f572bfb (`AdvancedStructuralEngine`), 1295c725 (Common); forced test sites e2dd052b, 5b2ae7cb; 6d-3 36b4a43c.
+  Remainder: 10 production `new Dictionary<FilePathWrapper, string>` kept on purpose, all path -> reason or
+  metadata maps, not content (`PersistentWorkspaceManager.cs` 2332, 2377, 2464, 2532, 2907, 3212, 3546;
+  `WorkspaceFileEditImpl.cs:1519` FailedFiles; `DependencyInjectionEngine.cs:514`; `StackOverflowEngine.cs:286`).
+  `SemanticFindReplace` `replaceConstruction` could not do the retype (needs a non-generic factory, skips
+  initializer sites); a batched `ReplaceSnippet` pattern sufficed.
 - Done when: `Search(mode: text, query: "new Dictionary<FilePathWrapper, string>")` returns zero in
   production code, or the remainder is listed here with a reason.
 
