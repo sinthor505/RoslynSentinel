@@ -311,7 +311,6 @@ public sealed class MoveFileTests
     }
 
     [TestCase(MoveFileNamespaceHandling.update)]
-    [TestCase(MoveFileNamespaceHandling.copyAndObsolete)]
     public async Task MoveFile_CsFileWithANamespaceHandlingOtherThanKeep_FailsAsNotYetSupportedAsync(MoveFileNamespaceHandling handling)
     {
         using var fixture = new TestSolutionFixture();

@@ -273,7 +273,7 @@ public class WholeFileWriteTools
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string sourcePath,
         [Description("New path of the file; its folders are created if missing.")][ExternalInputRequired(DataTag.SourceFilepath, required: true)] string destinationPath,
-        [Description("keep: the text moves unchanged, a .cs namespace stays as written. update, copyAndObsolete: not supported yet. Non-.cs files accept only keep.")] MoveFileNamespaceHandling namespaceHandling,
+        [Description("keep: the text moves unchanged, a .cs namespace stays as written. copyAndObsolete (.cs): copies the file with the folder-derived namespace, marks the old types [Obsolete], migrates callers best effort; refused when the namespace would not change or a type is partial across files. update: not supported yet. Non-.cs files accept only keep.")] MoveFileNamespaceHandling namespaceHandling,
         CancellationToken cancellationToken = default)
     {
         FilePathWrapper source = _workspaceManager.ResolveFromWire(sourcePath);
@@ -291,10 +291,12 @@ public class WholeFileWriteTools
             }
 
             bool isCs = string.Equals(Path.GetExtension(source.Absolute), ".cs", StringComparison.OrdinalIgnoreCase);
-            if (namespaceHandling != MoveFileNamespaceHandling.keep)
+            // copyAndObsolete on a .cs file runs after the generic validations below (MoveFileCopyAndObsolete); update stays unsupported.
+            var copyAndObsolete = isCs && namespaceHandling == MoveFileNamespaceHandling.copyAndObsolete;
+            if (namespaceHandling != MoveFileNamespaceHandling.keep && !copyAndObsolete)
             {
                 return isCs
-                    ? MoveFileError(ToolErrorCode.NotImplemented, $"MoveFile: namespaceHandling '{namespaceHandling}' is not supported yet; only 'keep' is supported in this version. Nothing was moved.")
+                    ? MoveFileError(ToolErrorCode.NotImplemented, $"MoveFile: namespaceHandling '{namespaceHandling}' is not supported yet; only 'keep' is supported in this version, apart from 'copyAndObsolete'. Nothing was moved.")
                     : MoveFileError(ToolErrorCode.InvalidArgument, $"MoveFile: namespaceHandling '{namespaceHandling}' does not apply to '{source.Absolute}', which is not a .cs file; non-.cs files accept only 'keep'. Nothing was moved.");
             }
 
@@ -341,6 +343,11 @@ public class WholeFileWriteTools
             catch (System.Text.DecoderFallbackException)
             {
                 return MoveFileError(ToolErrorCode.TargetIneligible, $"MoveFile: '{source.Absolute}' is not valid UTF-8 text, so it cannot be moved without altering its bytes; this tool moves UTF-8 text files only.");
+            }
+
+            if (copyAndObsolete)
+            {
+                return await MoveFileCopyAndObsolete.RunAsync(_workspaceManager, _validationEngine, _symbolNavigationEngine, _activeToolSurface, _logger, solution, source, destination, text, cancellationToken);
             }
 
             var sourceProject = SolutionProjectLocator.FindContainingProject(solution, source.Absolute);
