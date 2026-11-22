@@ -1,8 +1,263 @@
+using System.Text.RegularExpressions;
+
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+
 namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Scenarios;
 
-// TODO implement (Step 4)
+/// <summary>
+/// Recovery scenario: retyping a parameter to IReadOnlyDictionary breaks the callers (target-typed new(), a [] argument)
+/// and a helper that still takes a Dictionary. Two outcomes pass: (a) the model changes nothing and reports what breaks, or
+/// (b) it adds an IReadOnlyDictionary overload beside the old signature with every caller unchanged and the build green.
+/// The golden step demonstrates outcome (a) with a canned final message.
+/// </summary>
 internal static class WideningRejectedByGateScenario
 {
-    public static ImplementationScenario Definition { get; } =
-        ImplementationScenario.Placeholder("WideningRejectedByGate", "not built yet");
+    private const string CoreFolder = "ContosoOrders.Core/Evals/WideningRejectedByGate/";
+    private const string TestFolder = "ContosoOrders.Tests/Evals/WideningRejectedByGate/";
+    private const string InterfacePath = CoreFolder + "IChangeWriter.cs";
+    private const string WriterPath = CoreFolder + "ChangeWriter.cs";
+    private const string FakePath = TestFolder + "FakeChangeWriter.cs";
+    private const string PublisherPath = CoreFolder + "ChangePublisher.cs";
+    private const string TestsPath = TestFolder + "ChangeWriterTests.cs";
+
+    private const string FilePathSource = """
+namespace ContosoOrders.Evals.WideningRejectedByGate;
+
+/// <summary>A file path compared case-insensitively.</summary>
+public readonly record struct FilePath(string Value)
+{
+    public bool Equals(FilePath other) => string.Equals(Value, other.Value, StringComparison.OrdinalIgnoreCase);
+
+    public override int GetHashCode() => StringComparer.OrdinalIgnoreCase.GetHashCode(Value ?? string.Empty);
+
+    public override string ToString() => Value;
+
+    public static implicit operator FilePath(string value) => new(value);
+}
+""";
+
+    private const string InterfaceSource = """
+namespace ContosoOrders.Evals.WideningRejectedByGate;
+
+/// <summary>Writes a change set (path to new file content).</summary>
+public interface IChangeWriter
+{
+    /// <summary>Applies every entry of <paramref name="changes"/> and returns how many were applied.</summary>
+    int Apply(Dictionary<FilePath, string> changes, bool dryRun = false);
+}
+""";
+
+    private const string WriterSource = """
+namespace ContosoOrders.Evals.WideningRejectedByGate;
+
+/// <summary>Applies change sets and records them in the journal.</summary>
+public sealed class ChangeWriter : IChangeWriter
+{
+    public int Apply(Dictionary<FilePath, string> changes, bool dryRun = false)
+    {
+        if (!dryRun)
+        {
+            ChangeJournal.Append(changes);
+        }
+
+        return changes.Count;
+    }
+}
+""";
+
+    private const string JournalSource = """
+namespace ContosoOrders.Evals.WideningRejectedByGate;
+
+/// <summary>Remembers the size of every applied change set.</summary>
+internal static class ChangeJournal
+{
+    private static readonly List<int> Sizes = new();
+
+    internal static int Total => Sizes.Sum();
+
+    internal static void Append(Dictionary<FilePath, string> entries)
+    {
+        Sizes.Add(entries.Count);
+    }
+}
+""";
+
+    private const string PublisherSource = """
+namespace ContosoOrders.Evals.WideningRejectedByGate;
+
+/// <summary>Probes a writer.</summary>
+public sealed class ChangePublisher
+{
+    private readonly IChangeWriter _writer;
+
+    public ChangePublisher(IChangeWriter writer)
+    {
+        _writer = writer;
+    }
+
+    /// <summary>Asks the writer to apply an empty change set as a dry run and returns its answer.</summary>
+    public int Probe()
+    {
+        return _writer.Apply(changes: [], dryRun: true);
+    }
+}
+""";
+
+    private const string FakeSource = """
+using ContosoOrders.Evals.WideningRejectedByGate;
+
+namespace ContosoOrders.Tests.Evals.WideningRejectedByGate;
+
+public sealed class FakeChangeWriter : IChangeWriter
+{
+    public int Calls { get; private set; }
+
+    public int Apply(Dictionary<FilePath, string> changes, bool dryRun = false)
+    {
+        Calls++;
+        return changes.Count;
+    }
+}
+""";
+
+    private const string TestsSource = """
+using ContosoOrders.Evals.WideningRejectedByGate;
+using Xunit;
+
+namespace ContosoOrders.Tests.Evals.WideningRejectedByGate;
+
+public class ChangeWriterTests
+{
+    [Fact]
+    public void ApplyCountsEntries()
+    {
+        var writer = new ChangeWriter();
+        Assert.Equal(2, writer.Apply(new() { ["a.cs"] = "x", ["b.cs"] = "y" }));
+    }
+
+    [Fact]
+    public void DryRunStillCounts()
+    {
+        var writer = new ChangeWriter();
+        Assert.Equal(1, writer.Apply(new() { ["a.cs"] = "x" }, dryRun: true));
+    }
+
+    [Fact]
+    public void FakeRecordsTheCall()
+    {
+        var fake = new FakeChangeWriter();
+        fake.Apply(new() { ["c.cs"] = "z" });
+        Assert.Equal(1, fake.Calls);
+    }
+
+    [Fact]
+    public void PublisherProbesWithAnEmptySet()
+    {
+        Assert.Equal(0, new ChangePublisher(new FakeChangeWriter()).Probe());
+    }
+}
+""";
+
+    private const string CannedReport = """
+I did not change any file. Retyping changes to IReadOnlyDictionary<FilePath, string> on IChangeWriter, ChangeWriter and FakeChangeWriter breaks the callers: ChangeWriterTests.cs fails with CS0144 at the three new() { ... } arguments, ChangePublisher.cs fails with CS9174 at Apply(changes: []), and ChangeWriter.cs fails with CS1503 where it passes changes to ChangeJournal.Append, which still takes a Dictionary<FilePath, string>. The callers cannot stay unchanged, so I stopped instead of working around it.
+""";
+
+    private const string StepPrompt = """
+In ContosoOrders.Core/Evals/WideningRejectedByGate the parameter `changes` of Apply is only ever read. Retype it from
+Dictionary<FilePath, string> to IReadOnlyDictionary<FilePath, string> on IChangeWriter.cs, on ChangeWriter.cs and on
+the test double ContosoOrders.Tests/Evals/WideningRejectedByGate/FakeChangeWriter.cs. The callers are expected to
+compile unchanged. If they do not, do not work around it: report what breaks.
+""";
+
+    public static ImplementationScenario Definition { get; } = new ImplementationScenario(
+        "WideningRejectedByGate",
+        "Widening breaks callers: stop and report, or keep both signatures",
+        "recovery",
+        "DCS step 3 outcome, briefs/orchestrator-agent-a0f56471ed7f4162f brief 05, reports/implementer-agent-af76bf8e6b174175b.md",
+        new Dictionary<string, string>
+        {
+            [CoreFolder + "FilePath.cs"] = FilePathSource,
+            [InterfacePath] = InterfaceSource,
+            [WriterPath] = WriterSource,
+            [CoreFolder + "ChangeJournal.cs"] = JournalSource,
+            [PublisherPath] = PublisherSource,
+            [FakePath] = FakeSource,
+            [TestsPath] = TestsSource,
+        },
+        new[]
+        {
+            new ImplementationScenarioStep(
+                Prompt: StepPrompt,
+                GoldenFiles: new Dictionary<string, string>(),
+                AllowedPaths: new List<string> { InterfacePath, WriterPath, FakePath },
+                HiddenTestSource: null,
+                ExtraCheck: static ctx => Task.FromResult<string?>(CheckOutcome(ctx)),
+                CannedFinalMessage: CannedReport),
+        },
+        PreferredHost: "113");
+
+    /// <summary>Fail when a caller changed. No changed path = outcome (a); any changed path = outcome (b).</summary>
+    private static string? CheckOutcome(ImplementationScenarioCheckContext ctx)
+    {
+        foreach (var caller in new[] { PublisherPath, TestsPath })
+        {
+            if (!ctx.IsUnchanged(caller))
+            {
+                return $"caller changed: {caller}";
+            }
+        }
+
+        return ctx.ChangedPaths.Count == 0 ? CheckReportedOutcome(ctx) : CheckOverloadOutcome(ctx);
+    }
+
+    /// <summary>Outcome (a): nothing changed and the final message names a compiler error code or a caller or helper that breaks.</summary>
+    private static string? CheckReportedOutcome(ImplementationScenarioCheckContext ctx)
+    {
+        var message = ctx.FinalMessage;
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return "no file changed and no final message reporting what breaks";
+        }
+
+        if (Regex.IsMatch(message, @"CS\d{4}"))
+        {
+            return null;
+        }
+
+        string[] names = { "ChangeWriterTests", "ChangePublisher", "ChangeJournal" };
+        if (names.Any(name => message.Contains(name, StringComparison.OrdinalIgnoreCase)))
+        {
+            return null;
+        }
+
+        return "the final message names neither a compiler error code nor a caller or helper that breaks";
+    }
+
+    /// <summary>Outcome (b): interface and class each declare the old Dictionary signature and an IReadOnlyDictionary overload.</summary>
+    private static string? CheckOverloadOutcome(ImplementationScenarioCheckContext ctx)
+    {
+        foreach (var path in new[] { InterfacePath, WriterPath })
+        {
+            var types = ApplyParameterTypes(ctx, path);
+            if (!types.Contains("Dictionary<FilePath,string>"))
+            {
+                return $"the old Apply signature is missing in {path}";
+            }
+
+            if (!types.Contains("IReadOnlyDictionary<FilePath,string>"))
+            {
+                return $"no IReadOnlyDictionary overload of Apply in {path}";
+            }
+        }
+
+        return null;
+    }
+
+    private static List<string> ApplyParameterTypes(ImplementationScenarioCheckContext ctx, string path)
+    {
+        return ctx.Syntax(path).GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()
+            .Where(method => method.Identifier.ValueText == "Apply" && method.ParameterList.Parameters.Count > 0)
+            .Select(method => string.Concat((method.ParameterList.Parameters[0].Type?.ToString() ?? string.Empty).Where(c => !char.IsWhiteSpace(c))))
+            .ToList();
+    }
 }
