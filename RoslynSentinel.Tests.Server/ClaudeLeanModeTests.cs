@@ -35,7 +35,7 @@ public class ClaudeLeanModeTests
     [
         "LoadSolution", "ReadFile", "GetFileOutline", "GetMethodSource", "GetLargeResult",
         "Search",
-        "Build", "RunTest", "Git", "ReplaceSnippet", "Member",
+        "Build", "RunTest", "Git", "ReplaceSnippet", "ReplaceRange", "Member",
         "RenameSymbol", "ChangeSignature", "CreateFile", "DeleteFile", "WriteFile",
         "UndoChange", "McpServerControl", "McpServerStatus", "ExternalFileDrift", "SemanticFindReplace", "InspectSymbol", "MoveMember", "UsingDirective", "GetDiagnostics",
         "McpToolsetControl",
@@ -55,7 +55,7 @@ public class ClaudeLeanModeTests
         "McpServerStatus", "Member", "MethodSignature", "ModifyAttribute", "ModifyBaseType",
         "ModifyEnum", "ModifyModifier", "MoveAllTypesToFiles", "MoveMember", "MoveType",
         "PreviewRenameImpact", "ProjectDoc", "QuerySymbolRelationships", "ReadFile", "RenameSymbol",
-        "ReplaceSnippet", "RetryFailedChanges", "RunTest", "DeleteUnusedSymbol", "Search",
+        "ReplaceRange", "ReplaceSnippet", "RetryFailedChanges", "RunTest", "DeleteUnusedSymbol", "Search",
         "SplitProjectByFolder", "SummaryComment", "SyncInterface", "SyncTypeAndFilename", "TypedMember", "UndoChange",
         "UsingDirective", "WrapRange", "WriteFile",
     ];
