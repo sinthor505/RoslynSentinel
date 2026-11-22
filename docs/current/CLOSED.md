@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Settle Build's 0 warnings vs workspace nullable warnings - resolved (2026-11-21)
+
+Settle Build's 0 warnings vs 210 workspace nullable warnings (2026-11-21) - the 3 CS8604 baseline sites are gone and the [Obsolete] ctor case is moot (ctor removed 86c26b43), but workspace diagnostics show 210 nullable warnings in test projects (e.g. Tests.Advanced `ChangeSignatureWrapperTests.cs:313` CS8602) while Build (`--no-incremental`, BuildEngine.cs ~380) says 0; run one raw `dotnet build RoslynSentinel.Tests.Advanced --no-incremental` and compare with Build's WarningCount: mismatch = Build defect (blocker doc, fix output handling/ParseDiagnostics), match = workspace over-reports; then refresh docs/known-build-warnings.*.txt via scripts/build.ps1; acceptance: a known CS8602 site appears in both outputs or neither, baseline matches a fresh run; Small
+
+Evidence: #6: raw dotnet build RoslynSentinel.Tests.Advanced --no-incremental = 0 warnings, Build WarningCount = 0 (match, not a Build defect); raw build at -p:WarningLevel=4 also lacks the workspace's CS8604 at ChangeSignatureWrapperTests.cs:313, so the workspace over-reports (cause not isolated; csproj sets WarningLevel 1); known-build-warnings.Solution/Advanced.txt regenerated after the WarningLevel 2 commit aa76eaee (raw build and Build both 5 warnings, all CS0108 in Tools.Basic GitImpl.cs; was 0 at level 1)
+
 ## Generator not-found errors have no name candidates - resolved (2026-11-21)
 
 Generator not-found errors have no name candidates (2026-11-21) - generate_fluent_builder / generate_test_scaffold record a kind via `CodeTransformTools.GeneratorFailure` but FluentBuilderResult/TestScaffoldResult hold only Code and Error; have both engines throw `ToolNotFoundException(kind, name, candidates)` like the other Engines.Advanced lookups and drop the result-level NotFound path; Small
