@@ -28,16 +28,12 @@ namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 [TestFixture]
 public class ShippingKindSteppedAgentTests
 {
-    private IHost _host = null!;
-    private McpClient _mcpClient = null!;
-    private RoslynSentinel.Tests.TestSolutionFixture _fixture = null!;
-    private LmStudioAgentClient _agentClient = null!;
+    private ModelEvalMcpEnvironment? _environment;
     private string _runDirectory = null!;
 
     [SetUp]
-    public async Task SetUp()
+    public void SetUp()
     {
-        // TODO extract the shared ModelEval host setup (third copy)
         LlmOptions.Configure([]);
         if (string.IsNullOrEmpty(LlmOptions.Model))
         {
@@ -51,68 +47,20 @@ public class ShippingKindSteppedAgentTests
             Assert.Ignore("git is not available - the stepped scenario keeps its golden steps in a git repository.");
         }
 
-        // restorePackages: ContosoOrders.Tests needs restore assets or a solution-scope build reports CS0246 for every Xunit file
-        _fixture = new RoslynSentinel.Tests.TestSolutionFixture(restorePackages: true);
-
-        var clientToServer = new Pipe();
-        var serverToClient = new Pipe();
-
-        var services = new ServiceCollection();
-        services.AddRoslynSentinelEnginesAdvanced();
-
-        var mcpBuilder = services.AddMcpServer();
-        mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
-        mcpBuilder.WithTasks(
-            new InMemoryMcpTaskStore(),
-            o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
-        mcpBuilder.AddRoslynSentinelToolsAdvanced(services, ChainEvalToolSurface.NewModes(), hideTools: ChainEvalToolSurface.NewHiddenTools());
-
         _runDirectory = Path.Combine(
             TestContext.CurrentContext.WorkDirectory,
             "model-eval",
             TestContext.CurrentContext.Test.Name,
             DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
-
-        var hostBuilder = Host.CreateApplicationBuilder();
-        hostBuilder.Services.AddLmStudioAgentClient(client =>
-        {
-            client.BaseAddress = new Uri(LlmOptions.BaseUrl.TrimEnd('/') + "/");
-            client.Timeout = TimeSpan.FromSeconds(Math.Max(LlmOptions.TimeoutSeconds * 4, 600));
-        });
-        foreach (var descriptor in services)
-        {
-            hostBuilder.Services.Add(descriptor);
-        }
-
-        hostBuilder.Logging.AddProvider(new FlushingFileLoggerProvider(Path.Combine(_runDirectory, "agent.log")));
-
-        _host = hostBuilder.Build();
-        _ = _host.RunAsync();
-
-        var clientTransport = new StreamClientTransport(
-            serverInput: clientToServer.Writer.AsStream(),
-            serverOutput: serverToClient.Reader.AsStream(),
-            loggerFactory: NullLoggerFactory.Instance);
-
-        _mcpClient = await McpClient.CreateAsync(clientTransport, cancellationToken: TestContext.CurrentContext.CancellationToken);
-        _agentClient = _host.Services.GetRequiredService<LmStudioAgentClient>();
     }
 
     [TearDown]
     public async Task TearDown()
     {
-        if (_mcpClient is not null)
+        if (_environment is not null)
         {
-            await _mcpClient.DisposeAsync();
+            await _environment.DisposeAsync();
         }
-
-        if (_host is not null)
-        {
-            await _host.StopAsync();
-            _host.Dispose();
-        }
-
-        _fixture?.Dispose();
 
         if (_runDirectory is not null)
         {
@@ -141,12 +89,19 @@ public class ShippingKindSteppedAgentTests
         Directory.CreateDirectory(_runDirectory);
 
         // The checkout happens before LoadSolutionAsync, so the server never sees a harness write.
-        var repository = GoldenStepRepository.Create(
-            _fixture.SolutionDirectory, ShippingKindStepGoldens.LastStep, s => ShippingKindStepGoldens.FilesForStep(s, withVisibleTests, style));
-        repository.CheckoutStep(step - 1, $"run/step-{step}");
-
-        var workspaceManager = _host.Services.GetRequiredService<IWorkspaceManager>();
-        await workspaceManager.LoadSolutionAsync(_fixture.SolutionPath, cancellationToken);
+        GoldenStepRepository? repository = null;
+        _environment = await ModelEvalMcpEnvironment.CreateAsync(
+            _runDirectory,
+            restorePackages: true,
+            beforeLoad: (fixture, workspaceManager, ct) =>
+            {
+                repository = GoldenStepRepository.Create(
+                    fixture.SolutionDirectory, ShippingKindStepGoldens.LastStep, s => ShippingKindStepGoldens.FilesForStep(s, withVisibleTests, style));
+                repository.CheckoutStep(step - 1, $"run/step-{step}");
+                return Task.CompletedTask;
+            },
+            afterLoad: null,
+            cancellationToken);
 
         // ROSLYNSENTINEL_MODELEVAL_STEP_WALL_CLOCK_MINUTES (modeleval -StepWallClockMinutes) raises the 15-minute cap for slow models;
         // a raised cap passes slow-but-correct runs that 15 minutes would fail, so the cap is printed in step-<k>.outcome.txt.
@@ -156,8 +111,8 @@ public class ShippingKindSteppedAgentTests
                 ? capMinutes
                 : 15);
         var runner = new ModelAgentRunner(
-            _agentClient, _mcpClient, repeatedFailureLimit: 10, maxTokensPerTurn: 16384, turnCap: 25, wallClockCap: wallClockCap,
-            logger: _host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
+            _environment.AgentClient, _environment.Client, repeatedFailureLimit: 10, maxTokensPerTurn: 16384, turnCap: 25, wallClockCap: wallClockCap,
+            logger: _environment.Host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
         var stopwatch = Stopwatch.StartNew();
         var result = await runner.RunAsync(
             ErrorPolicyWiring.ComposePrompt(AgentSystemPrompts.CodingAgent),
@@ -167,13 +122,13 @@ public class ShippingKindSteppedAgentTests
         stopwatch.Stop();
 
         // All three happen before the check writes its test file, so the golden diff and the changed paths never contain it.
-        var changedPaths = repository.ChangedPathsSinceStep(step - 1);
+        var changedPaths = repository!.ChangedPathsSinceStep(step - 1);
         repository.CommitWorkingTree($"model result for step {step}");
         File.WriteAllText(Path.Combine(_runDirectory, $"step-{step}.golden.diff"), repository.DiffAgainstStep(step));
 
         var finalMessage = result.Transcript.FinalMessage();
         var (checkOutcome, checkDetail) = await ShippingKindStepChecks.CheckAsync(
-            step, _fixture.SolutionDirectory, finalMessage, changedPaths, cancellationToken, style);
+            step, _environment.SolutionDirectory, finalMessage, changedPaths, cancellationToken, style);
 
         var outcome = checkOutcome;
         var detail = checkDetail;
