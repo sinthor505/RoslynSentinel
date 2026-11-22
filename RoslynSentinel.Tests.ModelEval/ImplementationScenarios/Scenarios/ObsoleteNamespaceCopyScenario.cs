@@ -214,8 +214,8 @@ In ContosoOrders.Core/Evals/ObsoleteNamespaceCopy the file Legacy/Orders.cs decl
 ContosoOrders.Evals.ObsoleteNamespaceCopy.Legacy. Create Modern/Orders.cs (same folder tree) as a copy of it in the namespace
 ContosoOrders.Evals.ObsoleteNamespaceCopy.Modern, and mark every top-level type of the legacy file with the attribute
 [System.Obsolete("Use ContosoOrders.Evals.ObsoleteNamespaceCopy.Modern.<Type>")], where <Type> is that type's name; write the
-attribute fully qualified as System.Obsolete and place it below the type's XML doc comment. Both files must keep the exact byte
-layout of the original: the UTF-8 byte order mark, CRLF line endings throughout, and the doc comments. Do not add a using
+attribute fully qualified as System.Obsolete and place it below the type's XML doc comment. Legacy/Orders.cs must keep its UTF-8 byte order mark, CRLF line endings and doc comments exactly as they are.
+Modern/Orders.cs keeps CRLF line endings and the doc comments; it has no byte order mark requirement. Do not add a using
 directive, do not edit Consumer.cs or any test, and leave the copy without any Obsolete attribute.
 """;
 
@@ -246,7 +246,7 @@ directive, do not edit Consumer.cs or any test, and leave the copy without any O
         },
         PreferredHost: "112");
 
-    /// <summary>Byte checks (one BOM, uniform CRLF, no added using), attribute placement and text, copy fidelity, untouched consumer and tests.</summary>
+    /// <summary>Byte checks (BOM on Legacy, zero or one on Modern, uniform CRLF, no added using), attribute placement and text, copy fidelity, untouched consumer and tests.</summary>
     private static string? CheckBytesAndAttributes(ImplementationScenarioCheckContext ctx)
     {
         foreach (var path in new[] { ConsumerPath, TestsPath })
@@ -265,12 +265,14 @@ directive, do not edit Consumer.cs or any test, and leave the copy without any O
             }
 
             var bytes = ctx.ReadBytes(path);
-            if (bytes.Length < 3 || bytes[0] != 0xEF || bytes[1] != 0xBB || bytes[2] != 0xBF)
+            var hasBom = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF;
+            if (path == LegacyPath && !hasBom)
             {
                 return $"{path} does not start with the UTF-8 BOM";
             }
 
-            var text = Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3);
+            // The new file may carry zero or one BOM; a second BOM is rejected below.
+            var text = Encoding.UTF8.GetString(bytes, hasBom ? 3 : 0, bytes.Length - (hasBom ? 3 : 0));
             if (text.Contains('﻿'))
             {
                 return $"{path} contains a second BOM";
@@ -292,6 +294,10 @@ directive, do not edit Consumer.cs or any test, and leave the copy without any O
 
         var legacyText = ctx.ReadText(LegacyPath);
         var modernText = ctx.ReadText(ModernPath);
+        if (modernText.StartsWith('﻿'))
+        {
+            modernText = modernText.Substring(1);
+        }
         var seedBody = ImplementationScenario.NormalizeToCrlf(LegacyBody).TrimEnd();
 
         // Removing the three attribute lines from the legacy file must give back the original text.
