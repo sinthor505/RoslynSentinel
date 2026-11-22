@@ -390,4 +390,111 @@ public class UndoLastApplyTests
         Assert.That((string)result.SuccessData!, Does.Contain("Reverted 1 files").And.Not.Contain("Failures"));
         Assert.That(await File.ReadAllBytesAsync(targetFile), Is.EqualTo(originalBytes), "undo must restore the exact BOM-prefixed pre-image bytes");
     }
+
+    private static async Task<string> WriteStampedUndoBlobAsync(TestSolutionFixture fixture, string changeId, DateTime stamp, string filePath, string beforeSource)
+    {
+        // Blob timestamps come from ToolCallContext.LastWriteUtc, so the stamp orders the blobs for the last-only rule.
+        var context = new ToolCallContext("test-agent", "implementer", "ApplyDiff", "stamped undo blob", 0) { SessionId = "s1" };
+        context.MarkWritten(stamp);
+        ToolCallContext.Set(context);
+        try
+        {
+            var blob = await OperationBlobWriter.WriteAsync(
+                "apply_diff",
+                changeId,
+                [new OperationItemRecord { FilePath = filePath, Outcome = ItemRecordOutcome.Succeeded, BeforeSource = beforeSource }],
+                fixture.SolutionDirectory);
+            return Path.Combine(fixture.SolutionDirectory, ".roslynsentinel", "operations", blob.FileName!);
+        }
+        finally
+        {
+            ToolCallContext.Set(null);
+        }
+    }
+
+    [Test]
+    public async Task UndoLastApply_OlderChangeShadowedByNewerBlobOnSameFile_IsRefusedAndFileUnchangedAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
+        var originalContent = await File.ReadAllTextAsync(targetFile);
+        var firstModified = originalContent + "\n// first edit for UndoLastApply test\n";
+        var secondModified = firstModified + "\n// second edit for UndoLastApply test\n";
+        var targetRelativePath = Path.GetRelativePath(fixture.SolutionDirectory, targetFile);
+        await fixture.ModifyFileInSolution(workspaceManager, targetRelativePath, secondModified);
+
+        var stamp = DateTime.UtcNow;
+        await WriteStampedUndoBlobAsync(fixture, "change-older", stamp, targetFile, originalContent);
+        await WriteStampedUndoBlobAsync(fixture, "change-newer", stamp.AddMinutes(1), targetFile, firstModified);
+        workspaceManager.ClearExternalFileChanges();
+
+        var result = await workspaceTools.UndoLastApplyTool(reason: "test message", changeId: "change-older");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.PreconditionNotMet));
+        Assert.That(result.ErrorData!.Message, Does.Contain("change-newer"));
+        Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(secondModified));
+    }
+
+    [Test]
+    public async Task UndoLastApply_NewestChange_StillRevertsToPreApplyTextAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var files = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).Take(2).ToArray();
+        Assert.That(files.Length, Is.EqualTo(2));
+        var targetFile = files[0];
+        var otherFile = files[1];
+        var originalContent = await File.ReadAllTextAsync(targetFile);
+        var otherContent = await File.ReadAllTextAsync(otherFile);
+        var modifiedContent = originalContent + "\n// modified for UndoLastApply test\n";
+        var targetRelativePath = Path.GetRelativePath(fixture.SolutionDirectory, targetFile);
+        await fixture.ModifyFileInSolution(workspaceManager, targetRelativePath, modifiedContent);
+
+        // A newer blob on a different file must not shadow the change to targetFile.
+        var stamp = DateTime.UtcNow;
+        await WriteStampedUndoBlobAsync(fixture, "change-target", stamp, targetFile, originalContent);
+        await WriteStampedUndoBlobAsync(fixture, "change-other", stamp.AddMinutes(1), otherFile, otherContent);
+        workspaceManager.ClearExternalFileChanges();
+
+        var result = await workspaceTools.UndoLastApplyTool(reason: "test message", changeId: "change-target");
+
+        Assert.That(result.IsError, Is.False);
+        Assert.That((string)result.SuccessData!, Does.Contain("Reverted 1 files"));
+        Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(originalContent));
+    }
+
+    [Test]
+    public async Task UndoLastApply_NewerBlobMarkedUndone_DoesNotBlockOlderChangeAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
+        var originalContent = await File.ReadAllTextAsync(targetFile);
+        var firstModified = originalContent + "\n// first edit for UndoLastApply test\n";
+        var secondModified = firstModified + "\n// second edit for UndoLastApply test\n";
+        var targetRelativePath = Path.GetRelativePath(fixture.SolutionDirectory, targetFile);
+        await fixture.ModifyFileInSolution(workspaceManager, targetRelativePath, secondModified);
+
+        var stamp = DateTime.UtcNow;
+        await WriteStampedUndoBlobAsync(fixture, "change-older", stamp, targetFile, originalContent);
+        var newerBlobPath = await WriteStampedUndoBlobAsync(fixture, "change-newer", stamp.AddMinutes(1), targetFile, firstModified);
+        OperationBlobWriter.MarkUndone(newerBlobPath);
+        workspaceManager.ClearExternalFileChanges();
+
+        var result = await workspaceTools.UndoLastApplyTool(reason: "test message", changeId: "change-older");
+
+        Assert.That(result.IsError, Is.False);
+        Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(originalContent));
+    }
 }

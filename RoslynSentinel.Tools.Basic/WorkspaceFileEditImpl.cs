@@ -369,7 +369,22 @@ public class WorkspaceFileEditImpl
 
             var json = await File.ReadAllTextAsync(blobPath, cancellationToken);
             var doc = JsonSerializer.Deserialize<JsonElement>(json);
-            var revertable = doc.GetProperty("items").EnumerateArray().Select(e => JsonSerializer.Deserialize<OperationItemRecord>(e.GetRawText())!).Where(r => r.Outcome == ItemRecordOutcome.Succeeded && r.BeforeSource != null).ToList();
+            var allItems = doc.GetProperty("items").EnumerateArray().Select(e => JsonSerializer.Deserialize<OperationItemRecord>(e.GetRawText())!).ToList();
+            // Last-only rule: refuse when a newer, non-undone operation blob touched any of these files; the drift guard below still covers writes that left no blob.
+            var targetPaths = allItems.Where(r => r.Outcome == ItemRecordOutcome.Succeeded).Select(r => r.FilePath).ToList();
+            if (solutionRoot != null && targetPaths.Count > 0)
+            {
+                var newerWriters = UndoLastOnlyGuard.FindNewerWriters(solutionRoot, blobPath, changeId, targetPaths);
+                if (newerWriters is not null)
+                {
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsError = true,
+                        ErrorData = new ResultError(ToolErrorCode.PreconditionNotMet, newerWriters)
+                    };
+                }
+            }
+            var revertable = allItems.Where(r => r.Outcome == ItemRecordOutcome.Succeeded && r.BeforeSource != null).ToList();
             if (revertable.Count == 0)
             {
                 return new SentinelCallToolResult<object>()
