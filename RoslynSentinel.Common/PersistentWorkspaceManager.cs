@@ -2357,7 +2357,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         DiagnosticReport? validationReport = null;
         if (validateChanges && CurrentSolution != null)
         {
-            validationReport = await ValidationEngine.ValidateChangesAsync(CurrentSolution, changes, cancellationToken: cancellationToken);
+            // deleted files are dropped from the candidate so a delete that breaks other code is refused before any write
+            validationReport = await ValidationEngine.ValidateChangesAsync(CurrentSolution, changes, deletePaths.Count > 0 ? deletePaths : null, cancellationToken: cancellationToken);
             if (validationReport.IsError)
             {
                 return new ApplyChangesResult(
@@ -2400,7 +2401,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             }
 
             // Another agent wrote elsewhere while this call ran: the compile gate saw an older solution, so run it again here.
-            var revalidation = await RevalidateAfterForeignWriteAsync(changes, exactRestore, cancellationToken);
+            var revalidation = await RevalidateAfterForeignWriteAsync(changes, deletePaths, exactRestore, cancellationToken);
             if (revalidation is not null)
             {
                 return revalidation;
@@ -2978,7 +2979,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     /// only when such a write exists. Returns null when the write may proceed. A check failure is logged and the write proceeds,
     /// so this check never blocks a write on its own.
     /// </summary>
-    private async Task<ApplyChangesResult?> RevalidateAfterForeignWriteAsync(IReadOnlyDictionary<FilePathWrapper, string> changes, bool exactRestore, CancellationToken cancellationToken)
+    private async Task<ApplyChangesResult?> RevalidateAfterForeignWriteAsync(IReadOnlyDictionary<FilePathWrapper, string> changes, IReadOnlyCollection<FilePathWrapper> deletePaths, bool exactRestore, CancellationToken cancellationToken)
     {
         try
         {
@@ -2994,7 +2995,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 return null;
             }
 
-            var report = await ValidationEngine.ValidateChangesAsync(CurrentSolution, changes, ctx.GateRemovePaths, cancellationToken);
+            var report = await ValidationEngine.ValidateChangesAsync(CurrentSolution, changes, (ctx.GateRemovePaths ?? []).Concat(deletePaths).ToList(), cancellationToken);
             if (!report.IsError || report.Diagnostics.Count == 0)
             {
                 return null;
