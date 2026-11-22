@@ -308,6 +308,7 @@ public static class SentinelToolFactory
         return null;
     }
 
+    // TODO no tool sets ReadOnly (readOnlyHint): tools/list carries no annotations, so Claude Code plan mode refuses every RoslynSentinel tool client-side ("Cannot call mcp__roslynsentinel__Search while in plan mode"); mark the read-only tools (attribute ReadOnly = true or here from the tool's effect list) and retest plan mode
     // Copy of the SDK's internal McpServerToolCreateOptions.Clone (McpServerToolCreateOptions.cs:203).
     private static McpServerToolCreateOptions CloneOptions(McpServerToolCreateOptions? options) =>
         options is null

@@ -91,6 +91,7 @@ public static class SubAgentModelRun
         // A fresh HttpClient and LmStudioAgentClient per call: nothing about the model is shared
         // between two calls in flight in this process, which is the whole reason the model is an
         // explicit constructor argument rather than the process-wide LlmOptions.Model.
+        // TODO SubAgent/SubAgentEval always use the process-wide LlmOptions.BaseUrl: no per-call host (eval-hosts.json aliases such as 112u/113u/85u), no liveness/loaded-model check and no coordination with roslynsentinel-evalqueue.ps1, so a call can land on a host mid-queue; tool descriptions still say "LM Studio" though hosts default to Unsloth llama-server
         using var httpClient = new HttpClient
         {
             BaseAddress = new Uri(LlmOptions.BaseUrl.TrimEnd('/') + "/"),

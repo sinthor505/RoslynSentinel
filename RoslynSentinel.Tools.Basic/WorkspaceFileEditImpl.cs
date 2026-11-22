@@ -957,6 +957,7 @@ public class WorkspaceFileEditImpl
             {
                 int from = Math.Max(1, startLine ?? 1);
                 int to = Math.Min(totalLines, endLine ?? totalLines);
+                // TODO an inverted range (from > to) is reported as "out of bounds"; say the range is inverted and give the swapped call (an Ornith run repeated startLine 409/endLine 215 verbatim after this text); same at ReadFileWithoutSolutionAsync
                 if (from > totalLines || from > to)
                 {
                     return new SentinelCallToolResult<object>()
