@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace RoslynSentinel.Common
 {
     public enum EditOutcome
@@ -8,9 +10,46 @@ namespace RoslynSentinel.Common
         AlreadyInTargetState = 13, // already in target state
         NoCandidatesFound = 14   // e.g. no matching methods for a signature change
     }
-
-    public sealed record DocumentEditResult : EngineResultBase
+    public sealed record DocumentEditResult : IOperationResult
     {
+        private static readonly System.Text.Json.JsonSerializerOptions _jsonOptions = new System.Text.Json.JsonSerializerOptions()
+        {
+            WriteIndented = true
+        };
+
+        /// <summary><see cref="IOperationResult.Status"/>: the canonical status of <see cref="Outcome"/>. Not serialized.</summary>
+        [JsonIgnore]
+        public ResultStatus Status => Outcome.ToResultStatus();
+
+        public required EditOutcome Outcome
+        {
+            get; init;
+        }
+
+        public FilePathWrapper FilePath
+        {
+            get; init;
+        }
+
+        public bool IsCommitted { get; init; } = false; // whether changes have been applied to the workspace (vs. just in-memory)
+
+        public string ChangeId
+        {
+            get; init;
+        } = string.Empty;
+
+        public string Message { get; init; } = ""; // for error details in case of failure
+
+        /// <summary><see cref="Code"/>: the <see cref="ToolErrorCode"/> for <see cref="Outcome"/>; null when not an error. Not serialized.</summary>
+        [JsonIgnore]
+        public string? Code => Outcome.ToErrorCode();
+
+        /// <summary>Structured candidates when the failure was an ambiguous match (see <see cref="ToolAmbiguousMatchException"/>); null otherwise. Not serialized, so <see cref="ToJsonSummary"/> output is unchanged.</summary>
+        [JsonIgnore]
+        public IReadOnlyList<AmbiguousCandidate>? Candidates
+        {
+            get; init;
+        }
 
         public DocumentChangeSet Changes { get; init; } = new DocumentChangeSet();
 
