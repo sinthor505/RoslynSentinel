@@ -43,14 +43,6 @@ public class LargeResultPagingAgentTests
         The file `{0}/FixtureHelpers/TierRates.cs` has 300 rate methods. Read it with ReadFile (the whole file, no line range) and tell me the exact name of the method that applies the Platinum annual-contract rate, and the decimal rate it uses. Do not edit anything. Answer with the method name and the rate.
         """;
 
-    // "Refactor" and "Workspace" are the exact mode strings AddRoslynSentinelToolsBasic checks. "Workspace"
-    // gates WorkspaceReadNavigationTools (ReadFile, GetFileOutline, Search and GetLargeResult), so this set
-    // exposes every read tool the paging path needs. The BlockedToolNames filter below does the no-edit enforcement.
-    private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Refactor", "Workspace",
-    };
-
     // Same mutating-tool block list as PlanOnlyAgentTests.
     private static readonly HashSet<string> BlockedToolNames = new(StringComparer.Ordinal)
     {
@@ -83,6 +75,12 @@ public class LargeResultPagingAgentTests
     private RoslynSentinel.Tests.TestSolutionFixture _fixture = null!;
     private LmStudioAgentClient _agentClient = null!;
     private string _runDirectory = null!;
+    private ModelEvalMcpEnvironment? _environment;
+
+    // Scenario options that StartHarnessAsync stores for the request filters installed by ConfigureToolSurface.
+    private IReadOnlySet<string> _blockedToolNames = null!;
+    private bool _blockReadFileMemberLookup;
+    private IReadOnlySet<string>? _allowedToolNames;
 
     /// <summary>
     /// Deterministic TierRates.cs body: 300 one-expression rate methods. Method NeedleMethodNumber is the
@@ -185,41 +183,13 @@ public class LargeResultPagingAgentTests
         && arguments.TryGetValue("memberName", out var member)
         && member.ValueKind == JsonValueKind.String;
 
-    [SetUp]
-    public void SetUp()
+    // The Basic tool surface plus this scenario's request filters. The filters read the options that StartHarnessAsync
+    // stores in fields, because CreateAsync takes this method as a plain Action.
+    private void ConfigureToolSurface(IMcpServerBuilder mcpBuilder, IServiceCollection services)
     {
-        LlmOptions.Configure([]);
-        if (string.IsNullOrEmpty(LlmOptions.Model))
-        {
-            Assert.Ignore(
-                "ROSLYNSENTINEL_LLM_MODEL is not set - model-eval tests require a real LM Studio " +
-                "server with a loaded model and are skipped rather than failed when unconfigured.");
-        }
-    }
+        bool IsHidden(string toolName) => _allowedToolNames is not null ? !_allowedToolNames.Contains(toolName) : _blockedToolNames.Contains(toolName);
 
-    /// <summary>
-    /// Starts the in-memory MCP server and the agent host for one scenario. blockedToolNames are refused by the
-    /// request filter and hidden from tools/list; blockReadFileMemberLookup also refuses ReadFile calls that name a member.
-    /// allowedToolNames, when given, is an allow-list instead: every other tool is hidden from tools/list and refused at call time.
-    /// </summary>
-    private async Task StartHarnessAsync(IReadOnlySet<string> blockedToolNames, bool blockReadFileMemberLookup, IReadOnlySet<string>? allowedToolNames = null)
-    {
-        bool IsHidden(string toolName) => allowedToolNames is not null ? !allowedToolNames.Contains(toolName) : blockedToolNames.Contains(toolName);
-
-        _fixture = new RoslynSentinel.Tests.TestSolutionFixture();
-
-        var clientToServer = new Pipe();
-        var serverToClient = new Pipe();
-
-        var services = new ServiceCollection();
-        services.AddRoslynSentinelEnginesBasic();
-
-        var mcpBuilder = services.AddMcpServer();
-        mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
-        mcpBuilder.WithTasks(
-            new InMemoryMcpTaskStore(),
-            o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
-        mcpBuilder.AddRoslynSentinelToolsBasic(services, ActiveModes);
+        ModelEvalToolSurfaces.Basic(mcpBuilder, services);
 
         // Blocks every mutating tool in BlockedToolNames with a readable error instead of a protocol exception,
         // so the model can answer from what it has already read.
@@ -228,7 +198,7 @@ public class LargeResultPagingAgentTests
             filters.AddCallToolFilter(next => new McpRequestHandler<CallToolRequestParams, CallToolResult>(
                 async (context, cancellationToken) =>
                 {
-                    if (blockReadFileMemberLookup && context.Params?.Name == "ReadFile" && NamesMember(context.Params))
+                    if (_blockReadFileMemberLookup && context.Params?.Name == "ReadFile" && NamesMember(context.Params))
                     {
                         return new CallToolResult
                         {
@@ -275,6 +245,43 @@ public class LargeResultPagingAgentTests
                 };
             });
         });
+    }
+
+    private static async Task StageFilesAsync(
+        RoslynSentinel.Tests.TestSolutionFixture fixture,
+        IWorkspaceManager workspaceManager,
+        CancellationToken cancellationToken)
+    {
+        await fixture.AddFileToSolution(
+            workspaceManager,
+            Path.Combine("ContosoOrders.Core", "FixtureHelpers", "TierRates.cs"),
+            BuildTierRatesSource(),
+            reloadSolution: true,
+            cancellationToken: cancellationToken);
+    }
+
+    [SetUp]
+    public void SetUp()
+    {
+        LlmOptions.Configure([]);
+        if (string.IsNullOrEmpty(LlmOptions.Model))
+        {
+            Assert.Ignore(
+                "ROSLYNSENTINEL_LLM_MODEL is not set - model-eval tests require a real LM Studio " +
+                "server with a loaded model and are skipped rather than failed when unconfigured.");
+        }
+    }
+
+    /// <summary>
+    /// Starts the in-memory MCP server and the agent host for one scenario. blockedToolNames are refused by the
+    /// request filter and hidden from tools/list; blockReadFileMemberLookup also refuses ReadFile calls that name a member.
+    /// allowedToolNames, when given, is an allow-list instead: every other tool is hidden from tools/list and refused at call time.
+    /// </summary>
+    private async Task StartHarnessAsync(IReadOnlySet<string> blockedToolNames, bool blockReadFileMemberLookup, IReadOnlySet<string>? allowedToolNames = null)
+    {
+        _blockedToolNames = blockedToolNames;
+        _blockReadFileMemberLookup = blockReadFileMemberLookup;
+        _allowedToolNames = allowedToolNames;
 
         _runDirectory = Path.Combine(
             TestContext.CurrentContext.WorkDirectory,
@@ -282,56 +289,27 @@ public class LargeResultPagingAgentTests
             TestContext.CurrentContext.Test.Name,
             DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
 
-        var hostBuilder = Host.CreateApplicationBuilder();
-        hostBuilder.Services.AddLmStudioAgentClient(client =>
-        {
-            client.BaseAddress = new Uri(LlmOptions.BaseUrl.TrimEnd('/') + "/");
-            client.Timeout = TimeSpan.FromSeconds(Math.Max(LlmOptions.TimeoutSeconds * 4, 600));
-        });
-        foreach (var descriptor in services)
-        {
-            hostBuilder.Services.Add(descriptor);
-        }
-
-        hostBuilder.Logging.AddProvider(new FlushingFileLoggerProvider(Path.Combine(_runDirectory, "agent.log")));
-
-        _host = hostBuilder.Build();
-        _ = _host.RunAsync();
-
-        var workspaceManager = _host.Services.GetRequiredService<IWorkspaceManager>();
-        await workspaceManager.LoadSolutionAsync(_fixture.SolutionPath, TestContext.CurrentContext.CancellationToken);
-
-        await _fixture.AddFileToSolution(
-            workspaceManager,
-            Path.Combine("ContosoOrders.Core", "FixtureHelpers", "TierRates.cs"),
-            BuildTierRatesSource(),
-            reloadSolution: true,
-            cancellationToken: TestContext.CurrentContext.CancellationToken);
-
-        var clientTransport = new StreamClientTransport(
-            serverInput: clientToServer.Writer.AsStream(),
-            serverOutput: serverToClient.Reader.AsStream(),
-            loggerFactory: NullLoggerFactory.Instance);
-
-        _mcpClient = await McpClient.CreateAsync(clientTransport, cancellationToken: TestContext.CurrentContext.CancellationToken);
-        _agentClient = _host.Services.GetRequiredService<LmStudioAgentClient>();
+        _environment = await ModelEvalMcpEnvironment.CreateAsync(
+            _runDirectory,
+            restorePackages: false,
+            beforeLoad: null,
+            afterLoad: StageFilesAsync,
+            TestContext.CurrentContext.CancellationToken,
+            configureToolSurface: ConfigureToolSurface);
+        _host = _environment.Host;
+        _mcpClient = _environment.Client;
+        _fixture = _environment.Fixture;
+        _agentClient = _environment.AgentClient;
     }
 
     [TearDown]
     public async Task TearDown()
     {
-        if (_mcpClient is not null)
+        if (_environment is not null)
         {
-            await _mcpClient.DisposeAsync();
+            await _environment.DisposeAsync();
+            _environment = null;
         }
-
-        if (_host is not null)
-        {
-            await _host.StopAsync();
-            _host.Dispose();
-        }
-
-        _fixture?.Dispose();
 
         if (_runDirectory is not null)
         {
