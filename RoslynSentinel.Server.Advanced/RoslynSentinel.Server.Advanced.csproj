@@ -8,18 +8,6 @@
     <Configurations>Debug;Release;DebugVisualStudio</Configurations>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <WarningLevel>2</WarningLevel>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-    <WarningLevel>2</WarningLevel>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugVisualStudio|AnyCPU'">
-    <WarningLevel>2</WarningLevel>
-  </PropertyGroup>
-
 	<ItemGroup>
 		<!-- MSBuild packages: same pattern as RoslynSentinel.Server - exclude runtime DLLs
          so MSBuildLocator can find the SDK-provided MSBuild at runtime instead. -->
