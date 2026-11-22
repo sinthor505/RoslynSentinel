@@ -16,7 +16,7 @@ public static class LlmOptions
 
     /// <summary>
     /// Longest gap allowed between consecutive SSE events on a streaming <c>/v1/responses</c> call
-    /// before <see cref="LmStudioAgentClient"/> treats the connection as dead and aborts it (see
+    /// before <c>LmStudioAgentClient</c> treats the connection as dead and aborts it (see
     /// <c>project_lmstudio_streaming_json_truncation_investigation</c> and the two observed cases
     /// of LM Studio going silent mid-stream without closing the connection or logging an error).
     /// This measures idle time between bytes, not total call duration, so a model that is genuinely
@@ -62,7 +62,7 @@ public static class LlmOptions
     /// from the echoed response body, and a same-prompt/same-temperature A/B test at very different
     /// <c>repeat_penalty</c> values (see <see cref="RepeatPenalty"/>) produced byte-identical
     /// generations -> strong evidence <c>/v1/responses</c> drops these three fields rather than
-    /// forwarding them to the sampler. NOT wired into <see cref="LmStudioAgentClient"/>'s request
+    /// forwarding them to the sampler. NOT wired into <c>LmStudioAgentClient</c>'s request
     /// body for that reason (a param that looks configured but silently does nothing is worse than
     /// no param at all) -> exposed here only so the modeleval script can print a reminder to set it
     /// by hand in LM Studio's sampling panel instead.
