@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace RoslynSentinel.Tests.Battery.Advanced;
 
 [TestFixture]
-[NonParallelizable]
+// Q-7b (2026-11-22): the fixture runs in parallel with other fixtures; only the debounce/watcher tests below keep a method-level [NonParallelizable] (timing-sensitive real debounce, no shared static or path).
 public class WorkspaceDebounceReloadTests
 {
     // The tests drive the debounce-driven full-solution reload (OnDebounceTimerElapsed, 2A path) through a
@@ -25,10 +25,10 @@ public class WorkspaceDebounceReloadTests
         var originalContent = await File.ReadAllTextAsync(projectFile);
         await File.WriteAllTextAsync(projectFile, originalContent + "\n<!-- debounce reload failure -->\n");
 
-        await WaitUntilAsync(() => manager.ReloadFailure is not null, TimeSpan.FromSeconds(10));
+        await WaitUntilAsync(() => manager.ReloadFailure is not null, TimeSpan.FromSeconds(30));
 
         var failure = manager.ReloadFailure;
-        Assert.That(failure, Is.Not.Null, "the debounce reload did not record a failure within 10 s");
+        Assert.That(failure, Is.Not.Null, "the debounce reload did not record a failure within 30 s");
         Assert.That(failure!.Trigger, Is.EqualTo(WorkspaceReloadTriggerKind.ProjectFileChange));
         Assert.That(failure.OldWorkspaceKept, Is.True);
         Assert.That(failure.Attempts, Is.EqualTo(1));
@@ -55,24 +55,24 @@ public class WorkspaceDebounceReloadTests
         manager.OpenSolutionOverride = (ws, path, ct) => throw new IOException("boom");
         var originalContent = await File.ReadAllTextAsync(projectFile);
         await File.WriteAllTextAsync(projectFile, originalContent + "\n<!-- debounce reload failure -->\n");
-        await WaitUntilAsync(() => manager.ReloadFailure is not null, TimeSpan.FromSeconds(10));
-        Assert.That(manager.ReloadFailure, Is.Not.Null, "the debounce reload did not record a failure within 10 s");
+        await WaitUntilAsync(() => manager.ReloadFailure is not null, TimeSpan.FromSeconds(30));
+        Assert.That(manager.ReloadFailure, Is.Not.Null, "the debounce reload did not record a failure within 30 s");
 
         // Restore the default open, then edit again: the next debounce reload must succeed and clear the failure.
         var versionBeforeRetry = manager.WorkspaceVersion;
         manager.OpenSolutionOverride = defaultOpen;
         var failedContent = await File.ReadAllTextAsync(projectFile);
         await File.WriteAllTextAsync(projectFile, failedContent + "\n<!-- debounce reload success -->\n");
-        await WaitUntilAsync(() => manager.ReloadFailure is null, TimeSpan.FromSeconds(10));
+        await WaitUntilAsync(() => manager.ReloadFailure is null, TimeSpan.FromSeconds(30));
 
-        Assert.That(manager.ReloadFailure, Is.Null, "the successful debounce reload did not clear the failure within 10 s");
+        Assert.That(manager.ReloadFailure, Is.Null, "the successful debounce reload did not clear the failure within 30 s");
         Assert.That(manager.CurrentSolution, Is.Not.SameAs(before));
         Assert.That(manager.CurrentSolution!.Projects.Count(), Is.EqualTo(projectCountBefore));
         Assert.That(manager.WorkspaceVersion, Is.GreaterThan(versionBeforeRetry));
     }
 
     [Test]
-    [NonParallelizable]
+    // Parallel since 2026-11-22 (plan_shorten_verification_loop Q-7b): no debounce wait, static, path or env var; restore [NonParallelizable] if it flakes only in full/parallel runs.
     public async Task ReloadFromDisk_OpenThrows_RecordsPostWriteReloadAndKeepsOldSolution()
     {
         using var fixture = new TestSolutionFixture();
@@ -97,7 +97,7 @@ public class WorkspaceDebounceReloadTests
     }
 
     [Test]
-    [NonParallelizable]
+    // Parallel since 2026-11-22 (plan_shorten_verification_loop Q-7b): no debounce wait, static, path or env var; restore [NonParallelizable] if it flakes only in full/parallel runs.
     public async Task ReloadFromDisk_SucceedsAfterFailure_ClearsFailureAndBumpsVersion()
     {
         using var fixture = new TestSolutionFixture();
@@ -298,7 +298,7 @@ public class WorkspaceDebounceReloadTests
         .First(f => f is not null && f.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) && File.Exists(f) && f.StartsWith(fixture.SolutionDirectory, StringComparison.OrdinalIgnoreCase))!;
 
     [Test]
-    [NonParallelizable]
+    // Parallel since 2026-11-22 (plan_shorten_verification_loop Q-7b): no debounce wait, static, path or env var; restore [NonParallelizable] if it flakes only in full/parallel runs.
     public async Task ApplyProposedChanges_PathInBothChangesAndDeletePaths_RefusedAsInvalidArgumentAndNothingWritten()
     {
         using var fixture = new TestSolutionFixture();

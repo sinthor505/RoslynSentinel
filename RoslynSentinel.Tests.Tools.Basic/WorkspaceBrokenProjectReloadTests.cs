@@ -11,7 +11,7 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Tools.Basic;
 
 [TestFixture]
-[NonParallelizable]
+// Q-7b (2026-11-22): the fixture runs in parallel with other fixtures; only the debounce/watcher tests below keep a method-level [NonParallelizable] (timing-sensitive real debounce, no shared static or path).
 public class WorkspaceBrokenProjectReloadTests
 {
     private const string CoreProjectName = "ContosoOrders.Core";
@@ -132,7 +132,7 @@ public class WorkspaceBrokenProjectReloadTests
     }
 
     [Test]
-    [NonParallelizable]
+    // Parallel since 2026-11-22 (plan_shorten_verification_loop Q-7b): no debounce wait, static, path or env var; restore [NonParallelizable] if it flakes only in full/parallel runs.
     public async Task LoadSolution_BrokenProjectXml_RecordsExplicitLoadFailureThenCleanLoadClears()
     {
         using var fixture = new TestSolutionFixture();
@@ -160,7 +160,7 @@ public class WorkspaceBrokenProjectReloadTests
     }
 
     [Test]
-    [NonParallelizable]
+    // Parallel since 2026-11-22 (plan_shorten_verification_loop Q-7b): no debounce wait, static, path or env var; restore [NonParallelizable] if it flakes only in full/parallel runs.
     public async Task LoadSolution_ValidProjectWithNoSourceFiles_IsNotReportedAsFailure()
     {
         using var fixture = new TestSolutionFixture();
