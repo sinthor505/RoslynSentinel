@@ -312,7 +312,15 @@ neither "likely a typo" nor "Closest name"), and one where it holds a different 
             return $"ErrorHintTests.cs has {facts} [Fact] test(s), expected the original one plus two new ones";
         }
 
-        if (!ctx.ReadText(TestsPath).Contains("renamedAwayNames"))
+        // The seed Describe arity is read from SeedHintSource, so the check never hard-codes it. A call supplies the
+        // new parameter when it has more arguments than the seed or names it renamedAwayNames: (positional or named).
+        var seedArity = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(SeedHintSource).GetRoot().DescendantNodes()
+            .OfType<MethodDeclarationSyntax>().First(m => m.Identifier.ValueText == "Describe").ParameterList.Parameters.Count;
+        var renamedAwareCalls = tests.DescendantNodes().OfType<InvocationExpressionSyntax>().Count(call =>
+            (call.Expression is MemberAccessExpressionSyntax access ? access.Name.Identifier.ValueText : (call.Expression as IdentifierNameSyntax)?.Identifier.ValueText) == "Describe"
+            && (call.ArgumentList.Arguments.Count > seedArity
+                || call.ArgumentList.Arguments.Any(argument => argument.NameColon?.Name.Identifier.ValueText == "renamedAwayNames")));
+        if (renamedAwareCalls < 1)
         {
             return "the new tests do not pass renamedAwayNames";
         }
