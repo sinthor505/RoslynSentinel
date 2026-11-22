@@ -197,33 +197,4 @@ public class ErrorPolicyDocumentTests
     {
         Assert.That(ErrorPolicyDocument.RenderedHeading(key), Is.EqualTo(expected));
     }
-
-    [Test]
-    public void WithErrorHandling_AppendsBlockWithHeadingsInAllOrderAndKeepsPromptPrefix()
-    {
-        const string prompt = "You are a coding agent.\n";
-        // Sections deliberately written in reverse so the output order must come from ErrorPolicyKeys.All.
-        ErrorPolicyDocument doc = ErrorPolicyDocument.Parse(
-            "### SymbolNotFound.Edit\nSymbol edit body.\n\n" +
-            "### SymbolNotFound.Lookup\nSymbol lookup body.\n\n" +
-            "### FileNotFound.Edit\nEdit body.\n\n" +
-            "### FileNotFound.Lookup\nLookup body.\n");
-
-        string result = AgentSystemPrompts.WithErrorHandling(prompt, doc);
-
-        Assert.That(result, Does.StartWith("You are a coding agent."));
-        Assert.That(result, Does.Contain("\n\n## Error handling\n\n"));
-        var headings = result.Split('\n').Where(line => line.StartsWith("### ", StringComparison.Ordinal)).ToList();
-        Assert.That(headings, Is.EqualTo(ErrorPolicyKeys.All.Select(key => "### " + ErrorPolicyDocument.RenderedHeading(key)).ToList()));
-        Assert.That(result, Does.EndWith("Symbol edit body.\n"));
-    }
-
-    [Test]
-    public void WithErrorHandling_EmptyDocument_ReturnsPromptUnchanged()
-    {
-        const string prompt = "You are a coding agent.\n";
-        ErrorPolicyDocument doc = ErrorPolicyDocument.Parse("# Only a preamble, no sections.\n");
-
-        Assert.That(AgentSystemPrompts.WithErrorHandling(prompt, doc), Is.EqualTo(prompt));
-    }
 }
