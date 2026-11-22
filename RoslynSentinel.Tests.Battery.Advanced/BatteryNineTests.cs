@@ -111,6 +111,22 @@ namespace MyApp
         Assert.That(result.Code, Does.Contain("OrderServiceTests"), "Test class should be named correctly");
         Assert.That(result.Code, Does.Contain("Mock<IOrderRepository>"), "Interface constructor params should become mocks");
     }
+
+    [Test]
+    public async Task GenerateTestScaffold_ClassNotInFile_ThrowsToolNotFoundWithKindAndNearestNameHint()
+    {
+        SetSource(@"
+public class Order
+{
+    public string CustomerId { get; set; }
+}");
+
+        var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolNotFoundException>(async () => await _engine.GenerateTestScaffoldAsync("Test.cs", "Ordr"));
+        Assert.That(ex!.MissingTargetKind, Is.EqualTo(RoslynSentinel.Common.MissingTargetKinds.Class));
+        Assert.That(ex.MissingTargetName, Is.EqualTo("Ordr"));
+        Assert.That(ex.Message, Does.Contain("Did you mean 'Order'?"));
+        Assert.That(ex.Message, Does.Contain("Retry with className: 'Order'."));
+    }
 }
 
 // ════════════════════════════════════════════════════════════════════════════════

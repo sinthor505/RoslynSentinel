@@ -350,6 +350,22 @@ public class Order
     }
 
     [Test]
+    public async Task GenerateFluentBuilder_ClassNotInFile_ThrowsToolNotFoundWithKindAndNearestNameHint()
+    {
+        SetSource(@"
+public class Order
+{
+    public string CustomerId { get; set; }
+}", "Order.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _codeGenerationEngine.GenerateFluentBuilderAsync("Order.cs", "Ordr"));
+        Assert.That(ex!.MissingTargetKind, Is.EqualTo(MissingTargetKinds.Type));
+        Assert.That(ex.MissingTargetName, Is.EqualTo("Ordr"));
+        Assert.That(ex.Message, Does.Contain("Did you mean 'Order'?"));
+        Assert.That(ex.Message, Does.Contain("Retry with className: 'Order'."));
+    }
+
+    [Test]
     [Category("FluentBuilderResult")] // sentinel:auto-category
     public async Task GenerateFluentBuilder_BuildMethodReturnsTargetType()
     {
