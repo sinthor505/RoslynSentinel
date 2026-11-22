@@ -740,7 +740,7 @@ public sealed class LmStudioAgentClient
     /// run 20261110-072746, request of 60437 tokens); the model restates its plan in each turn's reasoning, so the
     /// recent turns carry it.
     /// </summary>
-    internal const int ReasoningReplayTurns = 10;
+    internal const int ReasoningReplayTurns = ReasoningReplayPolicy.ReplayTurns;
 
     /// <summary>
     /// How many of the oldest assistant turns lose their reasoning when <paramref name="assistantTurns"/> turns are replayed.
@@ -756,31 +756,18 @@ public sealed class LmStudioAgentClient
     /// <see cref="ReasoningDroppedTurns(int)"/> for a block of <paramref name="window"/> turns; 0 replays every turn's reasoning.
     /// </summary>
     internal static int ReasoningDroppedTurns(int assistantTurns, int window) =>
-        window <= 0 ? 0 : Math.Max(0, ((assistantTurns / window) - 1) * window);
+        ReasoningReplayPolicy.DroppedTurnsForWindow(assistantTurns, window);
 
     /// <summary>
     /// Overrides <see cref="ReasoningReplayTurns"/> for experiments: a non-negative integer, 0 = replay all reasoning.
     /// Unset or empty keeps the default.
     /// </summary>
-    internal const string ReasoningWindowVariable = "ROSLYNSENTINEL_REASONING_WINDOW";
+    internal const string ReasoningWindowVariable = ReasoningReplayPolicy.WindowVariable;
 
     /// <summary>
     /// Parses the <see cref="ReasoningWindowVariable"/> text: null when unset or empty, the value for a non-negative integer.
     /// </summary>
-    internal static int? ParseReasoningWindowOverride(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return null;
-        }
-
-        if (int.TryParse(text.Trim(), out var value) && value >= 0)
-        {
-            return value;
-        }
-
-        throw new FormatException($"{ReasoningWindowVariable} must be a non-negative integer (0 = replay all reasoning), got '{text}'.");
-    }
+    internal static int? ParseReasoningWindowOverride(string? text) => ReasoningReplayPolicy.ParseWindowOverride(text);
 
     /// <summary>The live reasoning window: <see cref="ReasoningWindowVariable"/> when set, otherwise <see cref="ReasoningReplayTurns"/>.</summary>
     internal static int EffectiveReasoningWindow =>

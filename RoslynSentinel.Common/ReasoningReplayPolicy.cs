@@ -33,6 +33,45 @@ public sealed class ReasoningReplayPolicy
     /// </summary>
     public const double HysteresisFraction = 0.1;
 
+    /// <summary>
+    /// The fewest recent assistant turns that get their reasoning replayed; the window holds between this many and
+    /// twice this many minus one. Replaying every turn's reasoning overflowed a 60k context after 31 turns (10-chain
+    /// run 20261110-072746, request of 60437 tokens); the model restates its plan in each turn's reasoning, so the
+    /// recent turns carry it.
+    /// </summary>
+    internal const int ReplayTurns = 10;
+
+    /// <summary>
+    /// Overrides <see cref="ReplayTurns"/> for experiments: a non-negative integer, 0 = replay all reasoning.
+    /// Unset or empty keeps the default.
+    /// </summary>
+    internal const string WindowVariable = "ROSLYNSENTINEL_REASONING_WINDOW";
+
+    /// <summary>
+    /// Parses the <see cref="WindowVariable"/> text: null when unset or empty, the value for a non-negative integer.
+    /// </summary>
+    internal static int? ParseWindowOverride(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        if (int.TryParse(text.Trim(), out var value) && value >= 0)
+        {
+            return value;
+        }
+
+        throw new FormatException($"{WindowVariable} must be a non-negative integer (0 = replay all reasoning), got '{text}'.");
+    }
+
+    /// <summary>
+    /// How many of the oldest assistant turns lose their reasoning when <paramref name="assistantTurns"/> turns are replayed,
+    /// stepping by <paramref name="window"/> turns at a time; 0 replays every turn's reasoning.
+    /// </summary>
+    internal static int DroppedTurnsForWindow(int assistantTurns, int window) =>
+        window <= 0 ? 0 : Math.Max(0, ((assistantTurns / window) - 1) * window);
+
     private int _lastDropProjection;
 
     /// <summary>
@@ -53,7 +92,7 @@ public sealed class ReasoningReplayPolicy
         EffectivePressureFraction = pressureFraction;
         if ((fixedWindow is null or < 0) && contextLength <= 0)
         {
-            FixedWindow = LmStudioAgentClient.ReasoningReplayTurns;
+            FixedWindow = ReplayTurns;
             Mode = $"window:{FixedWindow} (context length unknown)";
         }
         else if (fixedWindow == 0)
@@ -82,7 +121,7 @@ public sealed class ReasoningReplayPolicy
     {
         return new ReasoningReplayPolicy(
             contextLength,
-            LmStudioAgentClient.ParseReasoningWindowOverride(Environment.GetEnvironmentVariable(LmStudioAgentClient.ReasoningWindowVariable)),
+            ParseWindowOverride(Environment.GetEnvironmentVariable(WindowVariable)),
             ParsePressureFractionOverride(Environment.GetEnvironmentVariable(PressureFractionVariable)) ?? PressureFraction);
     }
 
@@ -176,6 +215,6 @@ public sealed class ReasoningReplayPolicy
             return true;
         }
 
-        return assistantTurnIndex >= LmStudioAgentClient.ReasoningDroppedTurns(assistantTurns, FixedWindow.Value);
+        return assistantTurnIndex >= DroppedTurnsForWindow(assistantTurns, FixedWindow.Value);
     }
 }
