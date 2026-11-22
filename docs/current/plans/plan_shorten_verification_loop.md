@@ -1,6 +1,6 @@
 # Plan: Shorten the build/test verification loop (measure, fast tier, serial-tail cuts, flake causes)
 
-**Status:** DRAFT 2026-11-21. Nothing built; the numbers below were measured on 2026-11-21 from the journal and the worktree-run results and must be re-taken by Step 3 before any target is fixed.
+**Status:** APPROVED 2026-11-22. Batched run, owner away; Step 8 dropped (D5: timeouts documented as a contention flake), Steps 13-14 stay open past this run.
 
 ## Problem
 
@@ -101,6 +101,26 @@ script:
 5. Optional, owner decision: run the ratchet tests first so a ratchet failure costs seconds (Step 11).
 6. Affected-test selection stays a separate dependent plan, gated on journal data (Step 13).
 
+Owner decisions, 2026-11-22 (settled before the run; source review the same day):
+
+- **D1:** as recommended. The per-batch run uses `-Suite fast`. A full run is required before a push, when the marker is stale, and when the batch
+  touched git, `RunTest`/`Build` or process-spawning code. New (the review found the worktree script resets the marker but never increments
+  `fastRunsSince`; only `FullTestMarkerStore.cs:95` does): Step 4 also increments `fastRunsSince` on a fast unfiltered run, so both bounds
+  (2 days, 40 runs) apply.
+- **D2:** default `-Suite full` (as recommended).
+- **D3:** 11a now, 11b last (as recommended).
+- **D4:** separate plan, gated on Step 13 (as recommended).
+- **D5:** no code. The owner's diagnosis is contention: the test solutions load well under 30 s, and loads time out only when 20 workers per
+  process (often alongside other worktree runs) oversubscribe the CPU. Tagging the victims `[NonParallelizable]` was rejected, because the
+  victims vary and the attribute lengthens the serial tail. The rule is recorded in `reference_known_failing_tests.md` (Gotchas): re-run the
+  failing tests alone, and treat the timeout as a flake if they pass. Step 8 is dropped. Step 12 (worker cap) is the code lever if timeouts
+  stay frequent.
+- **D6:** draft targets stand; revise after Step 3 and Step 4's live run.
+- Run mode: Batched; owner away (mid-run decisions are deferred to the tracker).
+- Review corrections folded into the steps below: Step 1 split into 1a/1b (overlap from TRX `<Times>`, class names from the TRX
+  `UnitTest/TestMethod/@className` join, fast runs before Step 4 classified by `filter == 'TestCategory!=OutOfProcess'`); Step 5 re-anchored;
+  Step 4 mirrors `Compose`'s `Trim()` and keys `-WithRatchets` on the original `-Filter`.
+
 Relation to other work: [plan_in_memory_test_tier_for_battery.md](./plan_in_memory_test_tier_for_battery.md) (IN PROGRESS) made
 Tests.Battery.Basic cheap (19 s wall in the baseline run); this plan does not touch Battery fixtures and does not duplicate
 it. If a Step 7 slice would edit a fixture that plan still lists as a candidate, take it from that plan's list and say so in
@@ -143,8 +163,14 @@ the commit. The build warning-level work another session is doing is out of scop
   Mark tests that carry `[Category("Ratchet")]` the same way as `OutOfProcess`.
 - Done when: `pwsh -NoProfile -File scripts/Get-TestRunTimings.Tests.ps1` exits 0 (dispatcher runs it), and
   `Get-TestRunTimings.ps1 -Run a3d98b2e -View Projects` reproduces Tests.Tools.Basic: 3,438 tests, wall 921 s, test-seconds 4,906,
-  serial about 618 s (within 2%); `-FullOnly -View Failures` lists 16 red runs. Lane: `implementer` (2 files, one new file each).
-  Pairs with: Step 4.
+  serial about 618 s (within 2%); `-FullOnly -View Failures` lists the red full runs (16 on 2026-11-21, 18 of 47 on 2026-11-22).
+  Lane: `implementer` (2 files, one new file each). Pairs with: Step 2.
+- Review 2026-11-22: split into **1a** (Runs and Projects views, script skeleton with all parameters, tests for those views) and
+  **1b** (Fixtures and Failures views plus their tests); 1b depends on 1a. `summary.json` has no timestamp, no `suite` and no class name
+  (`failures[].test` is the method name with arguments). Facts: overlap windows come from each TRX's `<Times start= finish=>`, falling back to
+  the file mtime. Class names come from joining `UnitTestResult/@testId` to `UnitTest/@id` and reading `TestMethod/@className`. Before Step 4,
+  a run is fast when `filter -eq 'TestCategory!=OutOfProcess'`. A TRX does not carry categories, so a source scan is required. The script
+  must be dot-sourceable, as `Get-ScenarioSummary.Tests.ps1` dot-sources its script.
 
 ### Step 2 - Journal records suite, scope and level
 - Files: `.claude/hooks/journal-log-call.ps1` (the entry fields are set around line 104), `.claude/hooks/journal-hooks.Tests.ps1`.
@@ -154,7 +180,9 @@ the commit. The build warning-level work another session is doing is out of scop
 - Change: when `tool_input` carries `suite`, `scope` or `level`, copy the enum string into the entry; set `hasFilter` when
   `filter` is non-empty. Add a test with a canned `RunTest` payload.
 - Done when: `pwsh -NoProfile -File .claude/hooks/journal-hooks.Tests.ps1` exits 0 (dispatcher runs it); a parse check of the
-  hook script passes. Lane: `implementer`. Pairs with: Step 5b.
+  hook script passes. Lane: `implementer`. Pairs with: Step 1.
+- Review 2026-11-22: copy the fields only for `RunTest` and `Build` (line 103 strips the `mcp__*__` prefix; line 104 copies `operation`
+  the same way, so use it as the model). The tests run the hook under `powershell.exe` 5.1, so the change must not use pwsh-only syntax.
 - Why: the journal cannot say whether the 474 `RunTest` calls of 120 s or more are `suite: full`, `scope: solution` or fast
   runs of a big project; Step 13 needs that answer.
 
@@ -182,6 +210,11 @@ the commit. The build warning-level work another session is doing is out of scop
   help header and note that `build.ps1 -Fast` and `Test-Parallel.ps1 -Filter` apply the same category filter to every project
   (precedent for applying it to all default projects; `TestProjectDetector.UsesNUnitAdapter` is the guard `RunTest` uses
   for non-NUnit projects, and every default-selected project is NUnit).
+  Additions (review and D1, 2026-11-22):
+  - Trim `-Filter` before wrapping it, as `Compose` does.
+  - `-WithRatchets` keeps keying on the original `-Filter`, not the composed string. With fast and no filter, the ratchets already run.
+  - On a fast unfiltered run with no `-Projects` that completed every project, increment `fastRunsSince` in the existing marker. Leave the
+    marker absent if it does not exist, and do not reset `lastFullRunUtc`.
 - Done when: parse check `[void][scriptblock]::Create((Get-Content scripts/Invoke-WorktreeTests.ps1 -Raw))` raises nothing.
   Dispatcher live check (one run, `-Suite fast -Ref HEAD`): `summary.json` has `"suite": "fast"`, `total` is the full total
   minus the `OutOfProcess` tests (about 1,300 in Tests.Tools.Basic alone), and `.roslynsentinel/full-test-marker.json` is
@@ -192,7 +225,7 @@ the commit. The build warning-level work another session is doing is out of scop
 - Files (5a): `docs/current/references/reference_changing_claude_lean_tools.md` (line 70: "A whole-solution run takes about 5.5
   minutes"), `docs/current/references/reference_autonomous_run_conventions.md` ("After each batch"), `.claude/skills/dispatch-implementer/SKILL.md`
   ("Tests and test runs", per-batch full run paragraph).
-  Files (5b): `scripts/build.ps1` (comment at lines 230-232: "~118s summed as of 2026-09-09", "~59s", "all 9 RoslynSentinel.Tests*
+  Files (5b): `scripts/build.ps1` (comment at lines 252-254 as of 2026-11-22: "~118s summed as of 2026-09-09", "~59s", "all 9 RoslynSentinel.Tests*
   projects"), `RoslynSentinel.Engines.Basic/TestSuiteFilter.cs` (class comment line 6: "about 40% of the test time").
 - Depends on: 5a Steps 3 and 4 and decision D1/D2; 5b Step 3
 - Effect: 5a behaviour-changing for agents (which run to start after a batch); 5b text-neutral.
@@ -201,8 +234,12 @@ the commit. The build warning-level work another session is doing is out of scop
   stale or the batch touched git, build or `RunTest` code). 5b: the two comments use the measured shares (4,045 of 4,906 in
   Tests.Tools.Basic, 67% suite-wide, dated). The `docs/current/INBOX.md` line about the 5.5-minute figure is the
   other session's entry; closing it is that session's or the owner's.
-- Done when: 5a: Search of the three files for "5.5 minutes" finds nothing; 5b: `Build` 0 errors. Lane: `implementer` for
-  each. Pairs with: 5b with Step 2.
+- Done when: 5a: a search of `reference_changing_claude_lean_tools.md` for "5.5 minutes" finds nothing. The dispatch-implementer skill's
+  per-batch paragraph (lines 112-117 on 2026-11-22; it says the script "covers every category") names `-Suite fast` and the D1 rule. Its
+  line 105 ratchet count ("about 35 quick tests") matches the count after 11a. The conventions doc's "After each batch" names `-Suite fast`.
+  5b: `Build` 0 errors. Lane: `implementer` for each. Pairs with: 5b with Step 6.
+- Deferred (review 2026-11-22): the `RunTest` `filter` parameter text at `RoslynSentinel.Tools.Basic/WorkspaceTools.cs:250` carries a
+  stale "about 1.5 minute" figure. Changing it is a tool-schema edit (schema budget tests, generated docs), so it is out of this step.
 
 ### Step 6 - Serial-tail inventory
 - Files: none edited; the result is appended to this plan as Appendix A.
@@ -238,6 +275,11 @@ the commit. The build warning-level work another session is doing is out of scop
   fixture design). Slices that touch different projects can pair.
 
 ### Step 8 - One chokepoint for the solution-load timeout
+
+**DROPPED 2026-11-22 (D5).** No code. The contention-flake rule is in `reference_known_failing_tests.md`, and Step 12 is the code lever. The
+text below is kept for the record. The review found the anchors stale: the field is at line 32, there are 8 code reads, and there are 244
+call sites in 60 files. It also found a second 30 s default, the `LoadSolution` tool's `timeoutSeconds`.
+
 - Files: `RoslynSentinel.Common/SolutionLoadState.cs` (class `SolutionLoadWait`, lines 29-33), `RoslynSentinel.Tests.Basic/SolutionLoadWaitTests.cs`
   (new), `scripts/Invoke-WorktreeTests.ps1` (next to `$env:MSBUILDDISABLENODEREUSE = '1'`, line 264).
 - Depends on: Step 4 (same script) and decision D5
@@ -279,7 +321,7 @@ the commit. The build warning-level work another session is doing is out of scop
 ### Step 11 - Ratchets first (owner decision D3; skip if declined)
 - Files (11a): `RoslynSentinel.Tests.Server/ArchitectureDocFreshnessTests.cs` (the two `_WhenCommittedFileExists_MatchesRegeneratedContent` tests,
   lines 158 and 170). Files (11b): `scripts/Invoke-WorktreeTests.ps1`.
-- Depends on: 11a none; 11b Steps 4 and 8
+- Depends on: 11a none; 11b Step 4 (Step 8 dropped)
 - Effect: 11a text-neutral; 11b behaviour-changing for full runs (a red ratchet stops the run early).
 - Change: 11a: add `[Category("Ratchet")]` to those two methods only (the `_WhenUpdateEnvVarSet_RegeneratesFile` tests write files and stay
   untagged). They fail in 2 of the 8 ratchet-red runs (`069455d6`, `54e9052e`) but are missed by `-WithRatchets` today. 11b: for an
@@ -297,7 +339,7 @@ the commit. The build warning-level work another session is doing is out of scop
 ### Step 12 - Process-level parallelism (measure, then decide D4)
 - Files (12b): `scripts/Invoke-WorktreeTests.ps1`; possibly a `.runsettings` file or `-- NUnit.NumberOfTestWorkers=<n>` arguments (unverified:
   confirm the NUnit3 adapter option name in the adapter's documentation first).
-- Depends on: 12a Steps 4 and 8 (and 7 for the final numbers); 12b Step 12a
+- Depends on: 12a Step 4 (and 7 for the final numbers; Step 8 dropped); 12b Step 12a
 - Effect: 12a text-neutral; 12b changes run time and machine load, not results.
 - Change: 12a (dispatcher, no code): on an otherwise idle machine, 3 runs of `-Suite fast` sequential and 3 of `-Suite fast -Parallel`
   (the existing switch, lines 306-315, which launches one `dotnet test --no-build` per project at once); compare wall, failure sets and
@@ -335,7 +377,8 @@ the commit. The build warning-level work another session is doing is out of scop
 - Effect: text-neutral.
 - Change: three fresh full runs and three fresh fast runs (idle machine, no other worktree run), compare with Step 3 per project and in total.
   Targets (owner decision D6 may change them): fast full-solution run median under 10 minutes sequential and under 6 minutes with process
-  parallelism; full run under 15 minutes; Tests.Tools.Basic serial seconds under 300; no `SolutionLoadTimeoutException` in 6 runs.
+  parallelism; full run under 15 minutes; Tests.Tools.Basic serial seconds under 300; `SolutionLoadTimeoutException` count across the 6 runs
+  recorded (no target after D5; frequent timeouts argue for Step 12's worker cap).
 - Done when: the comparison table is in this plan and each target is marked met, partly met or not met with the measured value; set Status
   and close the plan per `docs/current/templates/README.md` rule 11 (`Closes: plan_shorten_verification_loop`).
   Lane: dispatcher.

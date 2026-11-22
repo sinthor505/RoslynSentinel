@@ -36,3 +36,11 @@ The single `docs/known-failing-tests.txt` / `docs/known-build-warnings.txt` name
   (`RoslynSentinel.Tests.Battery.ReadFileTests`) failed on master `f3aeee1` (2026-08-30) with
   `result.LargeResult` null, but a full-solution `RunTest` on 2026-09-20 passed 2558 of 2558 and the test
   carries no skip attribute. Treat it as fixed: if it fails again it is a real regression.
+- `SolutionLoadTimeoutException: The solution load did not finish within 30 s` in a full or parallel run
+  is a known contention flake (owner ruling 2026-11-22, plan_shorten_verification_loop D5): the
+  test solutions load well under 30 s alone, but a full run puts 20 NUnit workers in each test process,
+  often alongside other worktree runs, and a load that waits on that oversubscribed CPU passes the 30 s
+  default (`SolutionLoadWait.DefaultTimeout`). Re-run the failing tests alone (`Invoke-WorktreeTests.ps1
+  -Filter "FullyQualifiedName~<Class>"`); if they pass, record the run as this flake and move on. A
+  timeout that repeats when the test runs alone is a real regression. Do not add `[NonParallelizable]`
+  for it: the victims change from run to run, and the attribute lengthens the serial tail.
