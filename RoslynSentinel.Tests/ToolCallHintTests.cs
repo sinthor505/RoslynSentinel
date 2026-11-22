@@ -164,6 +164,7 @@ public class ToolCallHintTests
     }
 
     [Test]
+    [NonParallelizable] // ToolCallHint.Current is a process-wide static; overriding it raced with ReplaceSnippetRenameLiftTests / ReplaceSnippetCrossFileRejectionTests in full runs e821013a and 72b419e1 (plan_shorten_verification_loop Appendix B).
     public void Current_NoOverride_UsesFallbackAndNullClearsTestCatalog()
     {
         ToolCallHint.Current = null!;
@@ -178,6 +179,7 @@ public class ToolCallHintTests
     }
 
     [Test]
+    [NonParallelizable] // ToolCallHint.Current is a process-wide static; overriding it raced with ReplaceSnippetRenameLiftTests / ReplaceSnippetCrossFileRejectionTests in full runs e821013a and 72b419e1 (plan_shorten_verification_loop Appendix B).
     public void CurrentOverloads_UseCurrentCatalog()
     {
         ToolCallHint.Current = BuildCatalog();
