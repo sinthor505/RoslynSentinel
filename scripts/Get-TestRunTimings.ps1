@@ -36,7 +36,20 @@
 #   The '(total)' row per run: sums, except wallSec = first start to last end over all projects; serialSec is the SUM of
 #   the per-project figures (projects run concurrently, so it is not a run-level serial time).
 #
-# Fixtures and Failures views arrive in Step 1b.
+#
+# Fixtures view (needs TRX; pass -Run/-Last to keep it small): per run and project one row per test class (full TRX className,
+#   shown short, nested '+' kept), sorted by testSec descending, -Top <n> keeps n per run+project (0 = all). category =
+#   OutOfProcess / Ratchet / none (same scan as above). firstOffsetSec/lastOffsetSec = min start / max end of the class's
+#   tests, seconds from the project's first test start. Serial tail: tailStartSec = the last moment concurrency fell below 2
+#   (the project start if it never exceeded 1); tailTests = tests of the class that started at or after it, tailAll = all did.
+#
+# Failures view (summary.json only, no TRX): red run = any project with failed > 0. summary.summaryLine is "red full runs: N of M"
+#   over the SELECTED runs (full = empty filter and 9+ projects, the -FullOnly definition). One row per failing test of each
+#   selected red run: project, test, first message line, prefix (text before the first ':' or '(' of that line), runCount =
+#   full runs under -ResultsRoot (not only the selected ones) in which the test failed, flakeCandidate = failed in this full
+#   run and passed (absent from failures[]) in both the previous and the next full run by summary.json mtime (false at the
+#   ends of the sequence and for non-full runs). prefixCounts groups the rows by prefix. summary.json failures[] is what the
+#   runner stored; a project whose failed count exceeds its listed failures is not completed from anywhere else.
 
 param(
     [string]$ResultsRoot = 'C:\tmp\rs-testtrees\_results',
@@ -45,7 +58,8 @@ param(
     [switch]$FullOnly,
     [ValidateSet('Runs', 'Projects', 'Fixtures', 'Failures')][string]$View = 'Runs',
     [switch]$Json,
-    [string]$SourceRoot = (Split-Path -Parent $PSScriptRoot)
+    [string]$SourceRoot = (Split-Path -Parent $PSScriptRoot),
+    [int]$Top = 0
 )
 
 $script:Inv = [System.Globalization.CultureInfo]::InvariantCulture
@@ -103,7 +117,7 @@ function Select-TestRuns {
     )
     $selected = @($Runs)
     if ($Run) { $selected = @($selected | Where-Object { $_.Name.StartsWith($Run, [System.StringComparison]::OrdinalIgnoreCase) }) }
-    if ($FullOnly) { $selected = @($selected | Where-Object { $_.Filter -eq '' -and $_.Projects.Count -ge 9 }) }
+    if ($FullOnly) { $selected = @($selected | Where-Object { Test-FullRun $_ }) }
     if ($Last -gt 0 -and $selected.Count -gt $Last) { $selected = @($selected | Select-Object -Last $Last) }
     return $selected
 }
@@ -349,6 +363,8 @@ function Resolve-ClassCategoryIndex {
 # Sweep over [Start,End] intervals (UTC ticks). Returns WallTicks (first start .. last end), IdleTicks (0 running),
 # SingleTicks[category] (exactly one running, and it is in that category), ConcurrentTicks (2 or more running) and
 # SerialTicks (= IdleTicks + sum SingleTicks, i.e. concurrency <= 1). Intervals with End <= Start are ignored.
+# TailStartTick = the tick of the last transition from 2+ running to fewer (the project's first tick if concurrency never
+# exceeds 1; $null with no intervals): from there to the end of the project concurrency never exceeds 1 again.
 function Measure-SerialTimeline {
     param([long[]]$Starts, [long[]]$Ends, [int[]]$Category, [int]$CategoryCount = 3)
     $single = New-Object 'long[]' $CategoryCount
@@ -359,7 +375,7 @@ function Measure-SerialTimeline {
         $keys.Add($Starts[$i] * 2 + 1); $items.Add(2 * $i)       # start sorts after an end at the same tick
         $keys.Add($Ends[$i] * 2); $items.Add(2 * $i + 1)
     }
-    $idle = 0L; $concurrent = 0L; $wall = 0L
+    $idle = 0L; $concurrent = 0L; $wall = 0L; $tail = $null
     if ($keys.Count -gt 0) {
         $keyArray = $keys.ToArray(); $itemArray = $items.ToArray()
         [System.Array]::Sort($keyArray, $itemArray)
@@ -367,6 +383,7 @@ function Measure-SerialTimeline {
         $counts = New-Object 'int[]' $CategoryCount
         $first = $keyArray[0] -shr 1
         $prev = $first
+        $tail = $first   # stays the project start when concurrency never exceeds 1
         for ($e = 0; $e -lt $keyArray.Length; $e++) {
             $tick = $keyArray[$e] -shr 1
             $dt = $tick - $prev
@@ -380,7 +397,9 @@ function Measure-SerialTimeline {
             }
             $item = $itemArray[$e]
             $cat = $Category[$item -shr 1]
+            $before = $running
             if (($item -band 1) -eq 0) { $running++; $counts[$cat]++ } else { $running--; $counts[$cat]-- }
+            if ($before -ge 2 -and $running -lt 2) { $tail = $tick }   # last 2+ -> 1 transition = start of the serial tail
         }
         $wall = $prev - $first
     }
@@ -391,6 +410,7 @@ function Measure-SerialTimeline {
         SingleTicks     = $single
         ConcurrentTicks = $concurrent
         SerialTicks     = $idle + $singleSum
+        TailStartTick   = $tail
     }
 }
 
@@ -398,7 +418,7 @@ function Measure-SerialTimeline {
 
 function ConvertTo-Seconds([long]$Ticks) { return [math]::Round($Ticks / [double][System.TimeSpan]::TicksPerSecond, 1) }
 
-# One project's timing from its parsed TRX. Each result also gets CategoryIndex (kept for the Fixtures view in Step 1b).
+# One project's timing from its parsed TRX. Each result also gets CategoryIndex (used by the Fixtures view).
 function Get-ProjectTimingStats {
     param([Parameter(Mandatory)]$Trx, $Scan)
     $results = @($Trx.Results)
@@ -424,6 +444,7 @@ function Get-ProjectTimingStats {
         TestTicks   = $totalTicks
         SerialTicks = $sweep.SerialTicks
         IdleTicks   = $sweep.IdleTicks
+        TailStartTick = $sweep.TailStartTick
         CatTests    = $testCount
         CatTestTicks = $testTicks
         CatSerialTicks = $sweep.SingleTicks
@@ -521,8 +542,157 @@ function Get-ProjectsView {
     }
 }
 
-# TODO Step 1b: Fixtures and Failures views (Get-FixturesView, Get-FailuresView); reuse Get-TestRunInfo/Select-TestRuns,
-# Read-TrxFile + Get-ProjectTimingStats (each result carries ClassName and CategoryIndex) and Measure-SerialTimeline.
+function Get-CategoryLabel([int]$Index) {
+    if ($Index -eq $script:OopIndex) { return 'OutOfProcess' }
+    if ($Index -eq $script:RatchetIndex) { return 'Ratchet' }
+    return 'none'
+}
+
+# Per run and project: one row per test class (grouped by the full TRX className), sorted by test-seconds descending;
+# -Top keeps the first n rows of each run+project group (0 = all). Needs the TRX, so only pass the selected runs.
+# Offsets are seconds from the project's first test start. Serial tail: T = Measure-SerialTimeline's TailStartTick (the
+# last time concurrency fell below 2); tailTests = the class's tests with start >= T, tailAll = all of them are.
+function Get-FixturesView {
+    param([Parameter(Mandatory)][object[]]$SelectedRuns, [Parameter(Mandatory)][string]$SourceRoot, [int]$Top = 0)
+    foreach ($run in $SelectedRuns) {
+        foreach ($p in $run.Projects) {
+            $project = [string]$p.project
+            $trxPath = Get-TrxPath $run $project
+            if (-not (Test-Path -LiteralPath $trxPath -PathType Leaf)) { continue }
+            $trx = Read-TrxFile -Path $trxPath
+            if ($null -eq $trx -or $trx.Results.Count -eq 0) { continue }
+            $scan = Get-ProjectClassCategories -SourceRoot $SourceRoot -Project $project
+            $stats = Get-ProjectTimingStats -Trx $trx -Scan $scan
+            $tail = $stats.TailStartTick
+            $groups = @{}
+            foreach ($r in $trx.Results) {
+                $g = $groups[$r.ClassName]
+                if ($null -eq $g) {
+                    $g = [pscustomobject]@{ ClassName = $r.ClassName; Category = $r.CategoryIndex; Tests = 0; Ticks = 0L; MinStart = $r.Start; MaxEnd = $r.End; Tail = 0 }
+                    $groups[$r.ClassName] = $g
+                }
+                $g.Tests++; $g.Ticks += $r.Duration
+                if ($r.Start -lt $g.MinStart) { $g.MinStart = $r.Start }
+                if ($r.End -gt $g.MaxEnd) { $g.MaxEnd = $r.End }
+                if ($null -ne $tail -and $r.Start -ge $tail) { $g.Tail++ }
+            }
+            $ordered = @($groups.Values | Sort-Object -Property @{ Expression = 'Ticks'; Descending = $true }, ClassName)
+            if ($Top -gt 0) { $ordered = @($ordered | Select-Object -First $Top) }
+            foreach ($g in $ordered) {
+                [pscustomobject][ordered]@{
+                    run            = $run.Name
+                    project        = $project
+                    class          = Get-ShortClassName ([string]$g.ClassName)
+                    category       = Get-CategoryLabel $g.Category
+                    tests          = $g.Tests
+                    testSec        = ConvertTo-Seconds $g.Ticks
+                    firstOffsetSec = ConvertTo-Seconds ($g.MinStart - $stats.FirstStart)
+                    lastOffsetSec  = ConvertTo-Seconds ($g.MaxEnd - $stats.FirstStart)
+                    tailTests      = $g.Tail
+                    tailAll        = ($g.Tail -eq $g.Tests)
+                    tailStartSec   = ConvertTo-Seconds ($tail - $stats.FirstStart)
+                }
+            }
+        }
+    }
+}
+
+function Get-FailureFirstLine([string]$Message) {
+    if ([string]::IsNullOrWhiteSpace($Message)) { return '' }
+    return ($Message -split "\r?\n")[0].Trim()
+}
+
+# Text before the first ':' or '(' of the first message line, trimmed; the whole line when neither occurs.
+function Get-FailurePrefix([string]$FirstLine) {
+    if ([string]::IsNullOrWhiteSpace($FirstLine)) { return '(no message)' }
+    $i = $FirstLine.IndexOfAny([char[]]@(':', '('))
+    $prefix = if ($i -gt 0) { $FirstLine.Substring(0, $i).Trim() } else { $FirstLine.Trim() }
+    if ($prefix -eq '') { return '(no message)' }
+    if ($prefix.Length -gt 80) { $prefix = $prefix.Substring(0, 77) + '...' }   # a line with no ':' or '(' would be the whole message
+    return $prefix
+}
+
+# The one definition of a full run (also used by -FullOnly): empty filter and 9 or more projects.
+function Test-FullRun([object]$RunInfo) {
+    return ($RunInfo.Filter -eq '' -and $RunInfo.Projects.Count -ge 9)
+}
+
+function Get-RunFailedCount([object]$RunInfo) {
+    $n = 0
+    foreach ($p in $RunInfo.Projects) { if ($null -ne $p.failed) { $n += [int]$p.failed } }
+    return $n
+}
+
+# summary.json only (no TRX). A run is red when any project has failed > 0. Per failing test (project + test name):
+# runCount = number of full runs under the root (AllRuns) in which it failed; flakeCandidate = failed in this full run but
+# passed (absent from failures[]) in both the previous and the next full run by summary.json mtime; false at either end
+# of the full-run sequence and for runs that are not full. Returns summary, prefixCounts and failures.
+function Get-FailuresView {
+    param([Parameter(Mandatory)][object[]]$AllRuns, [Parameter(Mandatory)][object[]]$SelectedRuns)
+    $fullRuns = @($AllRuns | Where-Object { Test-FullRun $_ })
+    $failKeys = @{}      # full-run index -> set of 'project|test'
+    $runCount = @{}
+    $fullIndex = @{}
+    for ($i = 0; $i -lt $fullRuns.Count; $i++) {
+        $fullIndex[$fullRuns[$i].Name] = $i
+        $set = @{}
+        foreach ($p in $fullRuns[$i].Projects) {
+            foreach ($f in @($p.failures)) {
+                if ($null -eq $f) { continue }
+                $key = "$($p.project)|$($f.test)"
+                $set[$key] = $true
+            }
+        }
+        $failKeys[$i] = $set
+        foreach ($key in $set.Keys) { $runCount[$key] = 1 + [int]$runCount[$key] }
+    }
+
+    $rows = [System.Collections.Generic.List[object]]::new()
+    $redRuns = 0; $redFull = 0; $selectedFull = 0
+    foreach ($run in $SelectedRuns) {
+        $isFull = Test-FullRun $run
+        if ($isFull) { $selectedFull++ }
+        if ((Get-RunFailedCount $run) -le 0) { continue }
+        $redRuns++
+        if ($isFull) { $redFull++ }
+        $idx = if ($isFull) { $fullIndex[$run.Name] } else { -1 }
+        foreach ($p in $run.Projects) {
+            foreach ($f in @($p.failures)) {
+                if ($null -eq $f) { continue }
+                $key = "$($p.project)|$($f.test)"
+                $first = Get-FailureFirstLine ([string]$f.message)
+                $flake = $false
+                if ($idx -gt 0 -and $idx -lt $fullRuns.Count - 1) {
+                    $flake = (-not $failKeys[$idx - 1].ContainsKey($key)) -and (-not $failKeys[$idx + 1].ContainsKey($key))
+                }
+                $rows.Add([pscustomobject][ordered]@{
+                        run            = $run.Name
+                        fullRun        = $isFull
+                        project        = [string]$p.project
+                        test           = [string]$f.test
+                        prefix         = Get-FailurePrefix $first
+                        message        = $first
+                        runCount       = [int]$runCount[$key]
+                        flakeCandidate = $flake
+                    })
+            }
+        }
+    }
+    $prefixCounts = @($rows | Group-Object prefix | Sort-Object @{ Expression = 'Count'; Descending = $true }, Name |
+            ForEach-Object { [pscustomobject][ordered]@{ prefix = $_.Name; count = $_.Count } })
+    return [pscustomobject][ordered]@{
+        summary      = [pscustomobject][ordered]@{
+            redFullRuns       = $redFull
+            selectedFullRuns  = $selectedFull
+            redRuns           = $redRuns
+            selectedRuns      = $SelectedRuns.Count
+            fullRunsUnderRoot = $fullRuns.Count
+            summaryLine       = "red full runs: $redFull of $selectedFull"
+        }
+        prefixCounts = $prefixCounts
+        failures     = @($rows)
+    }
+}
 
 function Write-TimingOutput {
     param($Rows, [switch]$Json, [string]$Footer)
@@ -533,15 +703,28 @@ function Write-TimingOutput {
     if ($Footer) { Write-Output $Footer }
 }
 
+function Write-FailuresOutput {
+    param([Parameter(Mandatory)]$Result, [switch]$Json)
+    if ($Json) { ConvertTo-Json -InputObject $Result -Depth 6; return }
+    Write-Output $Result.summary.summaryLine
+    Write-Output "red runs among the $($Result.summary.selectedRuns) selected: $($Result.summary.redRuns); full runs under the results root: $($Result.summary.fullRunsUnderRoot)"
+    if ($Result.failures.Count -eq 0) { Write-Output '(no failing tests in the selected runs)'; return }
+    Write-Output ($Result.prefixCounts | Format-Table -AutoSize -Property * | Out-String -Width 1000)
+    $display = $Result.failures | ForEach-Object {
+        $short = if ($_.message.Length -gt 90) { $_.message.Substring(0, 87) + '...' } else { $_.message }
+        [pscustomobject][ordered]@{
+            run = $_.run; project = $_.project; test = $_.test; prefix = $_.prefix; runCount = $_.runCount
+            flakeCandidate = $_.flakeCandidate; message = $short
+        }
+    }
+    Write-Output ($display | Format-Table -AutoSize -Property * | Out-String -Width 1000)
+    Write-Output 'runCount = full runs (under the results root) in which the test failed; flakeCandidate = failed here, passed in the previous and the next full run. The message column is cut to 90 chars (-Json has it whole).'
+}
+
 function Invoke-TestRunTimings {
     param(
-        [string]$ResultsRoot, [string]$Run, [int]$Last, [switch]$FullOnly, [string]$View, [switch]$Json, [string]$SourceRoot
+        [string]$ResultsRoot, [string]$Run, [int]$Last, [switch]$FullOnly, [string]$View, [switch]$Json, [string]$SourceRoot, [int]$Top
     )
-    if ($View -in 'Fixtures', 'Failures') {
-        [Console]::Error.WriteLine("The $View view is not implemented yet (Step 1b).")
-        $script:ExitCode = 1
-        return
-    }
     $all = @(Get-TestRunInfo -ResultsRoot $ResultsRoot)
     $selected = @(Select-TestRuns -Runs $all -Run $Run -Last $Last -FullOnly:$FullOnly)
     if ($selected.Count -eq 0) {
@@ -553,14 +736,21 @@ function Invoke-TestRunTimings {
         $rows = Get-RunsView -AllRuns $all -SelectedRuns $selected
         Write-TimingOutput -Rows $rows -Json:$Json -Footer 'overlappingRuns is approximate: windows come from TRX <Times> (windowSource=trx) or summary.json mtime minus seconds (mtime).'
     }
-    else {
+    elseif ($View -eq 'Projects') {
         $rows = Get-ProjectsView -SelectedRuns $selected -SourceRoot $SourceRoot
         Write-TimingOutput -Rows $rows -Json:$Json -Footer 'Method-level [Category] tags and inherited class categories are not attributed (those tests count as "other"); see methodTagsInSource. serial = concurrency <= 1 incl. idle gaps.'
+    }
+    elseif ($View -eq 'Fixtures') {
+        $rows = Get-FixturesView -SelectedRuns $selected -SourceRoot $SourceRoot -Top $Top
+        Write-TimingOutput -Rows $rows -Json:$Json -Footer 'Offsets are seconds from the project first test start. tailTests = tests that started at or after tailStartSec (concurrency never exceeds 1 from there on); -Top applies per run and project.'
+    }
+    else {
+        Write-FailuresOutput -Result (Get-FailuresView -AllRuns $all -SelectedRuns $selected) -Json:$Json
     }
 }
 
 if ($MyInvocation.InvocationName -ne '.') {
     $script:ExitCode = 0
-    Invoke-TestRunTimings -ResultsRoot $ResultsRoot -Run $Run -Last $Last -FullOnly:$FullOnly -View $View -Json:$Json -SourceRoot $SourceRoot
+    Invoke-TestRunTimings -ResultsRoot $ResultsRoot -Run $Run -Last $Last -FullOnly:$FullOnly -View $View -Json:$Json -SourceRoot $SourceRoot -Top $Top
     exit $script:ExitCode
 }

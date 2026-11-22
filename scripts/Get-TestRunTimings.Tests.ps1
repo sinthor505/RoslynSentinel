@@ -217,7 +217,9 @@ namespace Ns
     $tie = Measure-SerialTimeline -Starts @(0, (10 * $T), (3 * $T)) -Ends @((10 * $T), (20 * $T), (3 * $T)) -Category @(2, 2, 2)
     Assert-That ($tie.SerialTicks -eq 20 * $T -and $tie.ConcurrentTicks -eq 0) 'sweep: back-to-back tests (end == next start) are never concurrent; a zero-length test adds nothing'
     $none = Measure-SerialTimeline -Starts @() -Ends @() -Category @()
-    Assert-That ($none.WallTicks -eq 0 -and $none.SerialTicks -eq 0) 'sweep: no tests gives zeros'
+    Assert-That ($none.WallTicks -eq 0 -and $none.SerialTicks -eq 0 -and $null -eq $none.TailStartTick) 'sweep: no tests gives zeros and no tail start'
+    Assert-That ($sweep.TailStartTick -eq 10 * $T) 'sweep: tail starts at the last 2+ -> 1 transition (B and A overlap until A ends at 10)'
+    Assert-That ($tie.TailStartTick -eq 0) 'sweep: concurrency never above 1 -> the tail starts at the first tick'
 
     # ---------------------------------------------------------------- source scan
     $scan1 = Get-ProjectClassCategories -SourceRoot $srcDir -Project 'Proj.One'
@@ -269,12 +271,110 @@ namespace Ns
     $childExit = $LASTEXITCODE
     $childRows = @(($childOut -join "`n") | ConvertFrom-Json)
     Assert-That ($childExit -eq 0 -and $childRows.Count -eq 2 -and $childRows[0].project -eq 'Proj.Two') 'invoked as a script: main body runs and prints JSON'
-    $notYet = & pwsh -NoProfile -File $scriptUnderTest -ResultsRoot $resultsDir -View Fixtures -SourceRoot $srcDir 2>&1
-    Assert-That ($LASTEXITCODE -eq 1 -and ($notYet -join ' ') -match 'not implemented yet \(Step 1b\)') '-View Fixtures is accepted and reports not implemented yet (Step 1b), exit 1'
-    $notYet = & pwsh -NoProfile -File $scriptUnderTest -ResultsRoot $resultsDir -View Failures -SourceRoot $srcDir 2>&1
-    Assert-That ($LASTEXITCODE -eq 1 -and ($notYet -join ' ') -match 'not implemented yet \(Step 1b\)') '-View Failures is accepted and reports not implemented yet (Step 1b), exit 1'
+    $childFail = & pwsh -NoProfile -File $scriptUnderTest -ResultsRoot $resultsDir -View Failures -Json -SourceRoot $srcDir | ConvertFrom-Json
+    Assert-That ($LASTEXITCODE -eq 0 -and $childFail.summary.summaryLine -eq 'red full runs: 0 of 1') 'invoked as a script: -View Failures runs (no stub) and prints a JSON summary'
     $noMatch = & pwsh -NoProfile -File $scriptUnderTest -ResultsRoot $resultsDir -Run nomatch -SourceRoot $srcDir 2>&1
     Assert-That ($LASTEXITCODE -eq 1 -and ($noMatch -join ' ') -match 'No runs matched') 'no matching run: message and exit 1'
+
+    # ---------------------------------------------------------------- Failures view (own results root; summary.json only)
+    function New-CannedFailureRun([string]$Root, [string]$Name, [datetime]$MtimeUtc, [string]$FilterText, [int]$ProjectCount, [hashtable]$FailuresByProject) {
+        $projects = @(1..$ProjectCount | ForEach-Object {
+                $pn = "Proj.$([char](64 + $_))"
+                $list = @()
+                if ($FailuresByProject.ContainsKey($pn)) { $list = @($FailuresByProject[$pn] | ForEach-Object { @{ test = $_[0]; message = $_[1] } }) }
+                $entry = New-CannedProject $pn 5
+                $entry.failures = $list; $entry.failed = $list.Count; $entry.passed = 5 - $list.Count
+                $entry
+            })
+        New-CannedRunDir $Root $Name @{ commit = ($Name.Substring(0, 8) + '0' * 32); subject = 's'; worktree = 'w'; filter = $FilterText; seconds = 10; projects = $projects } $MtimeUtc | Out-Null
+    }
+    $failRoot = Join-Path $tempRoot 'failresults'
+    New-Item -ItemType Directory -Path $failRoot -Force | Out-Null
+    $day = [datetime]::new(2026, 2, 1, 0, 0, 0, [DateTimeKind]::Utc)
+    $assertMsg = 'Assert.That(a, Is.True)'
+    $ioMsg = "System.IO.IOException: busy`nsecond line"
+    $timeoutMsg = 'System.TimeoutException: timed out'
+    # five full runs by mtime F1..F5 plus one filtered red run N1 between F3 and F4
+    New-CannedFailureRun $failRoot 'f1f1f1f1-1' $day.AddHours(10) '' 9 @{ 'Proj.A' = @(, @('T1', $assertMsg)); 'Proj.B' = @(, @('T4', $timeoutMsg)) }
+    New-CannedFailureRun $failRoot 'f2f2f2f2-2' $day.AddHours(11) '' 9 @{ 'Proj.A' = @(, @('T1', $assertMsg)); 'Proj.B' = @(, @('T2', $ioMsg)) }
+    New-CannedFailureRun $failRoot 'f3f3f3f3-3' $day.AddHours(12) '' 9 @{ 'Proj.C' = @(, @('T3', $assertMsg)) }
+    New-CannedFailureRun $failRoot 'n1n1n1n1-n' $day.AddHours(12.5) 'Name~T1' 1 @{ 'Proj.A' = @(, @('T1', $assertMsg)) }
+    New-CannedFailureRun $failRoot 'f4f4f4f4-4' $day.AddHours(13) '' 9 @{}
+    New-CannedFailureRun $failRoot 'f5f5f5f5-5' $day.AddHours(14) '' 9 @{ 'Proj.B' = @(, @('T4', $timeoutMsg)) }
+    $failAll = @(Get-TestRunInfo -ResultsRoot $failRoot)
+
+    Assert-That ((Get-FailurePrefix 'Assert.That(a, Is.True)') -eq 'Assert.That' -and (Get-FailurePrefix 'System.IO.IOException: busy') -eq 'System.IO.IOException') 'prefix: text before the first ( or :'
+    Assert-That ((Get-FailurePrefix 'plain words only') -eq 'plain words only' -and (Get-FailurePrefix '') -eq '(no message)' -and (Get-FailurePrefix '   ') -eq '(no message)') 'prefix: whole line when no separator, placeholder when empty'
+    Assert-That ((Get-FailureFirstLine $ioMsg) -eq 'System.IO.IOException: busy') 'first message line only'
+
+    $fv = Get-FailuresView -AllRuns $failAll -SelectedRuns @(Select-TestRuns -Runs $failAll -FullOnly)
+    Assert-That ($fv.summary.summaryLine -eq 'red full runs: 4 of 5' -and $fv.summary.redFullRuns -eq 4 -and $fv.summary.selectedFullRuns -eq 5) 'failures: -FullOnly red full runs = 4 of 5'
+    Assert-That ($fv.failures.Count -eq 6) 'failures: one row per failing test of each red run (2 + 2 + 1 + 1)'
+    $pc = @{}; foreach ($g in $fv.prefixCounts) { $pc[$g.prefix] = $g.count }
+    Assert-That ($pc['Assert.That'] -eq 3 -and $pc['System.TimeoutException'] -eq 2 -and $pc['System.IO.IOException'] -eq 1 -and $fv.prefixCounts[0].prefix -eq 'Assert.That') 'failures: counts grouped by exception-type prefix, largest first'
+    function Find-FailureRow($Rows, [string]$RunPrefix, [string]$TestName) { return @($Rows | Where-Object { $_.run.StartsWith($RunPrefix) -and $_.test -eq $TestName })[0] }
+    $rowF2T2 = Find-FailureRow $fv.failures 'f2f2' 'T2'
+    Assert-That ($rowF2T2.flakeCandidate -and $rowF2T2.runCount -eq 1 -and $rowF2T2.project -eq 'Proj.B' -and $rowF2T2.message -eq 'System.IO.IOException: busy') 'failures: T2 failed only in F2 -> flake candidate, runCount 1, first message line'
+    Assert-That ((Find-FailureRow $fv.failures 'f3f3' 'T3').flakeCandidate) 'failures: T3 failed only in F3 (neighbours F2/F4 pass) -> flake candidate'
+    $rowF2T1 = Find-FailureRow $fv.failures 'f2f2' 'T1'
+    Assert-That ((-not $rowF2T1.flakeCandidate) -and $rowF2T1.runCount -eq 2) 'failures: T1 failed in F1 and F2 -> not a flake candidate for F2, runCount 2'
+    Assert-That ((-not (Find-FailureRow $fv.failures 'f1f1' 'T1').flakeCandidate) -and (-not (Find-FailureRow $fv.failures 'f1f1' 'T4').flakeCandidate)) 'failures: the first full run has no previous run -> never a flake candidate'
+    $rowF5 = Find-FailureRow $fv.failures 'f5f5' 'T4'
+    Assert-That ((-not $rowF5.flakeCandidate) -and $rowF5.runCount -eq 2) 'failures: the last full run has no next run -> not a flake candidate; runCount 2 (F1 and F5)'
+    Assert-That ((Find-FailureRow $fv.failures 'f1f1' 'T4').runCount -eq 2) 'failures: runCount is per test across all full runs'
+
+    $fvAll = Get-FailuresView -AllRuns $failAll -SelectedRuns $failAll
+    Assert-That ($fvAll.summary.selectedRuns -eq 6 -and $fvAll.summary.redRuns -eq 5 -and $fvAll.summary.redFullRuns -eq 4 -and $fvAll.summary.summaryLine -eq 'red full runs: 4 of 5' -and $fvAll.summary.fullRunsUnderRoot -eq 5) 'failures: without -FullOnly the filtered red run counts as red but not as a full run'
+    $rowN1 = Find-FailureRow $fvAll.failures 'n1n1' 'T1'
+    Assert-That ((-not $rowN1.fullRun) -and (-not $rowN1.flakeCandidate) -and $rowN1.runCount -eq 2) 'failures: a non-full red run is listed, never a flake candidate, and does not add to runCount'
+    Assert-That ((Find-FailureRow $fvAll.failures 'f3f3' 'T3').flakeCandidate) 'failures: a filtered run between two full runs does not become their neighbour'
+    $fvLast = Get-FailuresView -AllRuns $failAll -SelectedRuns @(Select-TestRuns -Runs $failAll -Last 2)
+    Assert-That ($fvLast.summary.summaryLine -eq 'red full runs: 1 of 2' -and $fvLast.failures.Count -eq 1 -and $fvLast.failures[0].runCount -eq 2) 'failures: -Last 2 selects F4 and F5; flags and counts still use all runs under the root'
+    $fvGreen = Get-FailuresView -AllRuns $failAll -SelectedRuns @(Select-TestRuns -Runs $failAll -Run 'f4f4')
+    Assert-That ($fvGreen.summary.summaryLine -eq 'red full runs: 0 of 1' -and $fvGreen.failures.Count -eq 0) 'failures: a green run yields no rows'
+    $failJson = ((Invoke-TestRunTimings -ResultsRoot $failRoot -FullOnly -View Failures -Json -SourceRoot $srcDir) -join "`n") | ConvertFrom-Json
+    Assert-That ($failJson.summary.summaryLine -eq 'red full runs: 4 of 5' -and @($failJson.failures).Count -eq 6 -and @($failJson.prefixCounts).Count -eq 3) '-Json (Failures) emits one parseable object with summary, prefixCounts and failures'
+    $failTable = (Invoke-TestRunTimings -ResultsRoot $failRoot -FullOnly -View Failures -SourceRoot $srcDir) -join "`n"
+    Assert-That ($failTable -match 'red full runs: 4 of 5' -and $failTable -match 'flakeCandidate' -and $failTable -match 'System\.TimeoutException') 'failures: table output prints the summary line, the prefix groups and the rows'
+    # Failures must not need the TRX: there is none in this root and nothing complained above.
+
+    # ---------------------------------------------------------------- Fixtures view (own root, one TRX)
+    $fixSrc = Join-Path $srcDir 'Proj.Fix'
+    New-Item -ItemType Directory -Path $fixSrc -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $fixSrc 'Fix.cs') -Encoding utf8 -Value @'
+namespace Ns;
+[Category("OutOfProcess")]
+public class EarlyTests { }
+public class TailTests { }
+'@
+    $fixRoot = Join-Path $tempRoot 'fixresults'
+    $fixRun = New-CannedRunDir $fixRoot 'fix00001-20260301-100000-1' @{
+        commit = ('fix00001' + '0' * 32); subject = 'fix'; worktree = 'w'; filter = ''; seconds = 30
+        projects = @(New-CannedProject 'Proj.Fix' 6)
+    } ([datetime]::new(2026, 3, 1, 10, 1, 0, [DateTimeKind]::Utc))
+    # concurrency: [0,2) 1, [2,4) 2, [4,8) 3, [8,10) 2, [10,12) 1 -> the last 2 -> 1 transition is at 10 s = tail start.
+    # EarlyTests: E1 0-10, E2 2-8, E3 4-12 (before the tail) and E4 20-21 (in the tail). TailTests: T1 12-16, T2 16-20 (both in the tail).
+    New-CannedTrx (Join-Path $fixRun 'Proj.Fix.trx') $base1 0 30 @(
+        @{ Class = 'Ns.EarlyTests'; Name = 'E1'; S = 0; E = 10 },
+        @{ Class = 'Ns.EarlyTests'; Name = 'E2'; S = 2; E = 8 },
+        @{ Class = 'Ns.EarlyTests'; Name = 'E3'; S = 4; E = 12 },
+        @{ Class = 'Ns.EarlyTests'; Name = 'E4'; S = 20; E = 21 },
+        @{ Class = 'Ns.TailTests'; Name = 'T1'; S = 12; E = 16 },
+        @{ Class = 'Ns.TailTests'; Name = 'T2'; S = 16; E = 20 })
+    $fixRuns = @(Get-TestRunInfo -ResultsRoot $fixRoot)
+    $fx = @(Get-FixturesView -SelectedRuns $fixRuns -SourceRoot $srcDir)
+    Assert-That ($fx.Count -eq 2 -and $fx[0].class -eq 'EarlyTests' -and $fx[1].class -eq 'TailTests') 'fixtures: one row per class, sorted by test-seconds descending'
+    $early = $fx[0]; $tailRow = $fx[1]
+    Assert-That ($early.project -eq 'Proj.Fix' -and $early.category -eq 'OutOfProcess' -and $early.tests -eq 4 -and (Test-Near $early.testSec 25)) 'fixtures: EarlyTests is OutOfProcess, 4 tests, 25 s'
+    Assert-That ((Test-Near $early.firstOffsetSec 0) -and (Test-Near $early.lastOffsetSec 21)) 'fixtures: EarlyTests offsets 0 and 21 s from the project start'
+    Assert-That ($early.tailTests -eq 1 -and (-not $early.tailAll) -and (Test-Near $early.tailStartSec 10)) 'fixtures: EarlyTests has 1 test in the serial tail (E4), tail starts at 10 s, not all in the tail'
+    Assert-That ($tailRow.category -eq 'none' -and $tailRow.tests -eq 2 -and (Test-Near $tailRow.testSec 8) -and (Test-Near $tailRow.firstOffsetSec 12) -and (Test-Near $tailRow.lastOffsetSec 20)) 'fixtures: TailTests category none, 2 tests, 8 s, offsets 12 and 20'
+    Assert-That ($tailRow.tailTests -eq 2 -and $tailRow.tailAll) 'fixtures: TailTests lies entirely in the serial tail'
+    $fx1 = @(Get-FixturesView -SelectedRuns $fixRuns -SourceRoot $srcDir -Top 1)
+    Assert-That ($fx1.Count -eq 1 -and $fx1[0].class -eq 'EarlyTests') 'fixtures: -Top 1 keeps the heaviest class'
+    Assert-That ((Get-ShortClassName 'Ns.Sub.Outer+Inner') -eq 'Outer+Inner') 'short class name keeps the nested +'
+    $fxJson = @(((Invoke-TestRunTimings -ResultsRoot $fixRoot -View Fixtures -Top 1 -Json -SourceRoot $srcDir) -join "`n") | ConvertFrom-Json)
+    Assert-That ($fxJson.Count -eq 1 -and $fxJson[0].class -eq 'EarlyTests' -and $fxJson[0].tailAll -eq $false) '-Json (Fixtures) emits parseable rows and honours -Top'
 }
 finally {
     Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
