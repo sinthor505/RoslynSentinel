@@ -194,12 +194,14 @@ public static class CompilerErrorLookupHelper
 
     // TODO pass editedFilePaths to DescribeAsync at the remaining callers
     // isToolActive: whether a tool may be named to the caller (ActiveToolSurface.IsCallable); null names no tool, so existing callers keep today's text.
+    // renamedAwayNames: names the edit renamed away; a CS0103 for one of them is explained by the edit-impact attribution, so DescribeCs0103Async drops the typo/closest-name text.
     public static async Task<string> DescribeAsync(
         DiagnosticReport report,
         SymbolNavigationEngine symbolNavigationEngine,
         CancellationToken cancellationToken = default,
         IReadOnlyCollection<string>? editedFilePaths = null,
-        Func<string, bool>? isToolActive = null)
+        Func<string, bool>? isToolActive = null,
+        IReadOnlyCollection<string>? renamedAwayNames = null)
     {
         // Identical diagnostics (same Id AND same Message text) collapse into one line: a single
         // root cause repeated at N sites (e.g. 86 identical CS7036s from one bad MoveMember
@@ -227,7 +229,7 @@ public static class CompilerErrorLookupHelper
                 return $"  This follows from '{typeName}' being declared twice (see its CS0101); removing the extra '{typeName}' declaration fixes this too.";
             }
 
-            return await DescribeHintAsync(diagnostic, symbolNavigationEngine, cancellationToken, editedFilePaths, isToolActive);
+            return await DescribeHintAsync(diagnostic, symbolNavigationEngine, cancellationToken, editedFilePaths, isToolActive, renamedAwayNames);
         }
         foreach (var group in report.Diagnostics.GroupBy(d => (d.Id, d.Message)))
         {
@@ -270,11 +272,12 @@ public static class CompilerErrorLookupHelper
         SymbolNavigationEngine symbolNavigationEngine,
         CancellationToken cancellationToken,
         IReadOnlyCollection<string>? editedFilePaths,
-        Func<string, bool>? isToolActive)
+        Func<string, bool>? isToolActive,
+        IReadOnlyCollection<string>? renamedAwayNames = null)
     {
         if (diagnostic.Id == "CS0103")
         {
-            return HideNameInHint(diagnostic, await DescribeCs0103Async(diagnostic, symbolNavigationEngine, cancellationToken));
+            return HideNameInHint(diagnostic, await DescribeCs0103Async(diagnostic, symbolNavigationEngine, cancellationToken, renamedAwayNames));
         }
 
         if (diagnostic.Id is "CS0117" or "CS1061")
@@ -585,7 +588,8 @@ public static class CompilerErrorLookupHelper
     private static async Task<string> DescribeCs0103Async(
         DiagnosticInfo diagnostic,
         SymbolNavigationEngine symbolNavigationEngine,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyCollection<string>? renamedAwayNames = null)
     {
         var match = Cs0103NameRegex.Match(diagnostic.Message);
         if (!match.Success)
@@ -607,6 +611,11 @@ public static class CompilerErrorLookupHelper
 
         if (candidates.Count == 0)
         {
+            if (renamedAwayNames != null && renamedAwayNames.Contains(name, StringComparer.Ordinal))
+            {
+                return $"  No symbol named '{name}' was found anywhere in the solution.";
+            }
+
             var closestNameSentence = await DescribeClosestNameInScopeAsync(diagnostic, name, symbolNavigationEngine, cancellationToken);
             if (IsInvocationUse(diagnostic.SourceLine, name))
             {

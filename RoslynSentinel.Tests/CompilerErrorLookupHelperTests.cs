@@ -422,6 +422,54 @@ public class CompilerErrorLookupHelperTests
     }
 
     [Test]
+    public async Task DescribeAsync_Cs0103NameRenamedAwayByTheEdit_DropsTheTypoAndClosestNameText()
+    {
+        var report = await CompileAndGetErrorsAsync(
+            ("Calc.cs", """
+            namespace TestProj;
+
+            public class Calc
+            {
+                public int Run()
+                {
+                    return missingValue;
+                }
+            }
+            """));
+        var cs0103 = report.Diagnostics.Single(d => d.Id == "CS0103");
+        var withLine = new DiagnosticReport(true, [cs0103 with { SourceLine = "return missingValue;" }]);
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(withLine, _symbolNavigationEngine, renamedAwayNames: ["missingValue"]);
+
+        Assert.That(description, Does.Contain("No symbol named 'missingValue' was found anywhere in the solution."));
+        Assert.That(description, Does.Not.Contain("likely a typo"));
+        Assert.That(description, Does.Not.Contain("Closest name"));
+    }
+
+    [Test]
+    public async Task DescribeAsync_Cs0103NameNotRenamed_KeepsTheTypoText()
+    {
+        var report = await CompileAndGetErrorsAsync(
+            ("Calc.cs", """
+            namespace TestProj;
+
+            public class Calc
+            {
+                public int Run()
+                {
+                    return missingValue;
+                }
+            }
+            """));
+        var cs0103 = report.Diagnostics.Single(d => d.Id == "CS0103");
+        var withLine = new DiagnosticReport(true, [cs0103 with { SourceLine = "return missingValue;" }]);
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(withLine, _symbolNavigationEngine, renamedAwayNames: ["SomethingElse"]);
+
+        Assert.That(description, Does.Contain("likely a typo"));
+    }
+
+    [Test]
     public async Task DescribeAsync_Cs0117MissingMember_ListsTheTypesMembersAndTheClosestName()
     {
         var report = await CompileAndGetErrorsAsync(
