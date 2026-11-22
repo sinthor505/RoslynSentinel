@@ -37,9 +37,10 @@ public class ClaudeLeanSchemaBudgetTests
     // Raised 45200 -> 45500 on 2026-11-15 (owner approved): McpServerControl +180 for StopServer keepToolsets/toolsets (plan_tab_scoped_toolset_persistence Step 5); measured 45315.
     // Raised 45500 -> 46500 on 2026-11-20 (TODO punchlist #15): Build and RunTest gained the optional repoPath parameter (~200 chars each) and a longer useScratchDir text; measured 45975 (headroom 525; measured + 300 rounded up to 500 gives 46500).
     // Raised 46500 -> 47500 on 2026-11-22 (TODO punchlist #10): the ReplaceRange tool joined the claude-lean core; measured 46833 (headroom 667).
-    private const int AdvancedTotalBudget = 47500;
+    // Raised 47500 -> 48000 on 2026-11-22 (TODO punchlist #11): the MoveFile tool joined the claude-lean core; measured 47688 (headroom 312).
+    private const int AdvancedTotalBudget = 48000;
     // Basic raised 40000 -> 45000 on 2026-11-10 (core split slice 1): ChangeSignature (~1.9k) and MoveMember (3356) moved from Tools.Advanced to Tools.Basic (CoreRefactoringTools), so the Basic flavor now serves them and measures 44948 chars, the same as Advanced.
-    private const int BasicTotalBudget = 47500; // raised with AdvancedTotalBudget on 2026-11-15 (three times) and 2026-11-20 and 2026-11-22 (#10)
+    private const int BasicTotalBudget = 48000; // raised with AdvancedTotalBudget on 2026-11-15 (three times) and 2026-11-20 and 2026-11-22 (#10, #11)
     private const int AdvancedMaxToolBudget = 5000;
     private const int BasicMaxToolBudget = 5000;
     // Search per-tool budget.
