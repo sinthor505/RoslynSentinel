@@ -13,6 +13,7 @@ namespace RoslynSentinel.Common;
 /// after a partial failure have no entry. Null on refusals. In-process only: never serialised to tool output, so
 /// callers read it when building operation blobs (<see cref="OperationItemRecord.AfterSource"/>).</para>
 /// <para><see cref="CreatedFiles"/> lists files the chokepoint created on this call: no file existed before, the pre-image read did not fail, and the write landed. Null on refusals, empty when none. Keys match <see cref="SucceededFiles"/> entries.</para>
+/// <para><see cref="ChangeId"/> is the id of the operation blob written for this apply, shown on the tool response so a caller can pass it to UndoChange; null when no blob was written or on refusals.</para>
 /// <para><see cref="NoOpFiles"/> lists files included in <see cref="SucceededFiles"/> whose
 /// proposed content was skipped rather than re-written -> either byte-for-byte identical to what
 /// was already on disk, or (for .cs files) semantically identical after whitespace
@@ -41,7 +42,8 @@ public record ApplyChangesResult(
     List<Finding>? Findings = null,
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)] bool NeedsFullReload = false,
     [property: System.Text.Json.Serialization.JsonIgnore] IReadOnlyDictionary<string, string?>? PostImages = null,
-    [property: System.Text.Json.Serialization.JsonIgnore] IReadOnlyList<string>? CreatedFiles = null
+    [property: System.Text.Json.Serialization.JsonIgnore] IReadOnlyList<string>? CreatedFiles = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? ChangeId = null
 ) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]

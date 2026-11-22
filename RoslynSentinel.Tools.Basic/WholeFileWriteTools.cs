@@ -109,8 +109,9 @@ public class WholeFileWriteTools
                 };
             }
 
-            await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, exists ? "replace_file" : "create_file", result, cancellationToken: cancellationToken);
-            var strippedResult = result with { PreImages = null };
+            var changeId = Guid.NewGuid().ToString("n")[..8];
+            var blobWrite = await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, exists ? "replace_file" : "create_file", result, cancellationToken: cancellationToken, blobChangeId: changeId);
+            var strippedResult = result with { PreImages = null, ChangeId = blobWrite.Written ? changeId : null };
             return new SentinelCallToolResult<object>()
             {
                 IsError = false,
@@ -167,8 +168,9 @@ public class WholeFileWriteTools
                 };
             }
 
-            await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "delete_file", result, cancellationToken: cancellationToken);
-            var strippedResult = result with { PreImages = null };
+            var changeId = Guid.NewGuid().ToString("n")[..8];
+            var blobWrite = await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "delete_file", result, cancellationToken: cancellationToken, blobChangeId: changeId);
+            var strippedResult = result with { PreImages = null, ChangeId = blobWrite.Written ? changeId : null };
             return new SentinelCallToolResult<object>()
             {
                 IsError = false,
@@ -525,12 +527,13 @@ public class WholeFileWriteTools
                         };
                     if (result.IsError)
                         return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(result.RefusalCode ?? ToolErrorCode.Exception, $"ApplyDiff failed to apply the change set: {result.Summary}") };
-                    await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_diff", result, cancellationToken: cancellationToken);
+                    var changeId = Guid.NewGuid().ToString("n")[..8];
+                    var blobWrite = await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_diff", result, cancellationToken: cancellationToken, blobChangeId: changeId);
                     // PreImages (full pre-edit file content) is dropped from the default response -
                     // it's already captured in the undo blob written above (GetOperationDetailTool/
                     // UndoLastApplyTool can retrieve it) and was the single largest contributor to
                     // ApplyDiffTool responses exceeding the calling harness's token limit on large files.
-                    var strippedResult = result with { PreImages = null };
+                    var strippedResult = result with { PreImages = null, ChangeId = blobWrite.Written ? changeId : null };
                     object responseData = returnDiff
                         ? new
                         {
@@ -671,8 +674,9 @@ public class WholeFileWriteTools
                                     "ApplyDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n",
                                     await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable), cancellationToken)
                             };
-                        await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_diff", result, cancellationToken: cancellationToken);
-                        var strippedDiffResult = result with { PreImages = null };
+                        var changeId = Guid.NewGuid().ToString("n")[..8];
+                        var blobWrite = await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_diff", result, cancellationToken: cancellationToken, blobChangeId: changeId);
+                        var strippedDiffResult = result with { PreImages = null, ChangeId = blobWrite.Written ? changeId : null };
                         object diffResponseData = BuildDiffApplyResponseData(strippedDiffResult, diffReport, returnDiff, diffChanges, result.PreImages);
                         return new SentinelCallToolResult<object>()
                         {
@@ -819,8 +823,9 @@ public class WholeFileWriteTools
                                 "ApplyUnifiedDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n",
                                 await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable), cancellationToken)
                         };
-                    await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_unified_diff", result, cancellationToken: cancellationToken);
-                    var strippedDiffResult = result with { PreImages = null };
+                    var changeId = Guid.NewGuid().ToString("n")[..8];
+                    var blobWrite = await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_unified_diff", result, cancellationToken: cancellationToken, blobChangeId: changeId);
+                    var strippedDiffResult = result with { PreImages = null, ChangeId = blobWrite.Written ? changeId : null };
                     object diffResponseData = BuildDiffApplyResponseData(strippedDiffResult, diffReport, returnDiff, diffChanges, result.PreImages);
                     return new SentinelCallToolResult<object>()
                     {

@@ -2137,8 +2137,9 @@ public class WorkspaceFileEditImpl
                 };
             }
 
-            await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "create_file", result, cancellationToken: cancellationToken);
-            var strippedResult = result with { PreImages = null };
+            var changeId = Guid.NewGuid().ToString("n")[..8];
+            var blobWrite = await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "create_file", result, cancellationToken: cancellationToken, blobChangeId: changeId);
+            var strippedResult = result with { PreImages = null, ChangeId = blobWrite.Written ? changeId : null };
             var createFileFindings = new List<Finding>();
             createFileFindings.AddRange(result.Findings ?? []);
             return new SentinelCallToolResult<object>()
