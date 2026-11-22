@@ -343,13 +343,17 @@ public sealed class ScenarioSampleCsvTests
     [Test]
     public void LiveTurnsFor_ResumeScenarioExcludesKeptTurns()
     {
-        Assert.That(ResumeScenarios.StaleCallerEditAfterRename.LiveTurnsFor(14), Is.EqualTo(3));
+        // Input derived from ResumeKeepTurns so a re-captured transcript (new kept-turn count) does not break the pin.
+        var scenario = ResumeScenarios.StaleCallerEditAfterRename;
+        Assert.That(scenario.LiveTurnsFor(scenario.ResumeKeepTurns + 3), Is.EqualTo(3));
     }
 
     [Test]
     public void LiveTurnsFor_SeededResumeScenarioExcludesKeptTurnsAndFaultTurn()
     {
-        Assert.That(ResumeScenarios.FailedLastCallStaleOldContent.LiveTurnsFor(14), Is.EqualTo(2));
+        // Kept turns + 1 authored fault turn + 2 live turns.
+        var scenario = ResumeScenarios.FailedLastCallStaleOldContent;
+        Assert.That(scenario.LiveTurnsFor(scenario.ResumeKeepTurns + 1 + 2), Is.EqualTo(2));
     }
 
     [Test]
