@@ -94,6 +94,7 @@ public static class ServerStartupHelpers
             }
         }
 
+        // TODO --include-tools silently ignores unknown names (tool names like ReadFile are not class names) and only adds to --mode (default all), so "--include-tools=ReadFile,..." exposed all 114 tools; warn on unknown class names at startup and in Launch-RoslynSentinelHttpServer.ps1
         includeTools = NormalizeToolClassNames(ParseNameList(GetArgValue(args, "--include-tools")));
         excludeTools = NormalizeToolClassNames(ParseNameList(GetArgValue(args, "--exclude-tools")));
     }

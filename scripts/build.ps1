@@ -154,6 +154,19 @@ function Write-Baseline {
     if ($HeaderNote) { $header += "`n# $HeaderNote" }
     @($header) + ($Lines | Sort-Object) | Set-Content -Path $Path
 }
+
+# A non-zero exit with no parseable compiler/test lines (SDK not found, project load failure,
+# restore error) used to print a green "no new ..." line. Show the command's own error text.
+function Write-CommandFailure {
+    param([string]$Command, [int]$ExitCode, [object[]]$RawOutput)
+    $lines = @($RawOutput | ForEach-Object { "$_" } | Where-Object { $_.Trim() })
+    $errorLines = @($lines | Where-Object { $_ -match '(?i)\berror\b|not found|could not|failed' })
+    # Error-keyword lines first, then the output tail: an SDK/restore failure puts its context
+    # (requested version, global.json path) on lines that carry no error keyword.
+    $shown = @($errorLines | Select-Object -First 20) + @($lines | Select-Object -Last 15) | Select-Object -Unique
+    Write-Host "$Command exited with code ${ExitCode}:" -ForegroundColor Red
+    $shown | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+}
 #endregion
 
 #region Build mode
@@ -184,7 +197,14 @@ function Invoke-BuildMode {
         }
     }
 
+    $failedWithoutDiagnostics = ($exitCode -ne 0) -and ($current.Count -eq 0)
+    if ($exitCode -ne 0) { Write-CommandFailure -Command 'dotnet build' -ExitCode $exitCode -RawOutput $rawOutput }
+
     if ($UpdateBaseline) {
+        if ($failedWithoutDiagnostics) {
+            Write-Host "Baseline NOT updated: the build failed before producing any compiler output." -ForegroundColor Red
+            return $false
+        }
         Write-Baseline -Path $warningsBaseline -Lines $current -HeaderNote "dotnet build $Flavor $Config"
         Write-Host "Baseline updated: $($current.Count) warning(s)/error(s) recorded." -ForegroundColor Green
         return $exitCode -eq 0
@@ -199,7 +219,9 @@ function Invoke-BuildMode {
     $new = $current | Where-Object { -not $baselineSet.Contains($_) }
     $fixedItems = $baseline | Where-Object { -not $currentSet.Contains($_) }
 
-    if (@($new).Count -eq 0) {
+    if ($failedWithoutDiagnostics) {
+        Write-Host "Build FAILED with no compiler warnings/errors to compare (see the error above)." -ForegroundColor Red
+    } elseif (@($new).Count -eq 0) {
         Write-Host "No new warnings/errors. ($($current.Count) total, all pre-existing)" -ForegroundColor Green
     } else {
         Write-Host "$(@($new).Count) NEW warning(s)/error(s) not in baseline:" -ForegroundColor Red
@@ -258,6 +280,15 @@ function Invoke-TestMode {
         }
     }
 
+    # Failing tests also exit non-zero, so only a non-zero exit with no "Failed <name>" lines is a
+    # run that never got as far as the tests (build/restore/SDK error).
+    $failedWithoutResults = ($exitCode -ne 0) -and ($current.Count -eq 0)
+    if ($failedWithoutResults) {
+        Write-CommandFailure -Command 'dotnet test' -ExitCode $exitCode -RawOutput $rawOutput
+        if ($UpdateBaseline) { Write-Host "Baseline NOT updated: the test run failed before reporting any test." -ForegroundColor Red }
+        return $false
+    }
+
     if ($UpdateBaseline) {
         Write-Baseline -Path $testsBaseline -Lines $current -HeaderNote "dotnet test $Flavor $Config"
         Write-Host "Baseline updated: $($current.Count) known-failing test(s) recorded." -ForegroundColor Green
@@ -307,7 +338,7 @@ if (-not $UpdateBaseline) {
     if ($ok) {
         Write-Host "PASS - no new warnings/errors/failures beyond the known baseline." -ForegroundColor Green
     } else {
-        Write-Host "FAIL - see NEW items above." -ForegroundColor Red
+        Write-Host "FAIL - see the errors / NEW items above." -ForegroundColor Red
     }
 }
 
