@@ -88,6 +88,8 @@ public class EditImpactSpanAttributionTests
             Assert.That(message, Does.Contain("renamed parameter rate -> discountRate"));
             Assert.That(message, Does.Contain("1 use(s) outside your edit"));
             Assert.That(message, Does.Contain("var discount = amount * rate;"));
+            Assert.That(message, Does.Not.Contain("likely a typo"), "a name the edit renamed away is not a typo");
+            Assert.That(message, Does.Not.Contain("Closest name"), "a name the edit renamed away has no closest-name suggestion");
         });
         var verdicts = result.ErrorData?.StructuredDetail?.OfType<EditImpactDetail>().Single().Verdicts ?? [];
         Assert.That(verdicts, Has.Count.EqualTo(1), string.Join(" | ", verdicts.Select(v => $"{v.Kind} {v.DeclarationKind} {v.OldName}->{v.NewName} {v.Verdict}")));

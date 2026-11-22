@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## CS0103 "likely a typo" hint contradicts the parameter-rename attribution - resolved (2026-11-21)
+
+CS0103 "likely a typo" hint contradicts the parameter-rename attribution (2026-11-21) - after "renames parameter rate to discountRate ... 2 use(s) of rate are outside your edit" the CS0103 branch still appends "No symbol named 'rate' ... likely a typo ... Closest name: Byte" (K=3 run 20261121-050101-063, T4 of 10/10 samples); drop the typo hint when the attribution already explains the CS0103; `CompilerErrorLookupHelper.cs` CS0103 branch (~:273); Small
+
+Evidence: #4: CompilerErrorLookupHelper.DescribeAsync renamedAwayNames (96bac8c8) wired from ReplaceSnippet ComposeCompileRejectionAsync; covers only the ReplaceSnippet rejection path (ValidateAndApply and whole-file writers still show the hint, see TODO)
+
 ## Tests.Tools.Basic RunTest tests time out loading the solution under load - resolved (2026-11-21)
 
 Tests.Tools.Basic RunTest tests time out loading the solution under machine load (2026-11-20) - RunTest_FailedTestWithCapturedOutput_..., RunTest_CleanRun_..., RunTest_EnvironmentParameter_... failed worktree run 9b00b68c-20261120-215553-56016 with SolutionLoadTimeoutException (30 s) and passed alone (9b00b68c-20261120-222435-45652); raise the fixture's load timeout and add a flaky-test comment; Small

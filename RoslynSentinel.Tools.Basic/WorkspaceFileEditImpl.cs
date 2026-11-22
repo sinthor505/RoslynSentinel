@@ -1319,6 +1319,8 @@ public class WorkspaceFileEditImpl
             ?? ValidateAndApplyHelper.DescribeUntouchedFileErrors(changedPaths, validation.Diagnostics.Select(d => d.FilePath.ToString()), "one ReplaceSnippet call with batchEdits, one item per file, each with its own filePath");
         var repeatNote = isRepeat ? RepeatedRejectionNote + (impactNote is null ? RepeatedRejectionChangeApproach : RepeatedRejectionFollowNextStep) + " " : "";
         var nearMisses = await EditImpactGate.DetectNearMissesAsync(_workspaceManager, changes, validation.Diagnostics, cancellationToken);
+        // A CS0103 for a name the edit renamed away is explained by the impact attribution, so the typo/closest-name text is dropped for it.
+        var renamedAwayNames = impact?.Changes.Where(c => c.Kind == SymbolChangeKind.Renamed).Select(c => c.OldName).Distinct(StringComparer.Ordinal).ToList();
         return new ResultError(ToolErrorCode.ValidationFailed,
             headline +
             repeatNote +
@@ -1326,7 +1328,7 @@ public class WorkspaceFileEditImpl
             (untouchedNote is null ? "" : untouchedNote + " ") +
             (impactNote is null ? "Fix the issue(s) below and retry:\n" : "Compiler errors caused by this edit:\n") +
             "[COMPILER ERROR]\n" +
-            await CompilerErrorLookupHelper.DescribeAsync(validation, _symbolNavigationEngine, cancellationToken, changedPaths, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable),
+            await CompilerErrorLookupHelper.DescribeAsync(validation, _symbolNavigationEngine, cancellationToken, changedPaths, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable, renamedAwayNames: renamedAwayNames),
             StructuredDetail: RejectionDetail(impact, liftVerdicts, validation.Diagnostics, nearMisses));
     }
 
