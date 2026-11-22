@@ -80,6 +80,7 @@ public class AdvancedRefactoringTools
         return lookup.IsFound ? null : lookup.Describe(_activeToolSurface is null ? null : _activeToolSurface.IsCallable);
     }
 
+    // TODO this wrapper has no recordEffects parameter, so the 23 apply sites in this class record no EditEffects (CoreRefactoringTools.ValidateAndApplyAsync passes one); GenerationTools.ValidateAndApplyAsync has the same gap
     /// <summary>
     /// Validates proposed changes against the current in-memory solution and, unless
     /// <paramref name = "dryRun"/> is set, writes them straight to disk (write-through -> no
