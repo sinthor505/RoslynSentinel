@@ -266,6 +266,175 @@ public class WholeFileWriteTools
         return string.Join(" ", parts);
     }
 
+    [McpServerTool(Name = "MoveFile")]
+    [Produces(DataTag.ResultOnly)]
+    [Description("Moves or renames a text file in one step that is checked against the build (the destination may be in another project) and undoable via UndoChange. Fails if the source is missing, a directory or binary, or the destination exists.")]
+    public async Task<SentinelCallToolResult<AppliedChangeSummary>> MoveFileTool(
+        [Description(ToolParams.Reason)] ToolCallReason reason,
+        [Consumes(DataTag.SourceFilepath, required: true)] string sourcePath,
+        [Description("New path of the file; its folders are created if missing.")][ExternalInputRequired(DataTag.SourceFilepath, required: true)] string destinationPath,
+        [Description("keep: the text moves unchanged, a .cs namespace stays as written. update, copyAndObsolete: not supported yet. Non-.cs files accept only keep.")] MoveFileNamespaceHandling namespaceHandling,
+        CancellationToken cancellationToken = default)
+    {
+        FilePathWrapper source = _workspaceManager.ResolveFromWire(sourcePath);
+        FilePathWrapper destination = _workspaceManager.ResolveFromWire(destinationPath);
+        try
+        {
+            Solution solution;
+            try
+            {
+                solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+            }
+            catch (SolutionNotLoadedException)
+            {
+                return MoveFileError(ToolErrorCode.SolutionNotLoaded, $"MoveFile: no solution is loaded, so '{sourcePath}' and '{destinationPath}' were not resolved to paths and nothing was moved.");
+            }
+
+            bool isCs = string.Equals(Path.GetExtension(source.Absolute), ".cs", StringComparison.OrdinalIgnoreCase);
+            if (namespaceHandling != MoveFileNamespaceHandling.keep)
+            {
+                return isCs
+                    ? MoveFileError(ToolErrorCode.NotImplemented, $"MoveFile: namespaceHandling '{namespaceHandling}' is not supported yet; only 'keep' is supported in this version. Nothing was moved.")
+                    : MoveFileError(ToolErrorCode.InvalidArgument, $"MoveFile: namespaceHandling '{namespaceHandling}' does not apply to '{source.Absolute}', which is not a .cs file; non-.cs files accept only 'keep'. Nothing was moved.");
+            }
+
+            if (source == destination)
+            {
+                return MoveFileError(ToolErrorCode.InvalidArgument, $"MoveFile: sourcePath and destinationPath resolve to the same path '{source.Absolute}'. Nothing was moved.");
+            }
+
+            if (Directory.Exists(source.Absolute))
+            {
+                return MoveFileError(ToolErrorCode.TargetIneligible, $"MoveFile: '{source.Absolute}' is a directory, not a file; this tool moves single files.");
+            }
+
+            if (!File.Exists(source.Absolute))
+            {
+                var missing = $"MoveFile: '{source.Absolute}' does not exist on disk (resolved from '{sourcePath}'; path comparison ignores case).";
+                if (_activeToolSurface is null || _activeToolSurface.IsCallable("Search"))
+                {
+                    missing += " " + ToolCallHint.Next("Search", "to find the right path.", ("mode", "text"));
+                }
+
+                return MoveFileError(ToolErrorCode.NotFound, missing);
+            }
+
+            if (File.Exists(destination.Absolute) || Directory.Exists(destination.Absolute))
+            {
+                var kind = Directory.Exists(destination.Absolute) ? "directory" : "file";
+                return MoveFileError(ToolErrorCode.InvalidArgument, $"MoveFile: the destination '{destination.Absolute}' already exists as a {kind}; a move does not overwrite. Options: pass a destinationPath that does not exist, or remove the existing {kind} first.");
+            }
+
+            var bytes = await File.ReadAllBytesAsync(source.Absolute, cancellationToken);
+            if (Array.IndexOf(bytes, (byte)0, 0, Math.Min(bytes.Length, 8000)) >= 0)
+            {
+                return MoveFileError(ToolErrorCode.TargetIneligible, $"MoveFile: '{source.Absolute}' contains a NUL byte within its first 8000 bytes, so it is treated as a binary file; this tool moves text files only.");
+            }
+
+            // Decode the bytes here rather than with File.ReadAllText: GetString keeps a UTF-8 BOM as a leading U+FEFF, so the text moves as stored.
+            // Strict decoding refuses a file that is not valid UTF-8, because the text would otherwise be rewritten with replacement characters.
+            string text;
+            try
+            {
+                text = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true).GetString(bytes);
+            }
+            catch (System.Text.DecoderFallbackException)
+            {
+                return MoveFileError(ToolErrorCode.TargetIneligible, $"MoveFile: '{source.Absolute}' is not valid UTF-8 text, so it cannot be moved without altering its bytes; this tool moves UTF-8 text files only.");
+            }
+
+            var sourceProject = SolutionProjectLocator.FindContainingProject(solution, source.Absolute);
+            var destinationProject = SolutionProjectLocator.FindContainingProject(solution, destination.Absolute);
+            var sourceProjectName = sourceProject?.Name ?? "(no loaded project)";
+            var destinationProjectName = destinationProject?.Name ?? "(no loaded project)";
+            var solutionRoot = _workspaceManager.GetSolutionRoot();
+            var sourceDisplay = EditEffectNames.DisplayPath(source.Absolute, solutionRoot);
+            var destinationDisplay = EditEffectNames.DisplayPath(destination.Absolute, solutionRoot);
+
+            var changes = new DocumentChangeSet { [destination] = text };
+            IReadOnlyCollection<FilePathWrapper> deletePaths = [source];
+
+            // TODO 11-3: pass verbatim: true once the chokepoint parameter exists
+            var apply = await ValidateAndApplyHelper.ValidateAndApplyAsync(
+                _validationEngine, _workspaceManager, _logger, changes, "move_file",
+                cancellationToken: cancellationToken,
+                deletePaths: deletePaths,
+                describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable),
+                describeEditImpact: EditImpactGate.Describer(_workspaceManager, changes, _activeToolSurface, null, deletePaths),
+                recordEffects: () => ToolCallContext.Current?.RecordEffect(
+                    EditEffectKind.FileMoved, sourceDisplay, null, Path.GetFileNameWithoutExtension(source.Absolute), null, null, destinationDisplay));
+
+            if (apply.Error is { } error)
+            {
+                // The compile gate's own text says what broke; the projects are added so a cross-project move names both ends.
+                var refusal = error.ErrorCode == ToolErrorCode.ValidationFailed
+                    ? error with
+                    {
+                        Message = $"MoveFile: moving '{sourceDisplay}' (project '{sourceProjectName}') to '{destinationDisplay}' (project '{destinationProjectName}') would break the build; nothing was moved. {error.Message}"
+                    }
+                    : error;
+                return new SentinelCallToolResult<AppliedChangeSummary> { IsError = true, ErrorData = refusal };
+            }
+
+            // A later read of the old path is told the new one.
+            FileMoveMemory.Shared.Record(source.Absolute, destination.Absolute, "MoveFile");
+
+            var description = $"Moved '{sourceDisplay}' (project '{sourceProjectName}') to '{destinationDisplay}' (project '{destinationProjectName}'); the text moved unchanged (namespaceHandling keep).";
+            if (isCs && DescribeKeptNamespace(text, destinationProject, destination) is { } namespaceFact)
+            {
+                description += " " + namespaceFact;
+            }
+
+            return new SentinelCallToolResult<AppliedChangeSummary>
+            {
+                IsError = false,
+                SuccessData = AppliedChangeSummary.From(apply, [source, destination], description),
+                Findings = apply.Findings ?? []
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "MoveFile failed for '{Source}' to '{Destination}'", source, destination);
+            return new SentinelCallToolResult<AppliedChangeSummary>()
+            {
+                IsError = true,
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"MoveFile for '{source}' to '{destination}'")
+            };
+        }
+    }
+
+    private static SentinelCallToolResult<AppliedChangeSummary> MoveFileError(string errorCode, string message) =>
+        new()
+        {
+            IsError = true,
+            ErrorData = new ResultError(errorCode, message)
+        };
+
+    // One fact when the moved .cs file declares a namespace that differs from the folder-derived one in its destination project
+    // (the project's default namespace plus the folder path under the project directory); null when they match, the file declares none, or the destination is in no loaded project.
+    private static string? DescribeKeptNamespace(string text, Project? destinationProject, FilePathWrapper destination)
+    {
+        if (destinationProject?.FilePath is not { } projectPath || Path.GetDirectoryName(projectPath) is not { } projectDirectory)
+        {
+            return null;
+        }
+
+        var declared = CSharpSyntaxTree.ParseText(text).GetRoot().DescendantNodes()
+            .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.BaseNamespaceDeclarationSyntax>()
+            .FirstOrDefault()?.Name.ToString();
+        if (declared is null)
+        {
+            return null;
+        }
+
+        var root = string.IsNullOrEmpty(destinationProject.DefaultNamespace) ? destinationProject.Name : destinationProject.DefaultNamespace;
+        var relativeDirectory = Path.GetRelativePath(projectDirectory, Path.GetDirectoryName(destination.Absolute) ?? projectDirectory);
+        var expected = relativeDirectory == "." ? root : root + "." + relativeDirectory.Replace('\\', '.').Replace('/', '.').Trim('.');
+        return string.Equals(declared, expected, StringComparison.Ordinal)
+            ? null
+            : $"The namespace '{declared}' was kept; the destination folder's convention would give '{expected}'.";
+    }
+
     /// <summary>
     /// Fraction of <paramref name="oldContent"/>'s line count that <paramref name="newContent"/>
     /// would remove. Only shrinkage counts -> a large *increase* (codegen, genuine expansion) is

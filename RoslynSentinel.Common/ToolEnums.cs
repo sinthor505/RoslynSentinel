@@ -146,6 +146,18 @@ public enum WriteFileOperation
     Create, Replace
 }
 
+/// <summary>
+/// What MoveFile does about the namespace of a moved .cs file. Only keep is supported so far (the text moves unchanged and the namespace
+/// stays as written); update and copyAndObsolete are declared for the signature and refused as not yet supported. Non-.cs files accept only keep.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum MoveFileNamespaceHandling
+{
+    keep,
+    update,
+    copyAndObsolete
+}
+
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum MatchKind
 {
