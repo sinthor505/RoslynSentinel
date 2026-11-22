@@ -225,6 +225,7 @@ public class SymbolNavigationImpl
                 return new SentinelCallToolResult<object>
                 {
                     IsError = false,
+                    Findings = result.Findings ?? [],
                     SuccessData = result
                 };
             }

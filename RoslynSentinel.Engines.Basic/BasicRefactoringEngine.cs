@@ -837,73 +837,13 @@ public class BasicRefactoringEngine
 
         // ActivatorUtilities.CreateInstance(sp, args) and similar bind to no constructor, so they are not call sites above: they compile after the change and fail at runtime. Reported, never rewritten.
         var reflectiveSites = declaredSymbol is { MethodKind: MethodKind.Constructor }
-            ? await FindReflectiveConstructionSitesAsync(solution, declaredSymbol.ContainingType, cancellationToken)
+            ? await ConstructionSiteFinder.FindReflectiveConstructionSitesAsync(solution, declaredSymbol.ContainingType, cancellationToken)
             : null;
 
         return wrapperMode
             ? new ChangeSignatureResult(result, skippedCallSites, null, migratedCallSites, oldSignatureText, newSignatureText, ChangeSignatureOldSignature.keepAsDeprecatedWrapper, reflectiveSites)
             : new ChangeSignatureResult(result, skippedCallSites, OldSignatureOutcome: ChangeSignatureOldSignature.remove, ReflectiveConstructionSites: reflectiveSites);
     }
-
-    /// <summary>
-    /// Calls of Microsoft.Extensions.DependencyInjection.ActivatorUtilities (CreateInstance, CreateFactory, GetServiceOrCreateInstance, generic or not) and of
-    /// System.Activator.CreateInstance(Type, params object[] args) that name <paramref name="type"/> as a type argument or a typeof argument, matched by symbol. Line is 1-based.
-    /// </summary>
-    private static async Task<List<SkippedCallSite>> FindReflectiveConstructionSitesAsync(Solution solution, INamedTypeSymbol type, CancellationToken cancellationToken)
-    {
-        var sites = new List<SkippedCallSite>();
-        foreach (var document in solution.Projects.Where(project => project.Language == LanguageNames.CSharp).SelectMany(project => project.Documents))
-        {
-            if (document.FilePath == null || await document.GetSyntaxRootAsync(cancellationToken) is not { } root)
-            {
-                continue;
-            }
-
-            // Cheap syntactic pre-filter on the invoked name; the semantic model is only built for files that pass it.
-            var candidates = root.DescendantNodes().OfType<InvocationExpressionSyntax>()
-                .Where(invocation => invocation.Expression switch
-                {
-                    MemberAccessExpressionSyntax access => IsReflectiveConstructionName(access.Name.Identifier.ValueText),
-                    SimpleNameSyntax name => IsReflectiveConstructionName(name.Identifier.ValueText),
-                    _ => false
-                })
-                .ToList();
-            if (candidates.Count == 0 || await document.GetSemanticModelAsync(cancellationToken) is not { } model)
-            {
-                continue;
-            }
-
-            foreach (var invocation in candidates)
-            {
-                if (model.GetSymbolInfo(invocation, cancellationToken).Symbol is not IMethodSymbol method)
-                {
-                    continue;
-                }
-
-                var api = method.ContainingType;
-                var isActivatorUtilities = api.Name == "ActivatorUtilities" && api.ContainingNamespace.ToDisplayString() == "Microsoft.Extensions.DependencyInjection";
-                var isActivatorWithArgs = api.Name == "Activator" && api.ContainingNamespace.ToDisplayString() == "System" && method.Name == "CreateInstance"
-                    && method.Parameters.Any(p => p.Name == "args");
-                if (!isActivatorUtilities && !isActivatorWithArgs)
-                {
-                    continue;
-                }
-
-                var namesType = method.TypeArguments.Any(t => SymbolEqualityComparer.Default.Equals(t.OriginalDefinition, type.OriginalDefinition))
-                    || invocation.ArgumentList.DescendantNodes().OfType<TypeOfExpressionSyntax>()
-                        .Any(typeOf => model.GetTypeInfo(typeOf.Type, cancellationToken).Type is { } named && SymbolEqualityComparer.Default.Equals(named.OriginalDefinition, type.OriginalDefinition));
-                if (namesType)
-                {
-                    var line = root.SyntaxTree.GetLineSpan(invocation.Span, cancellationToken: cancellationToken).StartLinePosition.Line + 1;
-                    sites.Add(new SkippedCallSite(document.FilePath, line, $"{api.Name}.{method.Name} names '{type.Name}'; its arguments are not rewritten and are resolved at runtime"));
-                }
-            }
-        }
-
-        return sites;
-    }
-
-    private static bool IsReflectiveConstructionName(string name) => name is "CreateInstance" or "CreateFactory" or "GetServiceOrCreateInstance";
 
     private static bool IsCommentTrivia(SyntaxTrivia trivia) =>
     trivia.IsKind(SyntaxKind.SingleLineCommentTrivia) || trivia.IsKind(SyntaxKind.MultiLineCommentTrivia)

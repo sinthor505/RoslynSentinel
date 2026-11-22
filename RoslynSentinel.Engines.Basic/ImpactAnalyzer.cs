@@ -109,12 +109,15 @@ public class ImpactAnalyzer
                 }
             }
 
+            // Reflective construction and DI registration bind to no constructor, so the reference search above cannot see them: listed as findings, never as references.
+            var constructionFindings = await ConstructionSiteFindings.ForSymbolAsync(solution, symbol, "InspectSymbol", cancellationToken);
             return new ImpactReport(
                 symbol.ToDisplayString(),
                 symbol.Kind.ToString(),
                 referenceInfos,
                 referenceInfos.Count,
-                affectedProjects.Count
+                affectedProjects.Count,
+                Findings: constructionFindings
             );
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

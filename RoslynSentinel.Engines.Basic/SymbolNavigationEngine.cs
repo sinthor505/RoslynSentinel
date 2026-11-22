@@ -1548,6 +1548,20 @@ public class SymbolNavigationEngine
         string? lineAfter = null,
         string? containingType = null,
         CancellationToken cancellationToken = default)
+        => (await FindCallersWithTargetAsync(filePath, symbolName, contextSnippet, lineBefore, lineAfter, containingType, cancellationToken)).Callers;
+
+    /// <summary>
+    /// FindCallersAsync that also returns the resolved target symbol and the solution snapshot it was resolved in, so a caller can ask follow-up
+    /// questions about the same symbol (for example its construction sites) without resolving the name a second time.
+    /// </summary>
+    public async Task<(List<CallerInfo> Callers, ISymbol Target, Solution Solution)> FindCallersWithTargetAsync(
+        string? filePath,
+        string symbolName,
+        string? contextSnippet = null,
+        string? lineBefore = null,
+        string? lineAfter = null,
+        string? containingType = null,
+        CancellationToken cancellationToken = default)
     {
         // READCHOKEPOINT-CAST: see LocateSymbolAsync above for rationale (production-caller cascade avoided).
         // The solution is fetched per branch below: the filePath branch takes it from the resolved
@@ -1888,7 +1902,7 @@ public class SymbolNavigationEngine
             }
         }
 
-        return results;
+        return (results, symbol, solution);
     }
 
     /// <summary>

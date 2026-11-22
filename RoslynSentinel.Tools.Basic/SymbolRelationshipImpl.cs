@@ -348,12 +348,14 @@ public class SymbolRelationshipImpl
             var droppedProjectNames = new List<string>();
             if (kind == FindReferencesKind.callers)
             {
-                var result = await _symbolNavigationEngine.FindCallersAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, containingType: containingType, cancellationToken: cancellationToken);
-                result = ExcludeTestHits(result, c => c.FilePath, testDocProjects, droppedProjectNames);
+                // TODO construction-site findings below ignore includeTests: a site in a test project is listed even when includeTests is false (hits are filtered, findings are not)
+                var (found, target, targetSolution) = await _symbolNavigationEngine.FindCallersWithTargetAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, containingType: containingType, cancellationToken: cancellationToken);
+                var result = ExcludeTestHits(found, c => c.FilePath, testDocProjects, droppedProjectNames);
                 var summary = SummarizeListResult.Build(result, c => c.FilePath);
                 return new SentinelCallToolResult<object>
                 {
                     IsError = false,
+                    Findings = await ConstructionSiteFindings.ForSymbolAsync(targetSolution, target, "Search", cancellationToken),
                     SuccessData = new CallersSearchResult(result, summary),
                     StatusMessage = summary.ToSummaryMessage("caller") + DroppedTestHitsNote(droppedProjectNames) + ZeroResultScopeNote(summary, symbolName, includeTests),
                     ListSummary = summary
@@ -376,7 +378,7 @@ public class SymbolRelationshipImpl
 
             if (kind == FindReferencesKind.all)
             {
-                var callers = await _symbolNavigationEngine.FindCallersAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, containingType: containingType, cancellationToken: cancellationToken);
+                var (callers, target, targetSolution) = await _symbolNavigationEngine.FindCallersWithTargetAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, containingType: containingType, cancellationToken: cancellationToken);
                 // The implementations half is structurally inapplicable for a concrete target (sealed type,
                 // struct, non-virtual member): that is "nothing to implement", not a failure of the whole
                 // all-query, so the callers half must still be returned.
@@ -399,6 +401,7 @@ public class SymbolRelationshipImpl
                 return new SentinelCallToolResult<object>
                 {
                     IsError = false,
+                    Findings = await ConstructionSiteFindings.ForSymbolAsync(targetSolution, target, "Search", cancellationToken),
                     SuccessData = new ReferencesSearchResult(callers, implementations, summary),
                     StatusMessage = summary.ToSummaryMessage("hit") + DroppedTestHitsNote(droppedProjectNames) + ZeroResultScopeNote(summary, symbolName, includeTests)
                         + (implementationsSkipped ? " Implementations skipped: the target cannot have implementations (sealed/static type or non-virtual member)." : string.Empty),

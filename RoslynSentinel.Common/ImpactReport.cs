@@ -7,7 +7,8 @@ public record ImpactReport(
     int TotalCallSites,
     int AffectedProjectsCount,
     string? Error = null,
-    [property: System.Text.Json.Serialization.JsonIgnore] string? ErrorCode = null
+    [property: System.Text.Json.Serialization.JsonIgnore] string? ErrorCode = null,
+    [property: System.Text.Json.Serialization.JsonIgnore] List<Finding>? Findings = null
 ) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
