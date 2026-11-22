@@ -415,7 +415,7 @@ public class WholeFileWriteTools
     // (the project's default namespace plus the folder path under the project directory); null when they match, the file declares none, or the destination is in no loaded project.
     private static string? DescribeKeptNamespace(string text, Project? destinationProject, FilePathWrapper destination)
     {
-        if (destinationProject?.FilePath is not { } projectPath || Path.GetDirectoryName(projectPath) is not { } projectDirectory)
+        if (destinationProject is null || FolderNamespace.Expected(destinationProject, destination) is not { } expected)
         {
             return null;
         }
@@ -428,9 +428,6 @@ public class WholeFileWriteTools
             return null;
         }
 
-        var root = string.IsNullOrEmpty(destinationProject.DefaultNamespace) ? destinationProject.Name : destinationProject.DefaultNamespace;
-        var relativeDirectory = Path.GetRelativePath(projectDirectory, Path.GetDirectoryName(destination.Absolute) ?? projectDirectory);
-        var expected = relativeDirectory == "." ? root : root + "." + relativeDirectory.Replace('\\', '.').Replace('/', '.').Trim('.');
         return string.Equals(declared, expected, StringComparison.Ordinal)
             ? null
             : $"The namespace '{declared}' was kept; the destination folder's convention would give '{expected}'.";

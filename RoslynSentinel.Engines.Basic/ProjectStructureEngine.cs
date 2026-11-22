@@ -1476,20 +1476,8 @@ public class SolutionStructureEngine
     /// <summary>
     /// Derives the expected namespace for a file based on its path relative to the project root.
     /// </summary>
-    private static string DeriveExpectedNamespace(FilePathWrapper filePath, string projectRoot, string rootNamespace)
-    {
-        // Get the directory containing the file, relative to the project root.
-        var fileDir = Path.GetDirectoryName(filePath) ?? "";
-        var relativeDir = Path.GetRelativePath(projectRoot, fileDir);
-        if (relativeDir == ".")
-        {
-            return rootNamespace;
-        }
-
-        // Convert directory separators to namespace separators, strip leading dots.
-        var nsPart = relativeDir.Replace('\\', '.').Replace('/', '.').Trim('.');
-        return string.IsNullOrEmpty(nsPart) ? rootNamespace : $"{rootNamespace}.{nsPart}";
-    }
+    // The root here comes from GetRootNamespace (csproj XML); only the folder-to-namespace part is shared with MoveFile (FolderNamespace.Expected uses Project.DefaultNamespace).
+    private static string DeriveExpectedNamespace(FilePathWrapper filePath, string projectRoot, string rootNamespace) => FolderNamespace.FromFolder(rootNamespace, projectRoot, filePath);
 
     /// <summary>
     /// Reads the <c><RootNamespace></c> MSBuild property from the project file,
@@ -1497,6 +1485,7 @@ public class SolutionStructureEngine
     /// </summary>
     private static string GetRootNamespace(Project project)
     {
+        // TODO reads RootNamespace from the raw csproj XML, so a value from a props file or an expression is missed; FolderNamespace.Expected (MoveFile) uses Project.DefaultNamespace - unify on one root
         // Try to read <RootNamespace> from the .csproj XML directly -> works for both
         // SDK-style and legacy project formats, and doesn't require a compilation.
         if (project.FilePath is not null)
