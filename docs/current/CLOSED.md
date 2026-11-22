@@ -8,6 +8,18 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## MoveFile slice 1 (keep) - resolved (2026-11-22)
+
+MoveFile slice 1: keep (TOOL-GAP, 2026-11-10) - `MoveFile(sourcePath, destinationPath, namespaceHandling)` all mandatory, any text file, claude-lean core beside CreateFile; slice 1 = keep (update/copyAndObsolete refused as not yet supported), cross-project allowed with the compile gate refusing a breaking move, Git(status) rename hint from the server's own MoveFile record plus identical-content blob-hash pairs, byte-identity test first (EOL bypass only if it fails); unblocks the core-split test move; decisions and acceptance in the proposal; Medium - [doc](proposals/proposal_move_file_tool.md)
+
+Evidence: BUILT 9ea24727 (tool + 14 tests incl. cross-project, blob and UndoChange round trip), 9d0f8fe8 (narrow verbatim chokepoint param + byte-identity tests), 8fd85ebe + 35e24cfa (registries, budget 47500 -> 48000, measured 47688), d614bfc4 (Git(status) rename hints, tiers 1 and 2; 110 filtered tests pass). Live check after restart is on the tracker morning checklist.
+
+## ReplaceRange tool - resolved (2026-11-22)
+
+ReplaceRange tool (TOOL-GAP, 2026-11-09) - `ReplaceRange(filePath, firstLineText, lastLineText, newContent)` all mandatory, verbatim anchor lines each matched exactly once, inclusive range replaced, empty newContent deletes; decided 2026-11-21: claude-lean core beside ReplaceSnippet and on the eval lean list, shared apply tail extracted from ReplaceSnippet, returns ReplaceSnippetResult; decisions and acceptance in the proposal; Medium - [proposal](proposals/proposal_replace_range_tool.md)
+
+Evidence: BUILT 8ef5e730 (apply-tail extraction), 692ac902 (tool + ReplaceRangeTests, 12 pass), 06c37c66 + ab42b7e2 (registries, schema budget 46500 -> 47500, measured 46833). Decisions taken autonomously: anchors compared trimmed, each exactly once in the whole file, no indentation pass, no dry run, near-miss/lift/memories off, no-type-left and empty-file guards reused. Live check (tool visible after restart) is on the tracker morning checklist.
+
 ## UndoLastApply redesigned as UndoChange (last-only, validated, creation-aware) - resolved (2026-11-21)
 
 Redesign `UndoLastApply` as `UndoChange`: last-only, validated, creation-aware (2026-11-21) - refuse a changeId that is not the newest blob for every file it touched, validate the restored tree before writing and refuse on new compile errors, undo of a created file deletes it (blob records Created), CreateFile/WriteFile/DeleteFile and the diff tools return the changeId and undo hint, rename the tool and its hints to `UndoChange`; decisions and acceptance in the proposal; Medium - [proposal](proposals/proposal_undo_change_last_only_validated.md)
