@@ -384,7 +384,8 @@ public class WorkspaceFileEditImpl
                     };
                 }
             }
-            var revertable = allItems.Where(r => r.Outcome == ItemRecordOutcome.Succeeded && r.BeforeSource != null).ToList();
+            // An item is revertable with its pre-image (restore) or when the blob recorded it as created (delete); a null pre-image alone is not enough, it can also mean the pre-image read failed.
+            var revertable = allItems.Where(r => r.Outcome == ItemRecordOutcome.Succeeded && (r.BeforeSource != null || r.Created)).ToList();
             if (revertable.Count == 0)
             {
                 return new SentinelCallToolResult<object>()
@@ -421,6 +422,9 @@ public class WorkspaceFileEditImpl
 
             var failed = new List<string>();
             var revertChanges = new DocumentChangeSet();
+            // Created files are deleted by the undo; one already gone from disk (the drift guard let it through) has nothing left to delete.
+            var deletePaths = new List<FilePathWrapper>();
+            var alreadyAbsent = new List<string>();
             foreach (var item in revertable)
             {
                 if (solutionRoot != null && !item.FilePath.StartsWith(solutionRoot, StringComparison.OrdinalIgnoreCase))
@@ -429,15 +433,31 @@ public class WorkspaceFileEditImpl
                     continue;
                 }
 
+                if (item.Created)
+                {
+                    var createdPath = new FilePathWrapper(item.FilePath);
+                    if (File.Exists(createdPath.Absolute))
+                    {
+                        deletePaths.Add(createdPath);
+                    }
+                    else
+                    {
+                        alreadyAbsent.Add(item.FilePath);
+                    }
+
+                    continue;
+                }
+
                 revertChanges[item.FilePath] = item.BeforeSource!;
             }
 
             ApplyChangesResult? revertResult = null;
             var reverted = new List<string>();
+            var deleted = new List<string>();
             var noOpFiles = new List<string>();
             // Line delta of each revert (keyed by absolute path), measured against the file's text on disk before the write.
             var revertDeltas = new Dictionary<string, FileLineChange>(StringComparer.OrdinalIgnoreCase);
-            if (revertChanges.Count > 0)
+            if (revertChanges.Count > 0 || deletePaths.Count > 0)
             {
                 foreach (var (revertPath, restoredText) in revertChanges)
                 {
@@ -451,14 +471,30 @@ public class WorkspaceFileEditImpl
                 // exactRestore: this writes back a pre-image the server captured itself, so it bypasses the
                 // EOL-change guard and EOL normalization (a mixed-EOL pre-image over a since-normalized file would
                 // otherwise be refused as an EOL change) and writes the captured bytes verbatim.
+                // validateChanges: the restored tree (restores plus the removal of created files) is compiled before anything is written, like every other edit tool; deletePaths join the same atomic call.
                 revertResult = await _workspaceManager.ApplyProposedChangesAsync(
-                    revertChanges, rollbackOnPartialFailure: true, cancellationToken: cancellationToken, exactRestore: true);
+                    revertChanges, validateChanges: true, rollbackOnPartialFailure: true, cancellationToken: cancellationToken, deletePaths: deletePaths, exactRestore: true);
+                if (revertResult.IsError && revertResult.ValidationResult != null)
+                {
+                    // Compile gate refusal: nothing was written; return before RecordUndo/MarkReverted/MarkUndone.
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsError = true,
+                        ErrorData = await ComposeUndoValidationRefusalAsync(changeId, revertChanges, revertResult.ValidationResult, cancellationToken)
+                    };
+                }
+
                 var noOpSet = new HashSet<string>(revertResult.NoOpFiles ?? [], StringComparer.OrdinalIgnoreCase);
+                var deleteSet = new HashSet<string>(deletePaths.Select(p => (string)p), StringComparer.OrdinalIgnoreCase);
                 foreach (var path in revertResult.SucceededFiles)
                 {
                     if (noOpSet.Contains(path))
                     {
                         noOpFiles.Add(path);
+                    }
+                    else if (deleteSet.Contains(path))
+                    {
+                        deleted.Add(path);
                     }
                     else
                     {
@@ -489,7 +525,7 @@ public class WorkspaceFileEditImpl
 
             // The undone change's symbol effects ("call X renamed Y") no longer hold. Marked only when files were actually put back (or
             // already matched), and only effects stamped with this changeId at blob write; an apply that wrote no blob has none.
-            if (reverted.Count + noOpFiles.Count > 0)
+            if (reverted.Count + noOpFiles.Count + deleted.Count + alreadyAbsent.Count > 0)
             {
                 (_workspaceManager as IEditEffectIndexProvider)?.EditEffects.MarkReverted(changeId);
                 // On disk too: the next solution load seeds the index from blobs, and a blob does not otherwise say it was undone.
@@ -507,10 +543,15 @@ public class WorkspaceFileEditImpl
             var noOpPart = noOpFiles.Count > 0
                 ? $" ({noOpFiles.Count} already matched pre-apply state - no change needed: {string.Join(", ", noOpFiles)})"
                 : "";
+            var absentPart = alreadyAbsent.Count > 0
+                ? $" ({alreadyAbsent.Count} created file(s) already absent - nothing to delete: {string.Join(", ", alreadyAbsent)})"
+                : "";
+            // The text shape for restored files only is kept when no created file was deleted.
+            var deletedPart = deleted.Count > 0 ? $"; deleted {deleted.Count} created files" : "";
             return new SentinelCallToolResult<object>()
             {
                 IsError = false,
-                SuccessData = $"Reverted {reverted.Count} files{noOpPart}. Files: {string.Join(", ", reverted)}{lineChangePart}{failedPart}",
+                SuccessData = $"Reverted {reverted.Count} files{deletedPart}{noOpPart}{absentPart}. Files: {string.Join(", ", reverted.Concat(deleted))}{lineChangePart}{failedPart}",
                 Findings = revertResult?.Findings ?? []
             };
         }
@@ -523,6 +564,23 @@ public class WorkspaceFileEditImpl
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "UndoLastApply")
             };
         }
+    }
+
+    /// <summary>
+    /// The <see cref="ToolErrorCode.ValidationFailed"/> error of an undo whose restored tree (restored pre-images plus the removal of created files) fails the compile gate.
+    /// Nothing was written. Facts and options only: the new compiler errors (with the edit-impact attribution when one applies), then what can be done about them.
+    /// </summary>
+    private async Task<ResultError> ComposeUndoValidationRefusalAsync(
+        string changeId, IReadOnlyDictionary<FilePathWrapper, string> restored, DiagnosticReport validation, CancellationToken cancellationToken)
+    {
+        // TODO EditImpactGate.RejectionAsync takes no deletePaths, so an error caused by deleting a created file gets the compiler-error list but no edit-impact attribution ("type X was removed"); add a deletePaths overload and pass the undo's delete targets
+        var errorCount = validation.Diagnostics.Count(d => d.Severity == "Error");
+        var errors = await CompilerErrorLookupHelper.DescribeAsync(validation, _symbolNavigationEngine, cancellationToken, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable);
+        return await EditImpactGate.RejectionAsync(_workspaceManager, restored, validation, _activeToolSurface,
+            $"Undo refused: restoring changeId '{changeId}' would introduce {errorCount} new compiler error(s); nothing was written. ",
+            "Compiler errors the undo would introduce:\n[COMPILER ERROR]\n" + errors +
+            "\nOptions: the dependent code can be edited by hand first, or the dependent change undone first (newest first).",
+            cancellationToken);
     }
 
     /// <summary>
@@ -592,7 +650,7 @@ public class WorkspaceFileEditImpl
     /// <summary>
     /// Undo guard on the file text itself. Refuses the whole undo when, for a revertable item whose blob recorded the text the
     /// operation wrote (AfterSource), the file on disk now differs from that text (EOL style and a leading BOM are ignored) or is
-    /// gone. This catches every later change whatever its source: another agent, the same agent, a raw disk edit, or a change
+    /// gone (a created item that is gone is not drift: nothing is left to delete). This catches every later change whatever its source: another agent, the same agent, a raw disk edit, or a change
     /// made before a server restart. An item with no AfterSource (an older blob, or a tool that builds its own items) is not
     /// checked. Items outside the solution root are not checked because the undo skips them. The writer is named when the edit
     /// attribution ledger or the operation blobs know one.
@@ -613,7 +671,12 @@ public class WorkspaceFileEditImpl
                 var absolute = new FilePathWrapper(item.FilePath).Absolute;
                 if (!File.Exists(absolute))
                 {
-                    drifted.Add((item.FilePath, true));
+                    // A created file that is already gone has nothing left to delete: the undo reports it as already absent instead of refusing.
+                    if (!item.Created)
+                    {
+                        drifted.Add((item.FilePath, true));
+                    }
+
                     continue;
                 }
 
