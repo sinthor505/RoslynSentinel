@@ -360,7 +360,7 @@ public class CreateFileDeleteFileTests
 
     [Test]
     [Category("WorkspaceTools")] // sentinel:auto-category
-    public async Task DeleteFile_ThenUndoLastApply_RestoresFileAsync()
+    public async Task DeleteFile_ThenUndoChange_RestoresFileAsync()
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
@@ -381,7 +381,7 @@ public class CreateFileDeleteFileTests
         var changeId = ((RoslynSentinel.Common.ApplyChangesResult)deleteResult.SuccessData!).ChangeId!;
         Assert.That(changeId, Is.Not.Null.And.Not.Empty);
 
-        var undoResult = await workspaceTools.UndoLastApplyTool(reason: "test message", changeId);
+        var undoResult = await workspaceTools.UndoChangeTool(reason: "test message", changeId);
 
         Assert.That(!undoResult.IsError, Is.True);
         Assert.That(File.Exists(newFile), Is.True);

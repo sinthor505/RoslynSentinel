@@ -284,7 +284,7 @@
       "mcp__root_roslyn_sentinel_advanced_stdio__RenameSymbol",
       "mcp__root_roslyn_sentinel_advanced_stdio__ReplaceSnippet",
       "mcp__root_roslyn_sentinel_advanced_stdio__RunTest",
-      "mcp__root_roslyn_sentinel_advanced_stdio__UndoLastApply",
+      "mcp__root_roslyn_sentinel_advanced_stdio__UndoChange",
       "mcp__root_roslyn_sentinel_advanced_stdio__UsingDirective",
       "mcp__root_roslyn_sentinel_advanced_stdio__WriteFile"
     ]

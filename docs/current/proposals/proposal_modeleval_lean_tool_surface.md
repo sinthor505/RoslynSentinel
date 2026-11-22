@@ -45,7 +45,7 @@ Evidence: a review of every ModelEval scenario and PlanStepRunner prompt, their 
 | Build | compile | 372 calls |
 | RunTest | run tests | ten-chain (78%), PlanStepRunner |
 | *GetMethodSource* (hedge) | read a method | never called, but the system prompt names it (`AgentSystemPrompts.cs:60`) |
-| *UndoLastApply* (hedge) | revert an apply | `DeleteFile`'s description names it |
+| *UndoChange* (hedge) | revert an apply | `DeleteFile`'s description names it |
 | *ChangeSignature* (hedge) | signature change | ten-chain step 5; rarely called |
 
 The 15 tools cost about 8.2k tokens of schema, against 28.5k for the 55.
@@ -98,7 +98,7 @@ Error and hint text changes affect every caller, not only ModelEval. The surface
 
 ## Open questions
 
-- **Hedges:** keep all three (GetMethodSource, UndoLastApply, ChangeSignature), or start at 12 and add on evidence?
+- **Hedges:** keep all three (GetMethodSource, UndoChange, ChangeSignature), or start at 12 and add on evidence?
 - **Resume family:** keep `ChangeAccessibility`/`ModifyModifier`, or re-record the resume capture on the lean surface?
 - **ListAll's row cap** compared with Search's 30-row declaration cap was not checked. Search replacing ListAll may page more.
 - **Scoring:** whether a scenario's scoring or `ToolSchemaComparer` changes when tools are hidden was not checked.

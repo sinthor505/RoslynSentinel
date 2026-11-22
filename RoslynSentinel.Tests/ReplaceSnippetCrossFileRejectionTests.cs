@@ -194,7 +194,7 @@ public class ReplaceSnippetCrossFileRejectionTests
         });
     }
 
-    // A successful apply must hand back the change id that UndoLastApply(changeId: ...) accepts.
+    // A successful apply must hand back the change id that UndoChange(changeId: ...) accepts.
     [Test]
     public async Task ReplaceSnippet_SuccessfulApplyOnInMemoryWorkspace_ChangeIdIsNullBecauseNoBlobIsOwed()
     {

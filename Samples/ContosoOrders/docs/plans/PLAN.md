@@ -17,7 +17,7 @@ new files or structural redesign.
 - Changes should be validated (no new compiler errors) before being treated as done.
 - **Every RoslynSentinel edit tool writes directly to disk and returns `"status": "applied"` /
   `"note": "Written to disk."` on success — there is no separate stage/apply lifecycle to manage.**
-  Each `changeId` is a completed edit, not a pending one; `UndoLastApply(changeId: ...)` reverts it
+  Each `changeId` is a completed edit, not a pending one; `UndoChange(changeId: ...)` reverts it
   if needed. Do not expect or look for a bulk "apply all staged changes" step — one does not exist,
   and none is required.
 

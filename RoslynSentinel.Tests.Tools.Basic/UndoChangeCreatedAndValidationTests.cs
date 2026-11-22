@@ -1,4 +1,4 @@
-// Slice 12-7 of the UndoLastApply -> UndoChange redesign (docs/current/proposals/proposal_undo_change_last_only_validated.md):
+// Slice 12-7 of the UndoChange redesign (docs/current/proposals/proposal_undo_change_last_only_validated.md):
 // undo deletes files the blob records as Created, compiles the restored tree before writing (validateChanges), and applies
 // restores plus deletes in one atomic call. Real-disk fixture (PersistentWorkspaceManager over a TestSolutionFixture copy) because
 // both the compile gate and the delete path live in the write chokepoint. The still-open case "a created marker is not set when the
@@ -29,7 +29,7 @@ public class UndoChangeCreatedAndValidationTests
         return workspaceManager;
     }
 
-    // Writes a blob of hand-built items; the stamp orders it for the last-only rule (copy of the helper in UndoLastApplyTests, which keeps its own private).
+    // Writes a blob of hand-built items; the stamp orders it for the last-only rule (copy of the helper in UndoChangeTests, which keeps its own private).
     private static async Task<string> WriteBlobAsync(TestSolutionFixture fixture, string changeId, params OperationItemRecord[] items)
     {
         var context = new ToolCallContext("test-agent", "implementer", "ApplyDiff", "hand-built undo blob", 0) { SessionId = "s1" };
@@ -54,7 +54,7 @@ public class UndoChangeCreatedAndValidationTests
 
     [Test]
     [Description("Test (b): restoring a pre-image that removes a member another file still uses is refused by the compile gate; nothing is written and the blob is not marked undone")]
-    public async Task UndoLastApply_RestoreBreaksDependentCode_IsRefusedWithNothingWrittenAsync()
+    public async Task UndoChange_RestoreBreaksDependentCode_IsRefusedWithNothingWrittenAsync()
     {
         using var fixture = new TestSolutionFixture();
         var helper = CoreFile(fixture, "UndoHelper.cs");
@@ -66,7 +66,7 @@ public class UndoChangeCreatedAndValidationTests
         var blobPath = await WriteBlobAsync(fixture, "change-breaks-dependent", Edited(helper, HelperWithoutExtra, HelperWithExtra));
         workspaceManager.ClearExternalFileChanges();
 
-        var result = await workspaceTools.UndoLastApplyTool(reason: "test message", changeId: "change-breaks-dependent");
+        var result = await workspaceTools.UndoChangeTool(reason: "test message", changeId: "change-breaks-dependent");
 
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.ValidationFailed));
@@ -79,7 +79,7 @@ public class UndoChangeCreatedAndValidationTests
 
     [Test]
     [Description("Test (c): undo of a CreateFile change removes the file, using the changeId the CreateFile tool call returned")]
-    public async Task UndoLastApply_UndoOfCreateFileChange_DeletesTheCreatedFileAsync()
+    public async Task UndoChange_UndoOfCreateFileChange_DeletesTheCreatedFileAsync()
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = await LoadAsync(fixture);
@@ -92,7 +92,7 @@ public class UndoChangeCreatedAndValidationTests
         Assert.That(changeId, Is.Not.Null.And.Not.Empty);
         Assert.That(File.Exists(created), Is.True);
 
-        var undo = await workspaceTools.UndoLastApplyTool(reason: "test message", changeId: changeId!);
+        var undo = await workspaceTools.UndoChangeTool(reason: "test message", changeId: changeId!);
 
         Assert.That(undo.IsError, Is.False, undo.ErrorData?.Message);
         Assert.That((string)undo.SuccessData!, Does.Contain("Reverted 0 files; deleted 1 created files"));
@@ -102,7 +102,7 @@ public class UndoChangeCreatedAndValidationTests
 
     [Test]
     [Description("The drift guard still fires for a created item after the last-only check passes: a raw disk edit of the created file refuses the undo and keeps the file")]
-    public async Task UndoLastApply_CreatedFileEditedOnDiskAfterCreation_IsRefusedAndFileKeptAsync()
+    public async Task UndoChange_CreatedFileEditedOnDiskAfterCreation_IsRefusedAndFileKeptAsync()
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = await LoadAsync(fixture);
@@ -116,7 +116,7 @@ public class UndoChangeCreatedAndValidationTests
         await File.WriteAllTextAsync(created, edited);
         workspaceManager.ClearExternalFileChanges();
 
-        var undo = await workspaceTools.UndoLastApplyTool(reason: "test message", changeId: changeId);
+        var undo = await workspaceTools.UndoChangeTool(reason: "test message", changeId: changeId);
 
         Assert.That(undo.IsError, Is.True);
         Assert.That(undo.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.ConcurrentEditRefused));
@@ -126,7 +126,7 @@ public class UndoChangeCreatedAndValidationTests
 
     [Test]
     [Description("Deleting a created type that other code references is refused with the compile errors and the file is kept")]
-    public async Task UndoLastApply_CreatedTypeReferencedByOtherCode_IsRefusedAndFileKeptAsync()
+    public async Task UndoChange_CreatedTypeReferencedByOtherCode_IsRefusedAndFileKeptAsync()
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = await LoadAsync(fixture);
@@ -140,7 +140,7 @@ public class UndoChangeCreatedAndValidationTests
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Core", "CreatedUser.cs"),
             "namespace UndoFixtureCode;\n\npublic class CreatedUser\n{\n    public CreatedByTool Held { get; set; } = new();\n}\n");
 
-        var undo = await workspaceTools.UndoLastApplyTool(reason: "test message", changeId: changeId);
+        var undo = await workspaceTools.UndoChangeTool(reason: "test message", changeId: changeId);
 
         Assert.That(undo.IsError, Is.True);
         Assert.That(undo.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.ValidationFailed));
@@ -150,7 +150,7 @@ public class UndoChangeCreatedAndValidationTests
 
     [Test]
     [Description("A mixed undo (one edited file plus one created file) restores and deletes in one call")]
-    public async Task UndoLastApply_EditedAndCreatedFiles_AreBothRevertedInOneCallAsync()
+    public async Task UndoChange_EditedAndCreatedFiles_AreBothRevertedInOneCallAsync()
     {
         using var fixture = new TestSolutionFixture();
         var edited = CoreFile(fixture, "UndoEdited.cs");
@@ -164,7 +164,7 @@ public class UndoChangeCreatedAndValidationTests
         await WriteBlobAsync(fixture, "change-mixed", Edited(edited, before, after), CreatedItem(created, CreatedTypeSource));
         workspaceManager.ClearExternalFileChanges();
 
-        var undo = await workspaceTools.UndoLastApplyTool(reason: "test message", changeId: "change-mixed");
+        var undo = await workspaceTools.UndoChangeTool(reason: "test message", changeId: "change-mixed");
 
         Assert.That(undo.IsError, Is.False, undo.ErrorData?.Message);
         Assert.That((string)undo.SuccessData!, Does.Contain("Reverted 1 files; deleted 1 created files"));
@@ -174,7 +174,7 @@ public class UndoChangeCreatedAndValidationTests
 
     [Test]
     [Description("When the compile gate refuses a mixed undo, neither the edited file nor the created file is touched")]
-    public async Task UndoLastApply_MixedUndoRefusedByCompileGate_TouchesNeitherFileAsync()
+    public async Task UndoChange_MixedUndoRefusedByCompileGate_TouchesNeitherFileAsync()
     {
         using var fixture = new TestSolutionFixture();
         var edited = CoreFile(fixture, "UndoEdited.cs");
@@ -188,7 +188,7 @@ public class UndoChangeCreatedAndValidationTests
         var blobPath = await WriteBlobAsync(fixture, "change-mixed-refused", Edited(edited, brokenBefore, after), CreatedItem(created, CreatedTypeSource));
         workspaceManager.ClearExternalFileChanges();
 
-        var undo = await workspaceTools.UndoLastApplyTool(reason: "test message", changeId: "change-mixed-refused");
+        var undo = await workspaceTools.UndoChangeTool(reason: "test message", changeId: "change-mixed-refused");
 
         Assert.That(undo.IsError, Is.True);
         Assert.That(undo.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.ValidationFailed));
@@ -201,7 +201,7 @@ public class UndoChangeCreatedAndValidationTests
 
     [Test]
     [Description("A created file that is already gone from disk is not drift: the undo succeeds, names it as already absent and marks the blob undone")]
-    public async Task UndoLastApply_CreatedFileAlreadyAbsent_SucceedsAndReportsAlreadyAbsentAsync()
+    public async Task UndoChange_CreatedFileAlreadyAbsent_SucceedsAndReportsAlreadyAbsentAsync()
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = await LoadAsync(fixture);
@@ -210,7 +210,7 @@ public class UndoChangeCreatedAndValidationTests
         var blobPath = await WriteBlobAsync(fixture, "change-created-absent", CreatedItem(gone, CreatedTypeSource));
         workspaceManager.ClearExternalFileChanges();
 
-        var undo = await workspaceTools.UndoLastApplyTool(reason: "test message", changeId: "change-created-absent");
+        var undo = await workspaceTools.UndoChangeTool(reason: "test message", changeId: "change-created-absent");
 
         Assert.That(undo.IsError, Is.False, undo.ErrorData?.Message);
         Assert.That((string)undo.SuccessData!, Does.Contain("already absent"));
@@ -220,7 +220,7 @@ public class UndoChangeCreatedAndValidationTests
 
     [Test]
     [Description("A succeeded item with a null BeforeSource that is not marked Created (a failed pre-image read looks the same) is still not reversible")]
-    public async Task UndoLastApply_NullBeforeSourceWithoutCreatedMarker_StillReturnsNoReversibleItemsAsync()
+    public async Task UndoChange_NullBeforeSourceWithoutCreatedMarker_StillReturnsNoReversibleItemsAsync()
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = await LoadAsync(fixture);
@@ -230,7 +230,7 @@ public class UndoChangeCreatedAndValidationTests
         await WriteBlobAsync(fixture, "change-unmarked", new OperationItemRecord { FilePath = file, Outcome = ItemRecordOutcome.Succeeded, BeforeSource = null, AfterSource = CreatedTypeSource, Created = false });
         workspaceManager.ClearExternalFileChanges();
 
-        var undo = await workspaceTools.UndoLastApplyTool(reason: "test message", changeId: "change-unmarked");
+        var undo = await workspaceTools.UndoChangeTool(reason: "test message", changeId: "change-unmarked");
 
         Assert.That(undo.IsError, Is.True);
         Assert.That(undo.ErrorData!.ErrorCode, Is.EqualTo("NoReversibleItems"));

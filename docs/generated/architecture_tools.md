@@ -125,7 +125,7 @@
 | WorkspaceTools | RetryFailedChanges | Claude, claude-lean (on demand), Workspace | - | Retries failed file writes using server-cached content. |
 | WorkspaceTools | RunTest | Claude, claude-lean, Workspace | - | Runs `dotnet test` on the solution or one project. |
 | WorkspaceTools | SplitProjectByFolder | Claude, claude-lean (on demand), Workspace | - | Moves all files under a folder from one project to a new target project, preserving structure. |
-| WorkspaceTools | UndoLastApply | Claude, claude-lean, Workspace | - | Reverts files from a previous apply back to their pre-apply state. |
+| WorkspaceTools | UndoChange | Claude, claude-lean, Workspace | - | Reverts files from a previous apply back to their pre-apply state. |
 
 ## RoslynSentinel.Tools.Experimental
 

@@ -145,14 +145,14 @@ worktree); no other intervention.
   `IOrderPricingCalculator.cs`; then CreateFile "already exists", Member parse/not-found errors, and 10 alternating
   "'oldContent' is required" / "'newContent' is required" failures with no next step. Fixed after E: ReplaceSnippet
   refuses an edit that leaves no type declaration; ReplaceSnippet on an empty file and CreateFile on an existing empty
-  file now recover (UndoLastApply, CreateFile).
+  file now recover (UndoChange, CreateFile).
 - **R7: content correct, error budget exceeded.** RunTest 7/7 at T34; failures were 2 redirects, CS0266, five
   "More than one protection modifier" (`private internal`, step 3), four oldContent not found, two CS0103.
 - **Template/tool flaws with the default template:** no `</think>` leak, no malformed calls; one invalid enum (R2 T20
   `Git` operation `rm`).
 - **Smaller findings:** the repeat note fired on R7 T11 although only newContent matched (oldContent differed), so
   "this exact edit" overstates it; the tool list a run had is not recorded in `transcript.json` or `agent.log`, so
-  tool availability (WriteFile, UndoLastApply) cannot be checked from artifacts.
+  tool availability (WriteFile, UndoChange) cannot be checked from artifacts.
 
 ## R9 resample: loop assist at the moment the loop starts (2026-11-11)
 
@@ -501,7 +501,7 @@ are fine)."), 727ade36 (FileNotFound with no name match says the file does not e
   reasoning "the trial rename didn't persist. The files are back to original state", R2 T7 "The tool also renamed the
   class ... wait, it didn't!", R3 T6 "the class rename didn't persist". Misreading, cost one turn each.
 - **R4 T6.1:** RenameSymbol with `docCommentId` `0cbca485@...` (the `changeId` from the lift summary's "Call
-  UndoLastApply(changeId: ...)" hint) -> "Symbol '0cbca485@...' no longer resolves - may have been renamed, moved, or
+  UndoChange(changeId: ...)" hint) -> "Symbol '0cbca485@...' no longer resolves - may have been renamed, moved, or
   removed" (`PersistentWorkspaceManager.cs:3564`, main tree).
 - **Step 7 ordering:** R2 and R3 failed Step 7 at RunTest (field left as the concrete type after the lift rewrote it); both fixed it next turn.
 

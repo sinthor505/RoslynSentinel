@@ -23,7 +23,7 @@ public class SurfaceAwareHintsNavigationEngineTests
     private static readonly HashSet<string> LeanTools = new()
     {
         "ReadFile", "GetFileOutline", "Search", "ListSolutionItems", "GetLargeResult", "ReplaceSnippet", "Member", "RenameSymbol", "CreateFile",
-        "DeleteFile", "Build", "RunTest", "GetMethodSource", "UndoLastApply", "ChangeSignature", "ChangeAccessibility", "ModifyModifier", "UsingDirective",
+        "DeleteFile", "Build", "RunTest", "GetMethodSource", "UndoChange", "ChangeSignature", "ChangeAccessibility", "ModifyModifier", "UsingDirective",
     };
 
     private static readonly Func<string, bool> LeanSurface = name => LeanTools.Contains(name);

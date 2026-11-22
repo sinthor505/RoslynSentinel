@@ -344,14 +344,15 @@ public class WorkspaceTools
         CancellationToken cancellationToken = default)
         => _readNavTools.GetOperationDetailTool(reason, changeId, filter, maxItems, offset, cancellationToken);
 
-    [McpServerTool(Name = "UndoLastApply")]
+    // Renamed from UndoLastApply (redesign: last-only, compile-validated, deletes created files); kept in this comment so a code search for the old name still finds it.
+    [McpServerTool(Name = "UndoChange")]
     [Produces(DataTag.ResultOnly)]
     [Description("Reverts files from a previous apply back to their pre-apply state. The result lists the lines each reverted file gained and lost.")]
-    public Task<SentinelCallToolResult<object>> UndoLastApplyTool(
+    public Task<SentinelCallToolResult<object>> UndoChangeTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.OperationId, required: true)] string changeId,
         CancellationToken cancellationToken = default)
-        => _fileEdit.UndoLastApply(reason, changeId, cancellationToken);
+        => _fileEdit.UndoChange(reason, changeId, cancellationToken);
 
     // ── 8. GetWorkspaceHealthTool ─────────────────────────────────────────────────
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]

@@ -254,7 +254,7 @@ public class EolChokepointConversionTests
         try
         {
             var file = WriteExistingFile(dir, MixedSource);
-            var result = await ApplyAsync(file, MixedSourceWithAddedLine, EolMode.Crlf, exactRestore: true, operationLabel: "UndoLastApply");
+            var result = await ApplyAsync(file, MixedSourceWithAddedLine, EolMode.Crlf, exactRestore: true, operationLabel: "UndoChange");
 
             Assert.That(result.IsError, Is.False, result.Summary);
             Assert.That(result.Findings?.Count ?? 0, Is.Zero);

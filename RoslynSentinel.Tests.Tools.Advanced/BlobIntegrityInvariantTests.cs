@@ -1,5 +1,5 @@
 // The blob-integrity invariant: an apply that writes files and returns a changeId must have a
-// blob that UndoLastApplyTool can resolve.
+// blob that UndoChangeTool can resolve.
 //
 // Run 20260910-013550-398 (A3) violated it across five tools at once -> WrapRangeTool, ExtractMembersTool,
 // SyncInterfaceTool, InlineSymbolTool and MoveTypeTool all passed slashed operation names ("WrapRangeTool/region"),
@@ -8,7 +8,7 @@
 // confident undo instruction and no blob on disk.
 //
 // Driven across all five tools rather than the one the original report named, because this is the
-// third recorded UndoLastApplyTool gap (cf. project_synctypeandfilename_undolastapply_blocker) and the
+// third recorded UndoChangeTool gap (cf. project_synctypeandfilename_undolastapply_blocker) and the
 // class of bug is what needs covering. Tools that decline a change (target not found, etc.) return
 // no changeId and are simply not exercised by that case -> the assertion is conditional on a
 // changeId being issued, which is exactly the invariant's own precondition.
@@ -79,7 +79,7 @@ public class BlobIntegrityInvariantTests
         Assert.That(
             OperationBlobWriter.FindBlobPath(changeId, _workspaceManager.GetSolutionRoot()),
             Is.Not.Null,
-            $"{toolName} returned changeId '{changeId}' but UndoLastApply cannot resolve a blob for it. " +
+            $"{toolName} returned changeId '{changeId}' but UndoChange cannot resolve a blob for it. " +
             "Either the blob write failed silently, or the operation name contains a character that " +
             "can't appear in a filename (the A3 defect - see OperationBlobWriterTests).");
     }

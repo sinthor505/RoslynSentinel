@@ -27,7 +27,7 @@ public record UpliftCallerInfo(
 {
     /// <summary>
     /// Full source text of the file immediately before this uplift was written to disk.
-    /// Populated by RunUpliftBatchAsync to enable undo_last_apply via BeforeSource on
+    /// Populated by RunUpliftBatchAsync to enable UndoChange via BeforeSource on
     /// OperationItemRecord. Null when pre-image capture fails or the file did not previously exist.
     /// </summary>
     public string? BeforeSource
@@ -328,7 +328,7 @@ public class PropagateCtFileResult : IOperationResult
     }
     /// <summary>
     /// Full source text of the file immediately before this operation was written to disk.
-    /// Populated by PropagateCancellationTokenBatchAsync to enable undo_last_apply via
+    /// Populated by PropagateCancellationTokenBatchAsync to enable UndoChange via
     /// BeforeSource on OperationItemRecord. Null when pre-image capture fails or the file
     /// did not previously exist.
     /// </summary>

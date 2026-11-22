@@ -56,7 +56,7 @@ public static class ToolEffectList
         "Build",
         "RunTest",
         "DeleteUnusedSymbol",
-        "UndoLastApply",
+        "UndoChange",
         "DeleteFile",
         "RenameSymbol",
         "ChangeAccessibility",

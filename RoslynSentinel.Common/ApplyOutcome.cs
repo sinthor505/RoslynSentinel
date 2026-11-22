@@ -11,11 +11,11 @@ namespace RoslynSentinel.Common;
 /// successful apply whose operation blob could not be written, in which case
 /// <paramref name="NotReversibleReason"/> is set. Withholding the handle in that case is
 /// deliberate: previously one was issued regardless, so five tools returned handles
-/// <c>UndoLastApply</c> could never resolve, which is strictly worse than returning none.
+/// <c>UndoChange</c> could never resolve, which is strictly worse than returning none.
 /// </param>
 /// <param name="NotReversibleReason">
 /// Non-null only when the change landed on disk but its undo record did not. Callers should
-/// surface this in place of the usual "call UndoLastApply" note. The server also trips its
+/// surface this in place of the usual "call UndoChange" note. The server also trips its
 /// unrecoverable breaker in this case, so no further mutation is accepted this session.
 /// </param>
 /// <param name="Validation">

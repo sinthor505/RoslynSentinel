@@ -65,7 +65,7 @@
   but the watcher treats Renamed events as drift, so that needs its own design.
 - **Blob coverage (measured 2026-11-09).** 45 direct `ApplyProposedChangesAsync` sites in 9 production
   files; the chokepoint writes no blob itself. 35 reach a blob write (19 in the same method, 16 via a caller
-  or Asyncify summary chain), 5 confirmed without (`UndoLastApply` WorkspaceFileEditImpl.cs:142,
+  or Asyncify summary chain), 5 confirmed without (`UndoChange` WorkspaceFileEditImpl.cs:142,
   `RetryFailedChanges` -> PWM.RetryFailedChangesAsync, CommentingTools BulkComment seed phase :146,
   MsToolAugmentEngine sort-usings :623 and format :768), 5 untraced (AsyncifyTools
   RunHandlerConvertPhaseAsync cleanup applies :3268-3350). `GitImpl` writes no blob and bypasses the
@@ -135,7 +135,7 @@ files are written, with `hashAfter` computed from the content about to be writte
 - The blob writer runs after the apply returns ("outside the chokepoint by design",
   `docs/current/references/reference_code_file_write_paths.md:97`), so the file is on disk before any entry
   exists. A sibling's watcher event (500 ms debounce) can fire first and find nothing.
-- Blob coverage is incomplete: no blob for `UndoLastApply`, `RetryFailedChanges`,
+- Blob coverage is incomplete: no blob for `UndoChange`, `RetryFailedChanges`,
   `MsToolAugmentEngine` format/using-sort, and Git operations; the Asyncify/`AsyncBatchEngine` batch
   paths were only partly traced.
 
@@ -192,7 +192,7 @@ up in the other sessions' journals:
   (Windows-only, install burden).
 - **Journal in the repo root.** Shows as untracked, needs gitignore and a drift-detector exclusion.
 - **Extend the operation blobs instead of a new journal.** Attractive (one writer, existing
-  `changeId`, `UndoLastApply`/`GetOperationDetail` already read them) but: writes land after the
+  `changeId`, `UndoChange`/`GetOperationDetail` already read them) but: writes land after the
   files, coverage has the gaps listed above, no retention exists (blobs from 2026-06-08 remain),
   writes are not atomic, there is no schema version, and each blob holds full source so a hash lookup
   means scanning hundreds of large files. The blob `Reason` also needs the same `AsyncLocal` plumbing,
@@ -216,7 +216,7 @@ up in the other sessions' journals:
 - Worktrees: is `git rev-parse --git-common-dir` the right root for sessions in different worktrees
   of one repo, or should the journal be per-worktree?
 - Whether the `Outcome` serialisation drift in old blobs (`"succeeded"`, `1`, `"Succeeded"`) breaks
-  loading in `UndoLastApply`/`GetOperationDetail` is unverified; it affects only the `changeId` link,
+  loading in `UndoChange`/`GetOperationDetail` is unverified; it affects only the `changeId` link,
   not the journal.
 
 ## Cost / risk
@@ -237,8 +237,8 @@ Worth their own TODO entries:
 
 - No retention for `.roslynsentinel/operations/` blobs.
 - `.roslynsentinel/` is ignored only by the blanket `*.json` gitignore rule. (FIXED 2026-11-09: `/.roslynsentinel/` ignored.)
-- `UndoLastApply` cannot undo a file creation (null `BeforeSource` is filtered out; returns
-  `NoReversibleItems`), and `UndoLastApply` itself writes no blob.
+- `UndoChange` cannot undo a file creation (null `BeforeSource` is filtered out; returns
+  `NoReversibleItems`), and `UndoChange` itself writes no blob.
 - `Reason` is never populated on successful blob items. (Superseded: `AppliedByReason` is populated from `ToolCallContext`.)
 
 ## Related

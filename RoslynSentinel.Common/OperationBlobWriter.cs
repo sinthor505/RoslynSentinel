@@ -56,7 +56,7 @@ public static class OperationBlobWriter
     /// "Inline/method", …); <see cref="Path.Combine"/> then resolved the blob into a
     /// non-existent operations/WrapRange/ subdirectory, the write threw
     /// DirectoryNotFoundException, and the catch below swallowed it into a return string nobody
-    /// inspected. Five tools returned changeIds that UndoLastApply could never resolve. The call
+    /// inspected. Five tools returned changeIds that UndoChange could never resolve. The call
     /// sites were renamed too, but this holds for any future name regardless of caller discipline.
     /// </remarks>
     private static string SanitizeToolName(string toolName)
@@ -157,7 +157,7 @@ public static class OperationBlobWriter
             // appeared anywhere at all.
             // hint-ok: log message template for operators; the text is never returned to an agent
             logger?.LogError(ex,
-                "Operation blob write failed for {ToolName}/{ChangeId} - the change is not reversible via UndoLastApply.",
+                "Operation blob write failed for {ToolName}/{ChangeId} - the change is not reversible via UndoChange.",
                 toolName, changeId);
             return BlobWriteResult.Failed($"blob write failed: {ex.GetType().Name}: {ex.Message}");
         }
@@ -212,7 +212,7 @@ public static class OperationBlobWriter
     /// <summary>
     /// Writes a forensic blob for a completed write-through apply (direct-apply refactoring
     /// tools that no longer go through the staging dictionaries). Mirrors the per-changeId blob
-    /// shape used by staged-change applies so UndoLastApply/GetOperationDetail resolve it
+    /// shape used by staged-change applies so UndoChange/GetOperationDetail resolve it
     /// identically. No-ops (returns a diagnostic string, never throws) when nothing was written.
     /// </summary>
     public static async Task<BlobWriteResult> WriteApplyBlobAsync(
@@ -260,7 +260,7 @@ public static class OperationBlobWriter
     /// <c>BlobName</c> string rather than an <see cref="ApplyOutcome"/>. Those ten call sites
     /// previously assigned <see cref="WriteAsync"/>'s return value straight into that field and
     /// never checked it, so a failed write surfaced to the agent as a plausible-looking blob name
-    /// beginning with '(' alongside a changeId <c>UndoLastApply</c> could not resolve. Centralized
+    /// beginning with '(' alongside a changeId <c>UndoChange</c> could not resolve. Centralized
     /// so the trip cannot be forgotten at a call site -> the omission mode this whole change fixes.
     /// The <see cref="ValidateAndApplyHelper"/> path does the equivalent for the write-through
     /// refactoring tools.

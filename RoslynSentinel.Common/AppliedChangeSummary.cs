@@ -134,18 +134,18 @@ public record AppliedChangeSummary(
 
             // No ChangeId on a non-dry-run means no undo record exists -> either because nothing was
             // written (a no-op) or because the blob write failed. Either way, advertising
-            // UndoLastApply here would be a lie, and used to be one: run 20260910-013550-398
-            // returned this note alongside a changeId UndoLastApply could never resolve. The two
+            // UndoChange here would be a lie, and used to be one: run 20260910-013550-398
+            // returned this note alongside a changeId UndoChange could never resolve. The two
             // cases are distinguished by AffectedFiles, and the specific reason travels in
             // ApplyOutcome.NotReversibleReason for callers that surface it.
             if (!string.IsNullOrEmpty(ChangeId))
             {
-                return $"Written to disk. Call {ToolCallHint.Call("UndoLastApply", ("changeId", ChangeId))} to revert if needed." + NotEchoedHint();
+                return $"Written to disk. Call {ToolCallHint.Call("UndoChange", ("changeId", ChangeId))} to revert if needed." + NotEchoedHint();
             }
 
             return AffectedFiles.Count == 0
                 ? "No changes were produced, so nothing was written and there is nothing to undo. If you expected a change, the operation matched no target - or its refactoring feature is disabled on this server (check the Features tool)."
-                : "Written to disk, but NOT reversible: the server could not record an undo entry for this change, so UndoLastApply cannot revert it. Revert manually (e.g. via version control) if needed." + NotEchoedHint();
+                : "Written to disk, but NOT reversible: the server could not record an undo entry for this change, so UndoChange cannot revert it. Revert manually (e.g. via version control) if needed." + NotEchoedHint();
         }
     }
 

@@ -13,7 +13,7 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 
 /// <summary>
 /// Member(addMember) with two declarations in newMemberSource, against the edit-effect and undo contract: one write and one
-/// changeId for the whole block; UndoLastApply restores the file byte for byte; each declaration records its own Added effect
+/// changeId for the whole block; UndoChange restores the file byte for byte; each declaration records its own Added effect
 /// on the ambient ToolCallContext; a refused or dry-run add records nothing; the undo marks both committed effects reverted.
 /// The on-disk cases use a real PersistentWorkspaceManager so the blob stamps the change id (an InMemoryWorkspace cannot undo).
 /// </summary>
@@ -81,7 +81,7 @@ public class MemberAddManyUndoTests
     }
 
     [Test]
-    public async Task AddTwoMembers_UndoLastApply_RestoresTheFileByteForByte()
+    public async Task AddTwoMembers_UndoChange_RestoresTheFileByteForByte()
     {
         await OpenOnDiskAsync();
         var before = await File.ReadAllBytesAsync(HolderFullPath);
@@ -102,7 +102,7 @@ public class MemberAddManyUndoTests
         var added = await File.ReadAllTextAsync(HolderFullPath);
         Assert.That(added, Does.Contain("public int A() => 1;").And.Contain("public int B() => 2;"), "both members must be written before the undo");
 
-        var undo = await NewEditImpl().UndoLastApply(new ToolCallReason("undo the two-member add"), changeId);
+        var undo = await NewEditImpl().UndoChange(new ToolCallReason("undo the two-member add"), changeId);
 
         Assert.That(undo.IsError, Is.False, undo.ErrorData?.Message);
         Assert.That(await File.ReadAllBytesAsync(HolderFullPath), Is.EqualTo(before), "the undo restores the exact bytes, so both members are gone");
@@ -202,7 +202,7 @@ public class MemberAddManyUndoTests
             Assert.That(index.Find("B")[0].ChangeId, Is.EqualTo(changeId), "the blob write stamped B with the change id");
         });
 
-        var undo = await NewEditImpl().UndoLastApply(new ToolCallReason("undo the two-member add"), changeId);
+        var undo = await NewEditImpl().UndoChange(new ToolCallReason("undo the two-member add"), changeId);
 
         Assert.That(undo.IsError, Is.False, undo.ErrorData?.Message);
         Assert.Multiple(() =>

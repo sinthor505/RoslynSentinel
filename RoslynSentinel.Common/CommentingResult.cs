@@ -42,6 +42,6 @@ public sealed class CommentingResult
     /// <summary>True when this call ran with dryRun=true -> no LLM calls or writes were made, counts reflect planned work only.</summary>
     public bool DryRun { get; set; }
 
-    /// <summary>Forensic operation blob filename (enables UndoLastApply) -> empty when dryRun (nothing was written).</summary>
+    /// <summary>Forensic operation blob filename (enables UndoChange) -> empty when dryRun (nothing was written).</summary>
     public string BlobName { get; set; } = "";
 }

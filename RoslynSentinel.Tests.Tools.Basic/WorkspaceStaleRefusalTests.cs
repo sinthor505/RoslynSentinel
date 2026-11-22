@@ -103,7 +103,7 @@ public class WorkspaceStaleRefusalTests
         Assert.That(File.Exists(target), Is.True, "the write must land when no failure is recorded");
     }
 
-    // Pins the current undo behaviour: exactRestore (UndoLastApply) is refused while stale because
+    // Pins the current undo behaviour: exactRestore (UndoChange) is refused while stale because
     // AllowExactRestoreWhenWorkspaceStale is false. This test must change if that constant is flipped.
     [Test]
     public async Task StaleWorkspace_ExactRestoreWrite_IsRefusedWhileExemptionIsOff()

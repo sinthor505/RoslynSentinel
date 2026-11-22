@@ -167,7 +167,7 @@ public class SurfaceAwareHintsArgumentValidatorTests
         {
             "ReadFile", "GetFileOutline", "Search", "ListSolutionItems", "GetLargeResult", "ReplaceSnippet",
             "Member", "RenameSymbol", "CreateFile", "DeleteFile", "Build", "RunTest", "GetMethodSource",
-            "UndoLastApply", "ChangeSignature", "ChangeAccessibility", "ModifyModifier", "UsingDirective",
+            "UndoChange", "ChangeSignature", "ChangeAccessibility", "ModifyModifier", "UsingDirective",
         };
         Func<string, bool> isLeanCallable = leanSurface.Contains;
 

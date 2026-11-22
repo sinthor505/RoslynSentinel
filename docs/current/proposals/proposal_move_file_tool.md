@@ -98,7 +98,7 @@ through model output.
    Owner ideas to evaluate: run it through the `ScopedLedger` (scoped operation ledger, per the "name which
    ledger" convention); give the new file's class a different name, or rename the old class, to avoid the
    conflicts. Neither idea is evaluated yet.
-5. **Undo behaviour for the created file.** Whether `UndoLastApply` restores both paths (recreates the source,
+5. **Undo behaviour for the created file.** Whether `UndoChange` restores both paths (recreates the source,
    removes the destination) is not verified.
 6. **Byte preservation (from the EOL finding above).** Does the EOL pre-pass need a "move, do not normalise"
    bypass, or can the tool pass already-final text through it unchanged? Unverified.
@@ -107,7 +107,7 @@ through model output.
 - Touches `WholeFileWriteTools` (new method), the tool description budget (every extra tool costs startup
   prompt tokens, hence the dependency on the schema trim), and tests for the write chokepoint paths: move
   with the same content, cross-project move, refused cases (binary, directory, destination exists, source
-  missing), and `UndoLastApply`.
+  missing), and `UndoChange`.
 - Risk: a move that passes through the EOL pre-pass could rewrite line endings or the BOM of a file the user
   expected to be byte-identical (open question 6). A move into another project can break compilation; the
   compile gate must catch it (open question 1).

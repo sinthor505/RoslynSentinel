@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 namespace RoslynSentinel.Common;
 
 /// <summary>
-/// Shared static helper for writing the forensic operation blob that undo_last_apply relies on.
+/// Shared static helper for writing the forensic operation blob that UndoChange relies on.
 /// Extracted verbatim from WorkspaceTools.WriteBlobForApplyAsync (see
 /// docs/current/plans/closed/plan_split_workspace_refactoring_tools_for_di.md, Decision 7 step 1) so both
 /// the file-edit and project-management tool clusters can call it without a cross-class dependency.
@@ -11,7 +11,7 @@ namespace RoslynSentinel.Common;
 public static class OperationBlobHelper
 {
     /// <summary>
-    /// Writes a forensic blob for a completed apply so undo_last_apply can revert it.
+    /// Writes a forensic blob for a completed apply so UndoChange can revert it.
     /// Uses pre-images from ApplyChangesResult.PreImages (populated by ApplyProposedChangesAsync).
     /// blobChangeId: if provided, uses this id for the blob filename; if null, mints a fresh id.
     /// </summary>

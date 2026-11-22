@@ -113,13 +113,13 @@ you last read it"). A target with no entry is allowed.
 | --- | --- | --- |
 | `RefuseIfObservedStale` (anchor and whole-file tools) | `WriteFile` (ReplaceFile), `DeleteFile`, `ApplyDiff` (files format and diff format), `ApplyUnifiedDiff`, `ReplaceSnippet`, `ReplaceSnippetBatch` | allowed, plus a `WriteChokepoint` Info finding "changed without this agent having read them first" |
 | `RefuseIfObservedStaleQuiet` (engine and batch tools) | `ValidateAndApplyHelper.ValidateAndApplyAsync` DEFAULT (so `Member`, `RenameSymbol`, `MoveMember`, `ModifyModifier`, `ChangeSignature`, `ExtractMethod`, `SemanticFindReplace` and every other tool that writes through the helper, with no edit at the tool); direct callers `AsyncifyTools` (18 sites), `AsyncBatchEngine` (11), `CommentingTools` (2), `MsToolAugmentEngine` (2: sort-usings and format), `DeleteUnusedSymbol` (1) | allowed, NO finding (engine tools edit many files; the finding would be noise) |
-| `None` (exempt) | `UndoLastApply` (`exactRestore: true`), `CreateFile` (a new file has nothing observed); `RetryFailedChangesAsync` (a cache replay inside `Common`, default policy) | not checked |
+| `None` (exempt) | `UndoChange` (`exactRestore: true`), `CreateFile` (a new file has nothing observed); `RetryFailedChangesAsync` (a cache replay inside `Common`, default policy) | not checked |
 
 - The helper's default deviates on purpose from the chokepoint's default-`None` pattern (a code comment says
   so). A `dryRun` returns before the chokepoint and is never stale-checked.
 - Ratchet: `StaleReadPolicyRatchetTests` (`Tests.Basic`) is a syntax scan of the production projects outside
   `Common`: every `ApplyProposedChangesAsync(` invocation must name a `staleReadPolicy:` argument or be
-  allowlisted as `<file>::<member>` with a reason (today only `WorkspaceFileEditImpl::UndoLastApply` and
+  allowlisted as `<file>::<member>` with a reason (today only `WorkspaceFileEditImpl::UndoChange` and
   `::CreateFile`); a second test fails when an allowlist key no longer matches, so the list only shrinks. It
   checks that the argument is PRESENT, not which value it carries, and it does not see the helper's default.
 - Mapping to the tool result: `WriteRefusal.TryMap(toolName, result, out ResultError)`
@@ -350,7 +350,7 @@ Problem it fixes: a `Search` that finds nothing because another agent or session
 - A new read tool that returns file content must call `RecordObserved`, or its files stay unprotected
   (convention, not enforced). It should also call `FlushPendingFoldsAsync` (and `SyncFileFromDiskIfStaleAsync` when it
   reads one named file) before reading, or it inherits the debounce-window exposure (section 8; also convention, not enforced). New WRITERS are covered by `StaleReadPolicyRatchetTests`.
-- `UndoLastApply` (`exactRestore`) and `CreateFile` skip both the stale-read check and `FoldPending` by design.
+- `UndoChange` (`exactRestore`) and `CreateFile` skip both the stale-read check and `FoldPending` by design.
 - Tests on one process: the reading agent's `StartSeq` must be past a competing write, or
   `ConcurrentEditRefused` pre-empts `StaleRead`. `PersistentWorkspaceManager.AddExternalChangeForTest`
   sets a drift entry without the watcher (it now only affects `ExternalFileDrift` output).

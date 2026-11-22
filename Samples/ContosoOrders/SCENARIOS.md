@@ -9,7 +9,7 @@ deliberately planted issues, each mapped to one or more MCP tools exposed by
 
 ## Write model (current tools)
 Every edit tool applies its change and writes it to disk immediately, returning
-`"status": "applied"` / `"note": "Written to disk. Call UndoLastApply(changeId: ...) to revert if
+`"status": "applied"` / `"note": "Written to disk. Call UndoChange(changeId: ...) to revert if
 needed."` in the same response. There is no separate stage → validate → apply lifecycle, and no
 bulk "apply all staged changes" tool — each `changeId` names a completed, already-persisted edit,
 not a pending one. Earlier versions of this spec (and of the tools themselves) modeled a staged
@@ -661,7 +661,7 @@ possible. As a result this is no longer the hardest scenario in the set; grade i
 - Batch 2: `Git` tool scenarios (commit a written-to-disk change), `GenerateMapping` between two
   DTOs, `ModifyBaseType`/`ModifyModifier`/`AddMemberTyped` disambiguation drills.
 - Batch 3: adversarial/error-recovery — intentionally wrong symbol names, stale `changeId`s,
-  `RetryFailedChanges`, `UndoLastApply` after a bad edit.
+  `RetryFailedChanges`, `UndoChange` after a bad edit.
 - Batch 4: `SplitProjectByFolder` and `ProjectConsistencyEngine`-backed tools on a slightly larger
   multi-project sample.
 - Batch 5: unprompted-housekeeping judgment — does the agent notice and (only when asked to use its

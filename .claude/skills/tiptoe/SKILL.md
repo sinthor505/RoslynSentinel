@@ -46,7 +46,7 @@ anything whose partial completion is worse than not starting.
 For each queue item, in order:
 1. Do the step.
 2. `Build`; run only the relevant tests. Red and not fixable in one more small step: revert
-   only *your* files for that step (`UndoLastApply`), mark the item `PARKED: <why>` and move on.
+   only *your* files for that step (`UndoChange`), mark the item `PARKED: <why>` and move on.
 3. Commit green work right away: `Git` scope `listed`, only files you changed, message ends with
    the attribution trailer. Never commit a non-compiling tree. Small commits are the point.
 4. Append one line to the progress log (done / parked, commit hash) and drop the item from the

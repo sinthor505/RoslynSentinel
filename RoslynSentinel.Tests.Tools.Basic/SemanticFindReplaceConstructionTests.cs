@@ -368,8 +368,8 @@ public class SemanticFindReplaceConstructionTests
     }
 
     [Test]
-    [Description("Apply returns a changeId that UndoLastApply reverts")]
-    public async Task ReplaceConstruction_ApplyThenUndoLastApply_RestoresOriginalFiles()
+    [Description("Apply returns a changeId that UndoChange reverts")]
+    public async Task ReplaceConstruction_ApplyThenUndoChange_RestoresOriginalFiles()
     {
         await SeedAsync();
 
@@ -384,7 +384,7 @@ public class SemanticFindReplaceConstructionTests
             _validationEngine,
             Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
-        var undo = await editImpl.UndoLastApply(new ToolCallReason("testing undo of replaceConstruction"), changeId);
+        var undo = await editImpl.UndoChange(new ToolCallReason("testing undo of replaceConstruction"), changeId);
 
         Assert.That(undo.IsError, Is.False, undo.ErrorData?.Message);
         AssertSeedUnchanged();

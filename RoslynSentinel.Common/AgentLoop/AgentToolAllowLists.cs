@@ -10,7 +10,7 @@ public static class AgentToolAllowLists
     public static readonly IReadOnlyList<string> Lean =
     [
         "ReadFile", "GetFileOutline", "Search", "ListSolutionItems", "GetLargeResult", "ReplaceSnippet", "Member",
-        "RenameSymbol", "CreateFile", "DeleteFile", "Build", "RunTest", "GetMethodSource", "UndoLastApply",
+        "RenameSymbol", "CreateFile", "DeleteFile", "Build", "RunTest", "GetMethodSource", "UndoChange",
         "ChangeSignature", "ChangeAccessibility", "ModifyModifier", "UsingDirective",
     ];
 

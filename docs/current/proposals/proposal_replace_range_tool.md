@@ -60,7 +60,7 @@ The owner expects it to be used more than `ReplaceSnippet` because it does not n
 Name-keyed registries a new tool must join (verified to exist, whether each is mandatory is a hypothesis the
 plan must settle by reading the failing test or the consumer): `ToolClassRegistry.cs:53`
 (`ClaudeLeanToolNames`), `ErrorPolicyIntentTable.cs:132` (`ReplaceSnippet` is `Dispatch("action", ...)`;
-ReplaceRange has no `action`, so a fixed entry like `UndoLastApply`'s `Fixed(E)` at `:152` is the likely
+ReplaceRange has no `action`, so a fixed entry like `UndoChange`'s `Fixed(E)` at `:152` is the likely
 shape), `AgentIdentityCapture.cs:32` (`MissingTermArgument`: `ReplaceSnippet` maps to `"oldContent"`),
 `ToolArgumentValidator.cs:711,744` (parameter and enum aliases), `EditImpactAnalyzer.cs:26` (`NamedTools`).
 Per CLAUDE.md a tool needs the `[McpServerToolType]` class entry plus the `ToolClassRegistry` entry plus the DI
@@ -87,7 +87,7 @@ are more):
    `(path, oldContent, newContent)`; ReplaceRange has no `oldContent`.
 6. `ComposeCompileRejectionAsync` (`:1308`, called at `:1626`).
 7. `OperationBlobHelper.WriteBlobForApplyAsync("replace_snippet", ...)` (`:1650`), the summary, the
-   `UndoLastApply` hint (`:1654`) and the optional diff (`BuildDiffFromPreImages`).
+   `UndoChange` hint (`:1654`) and the optional diff (`BuildDiffFromPreImages`).
 
 Which of 3-5 the helper takes as options and which ReplaceRange simply does not use is open (Open question
 1). `ReplaceSnippetBatch` carries a near copy of the same tail (`:1943-2011`); extracting for it too is out of
@@ -96,7 +96,7 @@ this proposal's scope but the helper's shape should not preclude it.
 ### Name of the undo hint
 
 The success summary names the undo tool. `proposal_undo_change_last_only_validated.md` renames
-`UndoLastApply` to `UndoChange`; ReplaceRange's summary must use whichever name is live when it lands, and
+`UndoChange` to `UndoChange`; ReplaceRange's summary must use whichever name is live when it lands, and
 the hint is generated through `ToolCallHint.Call(...)` like the other sites so it moves with the rename.
 
 ## Alternatives considered, not pursued

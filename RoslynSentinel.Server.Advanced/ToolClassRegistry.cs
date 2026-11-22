@@ -52,7 +52,7 @@ public static class ToolClassRegistry
             "Search",
             "Build", "RunTest", "Git", "ReplaceSnippet", "Member",
             "RenameSymbol", "ChangeSignature", "CreateFile", "DeleteFile", "WriteFile",
-            "UndoLastApply", "McpServerControl", "McpServerStatus", "ExternalFileDrift", "SemanticFindReplace", "InspectSymbol", "MoveMember", "UsingDirective", "GetDiagnostics",
+            "UndoChange", "McpServerControl", "McpServerStatus", "ExternalFileDrift", "SemanticFindReplace", "InspectSymbol", "MoveMember", "UsingDirective", "GetDiagnostics",
             ToolsetCatalog.ControlToolName,
         ],
         StringComparer.Ordinal);

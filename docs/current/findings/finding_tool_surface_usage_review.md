@@ -73,7 +73,7 @@ Nothing is defective. The finding is that most of the maintained tool surface ha
 | ListExternalDiskChanges | 20 | 3 | 0 | 5 | 2026-10-08 |
 | SubAgent | 18 | 7 | 1 | 4 | 2026-11-06 |
 | AcknowledgeExternalFileChanges | 17 | 0 | 0 | 5 | 2026-10-08 |
-| UndoLastApply | 13 | 3 | 7 | 9 | 2026-11-14 |
+| UndoChange | 13 | 3 | 7 | 9 | 2026-11-14 |
 | ChangeSignature | 10 | 5 | 10 | 3 | 2026-11-04 |
 | MoveType | 10 | 3 | 6 | 3 | 2026-11-10 |
 | ListSolutionItems | 9 | 2 | 2 | 3 | 2026-10-28 |
@@ -111,7 +111,7 @@ Notes:
 
 - Tool surface: `RoslynSentinel.Common\AgentLoop\AgentToolAllowLists.cs:8-14` defines `Lean` (18 tools):
   ReadFile, GetFileOutline, Search, ListSolutionItems, GetLargeResult, ReplaceSnippet, Member,
-  RenameSymbol, CreateFile, DeleteFile, Build, RunTest, GetMethodSource, UndoLastApply, ChangeSignature,
+  RenameSymbol, CreateFile, DeleteFile, Build, RunTest, GetMethodSource, UndoChange, ChangeSignature,
   ChangeAccessibility, ModifyModifier, UsingDirective. `PlanStepRunnerSurface` (line 19) adds
   GetDiagnostics. Model-eval defaults to the lean list since 2026-11-14
   (`RoslynSentinel.Tests.ModelEval\ChainEvalToolSurface.cs`).
@@ -120,13 +120,13 @@ Notes:
   ListSolutionItems 1126, RenameSymbol 1122, Member 477, ListAll 463, CreateFile 431, RunTest 332,
   GetLargeResult 323, GetFileOutline 170, ChangeAccessibility 110, GetWorkspaceHealth 90, LocateSymbol 74,
   ProjectDoc 73, UsingDirective 59, EditSnippets 52, Git 42, ModifyModifier 36, ModifyAttribute 27,
-  ModifyBaseType 22, DeleteFile 21, UndoLastApply 19, PreviewRenameImpact 11, ChangeSignature 10,
+  ModifyBaseType 22, DeleteFile 21, UndoChange 19, PreviewRenameImpact 11, ChangeSignature 10,
   MethodSignature 10, RetryFailedChanges 9, DeleteUnusedSymbol 8, SummaryComment 8, GetDiagnostics 6,
   FindReferences 3, GetBestInsertionPoint 2, GetMethodSource 2, McpServerStatus 2, SyncTypeAndFilename 2,
   TypedMember 2, GetOperationDetail 1, GetTypeInfo 1.
 - 13 PlanStepRunner logs (23 names): ReadFile 182, ReplaceSnippet 66, SearchSolutionText 65 (a stale
   name, not in today's list), Member 35, RunTest 17, Build 15, LocateSymbol 13, ChangeAccessibility 8,
-  CreateFile 6, UndoLastApply 6, UsingDirective 6, GetDiagnostics 4, ListAll 2, ListSolutionItems 2, and
+  CreateFile 6, UndoChange 6, UsingDirective 6, GetDiagnostics 4, ListAll 2, ListSolutionItems 2, and
   one call each of GetBestInsertionPoint, GetLargeResult, GetMethodSource, GetOperationDetail,
   GetWorkspaceHealth, InspectSymbol, ModifyAttribute, ModifyEnum, SummaryComment.
 - No Advanced or Experimental tool was called by a model under test. Neither were ExtractMethod or
@@ -202,7 +202,7 @@ Nothing here is decided. Likelihood is the reviewer's judgement of future use by
 | Tools | Evidence | Likelihood |
 | --- | --- | --- |
 | ReadFile, Search, ReplaceSnippet, Git, GetMethodSource, RunTest, Member, GetFileOutline, Build, GetLargeResult, CreateFile, McpServerStatus, LoadSolution, WriteFile | 384 to 22,518 calls each | Certain |
-| SemanticFindReplace, ExternalFileDrift, McpServerControl, DeleteFile, McpToolsetControl, InspectSymbol, GetDiagnostics, GitRemote, RenameSymbol, MoveMember, UsingDirective, UndoLastApply, ChangeSignature | 10 to 332 calls each, all used in the last 30 days | High |
+| SemanticFindReplace, ExternalFileDrift, McpServerControl, DeleteFile, McpToolsetControl, InspectSymbol, GetDiagnostics, GitRemote, RenameSymbol, MoveMember, UsingDirective, UndoChange, ChangeSignature | 10 to 332 calls each, all used in the last 30 days | High |
 | MoveType, ListSolutionItems | MoveType 10 calls, 6 recent. ListSolutionItems 9 Claude calls, 1,126 eval calls, named in orientation hints | High |
 | ExtractMembers, MoveAllTypesToFiles, ApplyDiff, CreateProject, ProjectDoc | 2 to 9 calls each, all recent; ProjectDoc first used 2026-11-10 | Medium |
 | ParameterEdit | 1 call; the only tool that fixes call sites for constructor parameters | Medium |

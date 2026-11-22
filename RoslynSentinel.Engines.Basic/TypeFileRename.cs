@@ -75,7 +75,7 @@ public static class TypeFileRename
     /// Folds a file move into <paramref name="changes"/>: drops <paramref name="from"/>'s entry and adds
     /// <paramref name="content"/> at <paramref name="to"/>. Returns the paths the caller must pass as <c>deletePaths</c>
     /// (not <c>removePaths</c>) to the apply step: deletePaths goes through the tracked delete path that captures the old
-    /// file's pre-image for UndoLastApply and removes the old Document from the workspace itself. Passing the old path in
+    /// file's pre-image for UndoChange and removes the old Document from the workspace itself. Passing the old path in
     /// BOTH removePaths and deletePaths would ask the validation to RemoveDocument the same path twice against its own
     /// candidate solution (InvalidOperationException on the second), so removePaths is intentionally not returned.
     /// </summary>

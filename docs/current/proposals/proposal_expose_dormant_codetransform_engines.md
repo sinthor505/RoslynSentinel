@@ -107,7 +107,7 @@ Genuinely missing features (no engine anywhere): `CopyType` (flag only, `Sentine
 
 1. **Write path:** the transforms are stated to write through the unified write chokepoint (compile gate,
    undo blob). Taken as given, but Phase 2 must assert it per transform (file changed on disk, an
-   `UndoLastApply` blob exists) because the code was not traced in this proposal.
+   `UndoChange` blob exists) because the code was not traced in this proposal.
 2. **`--mode=all` excludes `Experimental`** (and so does `Claude`): add it to `ToolClassRegistry.ExclusiveModes`
    or an equivalent exclusion, so it costs zero tokens unless asked for by name. Add this to Phase 1.
 3. **`ConvertIndexerToMethod` call sites:** answer was a bare "yes" to a conditional question. Recorded

@@ -164,7 +164,7 @@ Owner decisions, settled 2026-11-07:
    both join the rule in Step 1. `.editorconfig` stays out: it changes diagnostics, not the binary's behaviour.
 
 Risks and unverified points:
-5. **State lost on restart (hypothesis to verify).** Undo history (`UndoLastApply`), toolsets enabled by
+5. **State lost on restart (hypothesis to verify).** Undo history (`UndoChange`), toolsets enabled by
    `McpToolsetControl` and other in-memory state probably do not survive. Step 6 should list what is lost in
    the restart-reason marker so the agent re-enables toolsets instead of concluding a tool is missing.
 6. **Hook hang (risk).** `GitImpl.RunGitAsync` reads git's output to EOF; a prebuild child that inherits the

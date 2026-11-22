@@ -51,7 +51,7 @@ public class UnrecoverableCircuitBreaker
             _unrecoverableHaltMessage =
                 $"The server recorded an unrecoverable operation-blob integrity failure while applying '{toolName}' " +
                 $"(changeId {changeId}): {diagnostic}. Changes may have been written to disk without an undo record, " +
-                "so UndoLastApply cannot reverse them. All mutating tools are disabled for the remainder of this " +
+                "so UndoChange cannot reverse them. All mutating tools are disabled for the remainder of this " +
                 "session; there is no way to clear this from here. Stop, restart the server, and have an operator " +
                 "review the server log before making further changes.";
         }

@@ -19,7 +19,7 @@ public record BridgeAppliedInfo(
 {
     /// <summary>
     /// Full source text of the file immediately before this operation was written to disk.
-    /// Populated by RunBridgeBatchAsync to enable undo_last_apply via BeforeSource on
+    /// Populated by RunBridgeBatchAsync to enable UndoChange via BeforeSource on
     /// OperationItemRecord. Null when pre-image capture fails or the file did not previously exist.
     /// </summary>
     public string? BeforeSource

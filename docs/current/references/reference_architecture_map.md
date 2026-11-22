@@ -169,7 +169,7 @@ The edit attribution ledger (`Common/EditAttributionLedger.cs`, in memory, per s
 operation ledger) records who wrote each file. Inside `_solutionLock` (before the OS write lock), after the refusals above, the chokepoint refuses with
 `ConcurrentEditRefused` when a different known agent wrote a target after this call started (`CheckConcurrentEditConflict`), or
 wrote anywhere since the call started and re-running the compile gate now finds new errors (`RevalidateAfterForeignWriteAsync`,
-only for a call whose gate passed, `ToolCallContext.GatePassed`). `UndoLastApply` refuses over another agent's later write, using
+only for a call whose gate passed, `ToolCallContext.GatePassed`). `UndoChange` refuses over another agent's later write, using
 `OperationItemRecord.AppliedByAgentId`. `Common/EditAttributionFindings.cs` adds last-writer `Findings` to `Build`,
 `GetDiagnostics`, compile-gate failures and `Git(status)`. `Common/NotFoundEvidence.cs` adds them to not-found errors by searching
 the operation blobs, which every window shares, and then Git. It also adds the zero-hit `Search` hint (`ForZeroHitSearch` /
@@ -186,7 +186,7 @@ entry differs from disk or memory. Opted in: the anchor and whole-file tools (`W
 `ApplyUnifiedDiff`, `ReplaceSnippet` single and batch) pass `RefuseIfObservedStale`; every engine tool goes through
 `ValidateAndApplyHelper`, whose default is `RefuseIfObservedStaleQuiet` (no "not read first" finding); the direct callers
 (`AsyncifyTools`, `AsyncBatchEngine`, `CommentingTools`, `MsToolAugmentEngine`, `DeleteUnusedSymbol`) pass `Quiet`. Exempt:
-`UndoLastApply` (`exactRestore`) and `CreateFile`. `StaleReadPolicyRatchetTests` fails a production call site that does not name
+`UndoChange` (`exactRestore`) and `CreateFile`. `StaleReadPolicyRatchetTests` fails a production call site that does not name
 `staleReadPolicy:` (presence, not value). `Common/WriteRefusal.TryMap` turns the refusal into the tool's `ResultError`
 (`StaleRead`, `FoldPending`, `WriteLockBusy`). A successful write CREATES the writer's entry after the rollback decision, so a writer is protected
 against later changes to files it wrote. Directly after the stale check, the `FoldPending` guard (every policy except

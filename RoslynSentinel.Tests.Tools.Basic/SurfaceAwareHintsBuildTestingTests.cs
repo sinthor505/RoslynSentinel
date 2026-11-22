@@ -135,7 +135,7 @@ public class SurfaceAwareHintsBuildTestingTests
     {
         "ReadFile", "GetFileOutline", "Search", "ListSolutionItems", "GetLargeResult", "ReplaceSnippet",
         "Member", "RenameSymbol", "CreateFile", "DeleteFile", "Build", "RunTest", "GetMethodSource",
-        "UndoLastApply", "ChangeSignature", "ChangeAccessibility", "ModifyModifier", "UsingDirective",
+        "UndoChange", "ChangeSignature", "ChangeAccessibility", "ModifyModifier", "UsingDirective",
     };
 
     private static bool LeanPredicate(string toolName) => LeanSurface.Contains(toolName);

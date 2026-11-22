@@ -245,7 +245,7 @@ touching disk today.
 
 `changeId`/operation-blob issuance (lines 75-97) currently happens unconditionally on every
 successful apply. Under staging, a `changeId` in the disk-blob sense is only meaningful at flush time
--- an edit that only staged has nothing on disk yet for `UndoLastApply` to reconcile against. Staged
+-- an edit that only staged has nothing on disk yet for `UndoChange` to reconcile against. Staged
 edits instead get an entry in the staging journal (decision 4), which needs its own identifier scheme
 distinct from (but referenceable from) the disk `changeId` a later flush eventually assigns.
 
@@ -253,7 +253,7 @@ distinct from (but referenceable from) the disk `changeId` a later flush eventua
 
 A stack of prior working-copy `Solution` snapshots makes undoing a staged (not yet flushed) edit a
 pure in-memory pop -- no disk I/O, no blob lookup, just replacing `CurrentSolution` with the
-snapshot before that edit. `UndoLastApply` keeps operating exactly as it does today for flushed
+snapshot before that edit. `UndoChange` keeps operating exactly as it does today for flushed
 (disk) blobs. What is not yet designed is the interaction at the boundary: what "undo" means when the
 caller doesn't know or say whether the target of the undo is still staged or has already flushed.
 Left as an open item below.

@@ -79,7 +79,7 @@ $orientTools = [System.Collections.Generic.HashSet[string]]::new([StringComparer
 $mutateTools = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 @('Edit', 'Write', 'NotebookEdit', 'ReplaceSnippet', 'Member', 'MethodSignature', 'ModifyModifier',
   'ModifyEnum', 'ApplyDiff', 'RenameSymbol', 'MoveMember', 'ChangeSignature', 'CreateFile',
-  'WriteFile', 'DeleteFile', 'UsingDirective', 'SemanticFindReplace', 'UndoLastApply') |
+  'WriteFile', 'DeleteFile', 'UsingDirective', 'SemanticFindReplace', 'UndoChange') |
     ForEach-Object { [void]$mutateTools.Add($_) }
 # Catch-all for refactoring tools not listed above
 $mutateNamePattern = '^(Add|Remove|Rename|Move|Extract|Modify|Replace|Apply|Create|Delete|Insert|Change|Convert|Introduce|Inline|Asyncify)'

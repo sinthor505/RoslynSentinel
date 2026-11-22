@@ -19,7 +19,7 @@ public interface IWorkspaceMutator : IEolResolver
 {
     /// <summary>
     /// Writes the given file changes to disk through the shared write-path chokepoint (drift-checked, undo-tracked, retried on lock).
-    /// <paramref name="exactRestore"/> is for restoring a file to a pre-image the server itself captured earlier (UndoLastApply): the
+    /// <paramref name="exactRestore"/> is for restoring a file to a pre-image the server itself captured earlier (UndoChange): the
     /// content is written byte for byte, bypassing the EOL-change guard, EOL normalization and the whitespace-only no-op skip, because
     /// a restore to the captured pre-image is intended by definition. Normal edits must leave it false. <paramref name="staleReadPolicy"/> follows operationLabel; <see cref="StaleReadPolicy.None"/> (default) skips the stale-read check.
     /// </summary>

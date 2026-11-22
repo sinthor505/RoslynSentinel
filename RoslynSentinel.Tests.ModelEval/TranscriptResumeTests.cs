@@ -512,8 +512,8 @@ public class TranscriptResumeTests
         var replayed = new List<ReplayedCall>
         {
             new ReplayedCall(1, "ReplaceSnippet", false, false,
-                "{\"hint\":\"Call UndoLastApply(reason: \\\"<why you call this>\\\", changeId: \\\"1991aaec\\\") to revert.\"}",
-                "{\"hint\":\"Call UndoLastApply(reason: \\\"<why you call this>\\\", changeId: \\\"6b2f0c3d\\\") to revert.\"}"),
+                "{\"hint\":\"Call UndoChange(reason: \\\"<why you call this>\\\", changeId: \\\"1991aaec\\\") to revert.\"}",
+                "{\"hint\":\"Call UndoChange(reason: \\\"<why you call this>\\\", changeId: \\\"6b2f0c3d\\\") to revert.\"}"),
         };
 
         Assert.That(TranscriptResume.CountResultDrift(replayed), Is.Zero);

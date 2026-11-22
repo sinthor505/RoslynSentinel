@@ -65,7 +65,7 @@ genuine model reasoning/coding mistakes.**
 | Run | Archive | Cause | Category |
 |---|---|---|---|
 | 1 | `20260907-043332-733` | LM Studio stream aborted mid-plan-explanation, before any tool call | Infra |
-| 5 | `20260907-051058-411` | `Member(operation:remove)` (deleting `ReformatWholeFile`) reformatted `UnrelatedMethodBefore`'s spacing from `( int    x , int y )` to `(int x, int y)`. Model's own logic was fully correct. **Model caught the drift itself** — turn 9 reasoning: *"Wait - I see that the `UnrelatedMethodBefore` method's formatting got changed... Let me check the original more carefully"* — tried `UndoLastApply`, reapplied the same `Member(remove)` call, got the identical corruption back, gave up chasing it. | Tool bug |
+| 5 | `20260907-051058-411` | `Member(operation:remove)` (deleting `ReformatWholeFile`) reformatted `UnrelatedMethodBefore`'s spacing from `( int    x , int y )` to `(int x, int y)`. Model's own logic was fully correct. **Model caught the drift itself** — turn 9 reasoning: *"Wait - I see that the `UnrelatedMethodBefore` method's formatting got changed... Let me check the original more carefully"* — tried `UndoChange`, reapplied the same `Member(remove)` call, got the identical corruption back, gave up chasing it. | Tool bug |
 | 6 | `20260907-052214-110` | Same symptom via a different call sequence (`ChangeAccessibility` + `Member(operation:replace)`). Model never noticed, declared success without re-diffing against the true original. | Tool bug |
 | 8 | `20260907-053919-255` | `Member(operation:replace)` dropped the blank line before the replaced member (this file's original finding) | Tool bug |
 | 9 | (streaming abort, run 9) | LM Studio stream aborted mid-generation | Infra |
@@ -77,7 +77,7 @@ a dropped blank line AND as method-signature re-spacing (deliberately-odd spacin
 conventional spacing). This is squarely a tool bug in `Member`'s write/formatting path, not
 something addressable via prompt wording — run 5 is the strongest evidence of that: the model
 correctly identified the corruption in its own reasoning and attempted a legitimate recovery
-(`UndoLastApply` + retry), and the SAME tool bug reproduced identically on retry. No amount of
+(`UndoChange` + retry), and the SAME tool bug reproduced identically on retry. No amount of
 prompt tightening fixes a bug that reproduces even when the model does everything right and
 actively tries to route around it.
 

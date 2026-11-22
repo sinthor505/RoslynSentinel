@@ -85,7 +85,7 @@ commit, then `RELEASE <file>`. Keep holds short: one slice.
 
 The working tree is shared, so a peer's `Build` sees your uncommitted edits too. A `BLOCKED`
 reply must list the files that hold the build errors. If they are yours, finish or undo your own
-edits (`UndoLastApply`), then resend `COMMIT`.
+edits (`UndoChange`), then resend `COMMIT`.
 
 Real deadlock: both sessions are `BLOCKED` on each other, and neither can reach a green build
 with its own edits alone. Stop and tell your user both sides' file lists. That is the only case

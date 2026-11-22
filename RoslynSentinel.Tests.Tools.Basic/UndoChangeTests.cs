@@ -1,4 +1,4 @@
-// UndoLastApplyTool -> WorkspaceTools. Zero coverage before this file (GetTestCoverageMap
+// UndoChangeTool -> WorkspaceTools. Zero coverage before this file (GetTestCoverageMap
 // flagged it as the highest-priority gap: it's the recently-fixed atomicity/rollback path per
 // project_workspace_manager_deferred_gaps.md, so regressions here are the costliest to miss).
 //
@@ -24,7 +24,7 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
 [Category("WorkspaceTools")] // sentinel:auto-category
-public class UndoLastApplyTests
+public class UndoChangeTests
 {
     private static readonly JsonSerializerOptions PrettyJson = new() { WriteIndented = true };
 
@@ -36,7 +36,7 @@ public class UndoLastApplyTests
     public void Setup()
     {
         _fakeWorkspaceManager = FakeWorkspaceManager.ReadOnly();
-        _tempDir = Path.Combine(Path.GetTempPath(), "UndoLastApplyTests_" + Guid.NewGuid().ToString("N"));
+        _tempDir = Path.Combine(Path.GetTempPath(), "UndoChangeTests_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDir);
         _fakeWorkspaceManager.SolutionPath = Path.Combine(_tempDir, "Test.sln");
 
@@ -74,16 +74,16 @@ public class UndoLastApplyTests
     }
 
     [Test]
-    public async Task UndoLastApply_NoBlobForChangeId_ReturnsNoOperationBlobFoundAsync()
+    public async Task UndoChange_NoBlobForChangeId_ReturnsNoOperationBlobFoundAsync()
     {
-        var result = await _fakeWorkspaceTools.UndoLastApplyTool(reason: "test message", "nonexistent-change-id");
+        var result = await _fakeWorkspaceTools.UndoChangeTool(reason: "test message", "nonexistent-change-id");
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("NoOperationBlobFound"));
     }
 
     [Test]
-    public async Task UndoLastApply_BlobHasNoSucceededItems_ReturnsNoReversibleItemsAsync()
+    public async Task UndoChange_BlobHasNoSucceededItems_ReturnsNoReversibleItemsAsync()
     {
         var changeId = "change-failed-only";
         WriteBlob(changeId, new[]
@@ -91,14 +91,14 @@ public class UndoLastApplyTests
             new { FilePath = Path.Combine(_tempDir, "Foo.cs"), Outcome = ItemRecordOutcome.Failed, BeforeSource = (string?)null },
         });
 
-        var result = await _fakeWorkspaceTools.UndoLastApplyTool(reason: "test message", changeId);
+        var result = await _fakeWorkspaceTools.UndoChangeTool(reason: "test message", changeId);
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("NoReversibleItems"));
     }
 
     [Test]
-    public async Task UndoLastApply_BlobHasSucceededItemWithNullBeforeSource_ReturnsNoReversibleItemsAsync()
+    public async Task UndoChange_BlobHasSucceededItemWithNullBeforeSource_ReturnsNoReversibleItemsAsync()
     {
         var changeId = "change-null-before";
         WriteBlob(changeId, new[]
@@ -106,14 +106,14 @@ public class UndoLastApplyTests
             new { FilePath = Path.Combine(_tempDir, "Foo.cs"), Outcome = ItemRecordOutcome.Succeeded, BeforeSource = (string?)null },
         });
 
-        var result = await _fakeWorkspaceTools.UndoLastApplyTool(reason: "test message", changeId);
+        var result = await _fakeWorkspaceTools.UndoChangeTool(reason: "test message", changeId);
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("NoReversibleItems"));
     }
 
     [Test]
-    public async Task UndoLastApply_AllRevertibleItemsOutsideSolutionRoot_SkipsAllAndReturnsSuccessWithFailuresAsync()
+    public async Task UndoChange_AllRevertibleItemsOutsideSolutionRoot_SkipsAllAndReturnsSuccessWithFailuresAsync()
     {
         var changeId = "change-outside-root";
         var outsidePath = Path.Combine(Path.GetTempPath(), "SomewhereElse_" + Guid.NewGuid().ToString("N"), "Foo.cs");
@@ -122,7 +122,7 @@ public class UndoLastApplyTests
             new { FilePath = outsidePath, Outcome = ItemRecordOutcome.Succeeded, BeforeSource = "old content" },
         });
 
-        var result = await _fakeWorkspaceTools.UndoLastApplyTool(reason: "test message", changeId: changeId);
+        var result = await _fakeWorkspaceTools.UndoChangeTool(reason: "test message", changeId: changeId);
 
         // revertChanges ends up empty (item skipped as outside solution root), so
         // ApplyProposedChangesAsync is never called -> reaches the tool's success path with 0
@@ -133,7 +133,7 @@ public class UndoLastApplyTests
     }
 
     [Test]
-    public async Task UndoLastApply_RealRevert_RestoresFileToPreApplyContentAsync()
+    public async Task UndoChange_RealRevert_RestoresFileToPreApplyContentAsync()
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
@@ -142,7 +142,7 @@ public class UndoLastApplyTests
 
         var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var originalContent = await File.ReadAllTextAsync(targetFile);
-        var modifiedContent = originalContent + "\n// modified for UndoLastApply test\n";
+        var modifiedContent = originalContent + "\n// modified for UndoChange test\n";
         var targetRelativePath = Path.GetRelativePath(fixture.SolutionDirectory, targetFile);
         await fixture.ModifyFileInSolution(workspaceManager, targetRelativePath, modifiedContent);
 
@@ -172,19 +172,19 @@ public class UndoLastApplyTests
         // before it ever reaches undo logic.
         workspaceManager.ClearExternalFileChanges();
 
-        var result = await workspaceTools.UndoLastApplyTool(reason: "test message", changeId: changeId);
+        var result = await workspaceTools.UndoChangeTool(reason: "test message", changeId: changeId);
 
         Assert.That(!result.IsError, Is.True);
         Assert.That((string)result.SuccessData!, Does.Contain("Reverted 1 files"));
         Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(originalContent));
     }
     [Test]
-    public async Task UndoLastApply_NoOpRevert_ReportsDistinctlyFromRealRevertAsync()
+    public async Task UndoChange_NoOpRevert_ReportsDistinctlyFromRealRevertAsync()
     {
         // BeforeSource in the blob is identical to the file's current on-disk content, so
         // ApplyProposedChangesAsync's no-op skip path (PersistentWorkspaceManager.cs, "Skipping
         // no-op write") fires: the file lands in SucceededFiles but nothing is actually written.
-        // Before this fix, UndoLastApplyTool reported this the same as a real revert ("Reverted 1
+        // Before this fix, UndoChangeTool reported this the same as a real revert ("Reverted 1
         // files"), which is exactly the confusion observed this session -> a file believed
         // reverted was provably unchanged.
         using var fixture = new TestSolutionFixture();
@@ -217,7 +217,7 @@ public class UndoLastApplyTests
 
         workspaceManager.ClearExternalFileChanges();
 
-        var result = await workspaceTools.UndoLastApplyTool(reason: "test message", changeId: changeId);
+        var result = await workspaceTools.UndoChangeTool(reason: "test message", changeId: changeId);
 
         Assert.That(!result.IsError, Is.True);
         Assert.That((string)result.SuccessData!, Does.Contain("Reverted 0 files"));
@@ -229,7 +229,7 @@ public class UndoLastApplyTests
     // Regression test for blocking_error_synctypeandfilename_wrong_type_undolastapply_no_reversible_items.md
     // Symptom 2: SyncTypeAndFilenameTool used to delete the old file via a bare FileIoHelper.DeleteAsync
     // call outside ApplyProposedChangesAsync's tracked delete path, so the old path's content was
-    // never captured as a pre-image anywhere and UndoLastApplyTool could only ever report
+    // never captured as a pre-image anywhere and UndoChangeTool could only ever report
     // NoReversibleItems for a rename changeId. Now that the delete goes through deletePaths, its
     // pre-image is captured like any other tracked delete, so a rename changeId should be fully
     // revertible: old file restored.
@@ -240,7 +240,7 @@ public class UndoLastApplyTests
     [Category("RefactoringStructuralTools")] // sentinel:auto-category
     [Category("StructuralRefinementEngine")] // sentinel:auto-category
     [Category("SymbolNavigationEngine")] // sentinel:auto-category
-    public async Task UndoLastApply_RealRevert_RestoresRenamedFileFromSyncTypeAndFilenameAsync()
+    public async Task UndoChange_RealRevert_RestoresRenamedFileFromSyncTypeAndFilenameAsync()
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
@@ -268,10 +268,10 @@ public class UndoLastApplyTests
         Assert.That(File.Exists(oldPath), Is.False, "Old file should be gone after the rename.");
         Assert.That(File.Exists(newPath), Is.True, "New file should exist after the rename.");
 
-        var undoResult = await workspaceTools.UndoLastApplyTool(reason: "test message", changeId: changeId!);
+        var undoResult = await workspaceTools.UndoChangeTool(reason: "test message", changeId: changeId!);
 
         Assert.That(!undoResult.IsError, Is.True, $"Expected undo to succeed; error: {undoResult.ErrorData?.Message}");
-        Assert.That(File.Exists(oldPath), Is.True, "Old file should be restored by UndoLastApply.");
+        Assert.That(File.Exists(oldPath), Is.True, "Old file should be restored by UndoChange.");
         Assert.That(await File.ReadAllTextAsync(oldPath), Is.EqualTo(widgetSource));
     }
 
@@ -301,7 +301,7 @@ public class UndoLastApplyTests
 
     [Test]
     [Description("A file already normalized to pure LF by an earlier write can still be restored to its mixed-EOL pre-image: undo is an explicit exact restore, not a normal edit")]
-    public async Task UndoLastApply_PreImageIsMixedButFileIsNowPureLf_RestoresExactBytesAsync()
+    public async Task UndoChange_PreImageIsMixedButFileIsNowPureLf_RestoresExactBytesAsync()
     {
         using var fixture = new TestSolutionFixture();
         var targetFile = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "DamagedEol.cs");
@@ -316,7 +316,7 @@ public class UndoLastApplyTests
         await WriteUndoBlobAsync(fixture, changeId, targetFile, MixedEolSource);
         workspaceManager.ClearExternalFileChanges();
 
-        var result = await workspaceTools.UndoLastApplyTool(reason: "test message", changeId: changeId);
+        var result = await workspaceTools.UndoChangeTool(reason: "test message", changeId: changeId);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         Assert.That((string)result.SuccessData!, Does.Contain("Reverted 1 files").And.Not.Contain("Failures"));
@@ -327,8 +327,8 @@ public class UndoLastApplyTests
     }
 
     [Test]
-    [Description("Apply on a mixed-EOL file converges the whole file to CRLF, and UndoLastApply then restores the exact pre-image bytes")]
-    public async Task UndoLastApply_AfterApplyOnMixedEolFile_RestoresByteIdenticalPreImageAsync()
+    [Description("Apply on a mixed-EOL file converges the whole file to CRLF, and UndoChange then restores the exact pre-image bytes")]
+    public async Task UndoChange_AfterApplyOnMixedEolFile_RestoresByteIdenticalPreImageAsync()
     {
         using var fixture = new TestSolutionFixture();
         var targetFile = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "MixedEol.cs");
@@ -354,7 +354,7 @@ public class UndoLastApplyTests
         await WriteUndoBlobAsync(fixture, changeId, targetFile, apply.PreImages![targetFile]!);
         workspaceManager.ClearExternalFileChanges();
 
-        var result = await workspaceTools.UndoLastApplyTool(reason: "test message", changeId: changeId);
+        var result = await workspaceTools.UndoChangeTool(reason: "test message", changeId: changeId);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         Assert.That((string)result.SuccessData!, Does.Contain("Reverted 1 files").And.Not.Contain("Failures"));
@@ -362,8 +362,8 @@ public class UndoLastApplyTests
     }
 
     [Test]
-    [Description("Apply on a BOM-prefixed mixed-EOL file converges to CRLF and keeps the BOM, and UndoLastApply then restores the exact BOM-prefixed pre-image bytes")]
-    public async Task UndoLastApply_AfterApplyOnBomMixedEolFile_RestoresBomBytesAsync()
+    [Description("Apply on a BOM-prefixed mixed-EOL file converges to CRLF and keeps the BOM, and UndoChange then restores the exact BOM-prefixed pre-image bytes")]
+    public async Task UndoChange_AfterApplyOnBomMixedEolFile_RestoresBomBytesAsync()
     {
         using var fixture = new TestSolutionFixture();
         var targetFile = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "BomMixedEol.cs");
@@ -384,7 +384,7 @@ public class UndoLastApplyTests
         await WriteUndoBlobAsync(fixture, changeId, targetFile, apply.PreImages![targetFile]!);
         workspaceManager.ClearExternalFileChanges();
 
-        var result = await workspaceTools.UndoLastApplyTool(reason: "test message", changeId: changeId);
+        var result = await workspaceTools.UndoChangeTool(reason: "test message", changeId: changeId);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         Assert.That((string)result.SuccessData!, Does.Contain("Reverted 1 files").And.Not.Contain("Failures"));
@@ -413,7 +413,7 @@ public class UndoLastApplyTests
     }
 
     [Test]
-    public async Task UndoLastApply_OlderChangeShadowedByNewerBlobOnSameFile_IsRefusedAndFileUnchangedAsync()
+    public async Task UndoChange_OlderChangeShadowedByNewerBlobOnSameFile_IsRefusedAndFileUnchangedAsync()
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
@@ -422,8 +422,8 @@ public class UndoLastApplyTests
 
         var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var originalContent = await File.ReadAllTextAsync(targetFile);
-        var firstModified = originalContent + "\n// first edit for UndoLastApply test\n";
-        var secondModified = firstModified + "\n// second edit for UndoLastApply test\n";
+        var firstModified = originalContent + "\n// first edit for UndoChange test\n";
+        var secondModified = firstModified + "\n// second edit for UndoChange test\n";
         var targetRelativePath = Path.GetRelativePath(fixture.SolutionDirectory, targetFile);
         await fixture.ModifyFileInSolution(workspaceManager, targetRelativePath, secondModified);
 
@@ -432,7 +432,7 @@ public class UndoLastApplyTests
         await WriteStampedUndoBlobAsync(fixture, "change-newer", stamp.AddMinutes(1), targetFile, firstModified);
         workspaceManager.ClearExternalFileChanges();
 
-        var result = await workspaceTools.UndoLastApplyTool(reason: "test message", changeId: "change-older");
+        var result = await workspaceTools.UndoChangeTool(reason: "test message", changeId: "change-older");
 
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.PreconditionNotMet));
@@ -441,7 +441,7 @@ public class UndoLastApplyTests
     }
 
     [Test]
-    public async Task UndoLastApply_NewestChange_StillRevertsToPreApplyTextAsync()
+    public async Task UndoChange_NewestChange_StillRevertsToPreApplyTextAsync()
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
@@ -454,7 +454,7 @@ public class UndoLastApplyTests
         var otherFile = files[1];
         var originalContent = await File.ReadAllTextAsync(targetFile);
         var otherContent = await File.ReadAllTextAsync(otherFile);
-        var modifiedContent = originalContent + "\n// modified for UndoLastApply test\n";
+        var modifiedContent = originalContent + "\n// modified for UndoChange test\n";
         var targetRelativePath = Path.GetRelativePath(fixture.SolutionDirectory, targetFile);
         await fixture.ModifyFileInSolution(workspaceManager, targetRelativePath, modifiedContent);
 
@@ -464,7 +464,7 @@ public class UndoLastApplyTests
         await WriteStampedUndoBlobAsync(fixture, "change-other", stamp.AddMinutes(1), otherFile, otherContent);
         workspaceManager.ClearExternalFileChanges();
 
-        var result = await workspaceTools.UndoLastApplyTool(reason: "test message", changeId: "change-target");
+        var result = await workspaceTools.UndoChangeTool(reason: "test message", changeId: "change-target");
 
         Assert.That(result.IsError, Is.False);
         Assert.That((string)result.SuccessData!, Does.Contain("Reverted 1 files"));
@@ -472,7 +472,7 @@ public class UndoLastApplyTests
     }
 
     [Test]
-    public async Task UndoLastApply_NewerBlobMarkedUndone_DoesNotBlockOlderChangeAsync()
+    public async Task UndoChange_NewerBlobMarkedUndone_DoesNotBlockOlderChangeAsync()
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
@@ -481,8 +481,8 @@ public class UndoLastApplyTests
 
         var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var originalContent = await File.ReadAllTextAsync(targetFile);
-        var firstModified = originalContent + "\n// first edit for UndoLastApply test\n";
-        var secondModified = firstModified + "\n// second edit for UndoLastApply test\n";
+        var firstModified = originalContent + "\n// first edit for UndoChange test\n";
+        var secondModified = firstModified + "\n// second edit for UndoChange test\n";
         var targetRelativePath = Path.GetRelativePath(fixture.SolutionDirectory, targetFile);
         await fixture.ModifyFileInSolution(workspaceManager, targetRelativePath, secondModified);
 
@@ -492,7 +492,7 @@ public class UndoLastApplyTests
         OperationBlobWriter.MarkUndone(newerBlobPath);
         workspaceManager.ClearExternalFileChanges();
 
-        var result = await workspaceTools.UndoLastApplyTool(reason: "test message", changeId: "change-older");
+        var result = await workspaceTools.UndoChangeTool(reason: "test message", changeId: "change-older");
 
         Assert.That(result.IsError, Is.False);
         Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(originalContent));

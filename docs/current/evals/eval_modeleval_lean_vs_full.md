@@ -20,7 +20,7 @@ Setup:
 
 - **Lean** = 18 tools, selected with `ROSLYNSENTINEL_MODELEVAL_TOOLSET=lean`: ReadFile,
   GetFileOutline, Search, ListSolutionItems, GetLargeResult, ReplaceSnippet, Member, RenameSymbol,
-  CreateFile, DeleteFile, Build, RunTest, GetMethodSource, UndoLastApply, ChangeSignature,
+  CreateFile, DeleteFile, Build, RunTest, GetMethodSource, UndoChange, ChangeSignature,
   ChangeAccessibility, ModifyModifier, UsingDirective.
 - **Full** = 55 tools (the existing ModelEval surface).
 - Queue jobs were interleaved lean/full per scenario.

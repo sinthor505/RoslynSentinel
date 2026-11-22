@@ -36,7 +36,7 @@ or generic REST/CLI verbs.
 `RenameSymbol`, `ExtractMethodSafe`, `ExtractLocalVariable`, `PullUpMember`,
 `ChangeSignature`, `MoveType`, `FindReferences`, `InspectSymbol`,
 `QuerySymbolRelationships`, `GetTypeInfo`, `GetDiagnostics`, `Build`, `LoadSolution`,
-`CreateProject`, `SearchSolutionText`, `UndoLastApply`, `AddCancellationToken`,
+`CreateProject`, `SearchSolutionText`, `UndoChange`, `AddCancellationToken`,
 `InvertBooleanLogic`, `GetCallGraph`, `ReadFile`.
 
 No action needed on these.

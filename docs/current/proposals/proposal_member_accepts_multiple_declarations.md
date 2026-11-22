@@ -160,7 +160,7 @@ Four options; see "Decision".
   order, at the requested position: end of the container by default, or after/before the anchor
   (`insertAfterMemberName` / `insertBeforeMemberName`) with the whole block kept contiguous and in order.
 - One `updatedText`, one `ValidateAndApplyAsync` (one delta compile check, one `changeId`), so
-  `UndoLastApply` reverts the whole batch. **Atomic:** a parse or binding failure for any declaration
+  `UndoChange` reverts the whole batch. **Atomic:** a parse or binding failure for any declaration
   writes nothing.
 - Result reports every added member (see "Result shape").
 - `DetectMultipleMemberDeclarations` stops being an error for `addMember`; it becomes the splitter that
@@ -208,7 +208,7 @@ A new `MemberAction` value or a separate tool taking `members: [{...}]`. See "Al
   advice for existing ones), otherwise a model is told to do N calls that one call could do. Their tests in
   `Tests.Tools.Basic` / `Tests.Server` assert that text and move with it. Whether there should be a total
   length cap on a multi-member `newMemberSource` is open (question 6).
-- **Operation ledger / UndoLastApply.** No change for option 1 and 2: the batch is one document write, so one
+- **Operation ledger / UndoChange.** No change for option 1 and 2: the batch is one document write, so one
   `changeId`. A `dryRun` returns the same envelope. If a later design applies N sequential single-member
   writes internally, that would produce N changeIds and break "one undo"; reject that implementation shape.
 - **DocumentEditResult.** The record has `Message` (one string), `Warnings` and `AppliedEditIndexes`
@@ -235,7 +235,7 @@ A new `MemberAction` value or a separate tool taking `members: [{...}]`. See "Al
   2. addMember N=2 with `insertAfterMemberName` and with `insertBeforeMemberName`: contiguous and in order
      at the anchor (this is the path ShippingKind step 3 hit; today untested for the rejection).
   3. Atomicity: N=2 where the second declaration fails (own parse error; compile error; a binding capture)
-     writes nothing; `UndoLastApply` after a success reverts both.
+     writes nothing; `UndoChange` after a success reverts both.
   4. Caller-before-helper in one call passes the compile gate (the case the one-per-call form fails).
   5. The binding check still refuses a batch member that re-points an existing call.
   6. Existing "silent drop" regression coverage kept: a malformed second declaration, a stray `}`, a body

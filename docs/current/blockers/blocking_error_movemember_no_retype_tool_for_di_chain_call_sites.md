@@ -101,7 +101,7 @@ Both options require **adding a new constructor parameter to an existing, alread
     WorkspaceProjectManagementImpl(...)` call site now missing the new required arg).
   - On `WorkspaceTools`: CS7036 across 16 test files that construct `WorkspaceTools` directly,
     e.g. `ApplyDiffSizeGuardTests.cs:44`, `RunTestTests.cs:23`, `ReplaceSnippetSizeGuardTests.cs:24`,
-    `ReplaceSnippetBatchTests.cs:22`, `UndoLastApplyTests.cs:63`, `ReadFileTests.cs:46`,
+    `ReplaceSnippetBatchTests.cs:22`, `UndoChangeTests.cs:63`, `ReadFileTests.cs:46`,
     `MutatingToolRejectionMessageTests.cs:58`, `ListSolutionItemsAllTests.cs:24`,
     `ListProjectFrameworkTargetsTests.cs:37`, `GetOperationDetailTests.cs:42`,
     `GetMethodSourceTests.cs:44`, `CreateFileDeleteFileTests.cs:26`, `BatteryTwentyTests.cs:38`,

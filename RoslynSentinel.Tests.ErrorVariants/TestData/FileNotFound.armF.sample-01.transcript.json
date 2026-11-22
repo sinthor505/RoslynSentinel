@@ -12,7 +12,7 @@
     "RunTest",
     "DeleteUnusedSymbol",
     "ReadFile",
-    "UndoLastApply",
+    "UndoChange",
     "GetWorkspaceHealth",
     "ListProjectFrameworkTargets",
     "GetMethodSource",
@@ -73,7 +73,7 @@
     "RunTest": "Runs \u0060dotnet test\u0060 on the solution or one project. Returns TotalCount/PassedCount/FailedCount/SkippedCount, a FailureSummary grouping failures by shared cause, and a Results list (resultsType, default failed; capped by maxDetails; summary=true omits it). Failed tests carry their captured Output. filter goes to \u0060dotnet test --filter\u0060; an unresolvable filter is a distinct error from zero matches. Failed tests\u0027 unprojected rows are stored: largeResult.resultId \u002B path successData.fullResults reach them via GetLargeResult(reason: \u0022\u003Cwhy you call this\u003E\u0022, resultId: \u0022\u003CresultId\u003E\u0022). OmittedResultCount counts rows beyond maxDetails.",
     "DeleteUnusedSymbol": "Deletes a symbol only if it has zero usages anywhere in the codebase.",
     "ReadFile": "Returns a file\u0027s raw text verbatim, or a 1-based line-range slice via startLine/endLine. To read a single member, pass memberName (optionally containerName).",
-    "UndoLastApply": "Reverts files from a previous apply back to their pre-apply state.",
+    "UndoChange": "Reverts files from a previous apply back to their pre-apply state.",
     "GetWorkspaceHealth": "Reports live workspace/solution health: loaded state, project/document counts, and staleness.",
     "ListProjectFrameworkTargets": "Returns each project\u0027s TargetFramework value.",
     "GetMethodSource": "Returns a method\u0027s or constructor\u0027s full source text and attributes. For a constructor, pass the class name.",
@@ -90,7 +90,7 @@
     "GetBestInsertionPoint": "Returns the best 1-based line number for inserting a new member in a type, following standard C# ordering (fields -\u003E constructors -\u003E destructors -\u003E properties -\u003E events -\u003E methods -\u003E nested types).",
     "PreviewRenameImpact": "Previews the impact of renaming a symbol across the solution without applying changes. Returns affected files, location count and whether any is a test file. For per-location detail use Search(mode: references).",
     "FindReferences": "Finds call sites and/or implementations for a symbol (single-level, flat lookup). For a call tree use GetCallGraph, for a local variable\u0027s read/write/capture sites TraceVariableLifetime, for a rename-impact summary PreviewRenameImpact, for type-relationship queries (implementors, attribute usage, object creation) QuerySymbolRelationships.",
-    "DeleteFile": "Deletes a file from disk; fails if it doesn\u0027t exist. Undoable via UndoLastApply.",
+    "DeleteFile": "Deletes a file from disk; fails if it doesn\u0027t exist. Undoable via UndoChange.",
     "RenameSymbol": "Renames a symbol and all its references; also renames the file when it is named after the renamed top-level type (fileRenamed). Returns changeId, updatedHandle, residualMentions (summary of old-name hits it couldn\u0027t reach; rows via details). Types/members: does not touch using directives (use UsingDirective). Namespace: docCommentId N:Ns.Name, newName = new last segment.",
     "MethodSignature": "Add, remove, or view a method\u0027s parameters (any method; ConstructorParameter handles DI constructor parameters with a backing field). For overloaded methods, combine methodName with contextSnippet/lineBefore/lineAfter.",
     "ChangeAccessibility": "Sets the accessibility of a type or member to the given level, replacing whatever is present. For overloaded members, provide contextSnippet and optionally lineBefore/lineAfter. Accessibility only (others: ModifyModifier, ModifyAttribute). Returns changeId.",
@@ -685,7 +685,7 @@
         "filePath"
       ]
     },
-    "UndoLastApply": {
+    "UndoChange": {
       "type": "object",
       "properties": {
         "reason": {

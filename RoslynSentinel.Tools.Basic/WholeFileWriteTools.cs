@@ -133,7 +133,7 @@ public class WholeFileWriteTools
 
     [McpServerTool(Name = "DeleteFile")]
     [Produces(DataTag.ChangeId)]
-    [Description("Deletes a file from disk; fails if it doesn't exist. Undoable via UndoLastApply.")]
+    [Description("Deletes a file from disk; fails if it doesn't exist. Undoable via UndoChange.")]
     public async Task<SentinelCallToolResult<object>> DeleteFileTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath, CancellationToken cancellationToken = default)
@@ -531,7 +531,7 @@ public class WholeFileWriteTools
                     var blobWrite = await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_diff", result, cancellationToken: cancellationToken, blobChangeId: changeId);
                     // PreImages (full pre-edit file content) is dropped from the default response -
                     // it's already captured in the undo blob written above (GetOperationDetailTool/
-                    // UndoLastApplyTool can retrieve it) and was the single largest contributor to
+                    // UndoChangeTool can retrieve it) and was the single largest contributor to
                     // ApplyDiffTool responses exceeding the calling harness's token limit on large files.
                     var strippedResult = result with { PreImages = null, ChangeId = blobWrite.Written ? changeId : null };
                     object responseData = returnDiff

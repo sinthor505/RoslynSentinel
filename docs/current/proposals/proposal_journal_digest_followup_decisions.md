@@ -119,7 +119,7 @@ ChangeSignature, RenameSymbol conflicts) do not use it.
 1. Nothing in production resolves an entry: `RecordFix` and `TryRelease` are called only from tests (`ScopedOperationLedgerBlockingTests.cs`). The plan's "resolving the last entry releases the block" (`plan_scoped_operation_ledger.md` Decision 5) is not implemented, so an open ledger blocks unrelated writes until the server restarts.
 2. The refusal text ("Resolve the open ledger's entries", `ScopedOperationLedgerEngine.cs` ~52) names no tool, because no tool exists for it.
 3. The refusal carries no `RefusalCode` (`ValidateAndApplyHelper.cs` ~126), so the caller gets generic `Exception` / "apply failed".
-4. `UndoLastApply` goes through the same check; a refused revert still reaches `RecordUndo` and reports `IsError=false` with "Reverted 0 files ... Failures".
+4. `UndoChange` goes through the same check; a refused revert still reaches `RecordUndo` and reports `IsError=false` with "Reverted 0 files ... Failures".
 5. Pending entries are visible only inside the `MoveMember` summary and the refusal text; no read tool lists them (`GetOpenEntries` has no production caller beyond a pass-through).
 6. Writes outside `ApplyProposedChangesAsync` skip the ledger (`MsToolAugmentEngine.cs` ~782 for files outside the solution; `DocumentationTools.cs` ~361/458, targets not verified).
 7. The `validateOnApply:false` path still hits the ledger check (it is not a bypass), but `ChangeSignature` on interface members tells the model to hand-edit each side with `validateOnApply:false`; under an open ledger those edits are refused.
@@ -131,7 +131,7 @@ ChangeSignature, RenameSymbol conflicts) do not use it.
 
 ## Decisions (todo review 2026-11-08)
 
-- Scoped ledger part (c), writes outside `ApplyProposedChangesAsync`: closed. Why: every solution C# write (WriteFile, DeleteFile, CreateFile, ReplaceSnippet, ApplyDiff, ApplyUnifiedDiff, UndoLastApply, FormatDocumentSafe) routes through it; the bypasses (MsToolAugmentEngine ~782 without a solution, DocumentationTools ~361/~458, ProjectStructureEngine ~1839) write files the ledger does not track. Part (a) stays open.
+- Scoped ledger part (c), writes outside `ApplyProposedChangesAsync`: closed. Why: every solution C# write (WriteFile, DeleteFile, CreateFile, ReplaceSnippet, ApplyDiff, ApplyUnifiedDiff, UndoChange, FormatDocumentSafe) routes through it; the bypasses (MsToolAugmentEngine ~782 without a solution, DocumentationTools ~361/~458, ProjectStructureEngine ~1839) write files the ledger does not track. Part (a) stays open.
 
 ## Decisions (todo review 2026-11-09)
 

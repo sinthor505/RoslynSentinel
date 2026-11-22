@@ -12,7 +12,7 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Tools.Basic;
 
 // Slice 2 of proposal_not_found_cause_from_prior_tool_call: RenameSymbol and Member add/remove record an EditEffect on the ambient
-// ToolCallContext just before the write chokepoint, and UndoLastApply marks the undone change's effects reverted.
+// ToolCallContext just before the write chokepoint, and UndoChange marks the undone change's effects reverted.
 // The emitter tests run on an InMemoryWorkspace, whose FakeWorkspaceManager has no real chokepoint: the effects stay pending on
 // the context, so TakePendingEffects shows exactly what the emitter recorded. The commit-at-chokepoint behaviour is covered by
 // EditEffectChokepointTests; the undo test below uses a real on-disk workspace so the blob stamps the change id.
@@ -282,7 +282,7 @@ public class EditEffectEmitterTests
     }
 }
 
-// UndoLastApply marks the effects of the undone change reverted. A real on-disk workspace and the real chokepoint: the apply writes a
+// UndoChange marks the effects of the undone change reverted. A real on-disk workspace and the real chokepoint: the apply writes a
 // blob, the blob write stamps the change id on the effects, and the undo finds them by that id.
 [TestFixture]
 public class EditEffectUndoTests
@@ -357,7 +357,7 @@ public class EditEffectUndoTests
         Assert.That(committed[0].NewName, Is.EqualTo("Build"));
         Assert.That(committed[0].ChangeId, Is.EqualTo(changeId), "the blob write stamped the effect with the change id");
 
-        var undo = await NewEditImpl().UndoLastApply(new ToolCallReason("undo the rename"), changeId);
+        var undo = await NewEditImpl().UndoChange(new ToolCallReason("undo the rename"), changeId);
 
         Assert.That(undo.IsError, Is.False, undo.ErrorData?.Message);
         Assert.That(index.Find("Create"), Is.Empty, "a reverted effect is excluded from lookups");
@@ -375,7 +375,7 @@ public class EditEffectUndoTests
         var rename = await impl.RenameSymbol("rename the factory method", "ContosoOrders.Core", CreateFactory, "Build");
         Assert.That(rename.IsError, Is.False, rename.ErrorData?.Message);
 
-        var undo = await NewEditImpl().UndoLastApply(new ToolCallReason("undo an unknown change"), "deadbeef");
+        var undo = await NewEditImpl().UndoChange(new ToolCallReason("undo an unknown change"), "deadbeef");
 
         Assert.That(undo.IsError, Is.True, "no blob exists for that id");
         Assert.That(((IEditEffectIndexProvider)_workspaceManager).EditEffects.Find("Create"), Has.Count.EqualTo(1));
@@ -384,7 +384,7 @@ public class EditEffectUndoTests
     [Test]
     public void EffectsCommittedWithNoBlob_HaveNoChangeId_SoAnUndoCannotRevertThem()
     {
-        // Documents the no-blob path: a write that produces no blob never stamps a change id, and UndoLastApply needs a blob to
+        // Documents the no-blob path: a write that produces no blob never stamps a change id, and UndoChange needs a blob to
         // run at all, so such an effect stays active. Slice 3's lookup treats it like any other active effect.
         var context = new ToolCallContext("agent-a", "implementer", "RenameSymbol", "rename", 0) { SessionId = "session-1" };
         ToolCallContext.Set(context);

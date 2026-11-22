@@ -271,7 +271,7 @@ are impressions; every claim below cites source read on 2026-10-08, and untraced
 11. Dropped as already handled or stale: McpServerControl confirm parameter (`ebd9923b:L10`; restored as a one-value
     enum in `45f3170`, described at `AdminTools.cs` "only value: ConfirmServerStop", and the refusal names parameter
     and value); ChangeAccessibility "error did not name correct parameters" (current `Validate` lists them);
-    UndoLastApply EOL refusal (fixed in `30bc781`); WriteFile create-missing (`a506102`).
+    UndoChange EOL refusal (fixed in `30bc781`); WriteFile create-missing (`a506102`).
 12. Noise or one-off, not planned: `47b2c93d:L25` (SDK list_changed), `630f0332:L7` (Connection closed after stop is
     client-side), `ebd9923b:L14` (client caches schema across a restart; client behaviour), `RunTest` project-scope
     probing time (`a08be84f:L15`, `L25`; a perf item, deferred).

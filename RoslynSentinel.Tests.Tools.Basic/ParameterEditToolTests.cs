@@ -313,7 +313,7 @@ public class ParameterEditToolTests
     {
         string json = data is null ? "null" : JsonSerializer.Serialize(data, data.GetType());
         string root = Path.GetDirectoryName(Path.GetDirectoryName(workspace.PathOf(FixtureRelativePath)))!;
-        // The id also appears inside the human-readable message (e.g. "UndoLastApplyTool(changeId: ...)"), so mask every occurrence.
+        // The id also appears inside the human-readable message (e.g. "UndoChangeTool(changeId: ...)"), so mask every occurrence.
         var changeId = System.Text.RegularExpressions.Regex.Match(json, "\"ChangeId\":\"([^\"]+)\"");
         if (changeId.Success)
         {

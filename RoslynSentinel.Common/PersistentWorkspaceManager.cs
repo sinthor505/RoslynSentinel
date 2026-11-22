@@ -66,7 +66,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     // casing, read with the watcher's e.FullPath casing -> a default (ordinal) comparer made a
     // c:\ vs C:\ difference miss the self-write suppression and read as external drift.
     private readonly ConcurrentDictionary<string, (DateTime Timestamp, string Content)> _internalChanges = new(PathComparison.Comparer);
-    // While the workspace is stale, UndoLastApply (the only exactRestore caller) is refused like any other
+    // While the workspace is stale, UndoChange (the only exactRestore caller) is refused like any other
     // source write. Flip to true to let undo through, since it writes back a pre-image this server captured
     // itself. See docs/current/proposals/proposal_workspace_reload_failure_visibility.md slice 3.
     private const bool AllowExactRestoreWhenWorkspaceStale = false;
@@ -2468,7 +2468,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             var unobservedTargets = new List<FilePathWrapper>();
 
             // Stale-read guard (observed-content ledger): refuse the whole batch, non-latching, when a target this agent has read
-            // changed since (in memory or on disk). Targets without a ledger entry are allowed. exactRestore (UndoLastApply) is exempt.
+            // changed since (in memory or on disk). Targets without a ledger entry are allowed. exactRestore (UndoChange) is exempt.
             if (staleReadPolicy != StaleReadPolicy.None && !exactRestore)
             {
                 var staleFiles = new Dictionary<FilePathWrapper, string>();

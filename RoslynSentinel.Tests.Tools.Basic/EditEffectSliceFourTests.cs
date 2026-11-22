@@ -481,7 +481,7 @@ public class EditEffectSeedAtLoadTests
             Battery.Basic.TestEngines.ValidationEngine(_workspaceManager),
             Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
-        var undo = await edit.UndoLastApply(new ToolCallReason("undo the rename"), changeId);
+        var undo = await edit.UndoChange(new ToolCallReason("undo the rename"), changeId);
 
         Assert.That(undo.IsError, Is.False, undo.ErrorData?.Message);
         Assert.That(OperationBlobWriter.IsUndone(blobPath), Is.True, "the undo left a marker beside the blob");

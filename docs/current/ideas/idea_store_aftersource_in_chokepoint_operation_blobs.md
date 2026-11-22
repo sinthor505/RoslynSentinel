@@ -38,7 +38,7 @@ Verified against the code on 2026-11-09:
 
 An operation blob records where a file started but not where the server left it. Two consequences:
 
-1. **Undo is blind to later edits.** `UndoLastApply` restores `BeforeSource`. If the file was changed
+1. **Undo is blind to later edits.** `UndoChange` restores `BeforeSource`. If the file was changed
    again after the recorded operation (by this agent, another session, or a human), the undo silently
    overwrites that later work. The blob has nothing to compare the current disk text against.
 2. **Forensics is half a diff.** To reconstruct what an operation did, a reader has the before text
@@ -70,7 +70,7 @@ test that asserts on blob contents or size.
 
 **Value.**
 
-- `UndoLastApply` could compare the current disk text to `AfterSource` and refuse, or warn, when a later
+- `UndoChange` could compare the current disk text to `AfterSource` and refuse, or warn, when a later
   edit has landed in between.
 - Exact per-operation before/after forensics without consulting git.
 - Input for [proposal_cross_session_write_journal.md](../proposals/proposal_cross_session_write_journal.md):
@@ -87,7 +87,7 @@ be pulled into it.
 - **Blob retention and size limits.** Is there a per-blob or per-session cap today, and does doubling
   the size need one? Not investigated; check `OperationBlobWriter` retention before scheduling.
 - **Refuse or warn on undo over a later edit?** Refusing is safe but strands a legitimate undo; warning
-  keeps the old behaviour with a visible flag. A force parameter on `UndoLastApply` is the usual
+  keeps the old behaviour with a visible flag. A force parameter on `UndoChange` is the usual
   compromise but would be a new parameter to maintain. Undecided.
 - **Which text counts as "unchanged"?** Comparing disk to `AfterSource` byte-for-byte will trip on
   EOL or BOM differences introduced outside the server; the comparison rule needs defining
@@ -109,7 +109,7 @@ be pulled into it.
 - **Settled open questions:**
   - Step 0: check `OperationBlobWriter` retention/size before slice 1; if there is no cap, report it
     before writing doubled blobs.
-  - Undo over a later edit: `UndoLastApply` **refuses** (same shape as `UndoConcurrentEditConflict`,
+  - Undo over a later edit: `UndoChange` **refuses** (same shape as `UndoConcurrentEditConflict`,
     `Tools.Basic/WorkspaceFileEditImpl.cs:501-566`, which today only catches a different agent via the
     in-memory ledger).
   - Comparison rule: disk text vs `AfterSource` after the EOL pre-pass normalisation.
@@ -121,5 +121,5 @@ be pulled into it.
   measurement needed.
 - **Why not the hash guard:** it gives undo safety only, no history, which is the owner's goal.
 - **Acceptance:** after an apply, the blob's `AfterSource` equals the disk text; apply, then edit the
-  same file (same agent, and a raw disk edit), then `UndoLastApply` is refused; an untouched file
+  same file (same agent, and a raw disk edit), then `UndoChange` is refused; an untouched file
   still undoes; blob tests updated for the larger blob.

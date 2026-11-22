@@ -12,7 +12,7 @@
     "RunTest",
     "DeleteUnusedSymbol",
     "ReadFile",
-    "UndoLastApply",
+    "UndoChange",
     "GetWorkspaceHealth",
     "ListProjectFrameworkTargets",
     "GetMethodSource",

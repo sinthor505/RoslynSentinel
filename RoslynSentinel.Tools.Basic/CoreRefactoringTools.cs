@@ -399,7 +399,7 @@ public class CoreRefactoringTools
                     ChangeId = apply.ChangeId,
                     DryRun = apply.DryRun,
                     Diff = apply.Diff,
-                    Description = apply.ChangeId is not null ? $"{description}. Call {ToolCallHint.Call("UndoLastApply", ("changeId", apply.ChangeId))} to revert if needed." : description,
+                    Description = apply.ChangeId is not null ? $"{description}. Call {ToolCallHint.Call("UndoChange", ("changeId", apply.ChangeId))} to revert if needed." : description,
                     AffectedFiles = changes.Keys.Select(kvp => Path.GetFileName(kvp)).ToList(),
                     ContentPreviews = changes.ToDictionary(kvp => Path.GetFileName(kvp.Key)!, kvp => RefactoringToolHelpers.PreviewFileContent(kvp.Value))
                 }

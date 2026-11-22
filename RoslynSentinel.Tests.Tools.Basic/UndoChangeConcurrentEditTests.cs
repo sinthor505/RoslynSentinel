@@ -12,7 +12,7 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Tools.Basic;
 
 [TestFixture]
-public class UndoLastApplyConcurrentEditTests
+public class UndoChangeConcurrentEditTests
 {
     private const string WidgetsPath = "ContosoOrders.Core/Cf/Widgets.cs";
     private const string ConsumersPath = "ContosoOrders.Core/Cf/Consumers.cs";
@@ -126,7 +126,7 @@ public class UndoLastApplyConcurrentEditTests
             _validationEngine,
             Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
-        var undo = await editImpl.UndoLastApply(new ToolCallReason("testing undo refusal under concurrent edit"), changeId);
+        var undo = await editImpl.UndoChange(new ToolCallReason("testing undo refusal under concurrent edit"), changeId);
 
         Assert.That(undo.IsError, Is.True);
         Assert.That(undo.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.ConcurrentEditRefused));
@@ -152,7 +152,7 @@ public class UndoLastApplyConcurrentEditTests
             _validationEngine,
             Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
-        var undo = await editImpl.UndoLastApply(new ToolCallReason("testing undo with no intervening write"), changeId);
+        var undo = await editImpl.UndoChange(new ToolCallReason("testing undo with no intervening write"), changeId);
 
         Assert.That(undo.IsError, Is.False, undo.ErrorData?.Message);
         Assert.That(ReadSeeded(ConsumersPath), Is.EqualTo(ConsumersSource));
@@ -175,7 +175,7 @@ public class UndoLastApplyConcurrentEditTests
             _validationEngine,
             Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
-        var undo = await editImpl.UndoLastApply(new ToolCallReason("testing undo line-delta summary"), changeId);
+        var undo = await editImpl.UndoChange(new ToolCallReason("testing undo line-delta summary"), changeId);
 
         Assert.That(undo.IsError, Is.False, undo.ErrorData?.Message);
         var text = undo.SuccessData?.ToString();
@@ -184,8 +184,8 @@ public class UndoLastApplyConcurrentEditTests
     }
 
     [Test]
-    [Description("ReplaceSnippet on disk returns a ChangeId that names UndoLastApply in its success text and reverts the file")]
-    public async Task ReplaceSnippet_DiskBackedApply_ReturnsChangeIdThatUndoLastApplyReverts()
+    [Description("ReplaceSnippet on disk returns a ChangeId that names UndoChange in its success text and reverts the file")]
+    public async Task ReplaceSnippet_DiskBackedApply_ReturnsChangeIdThatUndoChangeReverts()
     {
         await SeedAsync();
 
@@ -205,10 +205,10 @@ public class UndoLastApplyConcurrentEditTests
 
         Assert.That(apply.IsError, Is.False, apply.ErrorData?.Message);
         Assert.That(apply.SuccessData!.ChangeId, Is.Not.Null);
-        Assert.That(apply.SuccessData.ReplacementResult!.Summary, Does.Contain("UndoLastApply"));
+        Assert.That(apply.SuccessData.ReplacementResult!.Summary, Does.Contain("UndoChange"));
         Assert.That(ReadSeeded(ConsumersPath), Does.Contain("new Widget(2, \"b\")"));
 
-        var undo = await editImpl.UndoLastApply(new ToolCallReason("testing undo of replace snippet"), apply.SuccessData.ChangeId!);
+        var undo = await editImpl.UndoChange(new ToolCallReason("testing undo of replace snippet"), apply.SuccessData.ChangeId!);
 
         Assert.That(undo.IsError, Is.False, undo.ErrorData?.Message);
         Assert.That(ReadSeeded(ConsumersPath), Is.EqualTo(ConsumersSource));
@@ -262,7 +262,7 @@ public class UndoLastApplyConcurrentEditTests
             _validationEngine,
             Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
-        var undo = await editImpl.UndoLastApply(new ToolCallReason("testing undo refused by open ledger"), changeId);
+        var undo = await editImpl.UndoChange(new ToolCallReason("testing undo refused by open ledger"), changeId);
 
         Assert.That(undo.IsError, Is.True);
         Assert.That(undo.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.ScopedLedgerBlocked));
@@ -299,7 +299,7 @@ public class UndoLastApplyConcurrentEditTests
             _validationEngine,
             Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
-        var undo = await editImpl.UndoLastApply(new ToolCallReason("testing undo without agent id"), changeId);
+        var undo = await editImpl.UndoChange(new ToolCallReason("testing undo without agent id"), changeId);
 
         // The ledger guard ("was changed after agent") needs an agent id and stays silent; the identity-free disk-text guard refuses.
         Assert.That(undo.IsError, Is.True);
@@ -343,7 +343,7 @@ public class UndoLastApplyConcurrentEditTests
         Assert.That(later.IsError, Is.False, later.Summary);
         var diskAfterLaterEdit = ReadSeeded(ConsumersPath);
 
-        var undo = await NewEditImpl().UndoLastApply(new ToolCallReason("testing undo refusal after a later edit by the same agent"), changeId);
+        var undo = await NewEditImpl().UndoChange(new ToolCallReason("testing undo refusal after a later edit by the same agent"), changeId);
 
         Assert.That(undo.IsError, Is.True);
         Assert.That(undo.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.ConcurrentEditRefused));
@@ -363,7 +363,7 @@ public class UndoLastApplyConcurrentEditTests
         var rawText = ReadSeeded(ConsumersPath) + "// raw disk edit\r\n";
         File.WriteAllText(consumersFullPath, rawText);
 
-        var undo = await NewEditImpl().UndoLastApply(new ToolCallReason("testing undo refusal after a raw disk edit"), changeId);
+        var undo = await NewEditImpl().UndoChange(new ToolCallReason("testing undo refusal after a raw disk edit"), changeId);
 
         Assert.That(undo.IsError, Is.True);
         Assert.That(undo.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.ConcurrentEditRefused));
@@ -407,7 +407,7 @@ public class UndoLastApplyConcurrentEditTests
         Assert.That(later.IsError, Is.False, later.Summary);
         ((PersistentWorkspaceManager)_workspaceManager).ClearExternalFileChanges();
 
-        var undo = await NewEditImpl().UndoLastApply(new ToolCallReason("testing undo of a blob item without AfterSource"), changeId);
+        var undo = await NewEditImpl().UndoChange(new ToolCallReason("testing undo of a blob item without AfterSource"), changeId);
 
         Assert.That(undo.IsError, Is.False, undo.ErrorData?.Message);
         Assert.That(ReadSeeded(ConsumersPath), Is.EqualTo(ConsumersSource));
@@ -429,7 +429,7 @@ public class UndoLastApplyConcurrentEditTests
         File.WriteAllText(consumersFullPath, flipped);
         ((PersistentWorkspaceManager)_workspaceManager).ClearExternalFileChanges();
 
-        var undo = await NewEditImpl().UndoLastApply(new ToolCallReason("testing undo after an EOL-only rewrite"), changeId);
+        var undo = await NewEditImpl().UndoChange(new ToolCallReason("testing undo after an EOL-only rewrite"), changeId);
 
         Assert.That(undo.IsError, Is.False, undo.ErrorData?.Message);
         Assert.That(ReadSeeded(ConsumersPath), Is.EqualTo(ConsumersSource));

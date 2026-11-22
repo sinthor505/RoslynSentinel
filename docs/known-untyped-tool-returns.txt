@@ -86,4 +86,4 @@ WorkspaceTools.ReadFileTool | SentinelCallToolResult<object>
 WorkspaceTools.RetryFailedChangesTool | SentinelCallToolResult<object>
 WorkspaceTools.RunTestTool | SentinelCallToolResult<object>
 WorkspaceTools.SplitProjectByFolderTool | SentinelCallToolResult<object>
-WorkspaceTools.UndoLastApplyTool | SentinelCallToolResult<object>
+WorkspaceTools.UndoChangeTool | SentinelCallToolResult<object>

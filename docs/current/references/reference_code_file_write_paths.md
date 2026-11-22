@@ -34,7 +34,7 @@ In order, the method:
    `ToolErrorCode.ConcurrentEditRefused` when another known agent wrote a target after this call started) and
    `RevalidateAfterForeignWriteAsync` (a second compile gate when another agent wrote elsewhere), then the cross-process write
    lock (7a), then captures a **pre-image** of every target (null = file did not exist), used for
-   `OperationItemRecord.BeforeSource` and `UndoLastApply`.
+   `OperationItemRecord.BeforeSource` and `UndoChange`.
 7a. Cross-process write lock (`CrossProcessWriteLock`, `Common/CrossProcessWriteLock.cs`): an OS-held `FileShare.None` lock on
    `<solution root>/.roslynsentinel/write.lock`, taken after the checks above and before pre-image capture, so the stale-read and
    `FoldPending` checks and the writes see a disk no other RoslynSentinel process can change. Wait 10 s
@@ -56,7 +56,7 @@ In order, the method:
    - `RefuseIfObservedStaleQuiet` (same refusal, no unobserved finding): `ValidateAndApplyHelper` by default, so every engine tool
      that writes through it (`Member`, `RenameSymbol`, `MoveMember`, ...) is opted in with no edit at the tool; and the direct callers
      `AsyncifyTools`, `AsyncBatchEngine`, `CommentingTools`, `MsToolAugmentEngine` and `DeleteUnusedSymbol`.
-   - Exempt (`None`): `UndoLastApply` (`exactRestore`), `CreateFile`, and `RetryFailedChangesAsync` (a cache replay in `Common`).
+   - Exempt (`None`): `UndoChange` (`exactRestore`), `CreateFile`, and `RetryFailedChangesAsync` (a cache replay in `Common`).
    `StaleReadPolicyRatchetTests` fails any production `ApplyProposedChangesAsync(` call outside `Common` that does not name
    `staleReadPolicy:` unless allowlisted (presence only, not the value). Tools turn the refusal into a `ResultError` with
    `WriteRefusal.TryMap` (`Common/WriteRefusal.cs`: `StaleRead`, `FoldPending`; at most 10 files named, rest in `StructuredDetail`);
@@ -115,7 +115,7 @@ Every workspace write ends up with one line-ending style, chosen by the server, 
   (`EolChangeGuard.Count`) and refuses (`EolChangeRefused`) if the bytes it is about to write are not uniform. So text arriving in
   the other style (an agent's LF snippet in a CRLF file) is converted, not refused, and a mixed file converges on its first touch. There
   is no longer a "style flip" refusal, and `NormalizeEolOfChangedLines` is not on the write path.
-- **Exemptions.** `UndoLastApply` passes `exactRestore: true`, which writes the pre-image back unchanged. The partial-failure rollback
+- **Exemptions.** `UndoChange` passes `exactRestore: true`, which writes the pre-image back unchanged. The partial-failure rollback
   restore also writes the pre-image as it was. Consequence, accepted: in a foreign `auto` repo an undo or rollback can restore a file
   that was mixed before the change.
 - **Attribution finding.** When the pre-image read from disk is mixed, or uniform in a style other than the resolved target, `ComputeEolPrePass`
@@ -156,7 +156,7 @@ compile validation, the collateral-change check, dry-run and a diff, then calls 
 | --- | --- | --- |
 | `ValidateAndApplyHelper` | Common | Shared validate-then-apply wrapper. Reached by `GenerationTools` (via its private `ValidateAndApplyAsync`) and, by name and call-count, by the refactoring `*Impl` classes (`RefactoringStructuralImpl`, `RefactoringSignatureImpl`, `RefactoringExtractionDocsImpl`) and `AdvancedRefactoringTools` (not individually traced) |
 | `WholeFileWriteTools` | Tools.Basic | `WriteFile`, `DeleteFile`, `ApplyDiff`, `ApplyUnifiedDiff` |
-| `WorkspaceFileEditImpl` | Tools.Basic | Direct calls from `UndoLastApply`, `ReplaceSnippet`, `ReplaceSnippetBatch`, `CreateFile` |
+| `WorkspaceFileEditImpl` | Tools.Basic | Direct calls from `UndoChange`, `ReplaceSnippet`, `ReplaceSnippetBatch`, `CreateFile` |
 | `WorkspaceProjectManagementImpl` | Tools.Basic | Direct call from `SafeDeleteUnusedSymbol` |
 | `CommentingTools` | Tools.Advanced | Two direct calls in `RunAsync` |
 | `MsToolAugmentEngine` | Engines.Basic | Format/using-sort helpers; see the sanctioned fallback below |
@@ -192,7 +192,7 @@ A new writer of workspace source should go through the chokepoint, not add to th
 ### History
 
 Three bypasses were found and fixed on 2026-08-22 (a raw write in `SortAndDeduplicateUsingsAsync`, a write-then-resync in
-`FormatDocumentSafeAsync`, and a hand-rolled `UndoLastApply` revert loop). Each lacked drift refusal, pre-image capture, rollback
+`FormatDocumentSafeAsync`, and a hand-rolled `UndoChange` revert loop). Each lacked drift refusal, pre-image capture, rollback
 and watcher-loop suppression; the undo path in particular produced spurious external-drift warnings because `_internalChanges`
 was never marked. The shared `ValidateAndApplyHelper` was extracted in commit `cb70952`.
 
@@ -224,7 +224,7 @@ These write files but are outside the chokepoint by design:
 
 - `Tools.Basic/DocumentationTools.cs` (`ProjectDoc` and its helpers): project documentation and state files under `docs/`
   (written through `EolFileWriter`, so they follow the EOL policy).
-- `Common/OperationBlobWriter.cs`: forensic operation JSON used by `UndoLastApply` for pre-image lookup.
+- `Common/OperationBlobWriter.cs`: forensic operation JSON used by `UndoChange` for pre-image lookup.
 - `Common/MigrationLedger.cs` (`SaveAsync`): ledger JSON persistence.
 - `Common/LargeResultHelper.cs`: offloaded oversized tool results under `.roslynsentinel/largeresults/`.
 - `Server.Basic/ConsoleMode.cs`: `tool_list_*.json` and method-inventory dumps in the server bin folder.

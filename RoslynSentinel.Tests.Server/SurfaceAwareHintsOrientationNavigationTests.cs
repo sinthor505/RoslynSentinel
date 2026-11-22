@@ -39,7 +39,7 @@ public class SurfaceAwareHintsOrientationNavigationTests
     private static readonly HashSet<string> LeanCallable = new(StringComparer.Ordinal)
     {
         "ReadFile", "GetFileOutline", "Search", "ListSolutionItems", "GetLargeResult", "ReplaceSnippet", "Member",
-        "RenameSymbol", "CreateFile", "DeleteFile", "Build", "RunTest", "GetMethodSource", "UndoLastApply",
+        "RenameSymbol", "CreateFile", "DeleteFile", "Build", "RunTest", "GetMethodSource", "UndoChange",
         "ChangeSignature", "ChangeAccessibility", "ModifyModifier", "UsingDirective",
     };
 

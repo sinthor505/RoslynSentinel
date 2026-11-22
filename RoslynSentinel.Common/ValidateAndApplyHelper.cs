@@ -281,7 +281,7 @@ public static class ValidateAndApplyHelper
             var reason = blob.Diagnostic ?? "the operation blob could not be written";
             ((IUnrecoverableBreaker)workspaceManager).Trip(operationName, changeId, reason);
 
-            // No changeId: one UndoLastApply cannot resolve is worse than none.
+            // No changeId: one UndoChange cannot resolve is worse than none.
             return new ApplyOutcome(null, null, false, appliedDiff, reason, LineChanges: lineChanges, Findings: successFindings);
         }
 
@@ -289,7 +289,7 @@ public static class ValidateAndApplyHelper
         // unconditionally, which meant any operation producing an empty change set -> most commonly
         // one whose refactoring feature is disabled in SentinelConfiguration, e.g. ExtractInterface,
         // which returns an empty dictionary rather than an error -> reported status:"applied" and
-        // handed back a handle UndoLastApply could never resolve. Not an integrity failure (nothing
+        // handed back a handle UndoChange could never resolve. Not an integrity failure (nothing
         // landed on disk), just a no-op, so the breaker deliberately stays untripped.
         //
         // Keyed on the apply result rather than on blob.Required: those diverge when there is no

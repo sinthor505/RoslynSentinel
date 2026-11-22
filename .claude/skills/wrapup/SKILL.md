@@ -16,7 +16,7 @@ punctuation, `Git` tool with scope `listed`, `CommitHashLength` off the result).
 
 - Finish an edit that is one or two calls from compiling. Anything larger: do not start it - record
   it as NEXT in the log instead.
-- If a half-applied multi-step change cannot be completed, prefer `UndoLastApply` or reverting only
+- If a half-applied multi-step change cannot be completed, prefer `UndoChange` or reverting only
   *your* session's files to a compiling state over leaving the tree broken. Never revert files you
   did not touch this session.
 - A tool failure that stopped work still gets its `docs/current/blockers/blocking_error_<slug>.md`

@@ -14,9 +14,9 @@ namespace RoslynSentinel.Tools.Basic;
 ///
 /// CORRECTION vs. the plan doc's Decision 1 (flagged per Decision 7 step 1.5's audit mandate):
 /// Decision 1 listed this class as 7 tools (ApplyDiffTool, ApplyUnifiedDiffTool, WriteFileTool, DeleteFileTool,
-/// RetryFailedChangesTool, UndoLastApplyTool, ReadFileTool) with DiffEngine as a dependency. As of 2026-09-17,
+/// RetryFailedChangesTool, UndoChangeTool, ReadFileTool) with DiffEngine as a dependency. As of 2026-09-17,
 /// WorkspaceTools.cs only actually still has 3 of those 7 live as [McpServerTool] methods
-/// (RetryFailedChangesTool, UndoLastApplyTool, ReadFileTool) - the other 4 (ApplyDiffTool/ApplyUnifiedDiffTool/
+/// (RetryFailedChangesTool, UndoChangeTool, ReadFileTool) - the other 4 (ApplyDiffTool/ApplyUnifiedDiffTool/
 /// WriteFileTool/DeleteFileTool) are live, separately-registered [McpServerTool] methods on a wholly
 /// different, pre-existing class (WholeFileWriteTools.cs) that this plan does not name and
 /// is out of scope to touch. DiffEngine is confirmed dead on WorkspaceTools (FindReferencesTool:
@@ -345,7 +345,7 @@ public class WorkspaceFileEditImpl
         }
     }
 
-    public async Task<SentinelCallToolResult<object>> UndoLastApply(ToolCallReason reason, string changeId, CancellationToken cancellationToken = default)
+    public async Task<SentinelCallToolResult<object>> UndoChange(ToolCallReason reason, string changeId, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -557,11 +557,11 @@ public class WorkspaceFileEditImpl
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "UndoLastApply failed for '{ChangeId}'", changeId);
+            _logger.LogError(ex, "UndoChange failed for '{ChangeId}'", changeId);
             return new SentinelCallToolResult<object>()
             {
                 IsError = true,
-                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "UndoLastApply")
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "UndoChange")
             };
         }
     }
@@ -1193,9 +1193,9 @@ public class WorkspaceFileEditImpl
     {
         bool Callable(string tool) => _activeToolSurface is null || _activeToolSurface.IsCallable(tool);
         var steps = new List<string>();
-        if (Callable("UndoLastApply"))
+        if (Callable("UndoChange"))
         {
-            steps.Add($"If an earlier edit emptied it, UndoLastApply restores the previous content: {ToolCallHint.Call("UndoLastApply")}, with the changeId from the response of that edit.");
+            steps.Add($"If an earlier edit emptied it, UndoChange restores the previous content: {ToolCallHint.Call("UndoChange")}, with the changeId from the response of that edit.");
         }
 
         if (Callable("CreateFile"))
@@ -1731,7 +1731,7 @@ public class WorkspaceFileEditImpl
                     var summaryBody = liftNote is null ? result.Summary : $"{liftNote} {result.Summary}";
                     var indentNote = reindent.LinesAdjusted > 0 ? $"newContent indentation was adjusted to the file's on {reindent.LinesAdjusted} line(s); returnDiff shows the written text." : null;
                     var appliedSummary = string.Join(" ", new[] { selectorNote, indentNote, summaryBody }.Where(part => part is not null));
-                    var strippedResult = result with { PreImages = null, Summary = blobWrite.Written ? $"{appliedSummary} Call {ToolCallHint.Call("UndoLastApply", ("changeId", changeId))} to revert." : appliedSummary };
+                    var strippedResult = result with { PreImages = null, Summary = blobWrite.Written ? $"{appliedSummary} Call {ToolCallHint.Call("UndoChange", ("changeId", changeId))} to revert." : appliedSummary };
                     string? diffContent = returnDiff
                         ? ValidateAndApplyHelper.BuildDiffFromPreImages(snippetChanges, result.PreImages)
                         : null;
@@ -2088,7 +2088,7 @@ public class WorkspaceFileEditImpl
             var blobWrite = await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet_batch", result, blobChangeId: changeId, cancellationToken: cancellationToken);
             var summaryBody = liftNote is null ? result.Summary : $"{liftNote} {result.Summary}";
             var appliedSummary = selectorNotes.Count == 0 ? summaryBody : string.Join(" ", selectorNotes) + " " + summaryBody;
-            var strippedResult = result with { PreImages = null, Summary = blobWrite.Written ? $"{appliedSummary} Call {ToolCallHint.Call("UndoLastApply", ("changeId", changeId))} to revert." : appliedSummary };
+            var strippedResult = result with { PreImages = null, Summary = blobWrite.Written ? $"{appliedSummary} Call {ToolCallHint.Call("UndoChange", ("changeId", changeId))} to revert." : appliedSummary };
             string? diffContent = returnDiff
                 ? ValidateAndApplyHelper.BuildDiffFromPreImages(finalContents, result.PreImages)
                 : null;

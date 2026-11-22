@@ -5,7 +5,7 @@
 // the blob into a non-existent operations/WrapRange/ subdirectory, the write threw
 // DirectoryNotFoundException, and the catch swallowed it into a return string nobody inspected ->
 // so WrapRange, ExtractMembers, SyncInterface, Inline and MoveType all returned changeIds
-// UndoLastApply could never resolve. The call sites were renamed, but sanitization here is the
+// UndoChange could never resolve. The call sites were renamed, but sanitization here is the
 // durable fix: it holds for any future name regardless of caller discipline. These tests pin the
 // sink, so a reverted rename can no longer reintroduce the bug.
 
@@ -55,7 +55,7 @@ public class OperationBlobWriterTests
         Assert.That(result.Written, Is.True, result.Diagnostic);
         Assert.That(result.FileName, Is.Not.Null.And.Contain(changeId));
         Assert.That(OperationBlobWriter.FindBlobPath(changeId, _solutionRoot), Is.Not.Null,
-            "a changeId that was issued must be resolvable by UndoLastApply");
+            "a changeId that was issued must be resolvable by UndoChange");
     }
 
     [Test]
@@ -171,7 +171,7 @@ public class OperationBlobWriterTests
         });
     }
 
-    // Items read back the way UndoLastApply / GetOperationDetail do: each element deserialised to OperationItemRecord.
+    // Items read back the way UndoChange / GetOperationDetail do: each element deserialised to OperationItemRecord.
     private List<OperationItemRecord> ReadBlobItems(string changeId)
     {
         var path = OperationBlobWriter.FindBlobPath(changeId, _solutionRoot);

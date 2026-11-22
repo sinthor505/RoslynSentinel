@@ -149,7 +149,7 @@ public static class ErrorPolicyIntentTable
         ["TagTestCategories"] = Fixed(E),
         ["TraceVariableLifetime"] = Fixed(L),
         ["TypedMember"] = Fixed(E),
-        ["UndoLastApply"] = Fixed(E),
+        ["UndoChange"] = Fixed(E),
         ["UpliftCallers"] = Fixed(E),
         ["UsingDirective"] = Dispatch("operation", E, lookup: "view", edit: "add,remove"),
         ["WrapRange"] = Fixed(E),

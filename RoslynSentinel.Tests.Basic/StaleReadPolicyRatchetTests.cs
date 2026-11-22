@@ -21,7 +21,7 @@ public class StaleReadPolicyRatchetTests
     // Allowlist keyed "<relative file>::<enclosing member>" to a one-line reason.
     private static readonly Dictionary<string, string> StaleReadPolicyAllowlist = new(StringComparer.Ordinal)
     {
-        ["RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs::UndoLastApply"] = "exactRestore: undo restores a recorded pre-image and is exempt from the stale-read check",
+        ["RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs::UndoChange"] = "exactRestore: undo restores a recorded pre-image and is exempt from the stale-read check",
         ["RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs::CreateFile"] = "a new file has nothing observed, exempt by decision",
     };
 
