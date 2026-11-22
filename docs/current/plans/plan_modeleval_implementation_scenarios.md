@@ -1,6 +1,6 @@
 # Plan: Data-driven model-eval family of 14 implementation scenarios distilled from real plan/punchlist runs
 
-**Status:** IN PROGRESS 2026-11-22. Steps 1-5 and 9 (script/docs) done (786a1c89, 6000b8d2, 8f15d902, 214af126, a57a43e6, e6b0bc83).
+**Status:** IN PROGRESS 2026-11-22. Steps 1-9 done (786a1c89, 6000b8d2, 8f15d902, 214af126, a57a43e6, 73e8e44e, 4581f2e7, 356f3ab7, e6b0bc83); Step 10 live runs in progress.
 
 ## Problem
 
@@ -137,6 +137,13 @@ reduced to a small self-contained fixture rather than a checkout of this repo.
   ctors over `IDictionary`/`IEnumerable<KeyValuePair>`, `Merge(DocumentChangeSet)` returning a new set; scenarios 1
   and 3 rely on probed compiler behaviour (`IReadOnlyDictionary` breaks `[]` with CS9174 and `new() {..}` with
   CS0144); scenario 6's three blocked sites are `Renamer.FromResult`, `Mover.Choose`, `Merger.Latest`.
+- Done: Step 6 73e8e44e9006bad8ebaecc09bd281bc65c0b2787, Step 7 4581f2e724ec17c191224c55115abbdc1260bf78, Step 8
+  356f3ab739c6da1a8947652e86f77dd5b2ebeebe. Whole `ImplementationScenarioGoldenTests` class 45/45, none parked.
+- As built: scenario 10's engines are async (tests use `await Assert.ThrowsAsync`), its seed `OutcomeTests` pins only
+  success and TargetIneligible; scenario 11's hidden fourth reference is a `using static`; scenario 13's check requires
+  an exact copy apart from the namespace and a legacy file equal to the original minus the three attribute lines;
+  scenario 14's seed has `EvalFixture`, `EvalHost`, `EvalClient` and a static `EventLog`; scenario 12's deviation check
+  is a keyword check ("root" with "differ"/"deviat", or both `RootNamespace` and `DefaultNamespace`).
 
 ### Step 9 - Script, docs, leftover check
 - Files: `scripts/roslynsentinel-modeleval.ps1`, `docs/current/references/reference_model_eval_procedure.md`
@@ -153,6 +160,8 @@ reduced to a small self-contained fixture rather than a checkout of this repo.
   over `ImplementationScenarios/` finds only parked scenarios.
 - Done when: the first queued Step 10 run of `-Test ImplementationScenario -Scenario WidenToReadOnlyDictionary`
   runs exactly that test (the script has no dry-run mode).
+- Done: e6b0bc83b07124b4f553fbd920fc5dfacc916215 (filter verified by the pilot run: results folder
+  `ImplScenario_WidenToReadOnlyDictionary_Step1`); stub sweep after Step 8 found no placeholders.
 
 ### Step 10 - Live runs on 112 and 113, then refine
 - Depends on: 9
