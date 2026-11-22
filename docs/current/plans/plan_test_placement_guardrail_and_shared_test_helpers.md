@@ -1,6 +1,6 @@
 # Plan: guard test placement (core-subject tests out of Advanced test projects) and share the test helpers that keep being copied
 
-**Status:** DRAFT 2026-11-21. Not started. Steps 1-6 and 10 can run now; the relocation (Step 7) and the `Server.Advanced` move (Step 9) are blocked on MoveFile slice 1 (a TOOL-GAP, below).
+**Status:** READY 2026-11-22 (todo review: decisions settled, see Decisions at the end). Not started. MoveFile is live, so Steps 7 and 9 are no longer blocked.
 
 ## Problem
 
@@ -514,3 +514,11 @@ If unused Advanced tools are frozen out of the main solution:
 - Wasted (kept last): Step 10a-10d (they edit Advanced-subject files only), Step 9 (it only drops a reference from
   `Tests.Advanced` and `Tests.Asyncify`; the four moved tests are `Server.Advanced` hosting tests that stay useful in `Tests.Server`
   but no longer need the move), and the Advanced half of `BatteryToolFactory` (already out of scope).
+
+## Decisions (todo review 2026-11-22)
+
+- **D1-D9:** accepted as recommended: D1 relocate with MoveFile (batches of at most 8); D2 syntactic class-level census; D3 keep namespaces (MoveFile `update` is not built); D4 message ratchet floor 35 characters, `MessageTextSubject` exemption, migrate on touch; D5 whitespace-collapsing assert, `AssertByteExact` kept for formatter tests; D6 keep thin Advanced `BatteryToolFactory` delegates; D7 internal facade in Tests.Tools.Basic; D8 ratchets in Tests.Basic; D9 `RepoRootLocator.Find(AppContext.BaseDirectory)`.
+- **Ratchet strictness:** house rule from plan_shared_tool_execution_pipeline D10: growth fails, a decrease passes with a "lower the baseline to N" message (replaces failing on STALE lines).
+- **MoveFile is live** (`WholeFileWriteTools.cs`, MoveFile tool): the TOOL-GAP on Steps 7 and 9 is gone; ignore the "not built" wording in Step 7. Each `keep` move stores the full file in its blob (a READY TODO halves it); accepted.
+- **Order:** Steps 1-6 before plan_central_engine_throw_and_lookup_helpers (ErrorAssert makes its text changes cheap). Step 7.5 also does the parked "Core split test-move remainder" TODO line (MoveMemberSuccessTests, MoveMemberToolCollateralRefusalTests; drop the misleading `[Category("AdvancedRefactoringTools")]`).
+- **Acceptance:** as in the plan's Done-when sections; TestPlacementRatchetTests green with no baseline line for a moved class.

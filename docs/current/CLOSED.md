@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## workspaceStale with a RoslynSentinel.sln reload failure after a .slnx load - resolved (2026-11-22)
+
+`workspaceStale` with a RoslynSentinel.sln reload failure after a successful .slnx LoadSolution (2026-11-21) - seen once by a subagent of session bf9528c5, not reproduced in the main session; no code spot
+
+Evidence: not reproducible (todo review d6d7d3a2, owner 2026-11-22): no RoslynSentinel.sln in the repo or HEAD history; a reload uses _workspace.CurrentSolution.FilePath (PersistentWorkspaceManager.cs:1721); the .sln name can only come from a watcher triggerFile (ClassifyReloadTrigger :1472-1475). Reopen with the triggerFile if seen again.
+
 ## INBOX lines folded into the core-change plans or fixed - resolved (2026-11-22)
 
 INBOX triage in todo review d6d7d3a2. Each line below is closed because a DRAFT plan already carries it as a step (tracked by that plan's TODO.md line) or it was fixed in the triage commit:

@@ -172,3 +172,11 @@ Risks:
 - **A first-match-to-ambiguity change surfaces latent ambiguity** (Step 6, 8): tests that relied on the first pick need a `contextSnippet` or a renamed fixture, as in the audit plan's Step 7.
 - **Line numbers drift.** Another session had uncommitted edits in `AdvancedRefactoringTools.cs` and `Common.csproj` when this plan was written; every slice re-measures its anchors with `GetFileOutline` and `Search`, and uses the enclosing method, not the number.
 - **Engine reachability is the finding's judgement**, not a measurement of this plan; the two promoted methods in Step 7a assume the owner accepts that promotion (the finding's "Order of work" step 2).
+
+## Decisions (todo review 2026-11-22)
+
+- **Status:** PARKED by the owner until plan_shared_tool_execution_pipeline and plan_test_placement_guardrail_and_shared_test_helpers land (ErrorAssert and the shared ratchet scan helper make the text-changing slices cheap).
+- **Ratchet strictness:** house rule from plan_shared_tool_execution_pipeline D10: growth fails, a decrease passes with a message; replaces this plan's "stale and higher both fail".
+- **D4 answered:** `FilePathWrapper.ToString()` returns the absolute path (`FilePathWrapper.cs:127`), so messages pass the caller's own string.
+- **Drift to fold in on unpark:** the legacy `Cannot edit: target not found` sites are now `BasicRefactoringEngine.cs:2355,2500`; `ToolPreconditionException` has two production throws (`ProjectStructureEngine.cs:1799,1801`); share one `RatchetSourceScan` helper with the other two plans.
+- **D2 null syntax root code:** `TargetIneligible` (existing code: the target was found but the change cannot be made to it, pick another target; maps to ResultStatus.NotApplicable, `IResultStatus.cs:61`). The message names the cause, for example "'notes.md' has no C# syntax tree (not a C# document)". Why: the common cause is a found non-C# document; InvalidArgument, NotFound and PreconditionNotMet each steer the model wrongly, and no more specific code exists.

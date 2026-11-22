@@ -328,3 +328,18 @@ references, and can be split out later. The owner raised a separate repo; this i
 - **Tier-2 layout:** a second solution in this repo, excluded from default searches and builds.
 - **The 37 / 7 / 77 split:** not accepted yet; the owner amends the lists here first. Then step 1 (delete the 7 duplicates; update guidance and the not-found text that offers ListAll, `SymbolNotFoundDetail.RenderNoCandidates`, with its golden tests) becomes READY. Acceptance for step 1: the 7 are gone from `docs/generated/architecture_tools.md` and the Tests.Server by-name tables pass.
 - Note since the review: the claude-lean schema budget was raised to 46,500 chars (d2dcdc33), and ReplaceRange (proposals/proposal_replace_range_tool.md) and MoveFile (proposals/proposal_move_file_tool.md) are decided as new core tools.
+
+## Decisions (todo review 2026-11-22)
+
+- **ListAll:** stays in the delete set but leaves in its own step 1b, after the other six. Step 1b
+  retargets every reference to `Search(mode: ...)` (Search runs the same implementation; hint pairs
+  `('kind', X)` become `('mode', X)`): about 105 code matches in about 40 files - hint builders
+  (`SymbolNotFoundDetail.RenderNoCandidates`, `OrientationCircuitBreaker`, `BuildEngine.ListingCall`,
+  `ToolArgumentValidator.BuildParameterHints`, `ProjectStructureEngine` messages), name-keyed server logic
+  (`IsEmptyListAllResult`, the orientation-breaker allowlist, `ErrorPolicyIntentTable`), about 60 test pins,
+  and eval surfaces (`AgentToolAllowLists.Lean`, ModelEval and PlanStepRunner tool lists, agent-definition
+  tool lists); lean-eval baselines restart after it (463 eval calls). Medium, roughly 4-6 slices.
+  Why: the owner wants the duplicate gone, but its eval and hint reach is far larger than the other six.
+  Acceptance: `Search(text, "\"ListAll\"")` finds nothing outside history docs; Tests.Server by-name tables pass.
+- **The lists:** the owner amends the keep / delete / tier-2 lists (including the 2026-11-21 moves of
+  SubAgent and Features to main) personally; step 1 stays gated on that.

@@ -123,3 +123,14 @@ be pulled into it.
 - **Acceptance:** after an apply, the blob's `AfterSource` equals the disk text; apply, then edit the
   same file (same agent, and a raw disk edit), then `UndoChange` is refused; an untouched file
   still undoes; blob tests updated for the larger blob.
+
+## Decisions (todo review 2026-11-22)
+
+- **Question:** Slice 3 (self-building blob sites left without AfterSource): build, park or drop?
+- **Choice:** Build. Set AfterSource from the chokepoint's written text (after the EOL pre-pass), never
+  from `AttemptedSource`, at AsyncifyTools (code TODOs :1499, :2199, :2718; `AttemptedSource` assigned at
+  :1892, :2936, :3059), `AsyncBatchEngine` and the three UpliftCallers sites. Reverses the 2026-11-20
+  "not in scope" line.
+- **Why:** the owner's goal is an exact after-edit snapshot for every operation; `AttemptedSource` can
+  differ from disk after the EOL pre-pass and would make the undo guard report false drift.
+- **Acceptance:** after an Asyncify apply, the blob's `AfterSource` equals the disk text. Medium.

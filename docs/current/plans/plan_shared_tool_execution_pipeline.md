@@ -97,6 +97,14 @@ Layering: new code goes in `Common` (factories, overload) and `Engines.Basic` (`
 - Done when: `Build` 0 errors; `Search(mode: text, query: "NotImplementedException", fileGlob: "RoslynSentinel.Engines.Basic/EditApplier.cs")` finds nothing.
 - Lane: `implementer` (1 file, 2 edits). Pairs with: Step 3.
 
+### Step 4b - Hand the edit-impact result to the describe step (added by todo review 2026-11-22)
+- Files: `RoslynSentinel.Engines.Basic/EditApplier.cs`, `RoslynSentinel.Common/ValidateAndApplyHelper.cs` (around :199-202, where the two describers run independently)
+- Depends on: Step 4
+- Effect: behaviour-changing (small): a compile-gate rejection after a rename attribution no longer prints the CS0103 "likely a typo" hint for the renamed-away name on every `EditApplier` caller (today only `WorkspaceFileEditImpl.cs:1403`, the ReplaceSnippet path, passes `renamedAwayNames`).
+- Change: run the edit-impact analysis first and pass its renamed-away names into `CompilerErrorLookupHelper.DescribeAsync` (the same parameter ReplaceSnippet uses), instead of two unrelated closures. The whole-file writers (`EditImpactGate.RejectionAsync`, outside `EditApplier`) are a separate TODO.md line.
+- Done when: `Build` 0 errors; a test where a rename attribution precedes a CS0103 on the old name through an `EditApplier` caller shows no "likely a typo" text.
+- Lane: `implementer`.
+
 ### Step 5 - EditApplier tests
 - Files: `RoslynSentinel.Tests.Basic/EditApplierTests.cs` (new)
 - Depends on: Step 4
@@ -310,3 +318,10 @@ Other risks:
 - [plan_wrap_unwrapped_tool_returns_in_sentinel_call_tool_result.md](plan_wrap_unwrapped_tool_returns_in_sentinel_call_tool_result.md)
 - [reference_tool_response_pipeline.md](../references/reference_tool_response_pipeline.md)
 - [reference_architecture_map.md](../references/reference_architecture_map.md)
+
+## Decisions (todo review 2026-11-22)
+
+- **Status:** PARKED by the owner until plan_shorten_verification_loop is done (another session is implementing it), so this Large plan runs on the faster loop. D1-D9 were reviewed but not settled; the investigator agreed with every recommendation.
+- **D10 ratchet strictness (house rule for this plan, plan_central_engine_throw_and_lookup_helpers and plan_test_placement_guardrail_and_shared_test_helpers):** growth fails; a decrease passes with a "lower the baseline to N" message, with no stale failure. Why: parallel lanes do not collide on baselines.
+- **Step 4b added:** hand the edit-impact result to the describe step (CS0103 typo hint after a rename attribution).
+- **Drift to fold in on unpark:** MoveFile added two direct helper callers (`MoveFileCopyAndObsolete.cs:68`, `WholeFileWriteTools.cs:365`), so there are 12 production callers, not 10; the R2 baseline and Step 9's list grow by two. `new SentinelCallToolResult<` in Tools.Basic is now 479.
