@@ -1,6 +1,6 @@
 # Plan: Data-driven model-eval family of 14 implementation scenarios distilled from real plan/punchlist runs
 
-**Status:** IN PROGRESS 2026-11-22. Steps 1-2 done (786a1c89, 6000b8d2).
+**Status:** IN PROGRESS 2026-11-22. Steps 1-5 and 9 (script/docs) done (786a1c89, 6000b8d2, 8f15d902, 214af126, a57a43e6, e6b0bc83).
 
 ## Problem
 
@@ -130,6 +130,13 @@ reduced to a small self-contained fixture rather than a checkout of this repo.
   7 = {10 NotFoundToTypedThrow, 11 BreakCycleWithForwarders}; 8 = {12 ShareHelperDifferingRules, 13 ObsoleteNamespaceCopy, 14 MigrateOntoEnvironmentHelper}
   (slice 8 has 3 files, at the depth limit).
 - Done when: per scenario, the self-test cases named in Execution rules pass, or the scenario is parked.
+- Done: Step 3 8f15d902091c163c104d621f24a96b0d3ed91518 (also guards `File.Delete` in `CheckAsync` for steps
+  without a hidden test), Step 4 214af126c9c81392e54e22ec9ceafdcb4baad02d, Step 5 a57a43e62250209770ea034d0482188be1fc1be4.
+- As built: scenario 7's `OperationSummary` is a class with a primary constructor (a positional record forces the
+  property to keep the parameter type, CS8866); scenario 4's prompt fixes `Paths` as `IReadOnlyCollection<FilePath>`,
+  ctors over `IDictionary`/`IEnumerable<KeyValuePair>`, `Merge(DocumentChangeSet)` returning a new set; scenarios 1
+  and 3 rely on probed compiler behaviour (`IReadOnlyDictionary` breaks `[]` with CS9174 and `new() {..}` with
+  CS0144); scenario 6's three blocked sites are `Renamer.FromResult`, `Mover.Choose`, `Merger.Latest`.
 
 ### Step 9 - Script, docs, leftover check
 - Files: `scripts/roslynsentinel-modeleval.ps1`, `docs/current/references/reference_model_eval_procedure.md`
@@ -152,6 +159,9 @@ reduced to a small self-contained fixture rather than a checkout of this repo.
 - Lane: main session via `scripts/roslynsentinel-evalqueue.ps1` (never direct on a shared host); model = whatever
   each host reports loaded (`Get-EvalHostStatus.ps1 -Json`); record each host's context length.
 - Split by `PreferredHost`: long scenarios (1, 3, 4, 6, 9, 10, 11, 14) on 113, short ones (2, 5, 7, 8, 12, 13) on 112.
+- Wall-clock cap: the 15-minute default is too short for Ornith-1.5-9B on 112 (pilot: ~5 min per reasoning-heavy
+  turn, stopped after 4 turns). Queue with `-EvalArgs "-StepWallClockMinutes 45"` (112) / `30` (113) and a matching
+  `-TimeLimitMinutes`; queue with `-Commit HEAD` while other sessions have dirty source.
 - One run per scenario step first. Each failure goes through the `failure-analysis` doctrine: an environment defect
   in the scenario (ambiguous prompt, wrong check, fixture bug) is fixed in the scenario file and re-run once; a
   model failure with a sound scenario is recorded as the result. Outcome classes reported per run:
