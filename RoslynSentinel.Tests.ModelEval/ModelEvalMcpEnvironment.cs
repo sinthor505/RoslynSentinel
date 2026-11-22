@@ -28,13 +28,15 @@ internal delegate Task ModelEvalStaging(
 /// One isolated world for a live-model run: a fixture on disk, an in-process MCP server (Advanced engines, the
 /// <see cref="ChainEvalToolSurface"/> tool surface) on two pipes, a generic host carrying the LM Studio agent client and an
 /// agent.log in the sample directory, an MCP client on the other end of the pipes, and the agent client from DI.
-/// <see cref="DisposeAsync"/> disposes the client, stops and disposes the host, then disposes the fixture.
+/// <see cref="DisposeAsync"/> disposes the client, stops and disposes the host, then disposes the fixture (unless the
+/// fixture was borrowed, see <see cref="CreateAsync"/>).
 /// </summary>
 internal sealed class ModelEvalMcpEnvironment : IAsyncDisposable
 {
     private IHost? _host;
     private McpClient? _client;
     private RoslynSentinel.Tests.TestSolutionFixture? _fixture;
+    private bool _ownsFixture;
 
     private ModelEvalMcpEnvironment()
     {
@@ -57,6 +59,9 @@ internal sealed class ModelEvalMcpEnvironment : IAsyncDisposable
     /// <paramref name="configureToolSurface"/> replaces the default tool registration
     /// (<c>AddRoslynSentinelToolsAdvanced</c> with the <see cref="ChainEvalToolSurface"/> modes and hidden tools) when a run
     /// needs another surface or request filters; it is called at the same point in the builder chain.
+    /// <paramref name="borrowedFixture"/>, when non-null, is used instead of a new fixture (<paramref name="restorePackages"/>
+    /// is then ignored) and is NOT disposed by <see cref="DisposeAsync"/>: the caller owns it and disposes it itself, so
+    /// several worlds can be built in turn over the same on-disk solution.
     /// If any step throws, the partly built world is disposed before the exception propagates.
     /// </summary>
     public static async Task<ModelEvalMcpEnvironment> CreateAsync(
@@ -65,12 +70,13 @@ internal sealed class ModelEvalMcpEnvironment : IAsyncDisposable
         ModelEvalStaging? beforeLoad,
         ModelEvalStaging? afterLoad,
         CancellationToken cancellationToken,
-        Action<IMcpServerBuilder, IServiceCollection>? configureToolSurface = null)
+        Action<IMcpServerBuilder, IServiceCollection>? configureToolSurface = null,
+        RoslynSentinel.Tests.TestSolutionFixture? borrowedFixture = null)
     {
         var environment = new ModelEvalMcpEnvironment();
         try
         {
-            await environment.InitializeAsync(sampleDirectory, restorePackages, beforeLoad, afterLoad, configureToolSurface, cancellationToken);
+            await environment.InitializeAsync(sampleDirectory, restorePackages, beforeLoad, afterLoad, configureToolSurface, borrowedFixture, cancellationToken);
             return environment;
         }
         catch
@@ -86,10 +92,12 @@ internal sealed class ModelEvalMcpEnvironment : IAsyncDisposable
         ModelEvalStaging? beforeLoad,
         ModelEvalStaging? afterLoad,
         Action<IMcpServerBuilder, IServiceCollection>? configureToolSurface,
+        RoslynSentinel.Tests.TestSolutionFixture? borrowedFixture,
         CancellationToken cancellationToken)
     {
         // restorePackages: ContosoOrders.Tests needs restore assets or a solution-scope build reports CS0246 for every Xunit file
-        _fixture = new RoslynSentinel.Tests.TestSolutionFixture(restorePackages);
+        _ownsFixture = borrowedFixture is null;
+        _fixture = borrowedFixture ?? new RoslynSentinel.Tests.TestSolutionFixture(restorePackages);
 
         var clientToServer = new Pipe();
         var serverToClient = new Pipe();
@@ -161,6 +169,9 @@ internal sealed class ModelEvalMcpEnvironment : IAsyncDisposable
             _host.Dispose();
         }
 
-        _fixture?.Dispose();
+        if (_ownsFixture)
+        {
+            _fixture?.Dispose();
+        }
     }
 }

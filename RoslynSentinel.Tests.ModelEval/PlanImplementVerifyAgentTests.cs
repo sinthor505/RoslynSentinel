@@ -33,6 +33,7 @@ namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 /// required in addition to, not instead of, the mechanical check.
 /// </summary>
 [TestFixture]
+// TODO duplicate [TestFixture] attribute (pre-existing): NUnit may run every test in this fixture twice; confirm and remove one
 [TestFixture]
 public class PlanImplementVerifyAgentTests
 {
@@ -167,18 +168,13 @@ public class PlanImplementVerifyAgentTests
         State your verdict as described in your system prompt.
         """;
 
-    // "Refactor" (not "Refactoring") and "Workspace" are the exact mode strings
-    // AddRoslynSentinelToolsBasic checks -> see WholeFileRewriteAgentTests.ActiveModes for why both
-    // modes are needed for every phase here, including the read-only ones: the tools this fixture's
-    // prompts need (ReadFileTool/ListAllTool/Search/BuildTool) live in SentinelWorkspaceTools, gated
-    // by "Workspace", alongside the mutating tools gated by "Refactor" -> the per-phase BlockedToolNames
-    // filter below is what actually enforces read-only, not the mode selection.
-    private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Refactor", "Workspace",
-    };
+    // Tool surface: ModelEvalToolSurfaces.Basic (the "Refactor" and "Workspace" modes) for every phase,
+    // including the read-only ones: the tools this fixture's prompts need (ReadFileTool/ListAllTool/Search/
+    // BuildTool) live in SentinelWorkspaceTools, gated by "Workspace", alongside the mutating tools gated by
+    // "Refactor" -> see WholeFileRewriteAgentTests for why both modes are needed. The per-phase BlockedToolNames
+    // filter (ConfigurePhaseToolSurface) is what actually enforces read-only, not the mode selection.
 
-    // Blocks every mutating tool exposed by ActiveModes so the plan and verify phases genuinely
+    // Blocks every mutating tool exposed by the Basic surface so the plan and verify phases genuinely
     // cannot edit files, matching PlanOnlyAgentTests.BlockedToolNames.
     private static readonly HashSet<string> BlockedToolNames = new(StringComparer.Ordinal)
     {
@@ -191,7 +187,7 @@ public class PlanImplementVerifyAgentTests
     // LoadSolutionTool, 4 ListWorkspaceSolutionsTool, 3 ListAllTool, 3 ChangeAccessibilityTool, 1 UsingDirectiveTool,
     // 1 ModifyModifierTool, 1 ListSolutionItemsTool -> 2026-09-05 analysis). Used only when
     // LlmOptions.MinimalToolSchema is set, to narrow the advertised tools/list schema down from
-    // ActiveModes' full 48 tools to just these 11 -> see project_granite42_8b_tool_schema_size_isolated
+    // the Basic surface's full 48 tools to just these 11 -> see project_granite42_8b_tool_schema_size_isolated
     // for why schema size itself (not context growth or task difficulty) is the latency driver
     // this is meant to test. Not a permanent restriction: this list reflects what qwen3.5-9b-coder
     // happened to use on this one fixture, not a general-purpose minimal toolset.
@@ -285,34 +281,12 @@ public class PlanImplementVerifyAgentTests
         }
     }
 
-    /// <summary>
-    /// One phase's worth of MCP host/client/runner, torn down before the next phase starts so
-    /// tool-availability differences between phases (blocked vs. unblocked) can't leak, and so each
-    /// phase's model call gets a genuinely fresh <c>messages</c> list inside
-    /// <see cref="ModelAgentRunner.RunAsync"/> -> the "fresh context per phase" the design calls for.
-    /// The fixture's files already exist on disk from <see cref="SetUp"/>; this only loads the
-    /// existing solution path into this phase's own <see cref="IWorkspaceManager"/> view of it.
-    /// </summary>
-    private async Task<AgentRunResult> RunPhaseAsync(
-        string phaseName,
-        string systemPrompt,
-        string userPrompt,
-        bool blockMutatingTools,
-        int turnCap,
-        CancellationToken cancellationToken)
+    // The Basic tool surface (the "Refactor" + "Workspace" modes, see ModelEvalToolSurfaces.NewBasicModes) plus this
+    // phase's request filters: a call-tool filter blocking BlockedToolNames when blockMutatingTools, and a list-tools
+    // filter narrowing the advertised schema to MinimalToolNames when LlmOptions.MinimalToolSchema.
+    private static void ConfigurePhaseToolSurface(IMcpServerBuilder mcpBuilder, IServiceCollection services, bool blockMutatingTools)
     {
-        var clientToServer = new Pipe();
-        var serverToClient = new Pipe();
-
-        var services = new ServiceCollection();
-        services.AddRoslynSentinelEnginesBasic();
-
-        var mcpBuilder = services.AddMcpServer();
-        mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
-        mcpBuilder.WithTasks(
-            new InMemoryMcpTaskStore(),
-            o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
-        mcpBuilder.AddRoslynSentinelToolsBasic(services, ActiveModes);
+        ModelEvalToolSurfaces.Basic(mcpBuilder, services);
 
         if (blockMutatingTools || LlmOptions.MinimalToolSchema)
         {
@@ -365,61 +339,47 @@ public class PlanImplementVerifyAgentTests
                 }
             });
         }
+    }
 
+    /// <summary>
+    /// One phase's worth of MCP host/client/runner, torn down before the next phase starts so
+    /// tool-availability differences between phases (blocked vs. unblocked) can't leak, and so each
+    /// phase's model call gets a genuinely fresh <c>messages</c> list inside
+    /// <see cref="ModelAgentRunner.RunAsync"/> -> the "fresh context per phase" the design calls for.
+    /// The fixture's files already exist on disk from <see cref="SetUp"/>; the phase's
+    /// <see cref="ModelEvalMcpEnvironment"/> borrows that fixture (<see cref="SetUp"/> and <see cref="TearDown"/> own
+    /// it) and only loads the existing solution path into its own <see cref="IWorkspaceManager"/> view of it.
+    /// </summary>
+    private async Task<AgentRunResult> RunPhaseAsync(
+        string phaseName,
+        string systemPrompt,
+        string userPrompt,
+        bool blockMutatingTools,
+        int turnCap,
+        CancellationToken cancellationToken)
+    {
         var phaseRunDirectory = Path.Combine(_runDirectory, phaseName);
 
-        var hostBuilder = Host.CreateApplicationBuilder();
-        hostBuilder.Services.AddLmStudioAgentClient(client =>
-        {
-            client.BaseAddress = new Uri(LlmOptions.BaseUrl.TrimEnd('/') + "/");
-            client.Timeout = TimeSpan.FromSeconds(Math.Max(LlmOptions.TimeoutSeconds * 4, 600));
-        });
-        foreach (var descriptor in services)
-        {
-            hostBuilder.Services.Add(descriptor);
-        }
+        await using var environment = await ModelEvalMcpEnvironment.CreateAsync(
+            phaseRunDirectory,
+            restorePackages: false,
+            beforeLoad: null,
+            afterLoad: null,
+            cancellationToken,
+            configureToolSurface: (mcpBuilder, services) => ConfigurePhaseToolSurface(mcpBuilder, services, blockMutatingTools),
+            borrowedFixture: _fixture);
 
-        hostBuilder.Logging.AddProvider(new FlushingFileLoggerProvider(Path.Combine(phaseRunDirectory, "agent.log")));
+        // 10-minute wall-clock cap per phase (raised from 5, 2026-09-02: see
+        // docs/current/project_planimplementverify_phase_transition_gap.md -> 5/39 implement-phase
+        // runs stumbled on a wrong/guessed workspace path early, self-corrected, but then still
+        // ran out the tighter budget before applying+verifying a fix, something the single-call
+        // variants' much larger budget absorbs comfortably). Turn cap is just a safety ceiling
+        // underneath that, not the real constraint.
+        var runner = new ModelAgentRunner(
+            environment.AgentClient, environment.Client, repeatedFailureLimit: 10, maxTokensPerTurn: 16384, turnCap: turnCap, wallClockCap: TimeSpan.FromMinutes(10),
+            logger: environment.Host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
 
-        var host = hostBuilder.Build();
-        McpClient? mcpClient = null;
-        try
-        {
-            _ = host.RunAsync(cancellationToken);
-
-            var workspaceManager = host.Services.GetRequiredService<IWorkspaceManager>();
-            await workspaceManager.LoadSolutionAsync(_fixture.SolutionPath, cancellationToken);
-
-            var clientTransport = new StreamClientTransport(
-                serverInput: clientToServer.Writer.AsStream(),
-                serverOutput: serverToClient.Reader.AsStream(),
-                loggerFactory: NullLoggerFactory.Instance);
-
-            mcpClient = await McpClient.CreateAsync(clientTransport, cancellationToken: cancellationToken);
-            var agentClient = host.Services.GetRequiredService<LmStudioAgentClient>();
-
-            // 10-minute wall-clock cap per phase (raised from 5, 2026-09-02: see
-            // docs/current/project_planimplementverify_phase_transition_gap.md -> 5/39 implement-phase
-            // runs stumbled on a wrong/guessed workspace path early, self-corrected, but then still
-            // ran out the tighter budget before applying+verifying a fix, something the single-call
-            // variants' much larger budget absorbs comfortably). Turn cap is just a safety ceiling
-            // underneath that, not the real constraint.
-            var runner = new ModelAgentRunner(
-                agentClient, mcpClient, repeatedFailureLimit: 10, maxTokensPerTurn: 16384, turnCap: turnCap, wallClockCap: TimeSpan.FromMinutes(10),
-                logger: host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
-
-            return await runner.RunAsync(systemPrompt, userPrompt, phaseRunDirectory, cancellationToken);
-        }
-        finally
-        {
-            if (mcpClient is not null)
-            {
-                await mcpClient.DisposeAsync();
-            }
-
-            await host.StopAsync(cancellationToken);
-            host.Dispose();
-        }
+        return await runner.RunAsync(systemPrompt, userPrompt, phaseRunDirectory, cancellationToken);
     }
 
     // This model streams its final answer as ReasoningContent (not Content) on a turn that makes no

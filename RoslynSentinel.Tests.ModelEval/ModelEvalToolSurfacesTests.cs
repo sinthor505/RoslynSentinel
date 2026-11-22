@@ -57,4 +57,47 @@ public class ModelEvalToolSurfacesTests
             Assert.That(advancedOnly, Is.Empty, "Tools.Advanced tools offered by the Basic surface");
         });
     }
+
+    [Test]
+    public async Task BorrowedFixture_IsUsedByTheEnvironmentAndNotDisposedWithIt()
+    {
+        var sampleDirectory = Path.Combine(
+            TestContext.CurrentContext.WorkDirectory,
+            "model-eval",
+            TestContext.CurrentContext.Test.Name,
+            DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
+
+        var fixture = new RoslynSentinel.Tests.TestSolutionFixture();
+        try
+        {
+            var environment = await ModelEvalMcpEnvironment.CreateAsync(
+                sampleDirectory,
+                restorePackages: false,
+                beforeLoad: null,
+                afterLoad: null,
+                TestContext.CurrentContext.CancellationToken,
+                configureToolSurface: ModelEvalToolSurfaces.Basic,
+                borrowedFixture: fixture);
+
+            try
+            {
+                var tools = await environment.Client.ListToolsAsync(cancellationToken: TestContext.CurrentContext.CancellationToken);
+                Assert.Multiple(() =>
+                {
+                    Assert.That(environment.Fixture, Is.SameAs(fixture));
+                    Assert.That(tools.Select(t => t.Name), Does.Contain("ReadFile"));
+                });
+            }
+            finally
+            {
+                await environment.DisposeAsync();
+            }
+
+            Assert.That(Directory.Exists(fixture.SolutionDirectory), Is.True, "a borrowed fixture must not be disposed with the environment");
+        }
+        finally
+        {
+            fixture.Dispose();
+        }
+    }
 }
