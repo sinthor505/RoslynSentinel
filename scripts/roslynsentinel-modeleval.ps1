@@ -202,14 +202,23 @@
     uses) silently drops top_k/repeat_penalty/min_p - a same-prompt A/B test at repeat_penalty
     1.0 vs 1.8 produced byte-identical generations, even though top_k/repeat_penalty ARE real,
     documented fields on /v1/chat/completions (a different endpoint this harness doesn't use).
-    Set these by hand in LM Studio's sampling panel for the loaded model instead.
+    Set these by hand in LM Studio's sampling panel for the loaded model instead. Passing any of
+    these now requires -AcceptUnverifiedSampler; without it the run is refused before anything runs.
 
 .PARAMETER HostSampler
     Sampler values you set by hand in LM Studio that the harness cannot send or verify, as
     "topK=20;minP=0.1;repeatPenalty=1.0;presencePenalty=0" (keys: topK, minP, repeatPenalty,
     presencePenalty, frequencyPenalty). Exported as ROSLYNSENTINEL_LLM_HOST_SAMPLER and recorded
     in transcript.json Settings.Sampler as Source "declared", Verified false. It changes nothing
-    about the request; it only documents what the host was configured with.
+    about the request; it only documents what the host was configured with. Passing it now
+    requires -AcceptUnverifiedSampler; without that switch the run is refused before anything runs.
+
+.PARAMETER AcceptUnverifiedSampler
+    Sampler values this script cannot send or verify (-HostSampler entries, and -TopK,
+    -RepeatPenalty, -MinP, which the /v1/responses endpoint drops) are refused unless this switch
+    is passed. Passing it exports ROSLYNSENTINEL_LLM_ACCEPT_UNVERIFIED_SAMPLER=true, and the run's
+    transcript.json Settings records AcceptedUnverifiedSampler true. Temperature and TopP are
+    still sent and verified from the host's echo; a mismatch there refuses the run regardless.
 
 .PARAMETER StreamTimeout
 	How many seconds to wait before assuming the model has failed to generating streaming tokens.
@@ -353,6 +362,8 @@ param(
 
     [string]$HostSampler,
 
+    [switch]$AcceptUnverifiedSampler,
+
 	[double]$StreamTimeout,
 
     [string]$ResumeTranscript,
@@ -397,6 +408,24 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Refuse declared-but-unverifiable sampler values before any side effect unless the caller accepts them.
+$unverifiableSamplerFields = @()
+if ($HostSampler) {
+    $unverifiableSamplerFields += @($HostSampler -split ';' | ForEach-Object { ($_ -split '=', 2)[0].Trim() } | Where-Object { $_ })
+}
+foreach ($samplerName in @('TopK', 'RepeatPenalty', 'MinP')) {
+    if ($PSBoundParameters.ContainsKey($samplerName)) { $unverifiableSamplerFields += $samplerName }
+}
+if ($unverifiableSamplerFields.Count -gt 0 -and -not $AcceptUnverifiedSampler) {
+    $refusedFields = ($unverifiableSamplerFields | Select-Object -Unique) -join ', '
+    throw @"
+Refused: sampler values this harness cannot send or verify were given: $refusedFields.
+Facts: the harness sends only temperature and top_p to LM Studio's /v1/responses endpoint, and verifies those from the host's echo (a temperature/top_p mismatch refuses the run). The listed fields are declared values the run cannot verify: /v1/responses drops top_k, repeat_penalty and min_p (confirmed 2026-09-05).
+Options: (a) pass -AcceptUnverifiedSampler to run with these fields declared and recorded as unverified in transcript.json Settings; (b) leave these fields out of the command.
+"@
+}
+
 $repoRoot = Split-Path $PSScriptRoot -Parent
 . (Join-Path $PSScriptRoot 'roslynsentinel-scratch.ps1')
 $scratchRoot = Get-RoslynSentinelScratchRoot -RepoRoot $repoRoot
@@ -563,6 +592,9 @@ if ($PSBoundParameters.ContainsKey('TopK') -or $PSBoundParameters.ContainsKey('R
 if ($HostSampler) {
     Write-Host "    ROSLYNSENTINEL_LLM_HOST_SAMPLER=$HostSampler (declared, not verifiable; recorded in transcript.json Settings)" -ForegroundColor Cyan
 }
+if ($AcceptUnverifiedSampler) {
+    Write-Host "    ROSLYNSENTINEL_LLM_ACCEPT_UNVERIFIED_SAMPLER=true (declared sampler values accepted as unverified; recorded in transcript.json Settings)" -ForegroundColor Cyan
+}
 if ($PSBoundParameters.ContainsKey('StreamTimeout')) {
 	Write-Host "    ROSLYNSENTINEL_LLM_STREAM_IDLE_TIMEOUT_SECONDS=$StreamTimeout" -ForegroundColor Cyan
 }
@@ -608,6 +640,13 @@ if ($HostSampler) {
 }
 else {
     $env:ROSLYNSENTINEL_LLM_HOST_SAMPLER = $null
+}
+# Always set or cleared so a stale shell value cannot mark an unverified run as accepted.
+if ($AcceptUnverifiedSampler) {
+    $env:ROSLYNSENTINEL_LLM_ACCEPT_UNVERIFIED_SAMPLER = 'true'
+}
+else {
+    $env:ROSLYNSENTINEL_LLM_ACCEPT_UNVERIFIED_SAMPLER = $null
 }
 # Always set or cleared (never left from the shell) so a stale cap cannot skew a run.
 if ($StepWallClockMinutes -gt 0) {
