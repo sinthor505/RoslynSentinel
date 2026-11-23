@@ -9,11 +9,6 @@ RoslynSentinel.Tests.Advanced/BugFixTests.cs::AddBracesNullReturnRegressionTests
 RoslynSentinel.Tests.Advanced/BugFixTests.cs::Bug53MakeMethodThreadSafeRegressionTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Advanced/BugFixTests.cs::CallGraphNullReturnRegressionTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Advanced/BugHuntSevenTests.cs::BH05_ConvertLockOverloadBugTests | RoslynSentinel.Tests.Basic
-RoslynSentinel.Tests.Advanced/ChangeSignatureConstructorWrapperTests.cs::ChangeSignatureConstructorWrapperTests | RoslynSentinel.Tests.Basic
-RoslynSentinel.Tests.Advanced/ChangeSignatureExtensionCallTests.cs::ChangeSignatureExtensionCallTests | RoslynSentinel.Tests.Basic
-RoslynSentinel.Tests.Advanced/ChangeSignatureLayoutTests.cs::ChangeSignatureLayoutTests | RoslynSentinel.Tests.Basic
-RoslynSentinel.Tests.Advanced/ChangeSignatureNonConstantDefaultTests.cs::ChangeSignatureNonConstantDefaultTests | RoslynSentinel.Tests.Basic
-RoslynSentinel.Tests.Advanced/ChangeSignatureParamsTests.cs::ChangeSignatureParamsTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Advanced/ChangeSignaturePrimaryConstructorTests.cs::ChangeSignaturePrimaryConstructorTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Advanced/ChangeSignatureReflectionConstructionTests.cs::ChangeSignatureReflectionConstructionTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Advanced/ChangeSignatureRemovedParameterUseTests.cs::ChangeSignatureRemovedParameterUseTests | RoslynSentinel.Tests.Basic

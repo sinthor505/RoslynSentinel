@@ -332,19 +332,11 @@ its subject with direct `new CoreRefactoringTools(` and test-local `NormalizingM
   not reference each other).
 - Done when: `Build` 0 errors.
 
-### Step 7 - Relocate the baselined classes (BLOCKED on MoveFile slice 1)
-`TOOL-GAP:` task: move 30 whole test files between test projects (about 506 KB). Tool tried: none exists. `McpServerStatus`
-(`toolListing: all`, filter "Move") lists `MoveAllTypesToFiles`, `MoveMember`, `MoveType`,
-`PreviewMoveFileToNamespaceFolder`; `Git` has no `mv`; `MoveMember` is member-level and the proposal records that a cross-project
-`MoveMember` refuses when shared fixtures stay behind; `Member(addMember)` + `Member(remove)` per member works for a mixed
-file (it was done for 5 mixed files, commits 444e5a53, fdeba2d2, c8d2dbfc, 4beb7a2b) but is a rewrite, not a byte-exact
-move. `ReadFile` + `CreateFile` + `DeleteFile` routes the whole text through model output (the failure mode
-`proposal_move_file_tool.md` exists to remove). Measured: 30 files, 2 destination projects, 3 source projects. Suggested
-change: build `MoveFile(sourcePath, destinationPath, namespaceHandling: keep)` (approved 2026-11-21, slice 1, no auto-staging,
-cross-project allowed behind the compile gate); it is not built (no `MoveFile` symbol in source or in the tool listing).
-The existing TODO.md entry (line 38, "Core split test-move remainder", BLOCKED) already tracks the two largest files.
+### Step 7 - Relocate the baselined classes (MoveFile is live; batches 7.1-7.6 whole files, 7.7+ class extraction)
+MoveFile (`MoveFile(sourcePath, destinationPath, namespaceHandling: keep)`, compile gate, cross-project allowed) is live, so the
+earlier TOOL-GAP is gone. The existing TODO.md entry "Core split test-move remainder" is done by batch 7.5.
 
-- Depends on: MoveFile slice 1, and Steps 1, 3c, 6b, 6c (so a move needs no edit beyond the file's own path).
+- Depends on: Steps 1, 3c, 6b, 6c (so a move needs no edit beyond the file's own path).
 - Effect: text-neutral (tests change project; their code and namespace do not).
 - Lane: `implementer-sweep`, tier 0, one operation (`MoveFile ... keep`) per batch, at most 8 files per batch. Batches (the
   Step 1 baseline is authoritative, these follow the preliminary list):
@@ -364,6 +356,32 @@ The existing TODO.md entry (line 38, "Core split test-move remainder", BLOCKED) 
   - 7.6 `Tests.Tools.Advanced` -> `Tests.Tools.Basic`: `DeclarationModifierTests`, `ExtractLocalVariableSnippetMissTests`,
     `ImpactMissAdvancedTests`, `MethodSignatureCallSiteTests`, `RenameNamespaceTests`, `RenameSymbolTests`,
     `StructuralRefinementMissAdvancedTests`, `SyncTypeAndFilenameTests`.
+  - Batches 7.7+ (added 2026-11-23, owner ruling: the baseline is authoritative; the 16 files below were not in the preliminary
+    list). 15 of the 16 files also hold Advanced-subject classes, so a whole-file move is wrong: per baseline class the route is
+    (1) `MoveType(destination: ownFile)` into a new file in the same project (`<ClassName>.cs`; a cross-project `targetFolder`
+    is refused by the compile gate because the copied `using RoslynSentinel.Engines.Advanced;` does not resolve in the
+    destination), (2) remove the usings the destination project cannot resolve (`UsingDirective`), (3)
+    `MoveFile(keep)` to the destination project. Nested classes in `BugFixTests` first go `MoveType(destination: outerScope)`
+    to the namespace. Only `ConstructionSiteFindingsTests.cs` is a whole-file move. Destination per baseline column.
+    - 7.7 `Tests.Advanced`: `ConstructionSiteFindingsTests` (whole file -> `Tests.Tools.Basic`), `BH05_ConvertLockOverloadBugTests`
+      (from `BugHuntSevenTests.cs`), `CircularTypeReferenceTests`, `ThreadSafetyEngineExtendedTests` (from `SentinelAccuracyTests.cs`).
+    - 7.8 `Tests.Advanced`: `DoubleCheckedLockingTests`, `CheckThenActOnDictionaryTests` (`SentinelAccuracyTests.cs`).
+    - 7.9 `Tests.Advanced`: `AddBracesNullReturnRegressionTests`, `Bug53MakeMethodThreadSafeRegressionTests` (nested three deep),
+      `CallGraphNullReturnRegressionTests` (all nested in `BugFixTests.cs`; private-member use of the outer classes is the risk).
+    - 7.10 `Tests.Battery.Advanced`: `InventoryEngineTests`, `DependencyEngineTests` (`BatteryEightTests.cs`),
+      `ThreadSafetyEngineTests` (`BatteryElevenTests.cs`), `SolutionManagementEngineTests`, `StructuralRefinementEngineTests`
+      (`BatteryNineTests.cs`).
+    - 7.11 `Tests.Battery.Advanced`: `BasicRefactoringEngineTests`, `SemanticSearchEngineTests`, `MemberRefactoringEngineTests`
+      (`BatterySevenTests.cs`), `MsToolAugmentEngineTests`, `SolutionStructureEngineTests2` (`BatterySeventeenTests.cs`).
+    - 7.12 `Tests.Battery.Advanced`: `SolutionStructureEngineTests` (`BatterySixTests.cs`), `ValidationEngineTests`,
+      `DiagnosticEngineTests` (`BatteryTenTests.cs`), `SymbolNavigationEngineTests` (`BatteryThirteenTests.cs`),
+      `SyntaxUpgradeEngineTests`, `RefactoringEngineTests` (`BatteryTwelveTests.cs`).
+    - 7.13 `Tests.Battery.Advanced`: `DependencyEngineGapTests`, `RefactoringEngineGapTests`, `SymbolNavigationEngineGapTests`,
+      `SyntaxUpgradeEngineGapTests` (`BatteryTwentyFiveTests.cs`).
+    - 7.14 `Tests.Battery.Advanced`: `B03_SolutionStructureEngine_ValidMemberAccess`, `B18_ContextHelper_CaseSensitiveKeywords`
+      (`BatteryTwentySevenTests.cs`), `ThreadSafeLockGotchaTests` (`BatteryTwentySixTests.cs`).
+  The baseline lines are removed by the dispatcher in the same commit as each batch (not by the implementer: two batches may run
+  at once and share the file).
   After each batch the same slice removes the moved classes' lines from `docs/known-misplaced-core-tests.txt` (the ratchet
   reports them STALE otherwise) and regenerates nothing else (`docs/known-long-message-pins.txt` is keyed by file name and is
   untouched).
@@ -383,12 +401,12 @@ The existing TODO.md entry (line 38, "Core split test-move remainder", BLOCKED) 
   mixed class that stayed (`BatteryTwentyFourTests` is mixed: it uses both Basic and Advanced factories) stay as delegates.
 - Done when: `Build` 0 errors; the file has no member with 0 references.
 
-### Step 9 - Move the `Server.Advanced`-dependent tests to Tests.Server (BLOCKED on MoveFile slice 1; matters only while Tests.Advanced stays in the main solution)
+### Step 9 - Move the `Server.Advanced`-dependent tests to Tests.Server (MoveFile is live; matters only while Tests.Advanced stays in the main solution)
 - Files: `Tests.Advanced/DependencyInjectionTests.cs`, `ErrorPolicySymbolNotFoundPipelineTests.cs`,
   `McpTasksHarnessTests.cs`, `McpTasksHarnessBulkCommentTests.cs`, `McpTasksHarnessTestSupport.cs`, `FakeLlmClient.cs`
   (to `RoslynSentinel.Tests.Server`, which already references `Server.Advanced`, `Tests` and `Tests.Support.Basic`);
   `RoslynSentinel.Tests.Advanced/RoslynSentinel.Tests.Advanced.csproj`; `RoslynSentinel.Tests.Asyncify/RoslynSentinel.Tests.Asyncify.csproj`.
-- Depends on: MoveFile slice 1 (the same TOOL-GAP as Step 7, 6 files, 3 projects).
+- Depends on: nothing outstanding (MoveFile is live; 6 files, 3 projects).
 - Effect: text-neutral.
 - Lane: `implementer-sweep` for the move (one operation, 6 files, 2 projects); a separate `implementer` slice for the csproj edits.
 - Change: first `Search(mode: references)` for `FakeLlmClient` and `McpTasksHarnessTestSupport` in the rest of `Tests.Advanced`
