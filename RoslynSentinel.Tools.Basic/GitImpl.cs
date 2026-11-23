@@ -20,15 +20,11 @@ public record GitResult : IOperationResult
     }
 
     /// <summary>Canonical status: Success when not an error, otherwise <see cref="GitErrorCodes.ToResultStatus"/> of <see cref="Code"/>.</summary>
-    [JsonIgnore]
-    public ResultStatus Status => IsError ? GitErrorCodes.ToResultStatus(Code) : ResultStatus.Success;
+    ResultStatus IOperationResult.Status => IsError ? GitErrorCodes.ToResultStatus(Code) : ResultStatus.Success;
 
     /// <summary>The code the GitTool tool reports on failure: <see cref="ErrorKind"/>, or the fallback GitError. Null on success.</summary>
     [JsonIgnore]
     public string? Code => IsError ? ErrorKind ?? GitErrorCodes.Fallback : null;
-
-    [JsonIgnore]
-    public string? Message => Error;
 
     /// <summary>Machine-readable cause of a failure, one of <see cref="GitErrorCodes"/>, when the cause is
     /// known. Null means unclassified: the GitTool tool then reports the fallback code GitError. Never

@@ -62,6 +62,28 @@ public class ToolsBasicResultStatusTests
     }
 
     [Test]
+    public void GitCommitResult_Serialization_MessagePayloadIsKept()
+    {
+        string json = JsonSerializer.Serialize(new GitCommitResult { Message = "hello" });
+
+        using JsonDocument doc = JsonDocument.Parse(json);
+        Assert.That(doc.RootElement.GetProperty("Message").GetString(), Is.EqualTo("hello"));
+    }
+
+    [Test]
+    public void GitStashResult_Status_PayloadIsObjectAndCanonicalStatusIsSuccess()
+    {
+        var stash = new GitStashResult { Status = new GitStatusResult() };
+        string json = JsonSerializer.Serialize(stash);
+
+        using JsonDocument doc = JsonDocument.Parse(json);
+        Assert.That(doc.RootElement.GetProperty("Status").ValueKind, Is.EqualTo(JsonValueKind.Object));
+
+        IOperationResult asResult = stash;
+        Assert.That(asResult.Status, Is.EqualTo(ResultStatus.Success));
+    }
+
+    [Test]
     public void DocWriteResult_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
     {
         IOperationResult ok = new DocWriteResult { IsError = false, Filename = "a.md" };
