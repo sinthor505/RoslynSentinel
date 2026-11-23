@@ -7,8 +7,6 @@
 RoslynSentinel.Tests.Advanced/BugFixTests.cs::AddBracesNullReturnRegressionTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Advanced/BugFixTests.cs::Bug53MakeMethodThreadSafeRegressionTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Advanced/BugFixTests.cs::CallGraphNullReturnRegressionTests | RoslynSentinel.Tests.Basic
-RoslynSentinel.Tests.Advanced/SentinelAccuracyTests.cs::CheckThenActOnDictionaryTests | RoslynSentinel.Tests.Basic
-RoslynSentinel.Tests.Advanced/SentinelAccuracyTests.cs::DoubleCheckedLockingTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Battery.Advanced/BatterySevenTests.cs::BasicRefactoringEngineTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Battery.Advanced/BatterySevenTests.cs::MemberRefactoringEngineTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Battery.Advanced/BatterySevenTests.cs::SemanticSearchEngineTests | RoslynSentinel.Tests.Basic

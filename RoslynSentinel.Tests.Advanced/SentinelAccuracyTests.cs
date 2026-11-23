@@ -3290,75 +3290,6 @@ public class C {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// 26. DoubleCheckedLockingWithoutVolatile (ThreadSafetyEngine)
-// ════════════════════════════════════════════════════════════════════════════
-[TestFixture]
-[Category("ThreadSafetyEngine")] // sentinel:auto-category
-public class DoubleCheckedLockingTests
-{
-    private IWorkspaceManager _workspaceManager = null!;
-    private ThreadSafetyEngine _engine = null!;
-    [SetUp]
-    public void Setup()
-    {
-        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = Battery.Basic.TestEngines.ThreadSafetyEngine(_workspaceManager);
-    }
-
-    [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
-    private void SetSource(string source) => _workspaceManager.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Test.cs", source)]));
-    [Test]
-    public async Task Flags_DCL_WithoutVolatile()
-    {
-        SetSource(@"
-public class Singleton {
-    private static Singleton _instance;
-    private static readonly object _lock = new object();
-    public static Singleton Instance {
-        get {
-            if (_instance == null) {
-                lock (_lock) {
-                    if (_instance == null) {
-                        _instance = new Singleton();
-                    }
-                }
-            }
-            return _instance;
-        }
-    }
-}");
-        var results = await _engine.FindDoubleCheckedLockingAsync();
-        Assert.That(results, Has.Count.EqualTo(1), "DCL without volatile field should be flagged");
-        Assert.That(results[0], Does.Contain("_instance"));
-    }
-
-    [Test]
-    public async Task DoesNotFlag_DCL_WithVolatile()
-    {
-        SetSource(@"
-public class Singleton {
-    private static volatile Singleton _instance;
-    private static readonly object _lock = new object();
-    public static Singleton Instance {
-        get {
-            if (_instance == null) {
-                lock (_lock) {
-                    if (_instance == null) {
-                        _instance = new Singleton();
-                    }
-                }
-            }
-            return _instance;
-        }
-    }
-}");
-        var results = await _engine.FindDoubleCheckedLockingAsync();
-        Assert.That(results, Is.Empty, "DCL with volatile field is the correct pattern - must not be flagged");
-    }
-}
-
-// ════════════════════════════════════════════════════════════════════════════
 // 27. StaticEventSubscription (AntiPatternEngine)
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
@@ -3454,62 +3385,6 @@ public class C {
 }");
         var results = await _engine.FindUnvalidatedRegexSourceAsync("Test.cs");
         Assert.That(results.Any(r => r.IssueType == "UnvalidatedRegexSource"), Is.False, "new Regex(literal) is safe - must not be flagged");
-    }
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// 29. CheckThenActOnDictionary (ThreadSafetyEngine)
-// ════════════════════════════════════════════════════════════════════════════
-[TestFixture]
-[Category("ThreadSafetyEngine")] // sentinel:auto-category
-public class CheckThenActOnDictionaryTests
-{
-    private IWorkspaceManager _workspaceManager = null!;
-    private ThreadSafetyEngine _engine = null!;
-    [SetUp]
-    public void Setup()
-    {
-        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = Battery.Basic.TestEngines.ThreadSafetyEngine(_workspaceManager);
-    }
-
-    [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
-    private void SetSource(string source) => _workspaceManager.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Test.cs", source)]));
-    [Test]
-    public async Task Flags_ContainsKey_ThenAdd_WithoutLock()
-    {
-        SetSource(@"
-using System.Collections.Generic;
-public class C {
-    private Dictionary<string, int> _d = new();
-    public void Add(string key) {
-        if (!_d.ContainsKey(key))
-            _d.Add(key, 0);
-    }
-}");
-        var results = await _engine.FindCheckThenActOnDictionaryAsync();
-        Assert.That(results, Has.Count.EqualTo(1), "ContainsKey + Add without lock is a check-then-act race and should be flagged");
-        Assert.That(results[0], Does.Contain("_d"));
-    }
-
-    [Test]
-    public async Task DoesNotFlag_ContainsKey_ThenAdd_InsideLock()
-    {
-        SetSource(@"
-using System.Collections.Generic;
-public class C {
-    private Dictionary<string, int> _d = new();
-    private readonly object _lock = new();
-    public void Add(string key) {
-        lock (_lock) {
-            if (!_d.ContainsKey(key))
-                _d.Add(key, 0);
-        }
-    }
-}");
-        var results = await _engine.FindCheckThenActOnDictionaryAsync();
-        Assert.That(results, Is.Empty, "ContainsKey + Add inside a lock is safe - must not be flagged");
     }
 }
 
