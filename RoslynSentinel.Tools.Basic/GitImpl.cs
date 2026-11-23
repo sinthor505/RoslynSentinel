@@ -568,7 +568,7 @@ public record GitStageHunksResult : GitStatusResult
     /// <summary>How many unstaged hunks the file still has after the stage.</summary>
     public int RemainingUnstagedHunks { get; set; }
 
-    /// <summary>Set when the remaining count is not what the selection predicts; verify with a staged diff.</summary>
+    /// <summary>Set when a hunk was staged only in part (which lines went in; the rest of that hunk stays unstaged), or when the remaining count is not what the selection predicts (verify with a staged diff).</summary>
     public string? Warning { get; set; }
 }
 
@@ -660,12 +660,18 @@ public class GitImpl : IGitOperations
     {
     }
 
-    internal GitImpl(ISolutionProvider workspaceManager, ILogger<GitImpl> logger, IGitReader gitReader, InProcessCommitRoute? commitRoute = null)
+    // Test seam, null in production: StageHunksAsync calls it with the git root after it has read the diff and written the patch and
+    // before it re-reads the file's index entry, so a test can stage the same file as "another session" at exactly that moment.
+    private readonly Action<string>? _afterHunkDiffLoaded;
+
+    internal GitImpl(ISolutionProvider workspaceManager, ILogger<GitImpl> logger, IGitReader gitReader, InProcessCommitRoute? commitRoute = null,
+        Action<string>? afterHunkDiffLoaded = null)
     {
         _workspaceManager = workspaceManager;
         _logger = logger;
         _gitReader = gitReader;
         _commitRoute = commitRoute ?? InProcessCommitRoute.Shared;
+        _afterHunkDiffLoaded = afterHunkDiffLoaded;
     }
 
     /// <summary>
@@ -2215,12 +2221,13 @@ public class GitImpl : IGitOperations
         return $"{h.Index}: {SpanText(start, end)}";
     })) + ".";
 
-    // Resolves hunkIds (guarded by the fingerprint) or lineRange to hunk indexes. Returns null on success with
-    // the ascending indexes in `selected`; otherwise the classified refusal. Exactly one of the two is non-blank.
+    // Resolves hunkIds (guarded by the fingerprint) or lineRange to the selection to stage. Returns null on success with
+    // the selection in `selection`; otherwise the classified refusal. Exactly one of the two is non-blank. A lineRange may cut
+    // a hunk made purely of added lines (a sub-hunk); a partly covered hunk that also removes lines is refused.
     private static (string Kind, string Error, string Detail)? SelectHunks(
-        GitFileDiff diff, string path, string? hunkIds, string? hunkFingerprint, string? lineRange, out List<int> selected)
+        GitFileDiff diff, string path, string? hunkIds, string? hunkFingerprint, string? lineRange, out GitLineSelectionResult selection)
     {
-        selected = [];
+        selection = new GitLineSelectionResult([], [], []);
         if (!string.IsNullOrWhiteSpace(hunkIds))
         {
             if (string.IsNullOrWhiteSpace(hunkFingerprint))
@@ -2235,37 +2242,122 @@ public class GitImpl : IGitOperations
                     $"'{path}' changed since the hunks were listed (fingerprint {given} vs {diff.Fingerprint}). " +
                     $"Re-run {ToolCallHint.Call("Git", ("operation", "hunks"), ("paths", path))} and pick again. Nothing was staged.", GitErrorDetails.HunkStale);
             }
-            if (!GitHunkParser.TryParseHunkIds(hunkIds, diff.Hunks.Count, out selected, out var idError))
+            if (!GitHunkParser.TryParseHunkIds(hunkIds, diff.Hunks.Count, out var ids, out var idError))
                 return (GitErrorCodes.HunkSelection, $"{idError} {DescribeHunkSpans(diff)} Nothing was staged.", GitErrorDetails.HunkSelection);
+            selection = new GitLineSelectionResult(ids, [], []);
             return null;
         }
 
         if (!GitHunkParser.TryParseLineRange(lineRange, out var from, out var to, out var rangeError))
             return (GitErrorCodes.HunkSelection, $"{rangeError} {DescribeHunkSpans(diff)} Nothing was staged.", GitErrorDetails.HunkSelection);
 
-        selected = GitHunkParser.SelectByNewLineRange(diff, from, to, out var straddling);
-        if (straddling.Count > 0)
+        var picked = GitHunkParser.SelectLines(diff, from, to);
+        if (picked.Unsupported.Count > 0)
         {
-            var spans = straddling.Select(HunkSpan).ToList();
+            var spans = picked.Unsupported.Select(HunkSpan).ToList();
             var lo = Math.Min(from, spans.Min(s => s.Start));
             var hi = Math.Max(to, spans.Max(s => s.End));
-            var parts = straddling.Select(h =>
+            var parts = picked.Unsupported.Select(h =>
             {
                 var (start, end) = HunkSpan(h);
                 return $"Hunk {h.Index} spans lines {SpanText(start, end)} but only partly lies in {SpanText(from, to)}.";
             });
-            selected = [];
+            var unsupportedIds = string.Join(", ", picked.Unsupported.Select(h => h.Index));
             return (GitErrorCodes.HunkSelection,
-                $"{string.Join(' ', parts)} Widen the range to {SpanText(lo, hi)}, or use hunkIds. {DescribeHunkSpans(diff)} Nothing was staged.",
+                $"{string.Join(' ', parts)} A hunk can be staged in part only when it is made purely of added lines; hunk {unsupportedIds} also removes lines. " +
+                $"Widen the range to {SpanText(lo, hi)} to take the whole hunk, pass hunkIds from {ToolCallHint.Call("Git", ("operation", "hunks"), ("paths", path))}, " +
+                $"or stage the whole file with {ToolCallHint.Call("Git", ("operation", "stage"), ("paths", path))}. {DescribeHunkSpans(diff)} Nothing was staged.",
                 GitErrorDetails.HunkSelection);
         }
-        if (selected.Count == 0)
+        if (picked.WholeHunks.Count == 0 && picked.SubHunks.Count == 0)
         {
             return (GitErrorCodes.HunkSelection,
-                $"No hunk lies wholly inside lines {SpanText(from, to)}. {DescribeHunkSpans(diff)} Nothing was staged.",
+                $"No hunk overlaps lines {SpanText(from, to)}. {DescribeHunkSpans(diff)} Nothing was staged.",
                 GitErrorDetails.HunkSelection);
         }
+        selection = picked;
         return null;
+    }
+
+    // Hunks left in the file after staging `selection`: a whole hunk is gone; a sub-hunk leaves the lines of its hunk it did not take (a head
+    // before it and a tail after it are separate zero-context hunks); every other hunk stays.
+    private static int ExpectedRemainingHunks(GitFileDiff before, GitLineSelectionResult selection)
+    {
+        var remaining = before.Hunks.Count - selection.WholeHunks.Count - selection.SubHunks.Count;
+        foreach (var sub in selection.SubHunks)
+        {
+            var original = before.Hunks[sub.Index - 1];
+            if (sub.NewStart > original.NewStart)
+                remaining++;
+            if (sub.NewStart + sub.NewCount < original.NewStart + original.NewCount)
+                remaining++;
+        }
+        return remaining;
+    }
+
+    // The staged hunks in listing order; a sub-hunk keeps the id of the hunk it was cut from, its new-file line numbers and only the lines taken.
+    private static List<GitHunkEntry> StagedEntries(GitFileDiff before, GitLineSelectionResult selection) =>
+        selection.WholeHunks.Select(i => before.Hunks[i - 1]).Concat(selection.SubHunks).OrderBy(h => h.Index).Select(ToHunkEntry).ToList();
+
+    // One fact per hunk that was staged only in part: which lines went in and that the rest of the hunk stays unstaged.
+    private static List<string> PartialHunkNotes(GitFileDiff before, GitLineSelectionResult selection)
+    {
+        var notes = new List<string>();
+        foreach (var sub in selection.SubHunks)
+        {
+            var original = before.Hunks[sub.Index - 1];
+            notes.Add($"Hunk {sub.Index} (new-file lines {SpanText(original.NewStart, original.NewStart + original.NewCount - 1)}) was staged only in part: " +
+                      $"lines {SpanText(sub.NewStart, sub.NewStart + sub.NewCount - 1)} ({sub.NewCount} of {original.NewCount} added lines). The other lines of that hunk stay unstaged.");
+        }
+        return notes;
+    }
+
+    // The index blob id the diff was read against: the old side of its "index <old>..<new>" line (an abbreviation), or null if the header has none.
+    private static string? DiffIndexBlob(GitFileDiff diff)
+    {
+        foreach (var line in diff.HeaderText.Split('\n'))
+        {
+            if (!line.StartsWith("index ", StringComparison.Ordinal))
+                continue;
+            var rest = line[6..];
+            var dots = rest.IndexOf("..", StringComparison.Ordinal);
+            return dots > 0 ? rest[..dots] : null;
+        }
+        return null;
+    }
+
+    private static string ShortBlob(string id) => id.Length > 7 && id[0] != '(' ? id[..7] : id;
+
+    // The blob id of the file's index entry now: "(absent)" when it has none, "(unmerged)" when it has several stages, null when git could not be asked.
+    private async Task<string?> ReadIndexBlobAsync(string gitRoot, string path, CancellationToken cancellationToken)
+    {
+        var run = await RunGitAsync(gitRoot, ["--literal-pathspecs", "ls-files", "-s", "--", path], cancellationToken);
+        if (run.ExitCode != 0)
+            return null;
+        var lines = run.Stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (lines.Length == 0)
+            return "(absent)";
+        if (lines.Length > 1)
+            return "(unmerged)";
+        var fields = lines[0].Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
+        return fields.Length >= 2 ? fields[1] : null;
+    }
+
+    // Returns the refusal text when the file's index entry is no longer the one the diff was read against (another session staged or reset
+    // it). The patch is positioned for the old index content, so applying it over that change could put lines in the wrong place. git apply
+    // holds index.lock only while it runs, so a change landing between this re-read and that lock is a residual window this check cannot close.
+    // Returns null when unchanged, or when the diff header or git cannot say (git apply then judges the patch itself).
+    private async Task<string?> IndexEntryChangedMessageAsync(string gitRoot, string path, GitFileDiff diff, CancellationToken cancellationToken)
+    {
+        var expected = DiffIndexBlob(diff);
+        if (expected is null)
+            return null;
+        var now = await ReadIndexBlobAsync(gitRoot, path, cancellationToken);
+        if (now is null || now.StartsWith(expected, StringComparison.OrdinalIgnoreCase))
+            return null;
+        return $"The index entry for '{path}' changed between reading the diff and applying it (was {ShortBlob(expected)}, now {ShortBlob(now)}): " +
+               $"another session changed what is staged for this file. Re-run {ToolCallHint.Call("Git", ("operation", "hunks"), ("paths", path))} " +
+               $"for the current hunks and select again, or stage the whole file with {ToolCallHint.Call("Git", ("operation", "stage"), ("paths", path))}. Nothing was staged.";
     }
 
     private static GitStageHunksResult StageHunksFailure(string path, string kind, string error, string detail) => new()
@@ -2280,17 +2372,17 @@ public class GitImpl : IGitOperations
     // Runs after git apply succeeded: re-reads the unstaged diff to count what is left, and copies the repository
     // status (from StatusAsync) into the inherited GitStatusResult members. Never turns a successful stage into an error.
     private async Task<GitStageHunksResult> BuildStageHunksResultAsync(
-        string gitRoot, string? paths, string path, GitFileDiff before, List<int> selected, CancellationToken cancellationToken)
+        string gitRoot, string? paths, string path, GitFileDiff before, GitLineSelectionResult selection, CancellationToken cancellationToken)
     {
-        var expected = before.Hunks.Count - selected.Count;
+        var expected = ExpectedRemainingHunks(before, selection);
         var after = await LoadFileDiffAsync(gitRoot, paths, cancellationToken);
         int? remaining = after.Diff is not null ? after.Diff.Hunks.Count
             : after.ErrorKind == GitErrorCodes.NoChanges ? 0
             : null;
-        var warnings = new List<string>();
+        var warnings = PartialHunkNotes(before, selection);
         if (remaining != expected)
         {
-            warnings.Add($"Staged {selected.Count} hunk(s) but the remaining count is {remaining?.ToString() ?? "unknown"} " +
+            warnings.Add($"Staged {selection.WholeHunks.Count + selection.SubHunks.Count} hunk(s) but the remaining count is {remaining?.ToString() ?? "unknown"} " +
                          $"(expected {expected}); verify with {ToolCallHint.Call("Git", ("operation", "diff"), ("ref", "staged"))}.");
         }
 
@@ -2301,7 +2393,7 @@ public class GitImpl : IGitOperations
         return new GitStageHunksResult
         {
             Path = path,
-            StagedHunks = selected.Select(i => ToHunkEntry(before.Hunks[i - 1])).ToList(),
+            StagedHunks = StagedEntries(before, selection),
             RemainingUnstagedHunks = remaining ?? expected,
             Warning = warnings.Count == 0 ? null : string.Join(' ', warnings),
             Branch = status.Branch,
@@ -2342,14 +2434,18 @@ public class GitImpl : IGitOperations
             if (load.Diff is null)
                 return StageHunksFailure(load.Path, load.ErrorKind ?? GitErrorCodes.Fallback, load.Error ?? "", load.ErrorDetail ?? "");
 
-            var rejection = SelectHunks(load.Diff, load.Path, hunkIds, hunkFingerprint, lineRange, out var selected);
+            var rejection = SelectHunks(load.Diff, load.Path, hunkIds, hunkFingerprint, lineRange, out var selection);
             if (rejection is { } refused)
                 return StageHunksFailure(load.Path, refused.Kind, refused.Error, refused.Detail);
 
             // Outside the repo, so the workspace file watcher never sees it. Latin-1 keeps every byte of the
             // patch (including CR) exactly as git printed it.
             patchFile = Path.Combine(Path.GetTempPath(), "roslynsentinel-hunk-" + Guid.NewGuid().ToString("N") + ".patch");
-            await File.WriteAllBytesAsync(patchFile, Encoding.Latin1.GetBytes(GitHunkParser.BuildPatch(load.Diff, selected)), cancellationToken);
+            await File.WriteAllBytesAsync(patchFile, Encoding.Latin1.GetBytes(GitHunkParser.BuildPatch(load.Diff, selection)), cancellationToken);
+
+            _afterHunkDiffLoaded?.Invoke(gitRoot);
+            if (await IndexEntryChangedMessageAsync(gitRoot, load.Path, load.Diff, cancellationToken) is { } indexChanged)
+                return StageHunksFailure(load.Path, GitErrorCodes.HunkStale, indexChanged, GitErrorDetails.HunkStale);
 
             var apply = await RunGitAsync(gitRoot,
                 ["apply", "--cached", "--unidiff-zero", "--whitespace=nowarn", patchFile], cancellationToken);
@@ -2360,7 +2456,7 @@ public class GitImpl : IGitOperations
                     $"Re-run {ToolCallHint.Call("Git", ("operation", "hunks"), ("paths", "<path>"))} and pick again, or stage the whole file with {ToolCallHint.Call("Git", ("operation", "stage"), ("paths", "<path>"))}.");
             }
 
-            return await BuildStageHunksResultAsync(gitRoot, paths, load.Path, load.Diff, selected, cancellationToken);
+            return await BuildStageHunksResultAsync(gitRoot, paths, load.Path, load.Diff, selection, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

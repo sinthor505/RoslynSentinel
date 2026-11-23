@@ -96,7 +96,7 @@ public class GitTools
         string? hunkIds = null,
         [Description("stage: fingerprint from the hunk list (GitHunkStale if the file changed since).")]
         string? hunkFingerprint = null,
-        [Description("stage: stage the hunks wholly inside these new-file lines, e.g. \"40-80\" or \"52\". Alternative to hunkIds.")]
+        [Description("stage: new-file lines to stage, e.g. \"40-80\" or \"52\"; an added-lines-only hunk can be cut. Or hunkIds.")]
         string? lineRange = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: pickaxe is optional for operation=log; refused for every other operation.
         [Description("log: -S text search")]
