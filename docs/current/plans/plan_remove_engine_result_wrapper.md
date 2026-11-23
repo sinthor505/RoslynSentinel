@@ -1,6 +1,6 @@
 # Plan: Remove EngineResultWrapper<T>; engines return IOperationResult types and throw typed exceptions when a build or test run did not run
 
-**Status:** IN PROGRESS 2026-11-22. Steps 0-10e done (Batch A 66f9940a..4d038a3f, Batch B 08d07f5b..34103e7e); Batch C (Steps 11, 12, 12b) next.
+**Status:** IN PROGRESS 2026-11-23. Steps 0-12b done (Batch A 66f9940a..4d038a3f, Batch B 08d07f5b..34103e7e, Batch C 568801d8..9b9e420d); Batch D (Steps 13-16, one commit) next.
 
 ## Problem
 
@@ -424,17 +424,19 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
 - Done when: `Build` 0 errors; the class passes.
 
 ### Step 11 - Delete the shims and rename Core back
+- Done: 568801d87f8bce9f4cd563d2cdb90baf8aeb7d49
 - Files: `RoslynSentinel.Engines.Basic/DiagnosticEngine.cs`, `RoslynSentinel.Engines.Basic/BuildEngine.cs` (callers
   are updated by `RenameSymbol`)
 - Depends on: Steps 8a, 8b, 9, 10a-10e
 - Effect: text-neutral
-- Lane: implementer (5 deletes plus 5 `RenameSymbol` calls)
+- Lane: implementer-senior (measured 2026-11-22: 5 renames over 17 files, 4+ projects, about 62 call sites - past S0)
 - Change: first confirm no shim has a caller left: `Search(mode: callers)` on each shim, including tests. Then for
   each of the five methods: delete the `[Obsolete]` shim (`Member` delete), then
   `RenameSymbol` `<Name>CoreAsync` -> `<Name>Async`. This also re-binds the cref at `BuildIsolation.cs:429`.
 - Done when: `Build` 0 errors and no CS0618 mentioning the five methods.
 
 ### Step 12 - Delete the wrapper
+- Done: 3123e05275c7e60b24972c6e6d09e138ee597634
 - Files: `RoslynSentinel.Common/EngineResultWrapper.cs` (renamed to `EngineError.cs` with `MoveFile`),
   `RoslynSentinel.Tests.Basic/ResultStatusTests.cs`, `RoslynSentinel.Engines.Basic/SyntaxTargetResolver.cs` (comment only)
 - Depends on: Steps 4, 11
@@ -452,6 +454,7 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
   `MemberRefactoringTests.cs:3205-3299`, `BatteryTwentyTwoTests.cs:41`, `BatteryTwentyOneTests.cs:517`).
 
 ### Step 12b - Remove BuildOutcome.NotRun
+- Done: 9b9e420dd6c9bdacfdd46c94e3c43c9af48ff1e6
 - Files: `RoslynSentinel.Common/BuildResult.cs`, `RoslynSentinel.Tests.Basic/ResultStatusTests.cs`
 - Depends on: Step 12 (same test file)
 - Pairs with: none in this phase (Step 11 is done by then)
