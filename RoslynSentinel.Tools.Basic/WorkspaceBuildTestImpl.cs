@@ -422,14 +422,9 @@ public class WorkspaceBuildTestImpl
 
             // useScratchDir is obsolete: true with level=fullBuild means the throwaway level.
             var fullBuildLevel = level == BuildVerifyLevel.fullBuild && useScratchDir ? BuildVerifyLevel.fullBuildThrowaway : level;
-            var result = isFullBuild
-                ? await _buildEngine.RunFullBuildAsync(cancellationToken, maxDetails, level: fullBuildLevel, scope: scope, scopeName: scopeName, isCallable: CallableCheck, repoRoot: worktreeRoot)
-                : await _buildEngine.RunQuickBuildAsync(scope, scopeName, maxDetails, cancellationToken, isCallable: CallableCheck);
-
-            if (!result.TryGetData(out var buildResult))
-            {
-                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.BuildFailed, result.Error?.Message ?? "Build failed unexpectedly."), Findings = result.Findings };
-            }
+            var buildResult = isFullBuild
+                ? await _buildEngine.RunFullBuildCoreAsync(cancellationToken, maxDetails, level: fullBuildLevel, scope: scope, scopeName: scopeName, isCallable: CallableCheck, repoRoot: worktreeRoot)
+                : await _buildEngine.RunQuickBuildCoreAsync(scope, scopeName, maxDetails, cancellationToken, isCallable: CallableCheck);
 
             if (worktreeRoot is not null)
             {
@@ -451,11 +446,16 @@ public class WorkspaceBuildTestImpl
                 // The build ran and failed: report isError:true like RunTestTool does for an incomplete run, but keep the
                 // BuildResult payload (inline or offloaded) so the caller still gets the error details.
                 // CS0246/CS0234 in a project with no current restore assets: name that as the likely cause.
-                var failureFindings = await WithUnrestoredProjectFindingsAsync(WithForeignWriterFindings(result.Findings, buildResult.Errors), buildResult.Errors, cancellationToken);
+                var failureFindings = await WithUnrestoredProjectFindingsAsync(WithForeignWriterFindings([], buildResult.Errors), buildResult.Errors, cancellationToken);
                 return buildToolResult with { IsError = true, ErrorData = new ResultError(ToolErrorCode.BuildFailed, failureMessage), Findings = failureFindings, StatusMessage = failureMessage };
             }
 
-            return buildToolResult with { Findings = result.Findings, StatusMessage = buildSummary };
+            return buildToolResult with { StatusMessage = buildSummary };
+        }
+        catch (BuildNotRunException ex)
+        {
+            // Phase 1: the wire keeps BuildFailed for a build that did not run (plan_remove_engine_result_wrapper.md Step 13 switches to the exception's code).
+            return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.BuildFailed, ex.Message) };
         }
         catch (ToolNotFoundException ex)
         {
