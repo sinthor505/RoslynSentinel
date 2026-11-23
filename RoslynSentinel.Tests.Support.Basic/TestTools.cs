@@ -13,8 +13,6 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 
 public static class TestTools
 {
-    // TODO The other tool classes (DocumentationTools, ...) have no factory yet; add them when their slice is migrated.
-
     public static WorkspaceReadNavigationImpl WorkspaceReadNavigationImpl(IWorkspaceManager workspaceManager) =>
         ActivatorUtilities.CreateInstance<WorkspaceReadNavigationImpl>(TestEngines.CreateProvider(workspaceManager), workspaceManager);
 
@@ -118,4 +116,24 @@ public static class TestTools
     /// </summary>
     public static CoreRefactoringTools CoreRefactoringTools(IWorkspaceManager workspaceManager) =>
         ActivatorUtilities.CreateInstance<CoreRefactoringTools>(TestEngines.CreateProvider(workspaceManager), workspaceManager);
+
+    /// <summary>Short form: the tool class over the short-form signature impl (see <see cref="RefactoringSignatureImpl(IWorkspaceManager)"/>).</summary>
+    public static RefactoringSignatureTools RefactoringSignatureTools(IWorkspaceManager workspaceManager) =>
+        ActivatorUtilities.CreateInstance<RefactoringSignatureTools>(TestEngines.CreateProvider(workspaceManager), RefactoringSignatureImpl(workspaceManager));
+
+    /// <summary>Short form: the tool class over the short-form extraction-docs impl (see <see cref="RefactoringExtractionDocsImpl(IWorkspaceManager)"/>).</summary>
+    public static RefactoringExtractionDocsTools RefactoringExtractionDocsTools(IWorkspaceManager workspaceManager) =>
+        ActivatorUtilities.CreateInstance<RefactoringExtractionDocsTools>(TestEngines.CreateProvider(workspaceManager), RefactoringExtractionDocsImpl(workspaceManager));
+
+    /// <summary>Short form: the tool class over the short-form structural impl (see <see cref="RefactoringStructuralImpl(IWorkspaceManager)"/>).</summary>
+    public static TypedMemberTools TypedMemberTools(IWorkspaceManager workspaceManager) =>
+        ActivatorUtilities.CreateInstance<TypedMemberTools>(TestEngines.CreateProvider(workspaceManager), RefactoringStructuralImpl(workspaceManager));
+
+    /// <summary>Short form: the impl (SymbolRelationshipImpl) is resolved from the fresh container, which shares the caller's manager.</summary>
+    public static SymbolRelationshipTools SymbolRelationshipTools(IWorkspaceManager workspaceManager) =>
+        ActivatorUtilities.CreateInstance<SymbolRelationshipTools>(TestEngines.CreateProvider(workspaceManager));
+
+    /// <summary>Short form: the impl (SymbolNavigationImpl) is resolved from the fresh container, which shares the caller's manager.</summary>
+    public static SymbolNavigationTools SymbolNavigationTools(IWorkspaceManager workspaceManager) =>
+        ActivatorUtilities.CreateInstance<SymbolNavigationTools>(TestEngines.CreateProvider(workspaceManager));
 }
