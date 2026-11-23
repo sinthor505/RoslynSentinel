@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace RoslynSentinel.Common;
 
-public enum BuildOutcome { Succeeded, Failed, NotRun }
+public enum BuildOutcome { Succeeded, Failed }
 
 public record BuildResult(
     BuildOutcome Outcome,
@@ -25,7 +25,7 @@ public record BuildResult(
     // Full sha of the worktree's HEAD; set by the Build tool only when repoPath was supplied.
     string? WorktreeCommit = null) : IOperationResult
 {
-    /// <summary>True unless the build succeeded; a NotRun build gives no verification, so it is an error.</summary>
+    /// <summary>True unless the build succeeded.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => Outcome != BuildOutcome.Succeeded;
 
@@ -35,18 +35,13 @@ public record BuildResult(
 
     /// <summary>BuildFailed when the build failed; null otherwise.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public string? Code => Outcome switch
-    {
-        BuildOutcome.Succeeded => null,
-        BuildOutcome.Failed => ToolErrorCode.BuildFailed,
-        _ => ToolErrorCode.Exception,
-    };
+    public string? Code => Outcome == BuildOutcome.Failed ? ToolErrorCode.BuildFailed : null;
 
     /// <summary>The failure detail when the build failed; null otherwise.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Message => Outcome == BuildOutcome.Succeeded
         ? null
-        : Detail ?? (Outcome == BuildOutcome.Failed ? $"Build failed with {ErrorCount} error(s)" : "Build was not run");
+        : Detail ?? $"Build failed with {ErrorCount} error(s)";
 }
 
 /// <summary>Error counts grouped by project and by file, plus the projects that are root causes.</summary>

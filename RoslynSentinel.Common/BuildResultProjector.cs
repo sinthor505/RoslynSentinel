@@ -66,7 +66,7 @@ public static class BuildResultProjector
             };
         }
 
-        // Failed (or NotRun). Tails stay when nothing parsed, otherwise the cause would be invisible.
+        // Failed. Tails stay when nothing parsed, otherwise the cause would be invisible.
         bool keepTails = options.IncludeOutput || errors.Count == 0;
 
         BuildFailureBreakdown? breakdown = null;

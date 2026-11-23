@@ -561,18 +561,12 @@ public class ResultStatusTests
     public void BuildResult_OutcomeDrivesStatus_AndSerializationHasNoStatusFields()
     {
         BuildResult ok = MakeBuildResult(BuildOutcome.Succeeded);
-        BuildResult notRun = MakeBuildResult(BuildOutcome.NotRun);
         BuildResult failed = MakeBuildResult(BuildOutcome.Failed, "compile broke");
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatusExtensions.FromFlag(false, null)));
         Assert.That(ok.Code, Is.Null);
         Assert.That(ok.Message, Is.Null);
-
-        Assert.That(notRun.IsError, Is.True);
-        Assert.That(notRun.Status, Is.EqualTo(ResultStatus.Failed));
-        Assert.That(notRun.Code, Is.EqualTo(ToolErrorCode.Exception));
-        Assert.That(notRun.Message, Is.EqualTo("Build was not run"));
 
         Assert.That(failed.IsError, Is.True);
         Assert.That(failed.Status, Is.EqualTo(ResultStatusExtensions.FromFlag(true, ToolErrorCode.BuildFailed)));
