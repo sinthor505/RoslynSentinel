@@ -348,14 +348,13 @@ public class SymbolRelationshipImpl
             var droppedProjectNames = new List<string>();
             if (kind == FindReferencesKind.callers)
             {
-                // TODO construction-site findings below ignore includeTests: a site in a test project is listed even when includeTests is false (hits are filtered, findings are not)
                 var (found, target, targetSolution) = await _symbolNavigationEngine.FindCallersWithTargetAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, containingType: containingType, cancellationToken: cancellationToken);
                 var result = ExcludeTestHits(found, c => c.FilePath, testDocProjects, droppedProjectNames);
                 var summary = SummarizeListResult.Build(result, c => c.FilePath);
                 return new SentinelCallToolResult<object>
                 {
                     IsError = false,
-                    Findings = await ConstructionSiteFindings.ForSymbolAsync(targetSolution, target, "Search", cancellationToken),
+                    Findings = await ConstructionSiteFindings.ForSymbolAsync(targetSolution, target, "Search", cancellationToken, path => testDocProjects.ContainsKey(path)),
                     SuccessData = new CallersSearchResult(result, summary),
                     StatusMessage = summary.ToSummaryMessage("caller") + DroppedTestHitsNote(droppedProjectNames) + ZeroResultScopeNote(summary, symbolName, includeTests),
                     ListSummary = summary
@@ -401,7 +400,7 @@ public class SymbolRelationshipImpl
                 return new SentinelCallToolResult<object>
                 {
                     IsError = false,
-                    Findings = await ConstructionSiteFindings.ForSymbolAsync(targetSolution, target, "Search", cancellationToken),
+                    Findings = await ConstructionSiteFindings.ForSymbolAsync(targetSolution, target, "Search", cancellationToken, path => testDocProjects.ContainsKey(path)),
                     SuccessData = new ReferencesSearchResult(callers, implementations, summary),
                     StatusMessage = summary.ToSummaryMessage("hit") + DroppedTestHitsNote(droppedProjectNames) + ZeroResultScopeNote(summary, symbolName, includeTests)
                         + (implementationsSkipped ? " Implementations skipped: the target cannot have implementations (sealed/static type or non-virtual member)." : string.Empty),

@@ -160,8 +160,9 @@ public static class ConstructionSiteFindings
     /// <summary>
     /// Empty unless <paramref name="symbol"/> is a constructor (its containing type is used) or a class/struct/record type. One Info finding per site, labelled
     /// "Reflective construction" or "DI registration", at most 25 per kind plus one finding stating the total when a kind is capped.
+    /// <paramref name="isExcludedFile"/>, when given, drops every site whose absolute file path it accepts; the drop happens before the per-kind cap, so dropped sites never count toward it.
     /// </summary>
-    public static async Task<List<Finding>> ForSymbolAsync(Solution solution, ISymbol symbol, string findingSource, CancellationToken cancellationToken)
+    public static async Task<List<Finding>> ForSymbolAsync(Solution solution, ISymbol symbol, string findingSource, CancellationToken cancellationToken, Func<string, bool>? isExcludedFile = null)
     {
         var findings = new List<Finding>();
         var type = symbol switch
@@ -175,8 +176,10 @@ public static class ConstructionSiteFindings
             return findings;
         }
 
-        AddKind(findings, findingSource, ReflectiveLabel, await ConstructionSiteFinder.FindReflectiveConstructionSitesAsync(solution, type, cancellationToken), stripPrefix: null);
-        AddKind(findings, findingSource, DiLabel, await ConstructionSiteFinder.FindDiRegistrationSitesAsync(solution, type, cancellationToken), ConstructionSiteFinder.DiRegistrationPrefix);
+        var reflectiveSites = await ConstructionSiteFinder.FindReflectiveConstructionSitesAsync(solution, type, cancellationToken);
+        var diSites = await ConstructionSiteFinder.FindDiRegistrationSitesAsync(solution, type, cancellationToken);
+        AddKind(findings, findingSource, ReflectiveLabel, reflectiveSites.Where(site => isExcludedFile?.Invoke(site.FilePath.Absolute) != true).ToList(), stripPrefix: null);
+        AddKind(findings, findingSource, DiLabel, diSites.Where(site => isExcludedFile?.Invoke(site.FilePath.Absolute) != true).ToList(), ConstructionSiteFinder.DiRegistrationPrefix);
         return findings;
     }
 
