@@ -200,58 +200,6 @@ public class B01_Instrumentation_ValidThrowStatement
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// B03 -> SolutionStructureEngine: stoppingToken.IsCancellationRequested must be a
-//        member access, not a dotted identifier name
-// ─────────────────────────────────────────────────────────────────────────────
-[TestFixture]
-[Category("SolutionStructureEngine")] // sentinel:auto-category
-// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
-[NonParallelizable]
-public class B03_SolutionStructureEngine_ValidMemberAccess
-{
-    private IWorkspaceManager _workspaceManager = null!;
-    private SolutionStructureEngine _engine = null!;
-    [SetUp]
-    public void Setup()
-    {
-        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
-        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration());
-    }
-
-    [TearDown]
-    public void TearDown()
-    {
-        _workspaceManager?.Dispose();
-        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
-    }
-    [Test]
-    public async Task ConvertToBackgroundService_ProducesValidMemberAccess()
-    {
-        // Before fix: SyntaxFactory.IdentifierName("stoppingToken.IsCancellationRequested")
-        // creates an identifier whose text contains a dot -> that is not valid C# and Roslyn
-        // would emit an identifier with a dot in it, which doesn't compile.
-        const string source = """
-            using System.Threading;
-            using System.Threading.Tasks;
-            public class MyWorker {
-                public async Task RunAsync(CancellationToken token) {
-                    await Task.Delay(1000);
-                }
-            }
-            """;
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("MyWorker.cs", source)]);
-        _workspaceManager.SetTestSolution(solution);
-        var result = await Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).ConvertToBackgroundServiceAsync("MyWorker.cs", "MyWorker");
-        // The result must contain "stoppingToken.IsCancellationRequested" as proper member access
-        Assert.That(result.UpdatedText, Does.Contain("stoppingToken.IsCancellationRequested"), "Output must reference stoppingToken.IsCancellationRequested via member access.");
-        // Crucially, the dotted form must NOT appear inside an IdentifierName literal string
-        // in the output (which would indicate un-parsed invalid syntax)
-        Assert.That(result.UpdatedText, Does.Not.Contain("\"stoppingToken.IsCancellationRequested\""), "Output must not contain dotted identifier as a literal string.");
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // B09 -> AdvancedRefactoringEngine.OptimizeTaskWaitAsync: must NOT rewrite
 //        .Wait()/.Result when semantic model is absent (prevents false positives)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -294,67 +242,6 @@ public class B09_AdvancedRefactoring_IsTaskTypeNullGuard
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.OptimizeTaskWaitAsync("Service.cs");
         Assert.That(result.UpdatedText, Does.Contain("_gate.WaitOne()"), "Non-Task .WaitOne() must not be touched by OptimizeTaskWaitAsync.");
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// B18 -> ContextHelper.GetUniqueVariableName: PascalCase identifiers like
-//        "String", "Object", "Int" must not be blocked as reserved keywords
-// ─────────────────────────────────────────────────────────────────────────────
-[TestFixture]
-public class B18_ContextHelper_CaseSensitiveKeywords
-{
-    [Test]
-    public void GetUniqueVariableName_PascalCaseTypeNameAsBase_NotBlockedByReservedKeywords()
-    {
-        // Before fix: OrdinalIgnoreCase caused "String" to match keyword "string",
-        // and "Object" to match "object", so these valid identifiers were unreachable.
-        // After camelCase conversion: "String" -> "string" IS a keyword, so suffix is added.
-        // But "MyString" -> "myString" is NOT a keyword and must be returned as-is.
-        // Use a minimal scope with no declarations
-        var emptyScope = Microsoft.CodeAnalysis.CSharp.SyntaxFactory.Block();
-        var result1 = ContextHelper.GetUniqueVariableName(emptyScope, "MyString");
-        Assert.That(result1, Is.EqualTo("myString"), "'MyString' -> camelCase 'myString' is not a keyword and must be returned as-is.");
-        var result2 = ContextHelper.GetUniqueVariableName(emptyScope, "MyObject");
-        Assert.That(result2, Is.EqualTo("myObject"), "'MyObject' -> camelCase 'myObject' is not a keyword and must be returned as-is.");
-        var result3 = ContextHelper.GetUniqueVariableName(emptyScope, "MyInt");
-        Assert.That(result3, Is.EqualTo("myInt"), "'MyInt' -> camelCase 'myInt' is not a keyword and must be returned as-is.");
-    }
-
-    [Test]
-    public void GetUniqueVariableName_ExistingNameConflict_CaseSensitive()
-    {
-        // Before fix: OrdinalIgnoreCase meant "myValue" conflicted with "MyValue"
-        // in C# they are different identifiers -> the suffix should NOT be added.
-        const string source = """
-            public class C {
-                public void M() {
-                    var MyValue = 1;
-                }
-            }
-            """;
-        var tree = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(source);
-        var method = tree.GetRoot().DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax>().First();
-        // "myValue" (camelCase of "MyValue") is different from "MyValue" in C# -> no conflict
-        var result = ContextHelper.GetUniqueVariableName(method, "myValue");
-        Assert.That(result, Is.EqualTo("myValue"), "'myValue' is case-sensitively distinct from existing 'MyValue' - must not add suffix.");
-    }
-
-    [Test]
-    public void GetUniqueVariableName_ExactCaseConflict_AddsSuffix()
-    {
-        // If the scope DOES have "myValue" already, we should get "myValue1"
-        const string source = """
-            public class C {
-                public void M() {
-                    var myValue = 1;
-                }
-            }
-            """;
-        var tree = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(source);
-        var method = tree.GetRoot().DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax>().First();
-        var result = ContextHelper.GetUniqueVariableName(method, "myValue");
-        Assert.That(result, Is.EqualTo("myValue1"), "When exact-case 'myValue' exists, must return 'myValue1'.");
     }
 }
 

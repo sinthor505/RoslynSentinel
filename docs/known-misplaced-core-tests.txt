@@ -4,6 +4,3 @@
 # Refresh after moving classes: set ROSLYNSENTINEL_UPDATE_PLACEMENT_BASELINE=1 and run
 # TestPlacementRatchetTests.AdvancedTestProjects_HoldNoNewCoreSubjectClasses.
 # Line format: <project>/<relative path>::<ClassName> | <destination project>
-RoslynSentinel.Tests.Battery.Advanced/BatteryTwentySevenTests.cs::B03_SolutionStructureEngine_ValidMemberAccess | RoslynSentinel.Tests.Basic
-RoslynSentinel.Tests.Battery.Advanced/BatteryTwentySevenTests.cs::B18_ContextHelper_CaseSensitiveKeywords | RoslynSentinel.Tests.Basic
-RoslynSentinel.Tests.Battery.Advanced/BatteryTwentySixTests.cs::ThreadSafeLockGotchaTests | RoslynSentinel.Tests.Basic
