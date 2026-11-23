@@ -1,0 +1,69 @@
+# Core-subject test classes that still sit in an Advanced test project (placement ratchet baseline).
+# Core-subject: no identifier token in the class names a type declared in the Advanced subject projects.
+# Move a class to its destination project, then remove its line. New entries are not allowed.
+# Refresh after moving classes: set ROSLYNSENTINEL_UPDATE_PLACEMENT_BASELINE=1 and run
+# TestPlacementRatchetTests.AdvancedTestProjects_HoldNoNewCoreSubjectClasses.
+# Line format: <project>/<relative path>::<ClassName> | <destination project>
+RoslynSentinel.Tests.Advanced/BasicRefactoringEngineFormatCharacterizationTests.cs::BasicRefactoringEngineFormatCharacterizationTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Advanced/BugFixTests.cs::AddBracesNullReturnRegressionTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Advanced/BugFixTests.cs::Bug53MakeMethodThreadSafeRegressionTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Advanced/BugFixTests.cs::CallGraphNullReturnRegressionTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Advanced/BugHuntSevenTests.cs::BH05_ConvertLockOverloadBugTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Advanced/ChangeSignatureConstructorWrapperTests.cs::ChangeSignatureConstructorWrapperTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Advanced/ChangeSignatureExtensionCallTests.cs::ChangeSignatureExtensionCallTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Advanced/ChangeSignatureLayoutTests.cs::ChangeSignatureLayoutTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Advanced/ChangeSignatureNonConstantDefaultTests.cs::ChangeSignatureNonConstantDefaultTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Advanced/ChangeSignatureParamsTests.cs::ChangeSignatureParamsTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Advanced/ChangeSignaturePrimaryConstructorTests.cs::ChangeSignaturePrimaryConstructorTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Advanced/ChangeSignatureReflectionConstructionTests.cs::ChangeSignatureReflectionConstructionTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Advanced/ChangeSignatureRemovedParameterUseTests.cs::ChangeSignatureRemovedParameterUseTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Advanced/ChangeSignatureWrapperTests.cs::ChangeSignatureWrapperTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Advanced/ConstructionSiteFindingsTests.cs::ConstructionSiteFindingsTests | RoslynSentinel.Tests.Tools.Basic
+RoslynSentinel.Tests.Advanced/GenericContainerNameTests.cs::GenericContainerNameTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Advanced/GenericContainerNameTests.cs::SyntaxTargetResolverTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Advanced/IntelligenceTests.cs::IntelligenceTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Advanced/MassiveStructuralTests.cs::MassiveStructuralTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Advanced/MsToolAugmentEngineFormatCharacterizationTests.cs::MsToolAugmentEngineFormatCharacterizationTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Advanced/NamespacePathMismatchTests.cs::NamespacePathMismatchTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Advanced/RefactoringEngineFormatCharacterizationTests.cs::RefactoringEngineFormatCharacterizationTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Advanced/SentinelAccuracyTests.cs::CheckThenActOnDictionaryTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Advanced/SentinelAccuracyTests.cs::CircularTypeReferenceTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Advanced/SentinelAccuracyTests.cs::DoubleCheckedLockingTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Advanced/SentinelAccuracyTests.cs::ThreadSafetyEngineExtendedTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Asyncify/OperationOutcomeRoutingTests.cs::OperationOutcomeRoutingTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Battery.Advanced/BatteryEightTests.cs::DependencyEngineTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Battery.Advanced/BatteryEightTests.cs::InventoryEngineTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Battery.Advanced/BatteryElevenTests.cs::ThreadSafetyEngineTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Battery.Advanced/BatteryNineTests.cs::SolutionManagementEngineTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Battery.Advanced/BatteryNineTests.cs::StructuralRefinementEngineTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Battery.Advanced/BatterySevenTests.cs::BasicRefactoringEngineTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Battery.Advanced/BatterySevenTests.cs::MemberRefactoringEngineTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Battery.Advanced/BatterySevenTests.cs::SemanticSearchEngineTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Battery.Advanced/BatterySeventeenTests.cs::MsToolAugmentEngineTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Battery.Advanced/BatterySeventeenTests.cs::SolutionStructureEngineTests2 | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Battery.Advanced/BatterySixTests.cs::SolutionStructureEngineTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Battery.Advanced/BatteryTenTests.cs::DiagnosticEngineTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Battery.Advanced/BatteryTenTests.cs::ValidationEngineTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Battery.Advanced/BatteryThirteenTests.cs::SymbolNavigationEngineTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Battery.Advanced/BatteryTwelveTests.cs::RefactoringEngineTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Battery.Advanced/BatteryTwelveTests.cs::SyntaxUpgradeEngineTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Battery.Advanced/BatteryTwentyFiveTests.cs::DependencyEngineGapTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Battery.Advanced/BatteryTwentyFiveTests.cs::RefactoringEngineGapTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Battery.Advanced/BatteryTwentyFiveTests.cs::SymbolNavigationEngineGapTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Battery.Advanced/BatteryTwentyFiveTests.cs::SyntaxUpgradeEngineGapTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Battery.Advanced/BatteryTwentySevenTests.cs::B03_SolutionStructureEngine_ValidMemberAccess | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Battery.Advanced/BatteryTwentySevenTests.cs::B18_ContextHelper_CaseSensitiveKeywords | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Battery.Advanced/BatteryTwentySixTests.cs::ThreadSafeLockGotchaTests | RoslynSentinel.Tests.Basic
+RoslynSentinel.Tests.Tools.Advanced/DeclarationModifierTests.cs::DeclarationModifierTests | RoslynSentinel.Tests.Tools.Basic
+RoslynSentinel.Tests.Tools.Advanced/ExtractLocalVariableSnippetMissTests.cs::ExtractLocalVariableSnippetMissTests | RoslynSentinel.Tests.Tools.Basic
+RoslynSentinel.Tests.Tools.Advanced/ImpactMissAdvancedTests.cs::ImpactMissAdvancedTests | RoslynSentinel.Tests.Tools.Basic
+RoslynSentinel.Tests.Tools.Advanced/MemberAddReplaceViewTests.cs::MemberAddReplaceViewTests | RoslynSentinel.Tests.Tools.Basic
+RoslynSentinel.Tests.Tools.Advanced/MemberRemoveTests.cs::MemberRemoveTests | RoslynSentinel.Tests.Tools.Basic
+RoslynSentinel.Tests.Tools.Advanced/MethodSignatureCallSiteTests.cs::MethodSignatureCallSiteTests | RoslynSentinel.Tests.Tools.Basic
+RoslynSentinel.Tests.Tools.Advanced/MoveMemberSuccessTests.cs::MoveMemberSuccessTests | RoslynSentinel.Tests.Tools.Basic
+RoslynSentinel.Tests.Tools.Advanced/MoveMemberToolCollateralRefusalTests.cs::MoveMemberToolCollateralRefusalTests | RoslynSentinel.Tests.Tools.Basic
+RoslynSentinel.Tests.Tools.Advanced/RenameNamespaceTests.cs::RenameNamespaceTests | RoslynSentinel.Tests.Tools.Basic
+RoslynSentinel.Tests.Tools.Advanced/RenameSymbolTests.cs::RenameSymbolTests | RoslynSentinel.Tests.Tools.Basic
+RoslynSentinel.Tests.Tools.Advanced/StructuralRefinementMissAdvancedTests.cs::StructuralRefinementMissAdvancedTests | RoslynSentinel.Tests.Tools.Basic
+RoslynSentinel.Tests.Tools.Advanced/SyncTypeAndFilenameTests.cs::SyncTypeAndFilenameTests | RoslynSentinel.Tests.Tools.Basic
+RoslynSentinel.Tests.Tools.Advanced/UsingDocsTypedMemberTests.cs::UsingDocsTypedMemberTests | RoslynSentinel.Tests.Tools.Basic
