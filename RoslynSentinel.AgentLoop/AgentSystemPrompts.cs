@@ -146,7 +146,9 @@ public static class AgentSystemPrompts
         4. Build the affected project with the cheapest level that covers the change (a quick
            build) and confirm it succeeds.
         5. Re-read the changed code and confirm no unrelated logic changed.
-        6. Report what you changed and the verification result.
+        6. Once the task is done and steps 4-5 pass, reply with your report (what you changed and
+           the verification result) and no tool call; that reply ends the task. Do not repeat a
+           check that already passed.
         """;
 
     /// <summary>
