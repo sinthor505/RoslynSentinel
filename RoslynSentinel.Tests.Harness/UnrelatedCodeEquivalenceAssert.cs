@@ -14,7 +14,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// one is reachable, since a passing behavior test is strictly better evidence than structural
 /// equivalence of source that was never exercised.
 /// </summary>
-internal static class UnrelatedCodeEquivalenceAssert
+public static class UnrelatedCodeEquivalenceAssert
 {
     /// <summary>
     /// Locates the member named <paramref name="memberName"/> in <paramref name="filePath"/> and
