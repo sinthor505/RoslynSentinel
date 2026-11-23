@@ -49,7 +49,7 @@ public static class GuardScenarios
         """;
 
     /// <summary>The seeded apply call: the same ReplaceSnippet edit is sent twice in the seeded turn (see TwinApplyCalls).</summary>
-    internal const string TwinApplyCallsArguments = """
+    public const string TwinApplyCallsArguments = """
         {"reason":"change national to national-post in SummarizeShipping","action":"apply","filePath":"{SOLUTION}/ContosoOrders.Core/FixtureHelpers/OrderPricingCalculator.cs","oldContent":"_ => \"national\",","newContent":"_ => \"national-post\","}
         """;
 

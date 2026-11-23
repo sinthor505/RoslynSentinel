@@ -72,7 +72,7 @@ public static class FaultScenarios
         // build + invoke step runs only once the text already classifies Correct, so the per-turn cost stays small.
         EndOnCorrectFinalState: true);
 
-    internal const string RenameSymbolNoSuchMethodPrompt = """
+    public const string RenameSymbolNoSuchMethodPrompt = """
         # Task: One small refactor in FixtureHelpers/OrderPricingCalculator.cs
 
         The solution is already loaded - go straight to ReadFile, Search or ListSolutionItems on the paths below.
@@ -165,7 +165,7 @@ public static class FaultScenarios
         ReproducesAt: CommonReproducesAt,
         FixedBy: "");
 
-    internal const string ReplaceSnippetWrongFileNoMatchPrompt = """
+    public const string ReplaceSnippetWrongFileNoMatchPrompt = """
         # Task: One small text edit
 
         The solution is already loaded - go straight to ReadFile, Search or ListSolutionItems on the paths below.

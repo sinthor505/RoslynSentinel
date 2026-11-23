@@ -21,7 +21,7 @@ public static class LocateScenarios
     private const string CommonSourceRun = "none: constructed locate variant of FaultScenarios.RenameSymbolNoSuchMethod (a BLOCKED: stop is accepted there, owner 2026-11-13); not seen in a recorded run";
     private const string CommonReproducesAt = "measured by this scenario (no fault to reproduce; the reply naming the real method is what is under test)";
 
-    internal const string LocateMethodByGuessedNamePrompt = """
+    public const string LocateMethodByGuessedNamePrompt = """
         # Task: Locate a method in FixtureHelpers/OrderPricingCalculator.cs
 
         The solution is already loaded - go straight to ReadFile, Search or ListSolutionItems on the paths below.
@@ -36,7 +36,7 @@ public static class LocateScenarios
         1. Locate the `ApplyLoyaltyBonus` method or a likely candidate and report back to the user with its name.
         """;
 
-    internal const string LocateMethodByDescriptionPrompt = """
+    public const string LocateMethodByDescriptionPrompt = """
         # Task: Locate a method in FixtureHelpers/OrderPricingCalculator.cs
 
         The solution is already loaded - go straight to ReadFile, Search or ListSolutionItems on the paths below.

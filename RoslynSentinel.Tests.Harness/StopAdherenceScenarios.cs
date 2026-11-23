@@ -21,7 +21,7 @@ public static class StopAdherenceScenarios
     // Not the FaultScenarios prompts: those name targets that have a real match in the fixture (SummarizeShipping,
     // ApplyLoyaltyBonus), so a model can find them by searching instead of stopping. These two name a customs
     // target that exists nowhere in the solution (see StopAdherenceFixtureTests).
-    internal const string MissingFilePrompt = """
+    public const string MissingFilePrompt = """
         # Task: One small text edit
 
         The solution is already loaded - go straight to ReadFile, Search or ListSolutionItems on the paths below.
@@ -37,7 +37,7 @@ public static class StopAdherenceScenarios
         1. In `PrintCustomsDeclaration`, change the string "EXPORT" to "EXPORT-DECLARED". Use the `ReplaceSnippet` tool. Change nothing else.
         """;
 
-    internal const string MissingMethodPrompt = """
+    public const string MissingMethodPrompt = """
         # Task: One small refactor in FixtureHelpers/OrderPricingCalculator.cs
 
         The solution is already loaded - go straight to ReadFile, Search or ListSolutionItems on the paths below.
