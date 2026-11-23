@@ -118,6 +118,59 @@ public sealed class ToolInvalidArgumentException : ToolException
 }
 
 /// <summary>
+/// The build did not run: no projects in the solution, worktree mapping failed, build gate busy, or a competing
+/// build. A build that ran and failed is a BuildResult with BuildOutcome.Failed, not this exception.
+/// Maps to <see cref="ToolErrorCode.BuildNotRun"/>.
+/// </summary>
+public sealed class BuildNotRunException : ToolException
+{
+    public override string ErrorCode => ToolErrorCode.BuildNotRun;
+
+    public BuildNotRunException(string message) : base(message)
+    {
+    }
+}
+
+/// <summary>
+/// The test run did not start: gate busy or worktree mapping failed. A run that ran and had failing tests is a
+/// TestRunResult, not this exception. Maps to <see cref="ToolErrorCode.TestRunNotRun"/>.
+/// </summary>
+public sealed class TestRunNotRunException : ToolException
+{
+    public override string ErrorCode => ToolErrorCode.TestRunNotRun;
+
+    public TestRunNotRunException(string message) : base(message)
+    {
+    }
+}
+
+/// <summary>
+/// An operation exceeded its time limit and was stopped. Distinct from <see cref="SolutionLoadTimeoutException"/>,
+/// where the load keeps running. Maps to <see cref="ToolErrorCode.TimedOut"/>.
+/// </summary>
+public sealed class ToolTimedOutException : ToolException
+{
+    public override string ErrorCode => ToolErrorCode.TimedOut;
+
+    public ToolTimedOutException(string message) : base(message)
+    {
+    }
+}
+
+/// <summary>
+/// The scope holds no project to build or no test project to run. A named project or file that resolves to
+/// nothing is <see cref="ToolNotFoundException"/>. Maps to <see cref="ToolErrorCode.NoProjects"/>.
+/// </summary>
+public sealed class NoProjectsException : ToolException
+{
+    public override string ErrorCode => ToolErrorCode.NoProjects;
+
+    public NoProjectsException(string message) : base(message)
+    {
+    }
+}
+
+/// <summary>
 /// A caller-supplied name or snippet matches more than one candidate and needs a disambiguating
 /// argument (contextSnippet, lineBefore/lineAfter, containingType, etc.) -> distinct from
 /// <see cref="ToolNotFoundException"/> because the content DOES exist, just not uniquely. Maps to

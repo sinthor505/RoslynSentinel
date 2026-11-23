@@ -78,8 +78,16 @@ public static class ToolErrorCode
     public const string SolutionLoadTimeout = "SolutionLoadTimeout";
     public const string FeatureDisabled = "FeatureDisabled";
     public const string InvalidArgument = "InvalidArgument";
+    /// <summary>The build did not start; <see cref="BuildFailed"/> means the build ran and failed.</summary>
+    public const string BuildNotRun = "BuildNotRun";
     public const string BuildFailed = "BuildFailed";
+    /// <summary>The test run did not start; <see cref="TestRunFailed"/> means the run completed with failures (engine-level view).</summary>
+    public const string TestRunNotRun = "TestRunNotRun";
     public const string TestRunFailed = "TestRunFailed";
+    /// <summary>The test run started but at least one project did not complete (timeout, hang or no TRX); the response keeps the partial results.</summary>
+    public const string TestRunIncomplete = "TestRunIncomplete";
+    /// <summary>The scope holds no project to build, or no test project to run.</summary>
+    public const string NoProjects = "NoProjects";
     public const string NotFound = "NotFound";
     public const string Ambiguous = "Ambiguous";
 
