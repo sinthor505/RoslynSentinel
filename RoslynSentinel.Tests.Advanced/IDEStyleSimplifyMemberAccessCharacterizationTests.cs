@@ -2,6 +2,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Engines.Advanced;
 
+using static RoslynSentinel.Tests.Support.FormatKit;
+
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
 
@@ -36,12 +38,6 @@ public class IDEStyleSimplifyMemberAccessCharacterizationTests
         _workspaceManager.SetTestSolution(solution);
     }
 
-    /// <summary>Joins lines with LF (no trailing newline), then converts to CRLF when requested.</summary>
-    private static string Src(bool crlf, params string[] lines)
-    {
-        var text = string.Join("\n", lines);
-        return crlf ? text.Replace("\n", "\r\n") : text;
-    }
 
     private static string[] Input() =>
     [
