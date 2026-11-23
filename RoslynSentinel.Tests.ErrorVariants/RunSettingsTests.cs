@@ -162,6 +162,32 @@ public sealed class RunSettingsTests
         Assert.That(json, Does.Not.Contain("Load"));
     }
 
+    [Test]
+    public void Build_WithAcceptedUnverifiedSampler_RecordsIt()
+    {
+        var settings = RunSettings.Build(null, null, EmptyDeclared, null, null, acceptedUnverifiedSampler: true);
+
+        Assert.That(settings.AcceptedUnverifiedSampler, Is.True);
+    }
+
+    [Test]
+    public void Build_DefaultsAcceptedUnverifiedSamplerToFalse()
+    {
+        var settings = RunSettings.Build(null, null, EmptyDeclared, null, null);
+
+        Assert.That(settings.AcceptedUnverifiedSampler, Is.False);
+    }
+
+    [Test]
+    public void Serialize_AcceptedUnverifiedSampler_IsOmittedUnlessTrue()
+    {
+        var accepted = JsonSerializer.Serialize(RunSettings.Build(null, null, EmptyDeclared, null, null, acceptedUnverifiedSampler: true));
+        var notAccepted = JsonSerializer.Serialize(RunSettings.Build(null, null, EmptyDeclared, null, null));
+
+        Assert.That(accepted.ToLowerInvariant(), Does.Contain("acceptedunverifiedsampler"));
+        Assert.That(notAccepted.ToLowerInvariant(), Does.Not.Contain("acceptedunverifiedsampler"));
+    }
+
     private static void AssertBaseUrlOnly(ModelLoadSettings load)
     {
         Assert.That(load, Is.Not.Null);

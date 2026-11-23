@@ -321,7 +321,7 @@ public sealed class ModelAgentRunner
         transcript.ContextLength = contextLength > 0 ? contextLength : null;
         // Settings is first written from what is sent/declared/loaded and rebuilt once with the host-echoed values after the first model reply.
         var loadSettings = await _llm.GetLoadSettingsAsync(cancellationToken);
-        transcript.Settings = RunSettings.Build(LlmOptions.Temperature, LlmOptions.TopP, LlmOptions.HostSampler, _llm.ReportedSampler, loadSettings);
+        transcript.Settings = RunSettings.Build(LlmOptions.Temperature, LlmOptions.TopP, LlmOptions.HostSampler, _llm.ReportedSampler, loadSettings, acceptedUnverifiedSampler: LlmOptions.AcceptUnverifiedSampler);
         var settingsReported = _llm.ReportedSampler is not null;
         transcript.ReasoningReplayMode = replayPolicy.Mode;
         _logger.LogInformation("Reasoning replay mode: {Mode} (context length {ContextLength}).", replayPolicy.Mode, contextLength);
@@ -429,7 +429,7 @@ public sealed class ModelAgentRunner
 
             if (!settingsReported && _llm.ReportedSampler is { } reportedSampler)
             {
-                transcript.Settings = RunSettings.Build(LlmOptions.Temperature, LlmOptions.TopP, LlmOptions.HostSampler, reportedSampler, loadSettings);
+                transcript.Settings = RunSettings.Build(LlmOptions.Temperature, LlmOptions.TopP, LlmOptions.HostSampler, reportedSampler, loadSettings, acceptedUnverifiedSampler: LlmOptions.AcceptUnverifiedSampler);
                 settingsReported = true;
             }
 

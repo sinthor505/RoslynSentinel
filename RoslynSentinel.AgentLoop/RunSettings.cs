@@ -263,8 +263,15 @@ public sealed class RunSettings
         get; init;
     }
 
-    /// <summary>Assembles the transcript's settings block from what the client sent, what the operator declared, what the host reported and the model load config.</summary>
-    public static RunSettings Build(double? sentTemperature, double? sentTopP, IReadOnlyDictionary<string, double> declaredSampler, SamplerSettings? reported, ModelLoadSettings? load)
+    /// <summary>True when the operator passed the accept flag, acknowledging the declared sampler values (Source declared) cannot be verified from the host's responses; omitted from the JSON when false.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool AcceptedUnverifiedSampler
+    {
+        get; init;
+    }
+
+    /// <summary>Assembles the transcript's settings block from what the client sent, what the operator declared, what the host reported, the model load config and whether the operator accepted unverified sampler values.</summary>
+    public static RunSettings Build(double? sentTemperature, double? sentTopP, IReadOnlyDictionary<string, double> declaredSampler, SamplerSettings? reported, ModelLoadSettings? load, bool acceptedUnverifiedSampler = false)
     {
         return new RunSettings
         {
@@ -279,6 +286,7 @@ public sealed class RunSettings
                 RepeatPenalty = DeclaredValue(declaredSampler, "repeatPenalty"),
             },
             Load = load,
+            AcceptedUnverifiedSampler = acceptedUnverifiedSampler,
         };
 
         static SamplerValue? SentOrReported(SamplerValue? reportedValue, double? sent)
