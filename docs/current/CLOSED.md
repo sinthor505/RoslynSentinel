@@ -8,6 +8,24 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Serializer escaping apostrophe in toolset rejection text - resolved (2026-11-22)
+
+Find which serializer JSON-escapes the toolset rejection text in filtered runs and fix it (2026-11-22) - `Declaration_`/`ParameterEdit_EnabledOnLean_IsCallable_AndRejectsAWrongParamSubsetByName` fail only in subset runs: the text arrives with `'` vs a plain-quote assert (`McpToolsetControlTests.cs:844,929`; runs e92f17ae-20261121-235202-13476, 35e24cfa-20261122-000251-42200); SharedJsonOptions uses UnsafeRelaxedJsonEscaping, so another serializer emits it; decided 2026-11-22: fix server-side (models get a literal quote), relax the assert only if it is test-only; acceptance: both tests pass filtered and full, text has a literal '; Small-Medium
+
+Evidence: 30513d31, 926b682e, and the following test commit; cause was McpJsonUtilities.DefaultOptions (default encoder) used by the replicated tool factory fallbacks, masked in full runs only if ToolCallEcho re-serialized (hypothesis: AgentIdentityFilterTests leaves echo on, see INBOX); fix SentinelToolFactory.WireSerializerOptions relaxed encoder; McpToolsetControlTests pass in a filtered subset run (130 tests green); full run left to the main session
+
+## Close the validateOnApply:false bypass on the lean profile - resolved (2026-11-22)
+
+Close the `validateOnApply:false` bypass on the lean profile (2026-11-22) - a model pushed an edit past three gate rejections (ImplScenario_WideningRejectedByGate run 20261122-102739-662 turn 5, 113); decided 2026-11-22: remove the bypass advice at `BasicRefactoringEngine.cs:298,316`, and `ToolArgumentValidator` (:1302 accepts hidden names) refuses `validateOnApply:false` with a structured error when the lean profile hides it (`McpToolSchemaPatcher.cs:632`); acceptance: a lean call with false gets a structured refusal and the engine text no longer suggests false; Small-Medium
+
+Evidence: 47ae6415; SchemaLeanProfileTests (3 new, filtered run 47ae6415 passed)
+
+## `--include-tools` warns on unknown names; launch script help - resolved (2026-11-22)
+
+`--include-tools` warns on unknown names; script help says it adds to `--mode` (2026-11-22) - `Launch-RoslynSentinelHttpServer.ps1 -Tools "ReadFile,..."` served all 114 tools: tool names are silently ignored and include unions with `--mode` (`ServerStartupHelpers.ResolveActiveToolClasses` :314-317); decided 2026-11-22: the union is intended (owner), so log a startup warning listing valid class names for any unknown include name and fix the `-Tools` help (:48-49, says "only"); code TODO above the includeTools parse in `ServerStartupHelpers.ParseArgs`; acceptance: unit test that an unknown name yields the warning; Small
+
+Evidence: 9c015bf2; NoActiveToolsStartupTests (3 new, filtered run 47ae6415 passed)
+
 ## CreateFile: no compile gate for non-.cs files - resolved (2026-11-22)
 
 CreateFile: no compile gate for non-.cs files (2026-11-22) - `Probe.txt` was rejected CS1525 (ImplScenario_ObsoleteNamespaceCopy on 113 turns 3-10); decided 2026-11-22: trace why a .txt reached the compiler (`isCSharpFile` at `WorkspaceFileEditImpl.cs:2419` is suffix-based) and gate the check on .cs project membership; no BOM option (owner: the file tools were not meant for non-.cs files, likely the root cause); acceptance: CreateFile of a .txt succeeds with no compile diagnostics; Small
