@@ -9,11 +9,6 @@ RoslynSentinel.Tests.Advanced/BugFixTests.cs::Bug53MakeMethodThreadSafeRegressio
 RoslynSentinel.Tests.Advanced/BugFixTests.cs::CallGraphNullReturnRegressionTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Advanced/SentinelAccuracyTests.cs::CheckThenActOnDictionaryTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Advanced/SentinelAccuracyTests.cs::DoubleCheckedLockingTests | RoslynSentinel.Tests.Basic
-RoslynSentinel.Tests.Battery.Advanced/BatteryEightTests.cs::DependencyEngineTests | RoslynSentinel.Tests.Basic
-RoslynSentinel.Tests.Battery.Advanced/BatteryEightTests.cs::InventoryEngineTests | RoslynSentinel.Tests.Basic
-RoslynSentinel.Tests.Battery.Advanced/BatteryElevenTests.cs::ThreadSafetyEngineTests | RoslynSentinel.Tests.Basic
-RoslynSentinel.Tests.Battery.Advanced/BatteryNineTests.cs::SolutionManagementEngineTests | RoslynSentinel.Tests.Basic
-RoslynSentinel.Tests.Battery.Advanced/BatteryNineTests.cs::StructuralRefinementEngineTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Battery.Advanced/BatterySevenTests.cs::BasicRefactoringEngineTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Battery.Advanced/BatterySevenTests.cs::MemberRefactoringEngineTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Battery.Advanced/BatterySevenTests.cs::SemanticSearchEngineTests | RoslynSentinel.Tests.Basic
