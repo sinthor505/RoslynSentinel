@@ -41,7 +41,7 @@ public class BuildEngine
 
     /// <summary>Quick (in-memory) build of the scope: diagnostics only, no dotnet build.</summary>
     /// <param name="isCallable">Tool-callability predicate for the active surface; null means every tool is callable (full surface). Selects the listing tool and LoadSolution named in zero-project messages.</param>
-    public async Task<EngineResultWrapper<BuildResult>> RunQuickBuildAsync(
+    public async Task<BuildResult> RunQuickBuildCoreAsync(
         ToolScope scope, string? scopeName, int maxDetails, CancellationToken cancellationToken = default, Func<string, bool>? isCallable = null)
     {
         var start = DateTime.UtcNow;
@@ -52,14 +52,9 @@ public class BuildEngine
         {
             if (string.IsNullOrEmpty(scopeName))
             {
-                return new EngineResultWrapper<BuildResult>(EngineOutcome.InvalidInput,
-                    error: new EngineError("scopeName (filePath) is required when scope=file."));
+                throw new BuildNotRunException("scopeName (filePath) is required when scope=file.");
             }
-            var fileResult = await _diagnosticEngine.GetFileDiagnosticsAsync(scopeName, cancellationToken);
-            if (!fileResult.TryGetData(out summary))
-            {
-                return new EngineResultWrapper<BuildResult>(fileResult.Outcome, error: fileResult.Error);
-            }
+            summary = await _diagnosticEngine.GetFileDiagnosticsCoreAsync(scopeName, cancellationToken);
             var solutionForFile = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
             var documentId = solutionForFile.GetDocumentIdsWithFilePath(scopeName).FirstOrDefault();
             var owningProject = documentId is null ? null : solutionForFile.GetProject(documentId.ProjectId);
@@ -69,24 +64,15 @@ public class BuildEngine
         {
             if (string.IsNullOrEmpty(scopeName))
             {
-                return new EngineResultWrapper<BuildResult>(EngineOutcome.InvalidInput,
-                    error: new EngineError("scopeName (projectName) is required when scope=project."));
+                throw new BuildNotRunException("scopeName (projectName) is required when scope=project.");
             }
-            var projectResult = await _diagnosticEngine.GetProjectDiagnosticsAsync(scopeName, cancellationToken);
-            if (!projectResult.TryGetData(out summary))
-            {
-                return new EngineResultWrapper<BuildResult>(projectResult.Outcome, error: projectResult.Error);
-            }
+            summary = await _diagnosticEngine.GetProjectDiagnosticsCoreAsync(scopeName, cancellationToken);
             var solutionForProject = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
             projectsCompiled = solutionForProject.Projects.Any(p => p.Name == scopeName) ? [scopeName] : [];
         }
         else
         {
-            var solutionResult = await _diagnosticEngine.GetSolutionDiagnosticsAsync(int.MaxValue, cancellationToken);
-            if (!solutionResult.TryGetData(out summary))
-            {
-                return new EngineResultWrapper<BuildResult>(solutionResult.Outcome, error: solutionResult.Error);
-            }
+            summary = await _diagnosticEngine.GetSolutionDiagnosticsCoreAsync(int.MaxValue, cancellationToken);
             var solutionForAll = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
             var compiledProjects = new List<string>();
             foreach (var project in solutionForAll.Projects)
@@ -101,11 +87,8 @@ public class BuildEngine
 
         if (projectsCompiled.Count == 0)
         {
-            return EngineResultWrapper<BuildResult>.Failure(
-                EngineOutcome.InvalidInput,
-                new EngineError(
-                    EngineErrorCode.BuildNotRun,
-                    $"Quick build compiled zero projects. Scope '{scope}' with scopeName '{scopeName}' resolved to nothing -- no compile verdict is available.{ListingSentence(ListingCall(isCallable), "to see valid project/file names.")}"));
+            throw new BuildNotRunException(
+                $"Quick build compiled zero projects. Scope '{scope}' with scopeName '{scopeName}' resolved to nothing -- no compile verdict is available.{ListingSentence(ListingCall(isCallable), "to see valid project/file names.")}");
         }
 
         // The engine returns every diagnostic: solution scope fetched the uncapped list (int.MaxValue) and
@@ -115,7 +98,7 @@ public class BuildEngine
         var warnings = summary.Details.Where(d => d.Severity == "Warning").ToList();
         const int SummaryTopN = 50;
 
-        return new EngineResultWrapper<BuildResult>(EngineOutcome.Success, new BuildResult(
+        return new BuildResult(
             Outcome: summary.Errors == 0 ? BuildOutcome.Succeeded : BuildOutcome.Failed,
             Level: BuildVerifyLevel.quickBuild,
             ProjectsCompiled: projectsCompiled,
@@ -129,7 +112,17 @@ public class BuildEngine
             StdoutTail: null,
             StderrTail: null,
             Duration: DateTime.UtcNow - start
-        ));
+        );
+    }
+
+    // Transitional shim (plan_remove_engine_result_wrapper.md); every not-run cause maps to InvalidInput/BuildNotRun.
+    /// <summary>Transitional wrapper over RunQuickBuildCoreAsync.</summary>
+    [Obsolete("Use RunQuickBuildCoreAsync")]
+    public async Task<EngineResultWrapper<BuildResult>> RunQuickBuildAsync(
+        ToolScope scope, string? scopeName, int maxDetails, CancellationToken cancellationToken = default, Func<string, bool>? isCallable = null)
+    {
+        try { return new EngineResultWrapper<BuildResult>(EngineOutcome.Success, await RunQuickBuildCoreAsync(scope, scopeName, maxDetails, cancellationToken, isCallable)); }
+        catch (BuildNotRunException ex) { return EngineResultWrapper<BuildResult>.Failure(EngineOutcome.InvalidInput, new EngineError(EngineErrorCode.BuildNotRun, ex.Message)); }
     }
 
     private static readonly Regex DiagnosticLineRegex = new(
