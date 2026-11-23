@@ -239,6 +239,7 @@ public sealed class LmStudioAgentClient
             ToolChoice = tools.Count > 0 ? "auto" : null,
             MaxOutputTokens = maxTokens,
             Stream = true,
+            // TODO per-request sampler path on /v1/chat/completions (top_k, min_p, repetition_penalty, penalties) so those fields can be enforced; deferred until a comparison needs it (docs/current/findings/finding_overnight_token_path_slips.md, item 7)
             Temperature = LlmOptions.Temperature,
             TopP = LlmOptions.TopP,
         };
@@ -401,6 +402,7 @@ public sealed class LmStudioAgentClient
         }
         if (samplerMismatches.Count > 0)
         {
+            // TODO the refusal propagates as an exception out of ModelAgentRunner, so the run's transcript is not written; consider an AgentStopReason for it
             throw new SamplerMismatchException(
                 "The model host did not use the sampler value(s) this run sent: " +
                 string.Join("; ", samplerMismatches) + ". " +
