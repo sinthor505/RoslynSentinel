@@ -124,7 +124,7 @@ public class ImplementationScenarioAgentTests
             logger: _environment.Host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
         var stopwatch = Stopwatch.StartNew();
         var result = await runner.RunAsync(
-            ErrorPolicyWiring.ComposePrompt(AgentSystemPrompts.CodingAgent),
+            EvalContractOptions.ComposeSystemPrompt(),
             prompt,
             _runDirectory,
             cancellationToken);
