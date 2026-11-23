@@ -209,12 +209,17 @@ public sealed class SubAgentChildServerLauncher(ILogger logger)
     /// every RoslynSentinel process system-wide, which would take down the live session (see
     /// PlanStepRunner's DotnetProcess).
     /// </summary>
-    private static async Task BuildServerAsync(string projectPath, string outputDirectory, CancellationToken cancellationToken)
+    // runProcess is a test seam: a test makes the build fail to start by passing a delegate that throws.
+    public static async Task BuildServerAsync(
+        string projectPath,
+        string outputDirectory,
+        CancellationToken cancellationToken,
+        Func<string, IReadOnlyList<string>, string, CancellationToken, Task<(int ExitCode, string StdOut, string StdErr)>>? runProcess = null)
     {
         (int ExitCode, string StdOut, string StdErr) result;
         try
         {
-            result = await RunProcessAsync(
+            result = await (runProcess ?? RunProcessAsync)(
                 "dotnet",
                 ["build", projectPath, "-c", "Debug", "-o", outputDirectory, "--nologo", "-v", "quiet"],
                 Path.GetDirectoryName(projectPath)!,
@@ -222,9 +227,8 @@ public sealed class SubAgentChildServerLauncher(ILogger logger)
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
-            // TODO a build that could not start reports BuildFailed; ToolErrorCode.BuildNotRun is the code for "did not run"
             throw new SubAgentLaunchException(
-                ToolErrorCode.BuildFailed, "Could not run 'dotnet build' for the worktree's server.", ex.Message, ex);
+                ToolErrorCode.BuildNotRun, "Could not run 'dotnet build' for the worktree's server.", ex.Message, ex);
         }
 
         if (result.ExitCode != 0)

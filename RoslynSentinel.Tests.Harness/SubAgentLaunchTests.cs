@@ -310,4 +310,56 @@ public class SubAgentLaunchTests
     {
         Assert.That(ChildToolResult.IsSuccess(Result("An error occurred invoking 'LoadSolution'.", isError: true), out _), Is.False);
     }
+
+    // ── Build step ──────────────────────────────────────────────────────────────
+
+    [Test]
+    [Category("SubAgentChildServerLauncher")] // sentinel:auto-category
+    public async Task BuildServerAsync_WhenTheBuildCannotStart_ReportsBuildNotRun()
+    {
+        var ex = await Assert.ThrowsAsync<SubAgentLaunchException>(() =>
+            SubAgentChildServerLauncher.BuildServerAsync(
+                @"C:\wt\RoslynSentinel.Server.Advanced\x.csproj", @"C:\out", CancellationToken.None,
+                (_, _, _, _) => throw new System.ComponentModel.Win32Exception("dotnet not found")));
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.BuildNotRun));
+    }
+
+    [Test]
+    [Category("SubAgentChildServerLauncher")] // sentinel:auto-category
+    public async Task BuildServerAsync_WhenTheBuildThrowsInvalidOperation_ReportsBuildNotRun()
+    {
+        var ex = await Assert.ThrowsAsync<SubAgentLaunchException>(() =>
+            SubAgentChildServerLauncher.BuildServerAsync(
+                @"C:\wt\RoslynSentinel.Server.Advanced\x.csproj", @"C:\out", CancellationToken.None,
+                (_, _, _, _) => throw new InvalidOperationException("no dotnet")));
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.BuildNotRun));
+    }
+
+    [Test]
+    [Category("SubAgentChildServerLauncher")] // sentinel:auto-category
+    public async Task BuildServerAsync_WhenTheBuildExitsNonZero_ReportsBuildFailed()
+    {
+        var ex = await Assert.ThrowsAsync<SubAgentLaunchException>(() =>
+            SubAgentChildServerLauncher.BuildServerAsync(
+                @"C:\wt\RoslynSentinel.Server.Advanced\x.csproj", @"C:\out", CancellationToken.None,
+                (_, _, _, _) => Task.FromResult((1, "stdout text", "stderr text"))));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.BuildFailed));
+            Assert.That(ex.Detail, Does.Contain("stderr text"));
+        });
+    }
+
+    [Test]
+    [Category("SubAgentChildServerLauncher")] // sentinel:auto-category
+    public async Task BuildServerAsync_WhenTheBuildSucceeds_DoesNotThrow()
+    {
+        await Assert.DoesNotThrowAsync(() =>
+            SubAgentChildServerLauncher.BuildServerAsync(
+                @"C:\wt\RoslynSentinel.Server.Advanced\x.csproj", @"C:\out", CancellationToken.None,
+                (_, _, _, _) => Task.FromResult((0, "", ""))));
+    }
 }
