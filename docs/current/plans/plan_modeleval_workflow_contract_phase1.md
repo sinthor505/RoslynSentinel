@@ -1,6 +1,6 @@
 # Plan: Standing workflow contract behind a switch, ScenarioTask record and renderer, contract stamp, validateOnApply hide switch (proposal Phasing step 1)
 
-**Status:** IN PROGRESS 2026-11-23. Steps 1-5, 10, 11, 15, 19 done (0522f742..8e5dc5f8, batch A); batches B, C and Step 21 left. Phasing step 1 of [proposal_modeleval_standing_workflow_contract.md](../proposals/proposal_modeleval_standing_workflow_contract.md).
+**Status:** IN PROGRESS 2026-11-23. Steps 1-11 and 15-19 done (batch A 0522f742..8e5dc5f8, batch B 8d945d10..5aefe070); batch C (12, 13, 14, 20) and Step 21 left. Phasing step 1 of [proposal_modeleval_standing_workflow_contract.md](../proposals/proposal_modeleval_standing_workflow_contract.md).
 
 ## Problem
 
@@ -186,6 +186,7 @@ Wire impact: none (authoring input to a renderer, never serialized or returned b
 - Lane: implementer (2 files, 3 edits). Pairs with: Step 7.
 
 ### Step 6 - Per-sample CSV columns
+- Done: 8d945d10
 - Files: RoslynSentinel.Tests.Harness/ScenarioSample.cs
 - Depends on: none
 - Effect: behaviour-changing for results.csv only: two columns appended (`contractHash`, `contractPlacement`); old rows still parse. No prompt or grader changes.
@@ -198,6 +199,7 @@ Wire impact: none (authoring input to a renderer, never serialized or returned b
 - Lane: implementer (3 files, ~15 edits; depth tier per the brief, or implementer-senior). Pairs with: Step 12.
 
 ### Step 7 - Fill the contract columns where samples are built
+- Done: e709a703
 - Files: RoslynSentinel.Tests.Harness/ScenarioSampleLoop.cs, RoslynSentinel.Tests.Harness/ScenarioRescoring.cs, RoslynSentinel.Tests.Harness/SavedTranscriptScoring.cs
 - Depends on: 4, 6
 - Effect: behaviour-changing for results.csv content only.
@@ -206,6 +208,7 @@ Wire impact: none (authoring input to a renderer, never serialized or returned b
 - Lane: implementer (3 files, ~7 edits). Pairs with: Step 5.
 
 ### Step 8 - Route the ModelEval call sites through the seam, part 1
+- Done: 8a47d0f4
 - Files: RoslynSentinel.Tests.ModelEval/ImplementationScenarioAgentTests.cs, ScenarioAgentTests.cs (2 sites), ShippingKindSteppedAgentTests.cs, LargeResultPagingAgentTests.cs, OrderPricingRefactorAgentTests.cs, OrderPricingRefactorChainAgentTests.cs
 - Depends on: 5
 - Effect: text-neutral (default `legacy` returns the identical string).
@@ -214,6 +217,7 @@ Wire impact: none (authoring input to a renderer, never serialized or returned b
 - Lane: implementer-sweep (1 operation, 6 files, 7 call sites, 1 project; sweep tier 0). Pairs with: Step 9.
 
 ### Step 9 - Route the ModelEval call sites through the seam, part 2
+- Done: e1ecde3b
 - Files: RoslynSentinel.Tests.ModelEval/PlanImplementVerifyAgentTests.cs (2 sites: `plan` and `implement` phases; the `verify` phase keeps `AgentSystemPrompts.CodeReviewer`), PlanOnlyAgentTests.cs, PlanThenExecuteAgentTests.cs, SizeThresholdAgentTests.cs, WholeFileRewriteAgentTests.cs
 - Depends on: 5
 - Effect: text-neutral.
@@ -281,6 +285,7 @@ Wire impact: none (authoring input to a renderer, never serialized or returned b
 - Lane: test-writer (2 new files). Pairs with: Step 10.
 
 ### Step 16 - Tests: the option class and the stamp helper
+- Done: 5fb0bc2d
 - Files: RoslynSentinel.Tests.Harness/EvalContractOptionsTests.cs (new)
 - Depends on: 5 (and 2, 3)
 - Effect: text-neutral (tests).
@@ -289,6 +294,7 @@ Wire impact: none (authoring input to a renderer, never serialized or returned b
 - Lane: test-writer (1 new file). Pairs with: Step 12.
 
 ### Step 17 - Tests: shared pinned prompt assertions gain a case for the new constant
+- Done: 5aefe070
 - Files: RoslynSentinel.Tests.ErrorVariants/ErrorPolicyWiringTests.cs, RoslynSentinel.Tests.Harness/ErrorPolicyEvalPromptTests.cs, RoslynSentinel.Tests.Harness/PlanStepRunnerSurfaceTests.cs
 - Depends on: 2
 - Effect: text-neutral (tests). No existing assertion pins `CodingAgent` wording (they compare against the constant itself), so none breaks; these add the contract constant beside it.
@@ -297,6 +303,7 @@ Wire impact: none (authoring input to a renderer, never serialized or returned b
 - Lane: test-writer (3 files, one slice because the pinned assertions are shared). Pairs with: Step 13.
 
 ### Step 18 - Tests: stamp and CSV
+- Done: f410f110
 - Files: RoslynSentinel.Tests.Harness/ScenarioSampleCsvTests.cs, RoslynSentinel.Tests.Harness/ContextExhaustedRunnerTests.cs, RoslynSentinel.Tests.Harness/ScenarioRescoringTests.cs
 - Depends on: 4, 6, 7
 - Effect: text-neutral (tests).
