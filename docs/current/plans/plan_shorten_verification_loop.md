@@ -1,6 +1,6 @@
 # Plan: Shorten the build/test verification loop (measure, fast tier, serial-tail cuts, flake causes)
 
-**Status:** IN PROGRESS 2026-11-22. Steps 1-6, 9, 10, 11a and the Step 7 parity slice done (d07a4bdc, c0a82f6b, 68db5c28, 4754cde6, c6d8c55d, 93da26c3, b42f4ea5, 107517e6, cc990855); fast run 567 s; Step 8 dropped (D5); Steps 13-14 stay open past this run.
+**Status:** IN PROGRESS 2026-11-22. Steps 1-6, 9-12, Q-7b and the Step 14 measurement done (d07a4bdc, c0a82f6b, 68db5c28, 4754cde6, c6d8c55d, 93da26c3, b42f4ea5, 107517e6, cc990855, d235506e, dec98303, f77f1923); fast run 238 s parallel (was 1,328 s full), full run 1,130 s; Step 8 dropped (D5). Open: Step 13 (needs a week of journal rows, from 2026-11-29) and full-run E-row sharding for the 15-minute target.
 
 ## Problem
 
@@ -333,6 +333,15 @@ the commit. The build warning-level work another session is doing is out of scop
   - **Debounce group:** `WorkspaceDebounceReloadTests` (drop the attribute on the 4 tests that touch no watcher, widen 10 s waits to
     about 30 s) and `WorkspaceBrokenProjectReloadTests` (3 `LoadSolution_*` tests have no timers).
   - **Deferred:** owner decision Q-7b under "Risks and open decisions".
+- Q-7b approved by the owner 2026-11-22, two groups:
+  - **Group 1 (dec98303):** `HaltStampFilterTests`, `RelativePathInputAuditTests` and 3 `CreateFileDeleteFileTests` methods, with their
+    15 s polls widened to 30 s.
+  - **Group 1 gate, three fast runs at d235506e:** 254 s with 5 failures, then 246 s and 242 s green.
+    - The 5 failures were all `SolutionLoadTimeoutException` in Tests.Tools.Basic, none of them in a group 1 test. That is the D5
+      contention class, so it is recorded as a flake.
+    - Counting the 12a runs, 1 of 6 parallel fast runs hit load timeouts. Step 14 watches the rate.
+  - **Group 2 (f77f1923):** both debounce fixtures lose the class-level attribute. 5 methods without a debounce wait lose theirs, and
+    the 10 s waits are widened to 30 s.
 
 ### Step 8 - One chokepoint for the solution-load timeout
 
@@ -387,6 +396,7 @@ call sites in 60 files. It also found a second 30 s default, the `LoadSolution` 
 - Depends on: 11a none; 11b Step 4 (Step 8 dropped)
 - Effect: 11a text-neutral; 11b behaviour-changing for full runs (a red ratchet stops the run early).
 - Done (11a): c6d8c55d (Tests.Server count under `-WithRatchets` and a non-matching filter: 16 -> 18).
+- Done (11b): d235506e (unfiltered full runs only, see the Step 12 re-scope note); live failing-ratchet check in Step 14 stopped in 13 s.
 - Change: 11a: add `[Category("Ratchet")]` to those two methods only (the `_WhenUpdateEnvVarSet_RegeneratesFile` tests write files and stay
   untagged). They fail in 2 of the 8 ratchet-red runs (`069455d6`, `54e9052e`) but are missed by `-WithRatchets` today. 11b: for an
   unfiltered run, after the build and before the project loop, start `dotnet test <project> --no-build --filter TestCategory=Ratchet`
@@ -431,7 +441,7 @@ call sites in 60 files. It also found a second 30 s default, the `LoadSolution` 
 | `cc990855-20261122-161854-11888` | `-Parallel` | 258 | 9,588 | 0 | 0 |
 
   - **Outcome:** adopt. The failure sets are equal and the parallel median is 272 s against 562 s sequential, under the 450 s threshold.
-  - **12b:** makes parallel the default for `-Suite fast`. `-Sequential` opts out; full runs stay opt-in.
+  - **12b (d235506e):** makes parallel the default for `-Suite fast`. `-Sequential` opts out; full runs stay opt-in.
   - **Not done:** the E-row sharding for full runs, which needs a measured parallel full run first.
 - Re-scope of 11b (dispatcher, 2026-11-22). With fast runs at about 270 s, a ratchet-first stage that starts 10 test processes would cost
   fast runs more than it saves. It is applied to unfiltered `-Suite full` runs only (median 1,328 s), and `-NoFailFast` skips it.
@@ -463,6 +473,35 @@ call sites in 60 files. It also found a second 30 s default, the `LoadSolution` 
 - Done when: the comparison table is in this plan and each target is marked met, partly met or not met with the measured value; set Status
   and close the plan per `docs/current/templates/README.md` rule 11 (`Closes: plan_shorten_verification_loop`).
   Lane: dispatcher.
+- Done (measurement), 2026-11-22, all at `f77f1923` (every change of this run in), one run at a time, no other worktree run of mine.
+  - **Runs:** 3 fast (parallel default) 252, 238, 238 s wall including build, all green (9,588 tests); 3 full 1,132, 1,136, 1,135 s,
+    all green (10,906 tests). The marker reset after the full runs (`fastRunsSince` 0, `totalCount` 10,906, `failedCount` 0).
+  - **Load timeouts:** 0 in these 6 runs. Over the day, 1 of 9 parallel fast runs hit them (5 tests, group 1 gate run 1).
+
+| Measure (full runs) | Step 3 baseline (median) | `f77f1923` (3 runs) | Change |
+| --- | --- | --- | --- |
+| Run wall, incl. build | 1,328 s (1,229 s over non-overlapping runs) | 1,128-1,131 s | -15% (-8%) |
+| Tests.Tools.Basic wall | 929 s | 794-798 s | -14% |
+| Tests.Tools.Basic serial | 628 s | 522-526 s | -17% |
+| Tests.Tools.Basic serial outside `OutOfProcess` | 108 s | 78-79 s | -27% |
+| Tests.Tools.Basic `OutOfProcess` serial | about 520 s | 444-448 s | -14% |
+| Tests.Server wall / serial | 159 / 138 s | 122 / 96-97 s | -23% / -30% |
+| Ratchet-first stage (11b) | none | 12-13 s, 38 tests | new |
+
+| Target (D6) | Measured | Verdict |
+| --- | --- | --- |
+| Fast run median under 10 min sequential | 562 s (12a, `cc990855`) | met |
+| Fast run median under 6 min parallel | 238 s | met |
+| Full run under 15 min | 1,130 s (18.8 min) | not met (15% faster) |
+| Tests.Tools.Basic serial under 300 s | 522-526 s | not met: 85% of it is `OutOfProcess` serial, which only E-row sharding or a project split moves |
+| `SolutionLoadTimeoutException` count recorded | 0 in 6; 1 run in 9 parallel fast runs over the day | recorded (no target, D5) |
+
+  - **11b live check:** a throwaway `-RepoPath` worktree with a stale line appended to `docs/generated/architecture_tools.md`, full unfiltered
+    run with `-Projects RoslynSentinel.Tests.Server,RoslynSentinel.Tests.Basic -SkipBuild`: exit 1 after 13 s, "Ratchet stage: 36 tests, 1 failed",
+    stop before the project loop. Done-when (stop under 90 s) met. The worktree was removed afterwards.
+  - **Q-7b group 2 gate:** the 3 fast runs above, all green.
+  - **Plan not closed:** Step 13 needs a week of journal rows after Step 2 (68db5c28), and the full-run target needs E-row sharding (Step 12b
+    remainder); see "Risks and open decisions".
 
 ## Out of scope
 
@@ -512,6 +551,17 @@ Decisions for the owner (each with a recommendation):
     about 50 s of fast-run tail), then the debounce group with widened waits.
   - **Recommendation:** yes, each group gated on 3 green fast runs, because the cause is inferred, not measured.
   - **Risk:** new timing flakes. Under the D5 rule a flake costs one re-run of the failing tests.
+  - **Outcome:** approved and done 2026-11-22 (dec98303, f77f1923), both gates green apart from one D5 load-timeout run.
+- **Left open after the 2026-11-22 run (owner away; recommendations):**
+  - **Step 13** (affected-test selection gate): run it on or after 2026-11-29, once the journal has a week of `suite`/`scope` rows. Recommend as planned.
+  - **E-row sharding for full runs** (Step 12b remainder): the only lever left for the 15-minute full-run target, since 445 s of Tests.Tools.Basic
+    serial time is `OutOfProcess`. Recommend one measured trial (shard the E rows of Appendix A into their own process) as its own slice, keeping
+    it only on equal failure sets.
+  - **`ToolParameterAliasTests` split and the Server E rows** (68 s and 34 s of the Tests.Server tail): Tests.Server is no longer on the critical
+    path (122 s wall against 795 s), so recommend dropping them unless sharding changes that.
+  - **Stale "about 1.5 minute" text** in the `RunTest` description (`WorkspaceTools.cs:250`): a tool-schema text edit; recommend fixing it with
+    the next `RunTest` change rather than alone.
+  - **`CreateFileDeleteFileTests.cs:736`** keeps a 15 s drift poll outside group 1; widen it only if it flakes.
 
 Risks and unverified points:
 
