@@ -239,6 +239,67 @@ public class SchemaLeanProfileTests
     }
 
     [Test]
+    public async Task Lean_CallPassingValidateOnApplyFalse_IsRefused()
+    {
+        var text = await WithClientAsync(["--schema-profile=lean"], async client =>
+        {
+            var result = await client.CallToolAsync(
+                "ReplaceSnippet",
+                new Dictionary<string, object?>
+                {
+                    ["reason"] = "Verify validateOnApply false is refused on lean",
+                    ["action"] = "validate",
+                    ["validateOnApply"] = false,
+                },
+                cancellationToken: TestContext.CurrentContext.CancellationToken);
+            return CallText(result);
+        });
+
+        Assert.That(text, Does.Contain("validateOnApply"), text);
+        Assert.That(text, Does.Contain("Nothing was executed"), text);
+    }
+
+    [Test]
+    public async Task Lean_CallPassingValidateOnApplyTrue_IsNotRefused()
+    {
+        var text = await WithClientAsync(["--schema-profile=lean"], async client =>
+        {
+            var result = await client.CallToolAsync(
+                "ReplaceSnippet",
+                new Dictionary<string, object?>
+                {
+                    ["reason"] = "Verify hidden validateOnApply true is accepted",
+                    ["action"] = "validate",
+                    ["validateOnApply"] = true,
+                },
+                cancellationToken: TestContext.CurrentContext.CancellationToken);
+            return CallText(result);
+        });
+
+        Assert.That(text, Does.Not.Contain("is not available for tool"), text);
+    }
+
+    [Test]
+    public async Task Full_CallPassingValidateOnApplyFalse_IsNotRefused()
+    {
+        var text = await WithClientAsync(["--schema-profile=full"], async client =>
+        {
+            var result = await client.CallToolAsync(
+                "ReplaceSnippet",
+                new Dictionary<string, object?>
+                {
+                    ["reason"] = "Verify validateOnApply false stays accepted on full",
+                    ["action"] = "validate",
+                    ["validateOnApply"] = false,
+                },
+                cancellationToken: TestContext.CurrentContext.CancellationToken);
+            return CallText(result);
+        });
+
+        Assert.That(text, Does.Not.Contain("is not available for tool"), text);
+    }
+
+    [Test]
     public async Task Lean_GenuinelyUnknownParam_IsStillRejected_AndHiddenNamesAreNotAdvertised()
     {
         var text = await WithClientAsync(["--schema-profile=lean"], async client =>

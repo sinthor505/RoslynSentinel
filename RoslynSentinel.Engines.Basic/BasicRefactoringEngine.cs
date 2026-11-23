@@ -294,8 +294,8 @@ public class BasicRefactoringEngine
                         $"'{methodName}' is declared on interface '{declaredSymbol.ContainingType.ToDisplayString()}', implemented by: " +
                         $"{string.Join(", ", implementers)}. ChangeSignature refuses this outright - it cannot cascade across the " +
                         "interface/implementer boundary, and calling it again on the interface or on any implementer hits this same " +
-                        "refusal. Edit the interface's and every implementer's parameter list directly instead (ApplyDiff/ReplaceSnippet " +
-                        "with validateOnApply:false on each), then run one terminal Build to converge.");
+                        "refusal. Edit the interface's and every implementer's parameter list together in one ApplyDiff call that lists the " +
+                        "interface file and every implementer file, then run one terminal Build to converge.");
                 }
             }
             else
@@ -313,7 +313,7 @@ public class BasicRefactoringEngine
                         $"'{methodName}' implements {string.Join(", ", implementedInterfaceMembers)}. ChangeSignature refuses this " +
                         "outright - it cannot cascade across the interface/implementer boundary, and calling it again on the interface " +
                         "or on any implementer hits this same refusal. Edit the interface's and every implementer's parameter list " +
-                        "directly instead (ApplyDiff/ReplaceSnippet with validateOnApply:false on each), then run one terminal Build " +
+                        "together in one ApplyDiff call that lists the interface file and every implementer file, then run one terminal Build " +
                         "to converge.");
                 }
             }

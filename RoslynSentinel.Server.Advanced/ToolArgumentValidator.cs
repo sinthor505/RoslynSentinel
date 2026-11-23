@@ -1289,6 +1289,22 @@ public static class ToolArgumentValidator
 
         var (declared, required, propertySchemas, _) = schema.Value;
 
+        // validateOnApply:false is refused where the lean profile hides the parameter: the compile gate
+        // always validates on that profile, so the caller has no way to switch it off.
+        if (arguments is not null &&
+            arguments.TryGetValue("validateOnApply", out var validateOnApplyArg) &&
+            (validateOnApplyArg.ValueKind == System.Text.Json.JsonValueKind.False ||
+             (validateOnApplyArg.ValueKind == System.Text.Json.JsonValueKind.String &&
+              string.Equals(validateOnApplyArg.GetString(), "false", StringComparison.OrdinalIgnoreCase))) &&
+            RoslynSentinel.Common.HiddenSchemaParams.IsHidden(toolName, "validateOnApply"))
+        {
+            return $"validateOnApply:false is not available for tool '{toolName}' on this server's current schema profile: " +
+                   "the parameter is not part of the tool's schema, so the compile gate always validates the edit before it is written. " +
+                   "Nothing was executed. If the gate rejected an edit, its message names the symbols that would fail to compile; " +
+                   "options are to change the edit so the whole result compiles, or to put the dependent changes in the same call " +
+                   "(a batch or multi-file ApplyDiff).";
+        }
+
         // 1. Unknown arguments. Reported first and in full: if the caller both misspelled a
         //    parameter and omitted a required one, the misspelling is usually the cause of both.
         if (arguments is not null && arguments.Count > 0)
