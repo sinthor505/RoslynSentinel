@@ -102,6 +102,25 @@ public class CopyAndObsoleteChecksTests
     }
 
     [Test]
+    public async Task Accepted_StaticFieldRules_StaticAutoPropertyAndFieldLikeEventCount()
+    {
+        const string source = """
+            namespace Demo.Models
+            {
+                public class WithAutoProp { public static int Count { get; set; } }
+                public class WithEvent { public static event System.EventHandler Changed; }
+                public class WithBodyProp { public static int V => 3; }
+                public class Plain { public int X { get; set; } }
+            }
+            """;
+
+        var result = await CheckAsync("Models/Types.cs", source, "Other/Types.cs");
+
+        Assert.That(result.IsRefusal, Is.False, result.Refusal?.Message);
+        Assert.That(result.StaticFieldTypeNames, Is.EqualTo(new[] { "WithAutoProp", "WithEvent" }));
+    }
+
+    [Test]
     public async Task Accepted_NestedNamespaceDeclarations_JoinIntoOneOldNamespace()
     {
         const string source = "namespace Demo { namespace Models { public class Foo { } public class Bar { } } }";

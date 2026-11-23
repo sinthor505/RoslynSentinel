@@ -136,8 +136,15 @@ public static class CopyAndObsoleteChecks
         var other => other.ToString(),
     };
 
-    // A static non-const field (const fields are static in name only: no state to duplicate); nested types count because they are copied with the type.
-    // TODO static auto-properties and field-like static events also hold per-copy static state; only fields are reported
-    private static bool HasStaticFields(SyntaxNode declaration) => declaration.DescendantNodes().OfType<FieldDeclarationSyntax>()
-        .Any(field => field.Modifiers.Any(SyntaxKind.StaticKeyword) && !field.Modifiers.Any(SyntaxKind.ConstKeyword));
+    // Counts static state that is copied with the type: a static non-const field, a static field-like event, or a static auto-property (no body on the property or its accessors). Const fields and static properties with a body do not count. Nested types count because they are copied with the type.
+    private static bool HasStaticFields(SyntaxNode declaration) => declaration.DescendantNodes().Any(node => node switch
+    {
+        FieldDeclarationSyntax field => field.Modifiers.Any(SyntaxKind.StaticKeyword) && !field.Modifiers.Any(SyntaxKind.ConstKeyword),
+        EventFieldDeclarationSyntax evt => evt.Modifiers.Any(SyntaxKind.StaticKeyword),
+        PropertyDeclarationSyntax property => property.Modifiers.Any(SyntaxKind.StaticKeyword)
+            && property.ExpressionBody == null
+            && property.AccessorList != null
+            && property.AccessorList.Accessors.All(accessor => accessor.Body == null && accessor.ExpressionBody == null),
+        _ => false,
+    });
 }
