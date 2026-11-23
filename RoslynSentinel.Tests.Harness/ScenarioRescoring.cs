@@ -101,6 +101,9 @@ public static class ScenarioRescoring
             var modelKey = Field(columns, fields, "modelKey");
             var temperature = ParseOptionalDouble(Field(columns, fields, "temperature"));
             var topP = ParseOptionalDouble(Field(columns, fields, "topP"));
+            // Absent in rows written before the workflow contract stamp: read as empty; a transcript header fills the gap below.
+            var contractHash = Field(columns, fields, "contractHash");
+            var contractPlacement = Field(columns, fields, "contractPlacement");
 
             var sampleFolder = Path.Combine(runFolder, "sample-" + sampleIndex.ToString("D2", CultureInfo.InvariantCulture));
             var transcriptPath = Path.Combine(sampleFolder, "transcript.json");
@@ -112,7 +115,8 @@ public static class ScenarioRescoring
                     scenarioId, scenarioType, faultKind, sampleIndex, commit, dirty, liftRenames,
                     null, schemaDrift, resultDrift, inconclusiveReason, transcriptPath,
                     ErrorPolicyMode: errorPolicyMode, ErrorPolicyHash: errorPolicyHash,
-                    ModelKey: modelKey, Temperature: temperature, TopP: topP);
+                    ModelKey: modelKey, Temperature: temperature, TopP: topP,
+                    ContractHash: contractHash, ContractPlacement: contractPlacement);
             }
             else
             {
@@ -146,7 +150,9 @@ public static class ScenarioRescoring
                     ErrorPolicyHash: errorPolicyHash.Length > 0 ? errorPolicyHash : transcript.ErrorPolicyHash ?? string.Empty,
                     ModelKey: modelKey.Length > 0 ? modelKey : transcript.ModelKey ?? string.Empty,
                     Temperature: temperature ?? transcript.Temperature,
-                    TopP: topP ?? transcript.TopP);
+                    TopP: topP ?? transcript.TopP,
+                    ContractHash: contractHash.Length > 0 ? contractHash : transcript.ContractHash ?? string.Empty,
+                    ContractPlacement: contractPlacement.Length > 0 ? contractPlacement : transcript.ContractPlacement ?? string.Empty);
             }
 
             ScenarioSampleCsv.Append(outputCsvPath, sample);

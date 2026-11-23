@@ -70,7 +70,9 @@ public static class SavedTranscriptScoring
             ErrorPolicyHash: transcript.ErrorPolicyHash ?? "",
             ModelKey: transcript.ModelKey ?? "",
             Temperature: transcript.Temperature,
-            TopP: transcript.TopP);
+            TopP: transcript.TopP,
+            ContractHash: transcript.ContractHash ?? "",
+            ContractPlacement: transcript.ContractPlacement ?? "");
 
         ScenarioSampleCsv.Append(csvPath, sample);
         return sample;

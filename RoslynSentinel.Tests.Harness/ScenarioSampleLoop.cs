@@ -98,7 +98,9 @@ public static class ScenarioSampleLoop
                         ErrorPolicyHash: result is null ? (stamp?.ErrorPolicyHash ?? string.Empty) : (result.Transcript.ErrorPolicyHash ?? string.Empty),
                         ModelKey: result?.Transcript.ModelKey ?? string.Empty,
                         Temperature: result?.Transcript.Temperature,
-                        TopP: result?.Transcript.TopP);
+                        TopP: result?.Transcript.TopP,
+                        ContractHash: result is null ? (ModelAgentRunner.ContractStamp?.Hash ?? string.Empty) : (result.Transcript.ContractHash ?? string.Empty),
+                        ContractPlacement: result is null ? (ModelAgentRunner.ContractStamp?.Placement ?? string.Empty) : (result.Transcript.ContractPlacement ?? string.Empty));
                 }
                 else
                 {
@@ -131,7 +133,9 @@ public static class ScenarioSampleLoop
                         ErrorPolicyHash: result.Transcript.ErrorPolicyHash ?? string.Empty,
                         ModelKey: result.Transcript.ModelKey ?? string.Empty,
                         Temperature: result.Transcript.Temperature,
-                        TopP: result.Transcript.TopP);
+                        TopP: result.Transcript.TopP,
+                        ContractHash: result.Transcript.ContractHash ?? string.Empty,
+                        ContractPlacement: result.Transcript.ContractPlacement ?? string.Empty);
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -155,7 +159,9 @@ public static class ScenarioSampleLoop
                     InconclusiveReason: "HarnessError: " + FirstLine(ex.Message),
                     TranscriptPath: File.Exists(partialTranscript) ? partialTranscript : string.Empty,
                     ErrorPolicyMode: stamp?.ErrorPolicyMode ?? string.Empty,
-                    ErrorPolicyHash: stamp?.ErrorPolicyHash ?? string.Empty);
+                    ErrorPolicyHash: stamp?.ErrorPolicyHash ?? string.Empty,
+                    ContractHash: ModelAgentRunner.ContractStamp?.Hash ?? string.Empty,
+                    ContractPlacement: ModelAgentRunner.ContractStamp?.Placement ?? string.Empty);
             }
 
             ScenarioSampleCsv.Append(csvPath, sample);
