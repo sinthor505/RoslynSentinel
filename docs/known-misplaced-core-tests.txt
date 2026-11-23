@@ -4,19 +4,11 @@
 # Refresh after moving classes: set ROSLYNSENTINEL_UPDATE_PLACEMENT_BASELINE=1 and run
 # TestPlacementRatchetTests.AdvancedTestProjects_HoldNoNewCoreSubjectClasses.
 # Line format: <project>/<relative path>::<ClassName> | <destination project>
-RoslynSentinel.Tests.Advanced/BasicRefactoringEngineFormatCharacterizationTests.cs::BasicRefactoringEngineFormatCharacterizationTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Advanced/BugFixTests.cs::AddBracesNullReturnRegressionTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Advanced/BugFixTests.cs::Bug53MakeMethodThreadSafeRegressionTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Advanced/BugFixTests.cs::CallGraphNullReturnRegressionTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Advanced/BugHuntSevenTests.cs::BH05_ConvertLockOverloadBugTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Advanced/ConstructionSiteFindingsTests.cs::ConstructionSiteFindingsTests | RoslynSentinel.Tests.Tools.Basic
-RoslynSentinel.Tests.Advanced/GenericContainerNameTests.cs::GenericContainerNameTests | RoslynSentinel.Tests.Basic
-RoslynSentinel.Tests.Advanced/GenericContainerNameTests.cs::SyntaxTargetResolverTests | RoslynSentinel.Tests.Basic
-RoslynSentinel.Tests.Advanced/IntelligenceTests.cs::IntelligenceTests | RoslynSentinel.Tests.Basic
-RoslynSentinel.Tests.Advanced/MassiveStructuralTests.cs::MassiveStructuralTests | RoslynSentinel.Tests.Basic
-RoslynSentinel.Tests.Advanced/MsToolAugmentEngineFormatCharacterizationTests.cs::MsToolAugmentEngineFormatCharacterizationTests | RoslynSentinel.Tests.Basic
-RoslynSentinel.Tests.Advanced/NamespacePathMismatchTests.cs::NamespacePathMismatchTests | RoslynSentinel.Tests.Basic
-RoslynSentinel.Tests.Advanced/RefactoringEngineFormatCharacterizationTests.cs::RefactoringEngineFormatCharacterizationTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Advanced/SentinelAccuracyTests.cs::CheckThenActOnDictionaryTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Advanced/SentinelAccuracyTests.cs::CircularTypeReferenceTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Advanced/SentinelAccuracyTests.cs::DoubleCheckedLockingTests | RoslynSentinel.Tests.Basic
