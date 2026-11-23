@@ -441,15 +441,14 @@ public class ToolParameterAliasTests
     [Test]
     public async Task RejectionDoesNotSuggestAnAlreadySuppliedName()
     {
-        // 'reason2' is one edit from 'reason', but the call already passes 'reason': telling the caller that
+        // 'reason2' is one edit from 'reason'. The call uses ReadFile, a Workspace-mode tool (Member is not enabled in this fixture), and already passes 'reason': telling the caller that
         // reason2 means reason would invite a duplicate, not a fix.
         var result = await _client.CallToolAsync(
-            "Member",
+            "ReadFile",
             new Dictionary<string, object?>
             {
                 ["reason"] = "test message",
                 ["reason2"] = "second reason",
-                ["operation"] = "view",
                 ["filePath"] = _seededFilePath,
             }!,
             cancellationToken: TestContext.CurrentContext.CancellationToken);
