@@ -148,6 +148,18 @@ public class SentinelToolFactoryParityTests
     public void ResultMarshallerOptions_Parse_MapsTheDocumentedValues(string? raw, ResultMarshallerMode expected) =>
         Assert.That(ResultMarshallerOptions.Parse(raw), Is.EqualTo(expected));
 
+    // ---- wire serializer: a quote reaches the model literally ----
+
+    [Test]
+    public void WireSerializerOptions_WritesAnApostropheLiterally_WhereTheSdkDefaultEscapesIt()
+    {
+        Assert.Multiple(() =>
+        {
+            Assert.That(JsonSerializer.Serialize("it's", SentinelToolFactory.WireSerializerOptions), Is.EqualTo("\"it's\""));
+            Assert.That(JsonSerializer.Serialize("it's", McpJsonUtilities.DefaultOptions), Is.EqualTo("\"it\\u0027s\""));
+        });
+    }
+
     // ---- parity over every declared tool ----
 
     private static string ProtocolJson(McpServerTool tool) =>

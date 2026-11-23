@@ -997,8 +997,8 @@ public class GitCommitSeamParityTests
 
         Assert.Multiple(() =>
         {
-            // System.Text.Json escapes the apostrophe as \u0027.
-            Assert.That(result.Json, Does.Contain("HEAD is already contained in its upstream \\u0027origin/").And.Contain("Nothing was amended."));
+            // The wire serializer keeps the apostrophe literal (SentinelToolFactory.WireSerializerOptions).
+            Assert.That(result.Json, Does.Contain("HEAD is already contained in its upstream 'origin/").And.Contain("Nothing was amended."));
             Assert.That(result.Facts, Does.Contain("log=second commit,initial commit"), "HEAD was not rewritten");
         });
     }

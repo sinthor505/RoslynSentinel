@@ -66,6 +66,22 @@ public static class SentinelToolFactory
     /// <summary>True when <paramref name="toolName"/> was built by <see cref="Create"/>, so its result went through the marshaller hook.</summary>
     public static bool IsHooked(string? toolName) => toolName is not null && HookedToolNames.ContainsKey(toolName);
 
+    // Serializer for tool results on the wire. The SDK default escapes an apostrophe as ', and models then read
+    // escaped quotes in error text, so this copy keeps the SDK's converters and resolver but relaxes the encoder (the
+    // same encoder as SharedJsonOptions).
+    /// <summary>The SDK's default tool-result serializer options with a relaxed encoder, so a quote reaches the model literally.</summary>
+    public static readonly JsonSerializerOptions WireSerializerOptions = CreateWireOptions();
+
+    private static JsonSerializerOptions CreateWireOptions()
+    {
+        JsonSerializerOptions options = new(McpJsonUtilities.DefaultOptions)
+        {
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        };
+        options.MakeReadOnly();
+        return options;
+    }
+
     /// <summary>The four service types the SDK's request-scoped service provider answers itself.</summary>
     internal static readonly IReadOnlySet<Type> AugmentedServiceTypes = new HashSet<Type>
     {
@@ -115,9 +131,9 @@ public static class SentinelToolFactory
                 method,
                 result,
                 returnType,
-                options?.SerializerOptions ?? McpJsonUtilities.DefaultOptions,
+                options?.SerializerOptions ?? WireSerializerOptions,
                 cancellationToken),
-            SerializerOptions = options?.SerializerOptions ?? McpJsonUtilities.DefaultOptions,
+            SerializerOptions = options?.SerializerOptions ?? WireSerializerOptions,
             JsonSchemaCreateOptions = options?.SchemaCreateOptions,
             ConfigureParameterBinding = pi =>
             {
@@ -212,7 +228,7 @@ public static class SentinelToolFactory
             if (toolAttr.OutputSchemaType is Type outputSchemaType)
             {
                 newOptions.OutputSchema ??= AIJsonUtilities.CreateJsonSchema(outputSchemaType,
-                    serializerOptions: newOptions.SerializerOptions ?? McpJsonUtilities.DefaultOptions,
+                    serializerOptions: newOptions.SerializerOptions ?? WireSerializerOptions,
                     inferenceOptions: newOptions.SchemaCreateOptions);
             }
         }
