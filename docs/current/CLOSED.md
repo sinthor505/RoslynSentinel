@@ -8,6 +8,24 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## SubAgentChildServerLauncher.BuildServerAsync reports BuildFailed when dotnet build could not start - resolved (2026-11-23)
+
+`SubAgentChildServerLauncher.BuildServerAsync` reports BuildFailed when `dotnet build` could not start (2026-11-23) - Win32Exception/InvalidOperationException should map to `ToolErrorCode.BuildNotRun` (did-not-run); code TODO there; Small
+
+Evidence: 1c185a53; SubAgentLaunchTests BuildServerAsync_* via the public runProcess seam; callers pass SubAgentLaunchException.ErrorCode through unchanged
+
+## LogLoadedModelStatusAsync logs the wrong host under hostAlias - resolved (2026-11-23)
+
+`LmStudioAgentClient.LogLoadedModelStatusAsync` logs the wrong host under `hostAlias` (2026-11-22) - the LM Studio branch reads process-wide `LlmOptions.BaseUrl`, not the per-call host (diagnostic only); code TODO there; Small
+
+Evidence: 4dd17159; LmStudioAgentClientSettingsTests.LoadedModelStatusCheck_TargetsTheHttpClientsHost_NotTheGlobalLlmOptionsBaseUrl
+
+## Eval sampler enforcement: verify and record - resolved (2026-11-23)
+
+Eval sampler enforcement: verify and record (2026-11-17) - decided 2026-11-22: per-field status (sent/echoed/declared/unverifiable) in the transcript Settings block (`RunSettings.cs`), a temperature/top_p echo mismatch refuses the run (today a warning, `LmStudioAgentClient.cs:387-407`), the batch script refuses unverifiable fields unless an accept flag is passed and recorded; a chat/completions per-request sampler path (Large) is deferred until a comparison needs enforced penalties; acceptance: the Settings block shows per-field status and a `LmStudioAgentClientSettingsTests` case with a mismatched echoed temperature is refused; Small-Medium - [finding](findings/finding_overnight_token_path_slips.md)
+
+Evidence: fca16bb3, d71f6452, 374a80dd, 2ad58c2c; per-field Source/Verified status already in the Settings block; SamplerMismatchException refuses a temperature/top_p echo mismatch; modeleval script refuses -HostSampler/-TopK/-RepeatPenalty/-MinP without -AcceptUnverifiedSampler, recorded as Settings.AcceptedUnverifiedSampler; tests LmStudioAgentClientSettingsTests, LlmOptionsHostSamplerTests, RunSettingsTests
+
 ## Mark GetComprehensiveHealthReport, GetDiagnostics and GetWorkspaceHealth ReadOnly - resolved (2026-11-23)
 
 Mark GetComprehensiveHealthReport, GetDiagnostics and GetWorkspaceHealth `ReadOnly = true` (2026-11-22) - decided 2026-11-22: GetComprehensiveHealthReport writes nothing (`IntelligenceTools.cs:41-66`, `HealthOrchestrationEngine.cs:35-166` only warm the in-memory compilation; first confirm its structure/performance/async-safety sub-engines write nothing); GetDiagnostics and GetWorkspaceHealth (`WorkspaceTools.cs:208`, `:372`) read at the default `verify` = noBuild and a non-default `verify` only builds into the throwaway artifacts path, accepted by the owner as not a solution write (first confirm the `_buildTest`/`_healthMisc` engine paths write nothing else); also remove `ReadOnly = true` from `GenerateClassesFromJson` (`GenerationTools.cs:82`, marked in 7a8163ed): owner rule 2026-11-22, ReadOnly means "returns information about the solution", and Generate* tools return generated content instead, so they stay unmarked even though they write nothing; acceptance: tools/list shows readOnlyHint true for the three and absent for every Generate* tool, `ClaudeLeanSchemaBudgetTests` stays green (GetDiagnostics is on claude-lean; raise the budget with a comment if needed); Small
