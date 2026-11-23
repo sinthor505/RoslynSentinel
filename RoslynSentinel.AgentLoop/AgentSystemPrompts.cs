@@ -150,6 +150,12 @@ public static class AgentSystemPrompts
            changed and the verification result) and no tool call; that reply ends the task.
         """;
 
+    /// <summary>Standing workflow contract text, placed in the system prompt (skeleton; text in Step 2).</summary>
+    public const string CodingAgentContract = "TODO contract text (Step 2)";
+
+    /// <summary>Endings block of the workflow contract (skeleton; text in Step 2).</summary>
+    public const string CodingAgentContractEndings = "TODO contract endings (Step 2)";
+
     /// <summary>
     /// Judge-role prompt for a read-only verify phase (see PlanImplementVerifyAgentTests). Kept
     /// deliberately separate from <see cref="CodingAgent"/> rather than reused: CodingAgent's
