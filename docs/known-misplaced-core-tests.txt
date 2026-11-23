@@ -13,7 +13,6 @@ RoslynSentinel.Tests.Advanced/SentinelAccuracyTests.cs::CheckThenActOnDictionary
 RoslynSentinel.Tests.Advanced/SentinelAccuracyTests.cs::CircularTypeReferenceTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Advanced/SentinelAccuracyTests.cs::DoubleCheckedLockingTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Advanced/SentinelAccuracyTests.cs::ThreadSafetyEngineExtendedTests | RoslynSentinel.Tests.Basic
-RoslynSentinel.Tests.Asyncify/OperationOutcomeRoutingTests.cs::OperationOutcomeRoutingTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Battery.Advanced/BatteryEightTests.cs::DependencyEngineTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Battery.Advanced/BatteryEightTests.cs::InventoryEngineTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Battery.Advanced/BatteryElevenTests.cs::ThreadSafetyEngineTests | RoslynSentinel.Tests.Basic
