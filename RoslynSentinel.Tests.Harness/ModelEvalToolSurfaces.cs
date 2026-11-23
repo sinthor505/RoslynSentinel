@@ -5,12 +5,12 @@ using RoslynSentinel.Server.Advanced;
 namespace RoslynSentinel.Tests.ModelEval;
 
 /// <summary>
-/// Ready-made <c>configureToolSurface</c> callbacks for <see cref="ModelEvalMcpEnvironment.CreateAsync"/>, for worlds that
-/// need a surface other than the default (<c>AddRoslynSentinelToolsAdvanced</c> with the <see cref="ChainEvalToolSurface"/>
+/// Ready-made <c>configureToolSurface</c> callbacks for <c>ModelEvalMcpEnvironment.CreateAsync</c>, for worlds that
+/// need a surface other than the default (<c>AddRoslynSentinelToolsAdvanced</c> with the <c>ChainEvalToolSurface</c>
 /// modes and hidden tools). Each is a method group, so a caller passes it as is or calls it from its own callback and then
 /// adds request filters.
 /// </summary>
-internal static class ModelEvalToolSurfaces
+public static class ModelEvalToolSurfaces
 {
     /// <summary>Fresh set per call: the registration call may keep the instance.</summary>
     public static HashSet<string> NewBasicModes() =>

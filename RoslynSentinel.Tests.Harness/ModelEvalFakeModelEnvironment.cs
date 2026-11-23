@@ -19,9 +19,9 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// optional run directory in the temp folder and an optional <see cref="RoslynSentinel.Tests.TestSolutionFixture"/>. The
 /// fake HTTP handler that stands in for the LLM is NOT part of this world: each test builds its own backend or runner around
 /// <see cref="Client"/>. <see cref="DisposeAsync"/> disposes the client, stops and disposes the host, deletes the run
-/// directory and disposes the fixture. Sibling of <see cref="ModelEvalMcpEnvironment"/>, which serves the live-model runs.
+/// directory and disposes the fixture. Sibling of <c>ModelEvalMcpEnvironment</c>, which serves the live-model runs.
 /// </summary>
-internal sealed class ModelEvalFakeModelEnvironment : IAsyncDisposable
+public sealed class ModelEvalFakeModelEnvironment : IAsyncDisposable
 {
     private IHost? _host;
     private McpClient? _client;

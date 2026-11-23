@@ -35,6 +35,7 @@
 		<InternalsVisibleTo Include="RoslynSentinel.Tools.Basic" />
 			<!-- ModelEvalAssemblySetUp stamps runs via the internal GitReaders.Default. -->
 			<InternalsVisibleTo Include="RoslynSentinel.Tests.ModelEval" />
+			<InternalsVisibleTo Include="RoslynSentinel.Tests.Harness" />
 	</ItemGroup>
 
 </Project>
