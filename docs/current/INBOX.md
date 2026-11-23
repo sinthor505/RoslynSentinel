@@ -11,3 +11,4 @@ close it with a reason in [CLOSED.md](./CLOSED.md), then delete the line here. C
 
 ## Untriaged
 - 2026-11-23 02:03 ModelEval: AgentTranscript.FinalMessage() returns a capped run's last mid-task text, so report/BLOCKED checks grade it as a final message - 85 WideningRejectedByGate run 20261123-075139-171 graded PassedAfterCap with no report and an unchanged tree (T25 text named ChangePublisher) - fixed in ImplementationScenarioAgentTests.RunStepAsync; TODO at ShippingKindSteppedAgentTests.cs:129 (also ScenarioScorer.Score, ScenarioSampleLoop.RunSamplesAsync)
+- 2026-11-23 02:50 LmStudioAgentClient: a SamplerMismatchException (temperature/top_p echo mismatch) propagates out of ModelAgentRunner so the run's transcript is not written; the chat/completions per-request sampler path stays deferred - todo-punchlist #6, commit fca16bb3 - TODO at LmStudioAgentClient.cs (throw site and request-body Temperature line)
