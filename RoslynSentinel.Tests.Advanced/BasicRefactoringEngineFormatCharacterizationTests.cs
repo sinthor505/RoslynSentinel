@@ -2,6 +2,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Engines.Basic;
 
+using static RoslynSentinel.Tests.Support.FormatKit;
+
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
 
@@ -39,21 +41,7 @@ public class BasicRefactoringEngineFormatCharacterizationTests
         _workspaceManager.SetTestSolution(solution);
     }
 
-    /// <summary>Joins lines with LF, then converts to CRLF when requested.</summary>
-    private static string Src(bool crlf, params string[] lines)
-    {
-        var text = string.Join("\n", lines);
-        return crlf ? text.Replace("\n", "\r\n") : text;
-    }
 
-    private static string WithStrayCrlf(string lfText, string anchorLine)
-    {
-        var anchor = anchorLine + "\n";
-        Assert.That(lfText, Does.Contain(anchor), "Precondition: the anchor line is present.");
-        var mixed = lfText.Replace(anchor, anchorLine + "\r\n");
-        Assert.That(mixed.Count(c => c == '\r'), Is.EqualTo(1), "Precondition: exactly one stray CRLF.");
-        return mixed;
-    }
 
     private static string ValueOfKeyContaining(Dictionary<FilePathWrapper, string> changes, string fragment)
     {

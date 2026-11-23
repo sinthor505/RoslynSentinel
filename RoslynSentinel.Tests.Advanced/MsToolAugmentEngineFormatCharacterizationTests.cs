@@ -2,6 +2,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Engines.Basic;
 
+using static RoslynSentinel.Tests.Support.FormatKit;
+
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
 
@@ -42,12 +44,6 @@ public class MsToolAugmentEngineFormatCharacterizationTests
     private void SetFiles(params (string name, string content)[] files) =>
         _workspaceManager.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", files));
 
-    /// <summary>Joins lines with LF (a trailing newline only if the last line is empty), then converts to CRLF when requested.</summary>
-    private static string Src(bool crlf, params string[] lines)
-    {
-        var text = string.Join("\n", lines);
-        return crlf ? text.Replace("\n", "\r\n") : text;
-    }
 
     /// <summary>An LF text with exactly one CRLF terminator: the last character of <paramref name="anchor"/>.</summary>
     private static string WithStrayCrlf(string lfText, string anchor)

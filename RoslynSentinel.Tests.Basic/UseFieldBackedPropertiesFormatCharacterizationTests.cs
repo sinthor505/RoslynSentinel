@@ -2,6 +2,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Engines.Basic;
 
+using static RoslynSentinel.Tests.Support.FormatKit;
+
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Basic;
 
@@ -37,19 +39,8 @@ public class UseFieldBackedPropertiesFormatCharacterizationTests
         _workspaceManager.SetTestSolution(solution);
     }
 
-    /// <summary>Joins lines with LF (no trailing newline), then converts to CRLF when requested.</summary>
-    private static string Src(bool crlf, params string[] lines)
-    {
-        var text = string.Join("\n", lines);
-        return crlf ? text.Replace("\n", "\r\n") : text;
-    }
 
-    private static string WithStrayCrlf(string lfText)
-    {
-        var mixed = lfText.Replace("    public void M() { }\n", "    public void M() { }\r\n");
-        Assert.That(mixed.Count(c => c == '\r'), Is.EqualTo(1), "Precondition: exactly one stray CRLF, on the method line.");
-        return mixed;
-    }
+    private static string WithStrayCrlf(string lfText) => RoslynSentinel.Tests.Support.FormatKit.WithStrayCrlf(lfText, "    public void M() { }");
 
     private static string[] WellFormedInput() =>
     [
