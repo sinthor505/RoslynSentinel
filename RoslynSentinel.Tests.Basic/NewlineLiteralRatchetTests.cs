@@ -54,16 +54,7 @@ public class NewlineLiteralRatchetTests
         ["RoslynSentinel.Engines.Basic/ProjectStructureEngine.cs::ConvertToBackgroundServiceAsync"] = 3,
     };
 
-    private static string RepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "RoslynSentinel.slnx")))
-        {
-            dir = dir.Parent;
-        }
-
-        return dir?.FullName ?? throw new InvalidOperationException("RoslynSentinel.slnx not found above " + AppContext.BaseDirectory);
-    }
+    private static string RepoRoot() => RepoRootLocator.Find(AppContext.BaseDirectory);
 
     // Scope: RoslynSentinel.Common and every RoslynSentinel.Engines.* production project (tests excluded).
     private static bool IsInScopeProject(string directoryName) =>

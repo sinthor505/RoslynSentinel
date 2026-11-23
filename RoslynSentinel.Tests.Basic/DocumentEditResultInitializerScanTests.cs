@@ -16,17 +16,6 @@ public class DocumentEditResultInitializerScanTests
     [Test]
     public void DocumentEditResult_InitializersAlwaysAssignUpdatedText()
     {
-        static string? FindRepoRoot()
-        {
-            var dir = new DirectoryInfo(AppContext.BaseDirectory);
-            while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "RoslynSentinel.slnx")))
-            {
-                dir = dir.Parent;
-            }
-
-            return dir?.FullName;
-        }
-
         static bool IsDocumentEditResult(TypeSyntax type) => type switch
         {
             IdentifierNameSyntax identifier => identifier.Identifier.ValueText == "DocumentEditResult",
@@ -47,7 +36,7 @@ public class DocumentEditResultInitializerScanTests
             return creation.ArgumentList is { Arguments.Count: > 0 };
         }
 
-        var repo = FindRepoRoot() ?? throw new InvalidOperationException("RoslynSentinel.slnx not found above " + AppContext.BaseDirectory);
+        var repo = RepoRootLocator.Find(AppContext.BaseDirectory);
         var engineDirs = Directory.GetDirectories(repo)
             .Where(dir => Path.GetFileName(dir).StartsWith("RoslynSentinel.Engines.", StringComparison.Ordinal))
             .ToList();

@@ -138,16 +138,7 @@ public class WhitespaceRatchetTests
             + Environment.NewLine + string.Join(Environment.NewLine, found));
     }
 
-    private static string RepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "RoslynSentinel.slnx")))
-        {
-            dir = dir.Parent;
-        }
-
-        return dir?.FullName ?? throw new InvalidOperationException("RoslynSentinel.slnx not found above " + AppContext.BaseDirectory);
-    }
+    private static string RepoRoot() => RepoRootLocator.Find(AppContext.BaseDirectory);
 
     // Parses every non-test production .cs file under RoslynSentinel.Common, Engines.* and Tools.*,
     // skipping bin, obj and Worktree folders. Returned in relative-path order for stable messages.
