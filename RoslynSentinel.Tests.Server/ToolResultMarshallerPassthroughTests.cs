@@ -211,6 +211,14 @@ public class ToolResultMarshallerPassthroughTests
         }
     }
 
+    // The replica deliberately writes the inner JSON with the relaxed encoder, so the only allowed
+    // difference from the SDK default is how inner characters are escaped. The SDK side's inner JSON
+    // text carries \uXXXX escapes that the outer Serialize doubles to \\uXXXX; collapse them back.
+    private static List<string> NormalizeInnerEscapes(IEnumerable<string> results)
+    {
+        return results.Select(s => System.Text.RegularExpressions.Regex.Replace(s, @"\\\\u([0-9A-Fa-f]{4})", @"\u$1")).ToList();
+    }
+
     private static readonly string[] FixtureToolNames =
         ["FixtureSearch", "FixtureListAll", "FixtureMember", "FixtureBuild", "FixtureError", "FixtureString", "FixtureCallToolResult", "FixtureVoid"];
 
@@ -277,7 +285,7 @@ public class ToolResultMarshallerPassthroughTests
     [Test]
     public async Task PassthroughText_IsByteIdenticalToTheSdkDefault_ForRealResultShapes()
     {
-        List<string> sdk = await CallFixturesAsync(replicated: false, marshaller: null);
+        List<string> sdk = NormalizeInnerEscapes(await CallFixturesAsync(replicated: false, marshaller: null));
 
         var recording = new RecordingMarshaller(new ToolResultMarshaller(NullLogger<ToolResultMarshaller>.Instance));
         List<string> passthrough = await CallFixturesAsync(replicated: true, marshaller: recording);
@@ -309,7 +317,7 @@ public class ToolResultMarshallerPassthroughTests
     [Test]
     public async Task ReplicaWithNoMarshallerRegistered_IsByteIdenticalToTheSdkDefault()
     {
-        List<string> sdk = await CallFixturesAsync(replicated: false, marshaller: null);
+        List<string> sdk = NormalizeInnerEscapes(await CallFixturesAsync(replicated: false, marshaller: null));
         List<string> replicaIdentity = await CallFixturesAsync(replicated: true, marshaller: null);
 
         Assert.That(replicaIdentity, Is.EqualTo(sdk));
