@@ -4,9 +4,6 @@
 # Refresh after moving classes: set ROSLYNSENTINEL_UPDATE_PLACEMENT_BASELINE=1 and run
 # TestPlacementRatchetTests.AdvancedTestProjects_HoldNoNewCoreSubjectClasses.
 # Line format: <project>/<relative path>::<ClassName> | <destination project>
-RoslynSentinel.Tests.Advanced/BugFixTests.cs::AddBracesNullReturnRegressionTests | RoslynSentinel.Tests.Basic
-RoslynSentinel.Tests.Advanced/BugFixTests.cs::Bug53MakeMethodThreadSafeRegressionTests | RoslynSentinel.Tests.Basic
-RoslynSentinel.Tests.Advanced/BugFixTests.cs::CallGraphNullReturnRegressionTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Battery.Advanced/BatterySixTests.cs::SolutionStructureEngineTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Battery.Advanced/BatteryTenTests.cs::DiagnosticEngineTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Battery.Advanced/BatteryTenTests.cs::ValidationEngineTests | RoslynSentinel.Tests.Basic

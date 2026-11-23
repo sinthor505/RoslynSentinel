@@ -275,7 +275,7 @@ public class Svc { public void Foo() {} }";
         // so the omitted slot cannot be filled without a default value. The entire change should
         // be refused.
         var result = await _refactoringEngine.ChangeSignatureAsync("Calculator.cs", "Add", new SignatureParameterSpec[] { new ExistingParameterSpec(1), new ExistingParameterSpec(0) });
-        
+
         Assert.That(result.Error, Does.Contain("Could not rewrite 1 call site(s)"), "Should refuse with the skipped-call-site error text");
         Assert.That(result.Changes, Is.Empty, "Should return no changes when refusing due to skipped call sites");
         Assert.That(result.SkippedCallSites, Has.Count.EqualTo(1), "Should populate SkippedCallSites with the single problem site");
@@ -2837,58 +2837,6 @@ public class Processor
             }
 
             // ──────────────────────────────────────────────────────────────────────────
-            // BUG-53: MakeMethodThreadSafe -> Server ErrorDetails Crash (null root reference)
-            // ──────────────────────────────────────────────────────────────────────────
-            [TestFixture]
-            [Category("ThreadSafetyEngine")] // sentinel:auto-category
-            public class Bug53MakeMethodThreadSafeRegressionTests
-            {
-                private IWorkspaceManager _workspaceManager;
-                private ThreadSafetyEngine _threadSafetyEngine;
-                [SetUp]
-                public void Setup()
-                {
-                    _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-                    _threadSafetyEngine = Battery.Basic.TestEngines.ThreadSafetyEngine(_workspaceManager);
-                }
-
-                [TearDown]
-                public void TearDown() => _workspaceManager?.Dispose();
-                private void SetSource(string source, string fileName = "Test.cs")
-                {
-                    var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
-                    _workspaceManager.SetTestSolution(solution);
-                }
-
-                [Test]
-                public async Task BUG_53_MakeMethodThreadSafe_SimpleMethod_NoServerCrash()
-                {
-                    const string code = @"
-public class Counter
-{
-    private int _count = 0;
-
-    public void Increment()
-    {
-        _count++;
-    }
-}";
-                    SetSource(code, "Counter.cs");
-                    var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
-                    if (document == null)
-                    {
-                        Assert.Fail("Document not found");
-                    }
-
-                    var result = await _threadSafetyEngine.MakeMethodThreadSafeAsync(document!.FilePath!, "Increment");
-                    Assert.That(result, Is.Not.Null, "Should return non-null result");
-                    Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
-                    Assert.That(result.UpdatedText, Does.Contain("lock"), "Should contain lock statement");
-                    Assert.That(result.UpdatedText, Does.Contain("_lock"), "Should contain lock field");
-                }
-            }
-
-            // ──────────────────────────────────────────────────────────────────────────
             // BUG-58: ConvertToAsyncEnumerable -> Server Crash (null root reference)
             // ──────────────────────────────────────────────────────────────────────────
             [TestFixture]
@@ -4094,88 +4042,6 @@ public class User { public int F = Util.Double(3); }";
         }
 
         /// <summary>
-        /// Regression tests for call graph null-return bug:
-        /// GetCallGraphTool/GetReverseCallGraph returned null (serialized as empty output)
-        /// when the method was not found. Now throws InvalidOperationException with
-        /// actionable guidance.
-        /// </summary>
-        [TestFixture]
-        [Category("SymbolNavigationEngine")] // sentinel:auto-category
-        public class CallGraphNullReturnRegressionTests
-        {
-            private IWorkspaceManager _workspaceManager;
-            private SymbolNavigationEngine _symbolNavigationEngine;
-            [SetUp]
-            public void Setup()
-            {
-                _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-                _symbolNavigationEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-            }
-
-            [TearDown]
-            public void TearDown() => _workspaceManager?.Dispose();
-            private void SetSource(string source, string fileName = "Test.cs")
-            {
-                var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
-                _workspaceManager.SetTestSolution(solution);
-            }
-
-            [Test]
-            public async Task GetCallGraph_ExistingMethod_ReturnsNode()
-            {
-                const string code = @"
-public class Calc
-{
-    public int Add(int a, int b) => a + b;
-    public int Double(int x) => Add(x, x);
-}";
-                SetSource(code, "Calc.cs");
-                var result = await _symbolNavigationEngine.GetCallGraphAsync("Calc.cs", "Double", maxDepth: 2);
-                Assert.That(result, Is.Not.Null, "Should return a CallGraphNode for an existing method");
-                Assert.That(result!.MethodName, Is.EqualTo("Double"));
-            }
-
-            [Test]
-            public async Task GetCallGraph_NonExistentMethod_ThrowsNotFound()
-            {
-                const string code = @"public class Calc { public int Add(int a, int b) => a + b; }";
-                SetSource(code, "Calc.cs");
-                var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
-                {
-                    await _symbolNavigationEngine.GetCallGraphAsync("Calc.cs", "NonExistent", maxDepth: 2);
-                });
-                Assert.That(ex.MissingTargetName, Is.EqualTo("NonExistent"));
-            }
-
-            [Test]
-            public async Task GetReverseCallGraph_ExistingMethod_ReturnsNode()
-            {
-                const string code = @"
-public class Svc
-{
-    public void Helper() { }
-    public void Caller() { Helper(); }
-}";
-                SetSource(code, "Svc.cs");
-                var result = await _symbolNavigationEngine.GetReverseCallGraphAsync("Svc.cs", "Helper", maxDepth: 2);
-                Assert.That(result, Is.Not.Null, "Should return a ReverseCallGraphNode for an existing method");
-                Assert.That(result!.MethodName, Is.EqualTo("Helper"));
-            }
-
-            [Test]
-            public async Task GetReverseCallGraph_NonExistentMethod_ThrowsNotFound()
-            {
-                const string code = @"public class Svc { public void Helper() { } }";
-                SetSource(code, "Svc.cs");
-                var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
-                {
-                    await _symbolNavigationEngine.GetReverseCallGraphAsync("Svc.cs", "Ghost", maxDepth: 2);
-                });
-                Assert.That(ex.MissingTargetName, Is.EqualTo("Ghost"));
-            }
-        }
-
-        /// <summary>
         /// Regression tests for GenerateDecoratorClass null-return bug:
         /// The engine returned null when the interface was not found in the solution,
         /// which the MCP framework silently serialized as empty output. The tool layer
@@ -4370,59 +4236,6 @@ namespace MyApp
                 await _engine.AddBenchmarkStubAsync("Calc.cs", "NonExistentClass", "Add");
             });
             Assert.That(ex.MissingTargetName, Is.EqualTo("NonExistentClass"));
-        }
-    }
-
-    /// <summary>
-    /// Regression tests for AddBraces and UpgradePatternMatching null-return bugs:
-    /// SyntaxUpgradeEngine returns "" when the file is not found in the workspace,
-    /// which the tool layer now converts to an InvalidOperationException.
-    /// </summary>
-    [TestFixture]
-    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
-    public class AddBracesNullReturnRegressionTests
-    {
-        private IWorkspaceManager _workspaceManager;
-        private SyntaxUpgradeEngine _engine;
-        private SentinelConfiguration _config;
-        [SetUp]
-        public void Setup()
-        {
-            _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-            _config = Battery.Basic.TestEngines.SentinelConfiguration();
-            _engine = Battery.Basic.TestEngines.SyntaxUpgradeEngine(_workspaceManager, _config);
-            var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Stub.cs", "public class Stub { public void Foo() { } }")]);
-            _workspaceManager.SetTestSolution(solution);
-        }
-
-        [TearDown]
-        public void TearDown() => _workspaceManager?.Dispose();
-        [Test]
-        public async Task AddBracesAsync_FileNotInWorkspace_ThrowsNotFound()
-        {
-            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.AddBracesAsync("nonexistent.cs"));
-            Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
-        }
-
-        [Test]
-        public async Task AddBraces_Tool_FileNotInWorkspace_ThrowsToolNotFoundException()
-        {
-            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.AddBracesAsync("nonexistent.cs"));
-            Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
-        }
-
-        [Test]
-        public async Task UpgradePatternMatchingAsync_FileNotInWorkspace_ThrowsNotFound()
-        {
-            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.UpgradePatternMatchingAsync("nonexistent.cs"));
-            Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
-        }
-
-        [Test]
-        public async Task UpgradePatternMatching_Tool_FileNotInWorkspace_ThrowsToolNotFoundException()
-        {
-            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.UpgradePatternMatchingAsync("nonexistent.cs"));
-            Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         }
     }
 
