@@ -375,6 +375,162 @@ public class GitHunkParserTests
         Assert.That(selected, Is.EqualTo(new[] { 1 }));
     }
 
+    // ---- SelectLines / BuildPatch(selection) --------------------------------------------------
+
+    private const string SixAppended = "@@ -10,0 +11,6 @@\n+l1\n+l2\n+l3\n+l4\n+l5\n+l6\n";
+
+    [Test]
+    public void SelectLines_PureInsertionHeadOfHunk_YieldsSubHunkWithOnlyThoseLines()
+    {
+        var diff = GitHunkParser.Parse(FileHeader + SixAppended);
+
+        var selection = GitHunkParser.SelectLines(diff, 11, 13);
+        var patch = GitHunkParser.BuildPatch(diff, selection);
+
+        Assert.That(selection.WholeHunks, Is.Empty);
+        Assert.That(selection.Unsupported, Is.Empty);
+        Assert.That(selection.SubHunks, Has.Count.EqualTo(1));
+        Assert.That(selection.SubHunks[0].Index, Is.EqualTo(1));
+        Assert.That(selection.SubHunks[0].NewCount, Is.EqualTo(3));
+        Assert.That(patch, Is.EqualTo(FileHeader + "@@ -10,0 +11,3 @@\n+l1\n+l2\n+l3\n"));
+    }
+
+    [Test]
+    public void SelectLines_PureInsertionTailOfHunk_HeaderPositionIgnoresUnstagedLeadingLines()
+    {
+        var diff = GitHunkParser.Parse(FileHeader + SixAppended);
+
+        var selection = GitHunkParser.SelectLines(diff, 14, 16);
+        var patch = GitHunkParser.BuildPatch(diff, selection);
+
+        // l1-l3 are not in the index, so the kept lines land right after old line 10: +11, not +14.
+        Assert.That(patch, Is.EqualTo(FileHeader + "@@ -10,0 +11,3 @@\n+l4\n+l5\n+l6\n"));
+    }
+
+    [Test]
+    public void SelectLines_PureInsertionMiddleOfHunk_KeepsOnlyTheRun()
+    {
+        var diff = GitHunkParser.Parse(FileHeader + SixAppended);
+
+        var patch = GitHunkParser.BuildPatch(diff, GitHunkParser.SelectLines(diff, 13, 14));
+
+        Assert.That(patch, Is.EqualTo(FileHeader + "@@ -10,0 +11,2 @@\n+l3\n+l4\n"));
+    }
+
+    [Test]
+    public void SelectLines_WholeHunkBeforeHeadCut_DeltaUsesPriorHunkCount()
+    {
+        // Hunk 1 inserts p,q at new lines 4-5 (delta +2); hunk 2 is six lines at 13-18.
+        var diff = GitHunkParser.Parse(FileHeader + "@@ -3,0 +4,2 @@\n+p\n+q\n" + "@@ -10,0 +13,6 @@\n+l1\n+l2\n+l3\n+l4\n+l5\n+l6\n");
+
+        var selection = GitHunkParser.SelectLines(diff, 4, 15);
+        var patch = GitHunkParser.BuildPatch(diff, selection);
+
+        Assert.That(selection.WholeHunks, Is.EqualTo(new[] { 1 }));
+        Assert.That(selection.SubHunks.Select(h => h.Index), Is.EqualTo(new[] { 2 }));
+        Assert.That(patch, Is.EqualTo(FileHeader + "@@ -3,0 +4,2 @@\n+p\n+q\n" + "@@ -10,0 +13,3 @@\n+l1\n+l2\n+l3\n"));
+    }
+
+    [Test]
+    public void SelectLines_TailCutBeforeWholeHunk_DeltaUsesSubHunkCountNotOriginal()
+    {
+        // Hunk 1: six lines at 11-16; hunk 2: one line at 27 (20 + 1 + 6).
+        var diff = GitHunkParser.Parse(FileHeader + SixAppended + "@@ -20,0 +27 @@\n+z\n");
+
+        var selection = GitHunkParser.SelectLines(diff, 14, 27);
+        var patch = GitHunkParser.BuildPatch(diff, selection);
+
+        Assert.That(selection.WholeHunks, Is.EqualTo(new[] { 2 }));
+        // Only three of hunk 1's lines are staged, so hunk 2 lands at 20 + 1 + 3 = 24.
+        Assert.That(patch, Is.EqualTo(FileHeader + "@@ -10,0 +11,3 @@\n+l4\n+l5\n+l6\n" + "@@ -20,0 +24 @@\n+z\n"));
+    }
+
+    [Test]
+    public void SelectLines_CrlfLines_AreKeptByteExact()
+    {
+        var diff = GitHunkParser.Parse(FileHeader + "@@ -10,0 +11,4 @@\n+a\r\n+b\r\n+c\r\n+d\r\n");
+
+        var patch = GitHunkParser.BuildPatch(diff, GitHunkParser.SelectLines(diff, 12, 13));
+
+        Assert.That(patch, Does.Contain("+b\r\n+c\r\n"));
+        Assert.That(patch, Is.EqualTo(FileHeader + "@@ -10,0 +11,2 @@\n+b\r\n+c\r\n"));
+    }
+
+    [Test]
+    public void SelectLines_NoNewlineMarker_KeptOnlyWhenLastLineIsKept()
+    {
+        var diff = GitHunkParser.Parse(FileHeader + "@@ -10,0 +11,3 @@\n+a\n+b\n+c\n\\ No newline at end of file\n");
+
+        var withoutLast = GitHunkParser.BuildPatch(diff, GitHunkParser.SelectLines(diff, 11, 12));
+        var withLast = GitHunkParser.BuildPatch(diff, GitHunkParser.SelectLines(diff, 12, 13));
+
+        Assert.That(withoutLast, Is.EqualTo(FileHeader + "@@ -10,0 +11,2 @@\n+a\n+b\n"));
+        Assert.That(withLast, Is.EqualTo(FileHeader + "@@ -10,0 +11,2 @@\n+b\n+c\n\\ No newline at end of file\n"));
+    }
+
+    [Test]
+    public void SelectLines_MixedHunkPartlyInRange_IsUnsupportedNotSplit()
+    {
+        var diff = GitHunkParser.Parse(FileHeader + "@@ -3,2 +3,3 @@\n-a\n-b\n+x\n+y\n+z\n");
+
+        var selection = GitHunkParser.SelectLines(diff, 4, 5);
+
+        Assert.That(selection.WholeHunks, Is.Empty);
+        Assert.That(selection.SubHunks, Is.Empty);
+        Assert.That(selection.Unsupported.Select(h => h.Index), Is.EqualTo(new[] { 1 }));
+    }
+
+    [Test]
+    public void SelectLines_PureDeletionOnItsPosition_IsWholeNeverSplit()
+    {
+        // The pure deletion occupies the single position 19; a range cannot cover "part" of it, so it is whole or absent.
+        var diff = SelectionDiff();
+
+        var selection = GitHunkParser.SelectLines(diff, 19, 19);
+
+        Assert.That(selection.WholeHunks, Is.EqualTo(new[] { 3 }));
+        Assert.That(selection.SubHunks, Is.Empty);
+        Assert.That(selection.Unsupported, Is.Empty);
+    }
+
+    [Test]
+    public void SelectLines_RangeCoveringHunk_BuildsSamePatchAsIndexSelection()
+    {
+        var diff = GitHunkParser.Parse(FileHeader + SixAppended);
+
+        var selection = GitHunkParser.SelectLines(diff, 1, 100);
+
+        Assert.That(selection.WholeHunks, Is.EqualTo(new[] { 1 }));
+        Assert.That(selection.SubHunks, Is.Empty);
+        Assert.That(GitHunkParser.BuildPatch(diff, selection), Is.EqualTo(GitHunkParser.BuildPatch(diff, new[] { 1 })));
+    }
+
+    [Test]
+    public void SelectLines_TwoAppendedBlocksInOneHunk_AreStagedSeparately()
+    {
+        // Old file has 10 lines; session A appended two lines and session B three: one zero-context hunk of five lines.
+        var diff = GitHunkParser.Parse(FileHeader + "@@ -10,0 +11,5 @@\n+A1\r\n+A2\r\n+B1\r\n+B2\r\n+B3\r\n");
+
+        var blockA = GitHunkParser.BuildPatch(diff, GitHunkParser.SelectLines(diff, 11, 12));
+        var blockB = GitHunkParser.BuildPatch(diff, GitHunkParser.SelectLines(diff, 13, 15));
+
+        Assert.That(blockA, Is.EqualTo(FileHeader + "@@ -10,0 +11,2 @@\n+A1\r\n+A2\r\n"));
+        Assert.That(blockB, Is.EqualTo(FileHeader + "@@ -10,0 +11,3 @@\n+B1\r\n+B2\r\n+B3\r\n"));
+    }
+
+    [Test]
+    public void SelectLines_RangeOutsideEveryHunk_IsEmptyAndPatchIsHeaderOnly()
+    {
+        var diff = GitHunkParser.Parse(FileHeader + SixAppended);
+
+        var selection = GitHunkParser.SelectLines(diff, 1, 5);
+
+        Assert.That(selection.WholeHunks, Is.Empty);
+        Assert.That(selection.SubHunks, Is.Empty);
+        Assert.That(selection.Unsupported, Is.Empty);
+        Assert.That(GitHunkParser.BuildPatch(diff, selection), Is.EqualTo(FileHeader));
+    }
+
     // ---- TryParseHunkIds ----------------------------------------------------------------------
 
     [Test]

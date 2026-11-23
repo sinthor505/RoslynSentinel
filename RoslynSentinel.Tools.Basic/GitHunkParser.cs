@@ -16,6 +16,14 @@ internal sealed record GitFileDiff(
     bool IsRenameOrModeOnly, string Fingerprint);
 
 /// <summary>
+/// Outcome of selecting new-file lines of one diff: <c>WholeHunks</c> are indexes of hunks wholly inside the range,
+/// <c>SubHunks</c> are hunks cut down to the in-range lines (each keeps the <see cref="GitHunk.Index"/> of the hunk it
+/// was cut from), <c>Unsupported</c> are hunks that overlap the range but cannot be cut.
+/// </summary>
+internal sealed record GitLineSelectionResult(
+    IReadOnlyList<int> WholeHunks, IReadOnlyList<GitHunk> SubHunks, IReadOnlyList<GitHunk> Unsupported);
+
+/// <summary>
 /// Pure parser for one file's zero-context unified diff, used to stage selected hunks. Works on a
 /// Latin-1-decoded string (1 char == 1 byte) so patches round-trip byte-exact: the caller decodes
 /// with <c>Encoding.Latin1.GetString(bytes)</c> and writes a built patch back with
@@ -77,20 +85,109 @@ internal static class GitHunkParser
     }
 
     /// <summary>The header text followed by the raw text of the selected hunks in ascending order, all verbatim.</summary>
-    public static string BuildPatch(GitFileDiff diff, IReadOnlyCollection<int> indexes)
+    public static string BuildPatch(GitFileDiff diff, IReadOnlyCollection<int> indexes) =>
+        BuildPatchFrom(diff, indexes.Distinct().OrderBy(i => i).Select(i => HunkAt(diff, i, nameof(indexes))));
+
+    /// <summary>
+    /// Like <see cref="BuildPatch(GitFileDiff, IReadOnlyCollection{int})"/> for a line selection: whole hunks verbatim plus
+    /// sub-hunks, in ascending hunk order. Each sub-hunk's own new-line count feeds the position delta of the hunks after
+    /// it. <see cref="GitLineSelectionResult.Unsupported"/> hunks are ignored; the caller decides whether to refuse them.
+    /// </summary>
+    public static string BuildPatch(GitFileDiff diff, GitLineSelectionResult selection)
+    {
+        var hunks = selection.WholeHunks.Distinct().Select(i => HunkAt(diff, i, nameof(selection)))
+            .Concat(selection.SubHunks)
+            .OrderBy(h => h.Index);
+        return BuildPatchFrom(diff, hunks);
+    }
+
+    private static GitHunk HunkAt(GitFileDiff diff, int index, string paramName)
+    {
+        if (index < 1 || index > diff.Hunks.Count)
+            throw new ArgumentOutOfRangeException(paramName, index,
+                $"Hunk index must be between 1 and {diff.Hunks.Count}.");
+        return diff.Hunks[index - 1];
+    }
+
+    private static string BuildPatchFrom(GitFileDiff diff, IEnumerable<GitHunk> hunksInOrder)
     {
         var sb = new StringBuilder(diff.HeaderText);
         var delta = 0;
-        foreach (var index in indexes.Distinct().OrderBy(i => i))
+        foreach (var hunk in hunksInOrder)
         {
-            if (index < 1 || index > diff.Hunks.Count)
-                throw new ArgumentOutOfRangeException(nameof(indexes), index,
-                    $"Hunk index must be between 1 and {diff.Hunks.Count}.");
-            var hunk = diff.Hunks[index - 1];
             sb.Append(WithNewStart(hunk, delta));
             delta += hunk.NewCount - hunk.OldCount;
         }
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Splits the new-file line range [from, to] into whole hunks, sub-hunks and unsupported hunks. A hunk wholly inside
+    /// the range is whole (same rule as <see cref="SelectByNewLineRange"/>). A hunk that only overlaps the range is cut
+    /// to its in-range lines when it is a pure insertion (OldCount == 0), the one shape whose lines are independent: a
+    /// kept run needs only the old position it was inserted after. Hunks with '-' lines (mixed or pure deletions) that
+    /// overlap partly are deliberately NOT split - which old line pairs with which new line is a judgement call - and are
+    /// returned in <see cref="GitLineSelectionResult.Unsupported"/>.
+    /// </summary>
+    public static GitLineSelectionResult SelectLines(GitFileDiff diff, int from, int to)
+    {
+        var whole = SelectByNewLineRange(diff, from, to, out var straddling);
+        var subs = new List<GitHunk>();
+        var unsupported = new List<GitHunk>();
+        foreach (var hunk in straddling)
+        {
+            var sub = hunk.OldCount == 0 ? SliceInsertion(hunk, from, to) : null;
+            if (sub != null)
+                subs.Add(sub);
+            else
+                unsupported.Add(hunk);
+        }
+        return new GitLineSelectionResult(whole, subs, unsupported);
+    }
+
+    // Cuts a pure-insertion hunk to the '+' lines whose new line number lies in [from, to]. Lines are copied byte-verbatim
+    // (their own line endings). The "\ No newline at end of file" marker belongs after the hunk's LAST line only, so it
+    // is kept only when that last line is kept. Returns null if the hunk is not a plain run of '+' lines.
+    private static GitHunk? SliceInsertion(GitHunk hunk, int from, int to)
+    {
+        var text = hunk.RawText;
+        var lines = EnumerateLines(text).ToList();
+        if (lines.Count < 2)
+            return null;
+        var m = HunkHeaderRegex.Match(LineContent(text, lines[0].Start, lines[0].Length));
+        if (!m.Success)
+            return null;
+
+        var body = new List<(int Start, int Length)>();
+        (int Start, int Length)? marker = null;
+        for (var i = 1; i < lines.Count; i++)
+        {
+            var firstChar = text[lines[i].Start];
+            if (firstChar == '+' && marker == null)
+                body.Add(lines[i]);
+            else if (firstChar == '\\' && body.Count > 0 && marker == null && i == lines.Count - 1)
+                marker = lines[i];
+            else
+                return null;
+        }
+        if (body.Count != hunk.NewCount)
+            return null;
+
+        var firstKept = Math.Max(from - hunk.NewStart, 0);
+        var lastKept = Math.Min(to - hunk.NewStart, body.Count - 1);
+        if (firstKept > lastKept)
+            return null;
+
+        var keptCount = lastKept - firstKept + 1;
+        var newStart = hunk.NewStart + firstKept;
+        var sb = new StringBuilder();
+        sb.Append(CultureInfo.InvariantCulture, $"@@ -{hunk.OldStart},0 +{newStart},{keptCount} @@{m.Groups["h"].Value}\n");
+        for (var i = firstKept; i <= lastKept; i++)
+            sb.Append(text, body[i].Start, body[i].Length);
+        if (lastKept == body.Count - 1 && marker is { } mk)
+            sb.Append(text, mk.Start, mk.Length);
+
+        return new GitHunk(hunk.Index, hunk.OldStart, 0, newStart, keptCount, hunk.Header, sb.ToString());
     }
 
     // Rewrites only the new-start number of a hunk's first line, so the body stays byte-exact.
