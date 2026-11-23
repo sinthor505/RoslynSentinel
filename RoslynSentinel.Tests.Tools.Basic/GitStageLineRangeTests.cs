@@ -103,7 +103,8 @@ public class GitStageLineRangeTests
         Assert.That(result.StagedHunks, Has.Count.EqualTo(1));
         Assert.That((result.StagedHunks[0].Index, result.StagedHunks[0].NewStart, result.StagedHunks[0].NewCount), Is.EqualTo((1, 14, 2)));
         Assert.That(result.RemainingUnstagedHunks, Is.EqualTo(1));
-        Assert.That(result.Warning, Does.Contain("only in part").And.Contain("lines 14-15").And.Contain("stay unstaged"));
+        Assert.That(result.Note, Does.Contain("only in part").And.Contain("lines 14-15").And.Contain("stay unstaged"));
+        Assert.That(result.Warning, Is.Null.Or.Empty, "a partial stage is a note, not a degradation.");
         var unstaged = UnstagedDiff();
         Assert.That(unstaged, Does.Contain("@@ -10,0 +11,3 @@"), "block A is still an unstaged hunk at its own lines.");
         Assert.That(unstaged, Does.Contain("+A1").And.Contain("+A3").And.Not.Contain("+B1"));
@@ -215,6 +216,7 @@ public class GitStageLineRangeTests
         Assert.That(result.IsError, Is.False, result.Error);
         Assert.That(IndexText(), Is.EqualTo(baseText + blockA + blockB));
         Assert.That(result.Warning, Is.Null.Or.Empty);
+        Assert.That(result.Note, Is.Null.Or.Empty);
         Assert.That(result.RemainingUnstagedHunks, Is.EqualTo(0));
     }
 }

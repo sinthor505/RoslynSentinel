@@ -568,8 +568,11 @@ public record GitStageHunksResult : GitStatusResult
     /// <summary>How many unstaged hunks the file still has after the stage.</summary>
     public int RemainingUnstagedHunks { get; set; }
 
-    /// <summary>Set when a hunk was staged only in part (which lines went in; the rest of that hunk stays unstaged), or when the remaining count is not what the selection predicts (verify with a staged diff).</summary>
+    /// <summary>Set when the remaining hunk count is not what the selection predicts (verify with a staged diff), or when the status could not be read after the stage.</summary>
     public string? Warning { get; set; }
+
+    /// <summary>Set when a hunk was staged only in part: which lines went in and that the rest of that hunk stays unstaged.</summary>
+    public string? Note { get; set; }
 }
 
 /// <summary>Result of operation=worktree. Which fields are set depends on the action: list sets Worktrees;
@@ -2379,7 +2382,8 @@ public class GitImpl : IGitOperations
         int? remaining = after.Diff is not null ? after.Diff.Hunks.Count
             : after.ErrorKind == GitErrorCodes.NoChanges ? 0
             : null;
-        var warnings = PartialHunkNotes(before, selection);
+        var notes = PartialHunkNotes(before, selection);
+        var warnings = new List<string>();
         if (remaining != expected)
         {
             warnings.Add($"Staged {selection.WholeHunks.Count + selection.SubHunks.Count} hunk(s) but the remaining count is {remaining?.ToString() ?? "unknown"} " +
@@ -2395,6 +2399,7 @@ public class GitImpl : IGitOperations
             Path = path,
             StagedHunks = StagedEntries(before, selection),
             RemainingUnstagedHunks = remaining ?? expected,
+            Note = notes.Count == 0 ? null : string.Join(' ', notes),
             Warning = warnings.Count == 0 ? null : string.Join(' ', warnings),
             Branch = status.Branch,
             IsClean = status.IsClean,
