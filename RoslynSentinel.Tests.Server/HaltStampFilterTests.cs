@@ -25,7 +25,8 @@ namespace RoslynSentinel.Tests.Server;
 /// cannot be seeded cheaply here.
 /// </summary>
 [TestFixture]
-// Parallel since 2026-11-22 (plan_shorten_verification_loop Q-7b): no static, shared path, env var or cwd found; if this flakes only in full/parallel runs, restore [NonParallelizable] and note the run id.
+[NonParallelizable]
+// [NonParallelizable]: the tests need the process-wide ToolCallEchoOptions enabled (the toolCall echo wrapper); SetUp enables it, TearDown restores the default (off).
 public class HaltStampFilterTests
 {
     private IHost _host = null!;
@@ -40,6 +41,7 @@ public class HaltStampFilterTests
     [SetUp]
     public async Task SetUp()
     {
+        ToolCallEchoOptions.Configure(["--echo-tool-args=true"]);
         _fixture = new TestSolutionFixture();
         (_host, _client) = await StartHostAsync(registerResetMutationBreakerProbe: false);
     }
@@ -62,6 +64,7 @@ public class HaltStampFilterTests
         await _host.StopAsync();
         _host.Dispose();
         _fixture.Dispose();
+        ToolCallEchoOptions.Configure(["--echo-tool-args=false"]); // static state: restore the default (off) for whatever test runs next
     }
 
     private async Task<(IHost Host, McpClient Client)> StartHostAsync(bool registerResetMutationBreakerProbe)
