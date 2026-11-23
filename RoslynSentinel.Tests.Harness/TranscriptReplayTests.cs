@@ -27,7 +27,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 ///
 /// Reads the padding-method count (the fixture size, e.g. "n60") from the transcript's own parent
 /// directory name rather than requiring it as a separate input, since
-/// <see cref="SizeThresholdAgentTests"/> and <see cref="WholeFileRewriteAgentTests"/> both write
+/// <c>SizeThresholdAgentTests</c> and <c>WholeFileRewriteAgentTests</c> both write
 /// transcripts under a path containing that size. Falls back to
 /// ROSLYNSENTINEL_MODELEVAL_REPLAY_SIZE when the path doesn't carry it (e.g. a copied-out
 /// transcript).

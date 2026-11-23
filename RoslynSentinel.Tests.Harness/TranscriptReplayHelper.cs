@@ -11,7 +11,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// transcript) and <see cref="TranscriptResume"/> (replay the kept turns before a live resume), so both treat a
 /// call's success the same way.
 /// </summary>
-internal static class TranscriptReplayHelper
+public static class TranscriptReplayHelper
 {
     public static async Task<(string ResultText, bool IsError)> ReplayToolCallAsync(
         McpClient mcpClient, string toolName, string argumentsJson, CancellationToken cancellationToken)
