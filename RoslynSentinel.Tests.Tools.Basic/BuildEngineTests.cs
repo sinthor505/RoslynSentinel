@@ -22,7 +22,7 @@ public class BuildEngineTests
         var diagnosticEngine = TestEngines.DiagnosticEngine(workspaceManager);
         var buildEngine = TestEngines.BuildEngine(workspaceManager, diagnosticEngine);
 
-        await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunQuickBuildCoreAsync(ToolScope.solution, null, maxDetails: 50, CancellationToken.None));
+        await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunQuickBuildAsync(ToolScope.solution, null, maxDetails: 50, CancellationToken.None));
 
         workspaceManager.Dispose();
     }
@@ -35,7 +35,7 @@ public class BuildEngineTests
         var diagnosticEngine = TestEngines.DiagnosticEngine(workspaceManager);
         var buildEngine = TestEngines.BuildEngine(workspaceManager, diagnosticEngine);
 
-        await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50));
+        await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50));
 
         workspaceManager.Dispose();
     }
@@ -76,16 +76,16 @@ public class BuildEngineTests
         var diagnosticEngine = TestEngines.DiagnosticEngine(workspaceManager);
         var buildEngine = TestEngines.BuildEngine(workspaceManager, diagnosticEngine);
 
-        var firstResult = await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50);
+        var firstResult = await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50);
         Assert.That(firstResult, Is.Not.Null);
         Assert.That(firstResult.ErrorCount, Is.Zero, firstResult.StdoutTail);
         Assert.That(firstResult.Warnings, Has.Some.Matches<DiagnosticInfo>(w => w.Id == "CS0618"),
-            "first RunFullBuildCoreAsync call must report the Obsolete-sourced CS0618 warning.");
+            "first RunFullBuildAsync call must report the Obsolete-sourced CS0618 warning.");
 
-        var secondResult = await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50);
+        var secondResult = await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50);
         Assert.That(secondResult, Is.Not.Null);
         Assert.That(secondResult.ErrorCount, Is.Zero, secondResult.StdoutTail);
         Assert.That(secondResult.Warnings, Has.Some.Matches<DiagnosticInfo>(w => w.Id == "CS0618"),
-            "second RunFullBuildCoreAsync call (previously an MSBuild incremental-cache no-op) must still report the CS0618 warning, not silently drop it.");
+            "second RunFullBuildAsync call (previously an MSBuild incremental-cache no-op) must still report the CS0618 warning, not silently drop it.");
     }
 }

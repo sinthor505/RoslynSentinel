@@ -55,7 +55,7 @@ public class WorkspaceBuildTestImpl
                 // wire form (solution-root-relative '/' or absolute) here, and reuse it for the quickBuild
                 // file scope below so both agree on the file.
                 scopeName = _workspaceManager.ResolveFromWire(scopeName).Absolute;
-                summary = await _diagnosticEngine.GetFileDiagnosticsCoreAsync(scopeName, cancellationToken: cancellationToken);
+                summary = await _diagnosticEngine.GetFileDiagnosticsAsync(scopeName, cancellationToken: cancellationToken);
             }
             else if (scope == ToolScope.project)
             {
@@ -68,11 +68,11 @@ public class WorkspaceBuildTestImpl
                     };
                 }
 
-                summary = await _diagnosticEngine.GetProjectDiagnosticsCoreAsync(scopeName, cancellationToken: cancellationToken);
+                summary = await _diagnosticEngine.GetProjectDiagnosticsAsync(scopeName, cancellationToken: cancellationToken);
             }
             else if (scope == ToolScope.solution)
             {
-                summary = await _diagnosticEngine.GetSolutionDiagnosticsCoreAsync(maxDetails, cancellationToken: cancellationToken);
+                summary = await _diagnosticEngine.GetSolutionDiagnosticsAsync(maxDetails, cancellationToken: cancellationToken);
             }
             else
             {
@@ -90,8 +90,8 @@ public class WorkspaceBuildTestImpl
                 try
                 {
                     var rawBuild = verify is BuildVerifyLevel.fullBuild or BuildVerifyLevel.fullBuildThrowaway
-                        ? await _buildEngine.RunFullBuildCoreAsync(cancellationToken, level: verify, isCallable: CallableCheck)
-                        : await _buildEngine.RunQuickBuildCoreAsync(scope, scopeName, maxDetails, cancellationToken, isCallable: CallableCheck);
+                        ? await _buildEngine.RunFullBuildAsync(cancellationToken, level: verify, isCallable: CallableCheck)
+                        : await _buildEngine.RunQuickBuildAsync(scope, scopeName, maxDetails, cancellationToken, isCallable: CallableCheck);
                     // Project like Build does (breakdown, root-cause order); every error is inline and the result marshaller pages a long list.
                     buildVerification = BuildResultProjector.Project(
                         rawBuild, new BuildProjection(maxDetails, IncludeOutput: false, IncludeWarnings: false), await GetTransitiveDependenciesAsync(cancellationToken));
@@ -423,8 +423,8 @@ public class WorkspaceBuildTestImpl
             // useScratchDir is obsolete: true with level=fullBuild means the throwaway level.
             var fullBuildLevel = level == BuildVerifyLevel.fullBuild && useScratchDir ? BuildVerifyLevel.fullBuildThrowaway : level;
             var buildResult = isFullBuild
-                ? await _buildEngine.RunFullBuildCoreAsync(cancellationToken, maxDetails, level: fullBuildLevel, scope: scope, scopeName: scopeName, isCallable: CallableCheck, repoRoot: worktreeRoot)
-                : await _buildEngine.RunQuickBuildCoreAsync(scope, scopeName, maxDetails, cancellationToken, isCallable: CallableCheck);
+                ? await _buildEngine.RunFullBuildAsync(cancellationToken, maxDetails, level: fullBuildLevel, scope: scope, scopeName: scopeName, isCallable: CallableCheck, repoRoot: worktreeRoot)
+                : await _buildEngine.RunQuickBuildAsync(scope, scopeName, maxDetails, cancellationToken, isCallable: CallableCheck);
 
             if (worktreeRoot is not null)
             {

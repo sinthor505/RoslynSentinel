@@ -495,7 +495,7 @@ public class RegressionTests
             }
             """);
 
-        var summary = await _diagnosticEngine.GetSolutionDiagnosticsCoreAsync();
+        var summary = await _diagnosticEngine.GetSolutionDiagnosticsAsync();
 
         Assert.That(summary, Is.Not.Null);
         Assert.That(summary.Details, Is.Not.Null);
@@ -523,7 +523,7 @@ public class RegressionTests
             }
             """);
 
-        var summary = await _diagnosticEngine.GetFileDiagnosticsCoreAsync("Test.cs");
+        var summary = await _diagnosticEngine.GetFileDiagnosticsAsync("Test.cs");
 
         Assert.That(summary.Errors, Is.Zero,
             "REGRESSION: Valid code must report zero errors");

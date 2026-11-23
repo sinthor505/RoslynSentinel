@@ -41,7 +41,7 @@ public class BuildEngine
 
     /// <summary>Quick (in-memory) build of the scope: diagnostics only, no dotnet build.</summary>
     /// <param name="isCallable">Tool-callability predicate for the active surface; null means every tool is callable (full surface). Selects the listing tool and LoadSolution named in zero-project messages.</param>
-    public async Task<BuildResult> RunQuickBuildCoreAsync(
+    public async Task<BuildResult> RunQuickBuildAsync(
         ToolScope scope, string? scopeName, int maxDetails, CancellationToken cancellationToken = default, Func<string, bool>? isCallable = null)
     {
         var start = DateTime.UtcNow;
@@ -54,7 +54,7 @@ public class BuildEngine
             {
                 throw new BuildNotRunException("scopeName (filePath) is required when scope=file.");
             }
-            summary = await _diagnosticEngine.GetFileDiagnosticsCoreAsync(scopeName, cancellationToken);
+            summary = await _diagnosticEngine.GetFileDiagnosticsAsync(scopeName, cancellationToken);
             var solutionForFile = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
             var documentId = solutionForFile.GetDocumentIdsWithFilePath(scopeName).FirstOrDefault();
             var owningProject = documentId is null ? null : solutionForFile.GetProject(documentId.ProjectId);
@@ -66,13 +66,13 @@ public class BuildEngine
             {
                 throw new BuildNotRunException("scopeName (projectName) is required when scope=project.");
             }
-            summary = await _diagnosticEngine.GetProjectDiagnosticsCoreAsync(scopeName, cancellationToken);
+            summary = await _diagnosticEngine.GetProjectDiagnosticsAsync(scopeName, cancellationToken);
             var solutionForProject = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
             projectsCompiled = solutionForProject.Projects.Any(p => p.Name == scopeName) ? [scopeName] : [];
         }
         else
         {
-            summary = await _diagnosticEngine.GetSolutionDiagnosticsCoreAsync(int.MaxValue, cancellationToken);
+            summary = await _diagnosticEngine.GetSolutionDiagnosticsAsync(int.MaxValue, cancellationToken);
             var solutionForAll = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
             var compiledProjects = new List<string>();
             foreach (var project in solutionForAll.Projects)
@@ -113,16 +113,6 @@ public class BuildEngine
             StderrTail: null,
             Duration: DateTime.UtcNow - start
         );
-    }
-
-    // Transitional shim (plan_remove_engine_result_wrapper.md); every not-run cause maps to InvalidInput/BuildNotRun.
-    /// <summary>Transitional wrapper over RunQuickBuildCoreAsync.</summary>
-    [Obsolete("Use RunQuickBuildCoreAsync")]
-    public async Task<EngineResultWrapper<BuildResult>> RunQuickBuildAsync(
-        ToolScope scope, string? scopeName, int maxDetails, CancellationToken cancellationToken = default, Func<string, bool>? isCallable = null)
-    {
-        try { return new EngineResultWrapper<BuildResult>(EngineOutcome.Success, await RunQuickBuildCoreAsync(scope, scopeName, maxDetails, cancellationToken, isCallable)); }
-        catch (BuildNotRunException ex) { return EngineResultWrapper<BuildResult>.Failure(EngineOutcome.InvalidInput, new EngineError(EngineErrorCode.BuildNotRun, ex.Message)); }
     }
 
     private static readonly Regex DiagnosticLineRegex = new(
@@ -237,7 +227,7 @@ public class BuildEngine
     /// true is the same as level = fullBuildThrowaway (and upgrades fullBuild to it). Both levels hold the server-wide <see cref="BuildGate"/>.</summary>
     /// <param name="isCallable">Tool-callability predicate for the active surface; null means every tool is callable (full surface). Selects the listing tool and LoadSolution named in zero-project messages.</param>
     /// <param name="repoRoot">A validated git worktree root (see <see cref="RepoWorktrees.TryResolve"/>) of the loaded solution's repository, or null for the loaded tree. When set, `dotnet build` runs in that worktree against its own copy of the solution/project (same repository-relative path), so fullBuild writes the worktree's bin/obj and a throwaway build writes the worktree's .roslynsentinel/build/&lt;instance&gt;/; the loaded tree's output is untouched. Project and file scope still name the loaded solution's project/file.</param>
-    public async Task<BuildResult> RunFullBuildCoreAsync(CancellationToken cancellationToken = default, int maxDetails = 50, bool useScratchDir = false,
+    public async Task<BuildResult> RunFullBuildAsync(CancellationToken cancellationToken = default, int maxDetails = 50, bool useScratchDir = false,
         BuildVerifyLevel level = BuildVerifyLevel.fullBuild, ToolScope scope = ToolScope.solution, string? scopeName = null, Func<string, bool>? isCallable = null,
         string? repoRoot = null)
     {
@@ -456,16 +446,5 @@ public class BuildEngine
             Duration: DateTime.UtcNow - start,
             Detail: detail
         );
-    }
-
-    // Transitional shim (plan_remove_engine_result_wrapper.md); every not-run cause maps to InvalidInput/BuildNotRun.
-    /// <summary>Transitional wrapper over RunFullBuildCoreAsync.</summary>
-    [Obsolete("Use RunFullBuildCoreAsync")]
-    public async Task<EngineResultWrapper<BuildResult>> RunFullBuildAsync(CancellationToken cancellationToken = default, int maxDetails = 50, bool useScratchDir = false,
-        BuildVerifyLevel level = BuildVerifyLevel.fullBuild, ToolScope scope = ToolScope.solution, string? scopeName = null, Func<string, bool>? isCallable = null,
-        string? repoRoot = null)
-    {
-        try { return new EngineResultWrapper<BuildResult>(EngineOutcome.Success, await RunFullBuildCoreAsync(cancellationToken, maxDetails, useScratchDir, level, scope, scopeName, isCallable, repoRoot)); }
-        catch (BuildNotRunException ex) { return EngineResultWrapper<BuildResult>.Failure(EngineOutcome.InvalidInput, new EngineError(EngineErrorCode.BuildNotRun, ex.Message)); }
     }
 }

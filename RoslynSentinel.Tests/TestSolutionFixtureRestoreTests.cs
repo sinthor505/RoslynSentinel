@@ -33,7 +33,7 @@ public class TestSolutionFixtureRestoreTests
 
     /// <summary>
     /// Runs the same solution-scope in-memory build that the Build tool uses for level=quickBuild
-    /// (BuildEngine.RunQuickBuildCoreAsync) against a freshly loaded copy of the solution.
+    /// (BuildEngine.RunQuickBuildAsync) against a freshly loaded copy of the solution.
     /// </summary>
     private static async Task<BuildResult> RunSolutionQuickBuildAsync(string solutionPath)
     {
@@ -45,7 +45,7 @@ public class TestSolutionFixtureRestoreTests
             var buildEngine = Battery.Basic.TestEngines.BuildEngine(workspaceManager, diagnosticEngine);
             try
             {
-                return await buildEngine.RunQuickBuildCoreAsync(ToolScope.solution, null, maxDetails: 200, CancellationToken.None);
+                return await buildEngine.RunQuickBuildAsync(ToolScope.solution, null, maxDetails: 200, CancellationToken.None);
             }
             catch (BuildNotRunException ex)
             {

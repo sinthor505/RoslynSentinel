@@ -317,11 +317,11 @@ public class PathCaseLookupRegressionTests
         var engine = TestEngines.DiagnosticEngine(h.Workspace);
         var relative = Path.Combine("ContosoOrders.Core", "OrderStatus.cs");
 
-        await Assert.ThrowsAsync<ToolNotFoundException>(async () => await engine.GetFileDiagnosticsCoreAsync(relative),
+        await Assert.ThrowsAsync<ToolNotFoundException>(async () => await engine.GetFileDiagnosticsAsync(relative),
             "a relative string converted implicitly stays unrooted and can never match a document path");
 
         FilePathWrapper resolved = h.Workspace.ResolveFromWire(relative);
-        var result = await engine.GetFileDiagnosticsCoreAsync(resolved);
+        var result = await engine.GetFileDiagnosticsAsync(resolved);
         Assert.That(result, Is.Not.Null);
     }
 }

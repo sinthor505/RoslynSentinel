@@ -75,7 +75,7 @@ public class BuildScopeFullBuildTests
             await workspaceManager.LoadSolutionAsync(Path.Combine(root, "ScopeFixture.slnx"));
             var buildEngine = TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager));
 
-            var result = await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50,
+            var result = await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50,
                 level: BuildVerifyLevel.fullBuildThrowaway, scope: ToolScope.project, scopeName: "Good");
 
             Assert.That(result, Is.Not.Null);
@@ -112,7 +112,7 @@ public class BuildScopeFullBuildTests
             await workspaceManager.LoadSolutionAsync(Path.Combine(root, "ScopeFixture.slnx"));
             var buildEngine = TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager));
 
-            var result = await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50,
+            var result = await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50,
                 level: BuildVerifyLevel.fullBuildThrowaway);
 
             Assert.That(result, Is.Not.Null);
@@ -148,7 +148,7 @@ public class BuildScopeFullBuildTests
             await workspaceManager.LoadSolutionAsync(Path.Combine(root, "ScopeFixture.slnx"));
             var buildEngine = TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager));
 
-            var result = await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50,
+            var result = await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50,
                 level: BuildVerifyLevel.fullBuildThrowaway, scope: ToolScope.project, scopeName: "Bad");
 
             Assert.That(result, Is.Not.Null);
@@ -185,7 +185,7 @@ public class BuildScopeFullBuildTests
             var buildEngine = TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager));
             var goodFile = Path.Combine(root, "Good", "GoodValue.cs");
 
-            var result = await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50,
+            var result = await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50,
                 level: BuildVerifyLevel.fullBuildThrowaway, scope: ToolScope.file, scopeName: goodFile);
 
             Assert.That(result, Is.Not.Null);
@@ -222,7 +222,7 @@ public class BuildScopeFullBuildTests
             await workspaceManager.LoadSolutionAsync(Path.Combine(root, "ScopeFixture.slnx"));
             var buildEngine = TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager));
 
-            var ex = await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50,
+            var ex = await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50,
                 level: BuildVerifyLevel.fullBuildThrowaway, scope: ToolScope.project, scopeName: "Nope"));
 
             Assert.That(ex.Message, Does.Contain("ListAll"));
@@ -257,7 +257,7 @@ public class BuildScopeFullBuildTests
             await workspaceManager.LoadSolutionAsync(Path.Combine(root, "ScopeFixture.slnx"));
             var buildEngine = TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager));
 
-            await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50,
+            await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50,
                 level: BuildVerifyLevel.fullBuildThrowaway, scope: ToolScope.project, scopeName: null));
         }
         finally

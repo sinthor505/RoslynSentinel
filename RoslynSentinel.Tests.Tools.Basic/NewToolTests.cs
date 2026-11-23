@@ -188,7 +188,7 @@ public class NewToolTests
             }
             """);
 
-        var summary = await _diagnosticEngine.GetFileDiagnosticsCoreAsync("Test.cs");
+        var summary = await _diagnosticEngine.GetFileDiagnosticsAsync("Test.cs");
 
         Assert.That(summary.Errors, Is.Zero, "Well-formed file should have no errors");
     }
@@ -210,7 +210,7 @@ public class NewToolTests
             }
             """);
 
-        var summary = await _diagnosticEngine.GetSolutionDiagnosticsCoreAsync();
+        var summary = await _diagnosticEngine.GetSolutionDiagnosticsAsync();
 
         // We just verify the summary struct is usable and has Data
         Assert.That(summary.Errors, Is.EqualTo(2));

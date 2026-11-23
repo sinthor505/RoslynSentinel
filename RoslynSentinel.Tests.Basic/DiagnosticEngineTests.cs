@@ -25,7 +25,7 @@ public class DiagnosticEngineTests
         fake.SetTestSolution(solution);
         var engine = Battery.Basic.TestEngines.DiagnosticEngine(fake);
 
-        var result = await engine.GetFileDiagnosticsCoreAsync(new FilePathWrapper("Test.cs"));
+        var result = await engine.GetFileDiagnosticsAsync(new FilePathWrapper("Test.cs"));
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Errors, Is.Zero);
@@ -42,7 +42,7 @@ public class DiagnosticEngineTests
         fake.SetTestSolution(solution);
         var engine = Battery.Basic.TestEngines.DiagnosticEngine(fake);
 
-        var result = await engine.GetFileDiagnosticsCoreAsync(new FilePathWrapper("Test.cs"));
+        var result = await engine.GetFileDiagnosticsAsync(new FilePathWrapper("Test.cs"));
 
         Assert.That(result.Errors, Is.GreaterThan(0));
         var cs0103 = result.Details.Single(d => d.Id == "CS0103");
@@ -61,7 +61,7 @@ public class DiagnosticEngineTests
         fake.SetTestSolution(solution);
         var engine = Battery.Basic.TestEngines.DiagnosticEngine(fake);
 
-        var result = await engine.GetFileDiagnosticsCoreAsync(new FilePathWrapper("Test.cs"));
+        var result = await engine.GetFileDiagnosticsAsync(new FilePathWrapper("Test.cs"));
 
         Assert.That(result.Errors, Is.EqualTo(1));
         Assert.That(result.Warnings, Is.Zero);
@@ -76,7 +76,7 @@ public class DiagnosticEngineTests
         var engine = Battery.Basic.TestEngines.DiagnosticEngine(fake);
 
         await Assert.ThatAsync(
-            () => engine.GetFileDiagnosticsCoreAsync(new FilePathWrapper("Test.cs")),
+            () => engine.GetFileDiagnosticsAsync(new FilePathWrapper("Test.cs")),
             Throws.TypeOf<SolutionNotLoadedException>());
     }
 
@@ -97,7 +97,7 @@ public class DiagnosticEngineTests
         fake.SetTestSolution(solution);
         var engine = Battery.Basic.TestEngines.DiagnosticEngine(fake);
 
-        var result = await engine.GetSolutionDiagnosticsCoreAsync(maxDetails: 1);
+        var result = await engine.GetSolutionDiagnosticsAsync(maxDetails: 1);
 
         Assert.That(result.Errors, Is.EqualTo(3));
         Assert.That(result.Details.Count, Is.LessThanOrEqualTo(2), "one error row plus the SENTINEL-TRUNCATED row");
@@ -131,7 +131,7 @@ public class DiagnosticEngineTests
         fake.SetTestSolution(solution);
         var engine = Battery.Basic.TestEngines.DiagnosticEngine(fake);
 
-        var result = await engine.GetSolutionDiagnosticsCoreAsync();
+        var result = await engine.GetSolutionDiagnosticsAsync();
 
         Assert.That(result.Errors, Is.Zero);
         Assert.That(result.ErrorFilePaths, Is.Not.Null);

@@ -75,7 +75,7 @@ public class BuildIsolationTests
         var binBefore = SnapshotFileSystemEntries(projectBin);
         var assembliesBefore = SnapshotAssemblyWriteTimes(projectDirectory);
 
-        var result = await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50, level: BuildVerifyLevel.fullBuildThrowaway);
+        var result = await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50, level: BuildVerifyLevel.fullBuildThrowaway);
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result.ErrorCount, Is.Zero, result.StdoutTail);
@@ -111,7 +111,7 @@ public class BuildIsolationTests
         var solutionDirectory = Path.GetDirectoryName(fixture.SolutionPath)!;
         var projectDirectory = Path.Combine(solutionDirectory, "ContosoOrders.Core");
 
-        var result = await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50, level: BuildVerifyLevel.fullBuild);
+        var result = await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50, level: BuildVerifyLevel.fullBuild);
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result.ErrorCount, Is.Zero, result.StdoutTail);

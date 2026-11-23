@@ -225,7 +225,7 @@ public class DiagnosticEngineTests
     [Test]
     public async Task GetFileDiagnostics_CleanFile_ReturnsZeroErrors()
     {
-        var summary = await _engine.GetFileDiagnosticsCoreAsync("Clean.cs");
+        var summary = await _engine.GetFileDiagnosticsAsync("Clean.cs");
 
         Assert.That(summary.Errors, Is.Zero, "Clean file should report no errors");
     }
@@ -234,13 +234,13 @@ public class DiagnosticEngineTests
     public async Task GetFileDiagnostics_UnknownFile_ThrowsFileNotFound()
     {
         await Assert.ThrowsAsync<ToolNotFoundException>(
-            () => _engine.GetFileDiagnosticsCoreAsync("DoesNotExist.cs"));
+            () => _engine.GetFileDiagnosticsAsync("DoesNotExist.cs"));
     }
 
     [Test]
     public async Task GetProjectDiagnostics_KnownProject_ReturnsSummaryWithNonNegativeCounts()
     {
-        var summary = await _engine.GetProjectDiagnosticsCoreAsync("Source");
+        var summary = await _engine.GetProjectDiagnosticsAsync("Source");
 
         Assert.That(summary, Is.Not.Null, "Known project should return a summary");
         Assert.That(summary, Is.Not.Null, "Known project should succeed");

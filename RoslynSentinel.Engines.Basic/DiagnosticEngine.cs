@@ -35,7 +35,7 @@ public class DiagnosticEngine
         _logger = logger;
     }
 
-    public async Task<DiagnosticSummary> GetFileDiagnosticsCoreAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
+    public async Task<DiagnosticSummary> GetFileDiagnosticsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = DocumentLookup.RequireDocument(solution, filePath);
@@ -50,11 +50,7 @@ public class DiagnosticEngine
         );
     }
 
-    // Transitional shims (plan_remove_engine_result_wrapper.md): removed in Step 11 once callers use the Core methods.
-    [Obsolete("Use GetFileDiagnosticsCoreAsync")]
-    public async Task<EngineResultWrapper<DiagnosticSummary>> GetFileDiagnosticsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default) => new EngineResultWrapper<DiagnosticSummary>(EngineOutcome.Success, await GetFileDiagnosticsCoreAsync(filePath, cancellationToken));
-
-    public async Task<DiagnosticSummary> GetProjectDiagnosticsCoreAsync(string projectName, CancellationToken cancellationToken = default)
+    public async Task<DiagnosticSummary> GetProjectDiagnosticsAsync(string projectName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var project = ProjectLookup.FindProject(solution, projectName) ?? throw SolutionStructureEngine.ProjectNotFound(projectName, solution);
@@ -68,9 +64,6 @@ public class DiagnosticEngine
             list
         );
     }
-
-    [Obsolete("Use GetProjectDiagnosticsCoreAsync")]
-    public async Task<EngineResultWrapper<DiagnosticSummary>> GetProjectDiagnosticsAsync(string projectName, CancellationToken cancellationToken = default) => new EngineResultWrapper<DiagnosticSummary>(EngineOutcome.Success, await GetProjectDiagnosticsCoreAsync(projectName, cancellationToken));
 
     // Diagnostic IDs that are false positives in Blazor/Razor projects because Roslyn's
     // static workspace doesn't run the Razor source generator (which produces App, Routes, etc.)
@@ -96,7 +89,7 @@ public class DiagnosticEngine
     /// the cap. File paths are made relative to the solution root for compact output.
     /// Filters Blazor source-generator false positives (CS0234/CS0246/CS0103).
     /// </summary>
-    public async Task<DiagnosticSummary> GetSolutionDiagnosticsCoreAsync(
+    public async Task<DiagnosticSummary> GetSolutionDiagnosticsAsync(
         int maxDetails = 50,
         CancellationToken cancellationToken = default)
     {
@@ -153,7 +146,4 @@ public class DiagnosticEngine
 
         return new DiagnosticSummary(totalErrors, totalWarnings, details, ErrorFilePaths: errorFilePaths.ToList());
     }
-
-    [Obsolete("Use GetSolutionDiagnosticsCoreAsync")]
-    public async Task<EngineResultWrapper<DiagnosticSummary>> GetSolutionDiagnosticsAsync(int maxDetails = 50, CancellationToken cancellationToken = default) => new EngineResultWrapper<DiagnosticSummary>(EngineOutcome.Success, await GetSolutionDiagnosticsCoreAsync(maxDetails, cancellationToken));
 }

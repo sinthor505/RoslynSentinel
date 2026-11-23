@@ -33,7 +33,7 @@ public class BuildCascadeFixtureTests
             await workspaceManager.LoadSolutionAsync(Path.Combine(root, "CascadeFixture.slnx"));
             var buildEngine = TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager));
 
-            var result = await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50, level: BuildVerifyLevel.fullBuildThrowaway);
+            var result = await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50, level: BuildVerifyLevel.fullBuildThrowaway);
 
             Assert.That(result, Is.Not.Null);
             Assert.That(result.Outcome, Is.EqualTo(BuildOutcome.Failed), result.StdoutTail);

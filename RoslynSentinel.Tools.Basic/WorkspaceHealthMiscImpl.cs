@@ -153,8 +153,8 @@ public class WorkspaceHealthMiscImpl
                 try
                 {
                     var data = verify is BuildVerifyLevel.fullBuild or BuildVerifyLevel.fullBuildThrowaway
-                        ? await _buildEngine.RunFullBuildCoreAsync(cancellationToken, level: verify)
-                        : await _buildEngine.RunQuickBuildCoreAsync(ToolScope.solution, null, 50, cancellationToken);
+                        ? await _buildEngine.RunFullBuildAsync(cancellationToken, level: verify)
+                        : await _buildEngine.RunQuickBuildAsync(ToolScope.solution, null, 50, cancellationToken);
                     // TODO pass the project dependency graph (root-cause ordering) like Build does; null means every project with errors counts as a root cause. Errors are no longer capped by the projector, so a long list is cut by the marshaller (ResultPager.Fit, nested under buildVerification).
                     result = result with { BuildVerification = BuildResultProjector.Project(data, new BuildProjection(20, IncludeOutput: false, IncludeWarnings: false), null) };
                 }

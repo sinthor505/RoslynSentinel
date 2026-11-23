@@ -324,7 +324,7 @@ public sealed class TestInstanceLauncher
         BuildResult data;
         try
         {
-            data = await _buildEngine.RunFullBuildCoreAsync(cancellationToken, 5, false, BuildVerifyLevel.fullBuildThrowaway);
+            data = await _buildEngine.RunFullBuildAsync(cancellationToken, 5, false, BuildVerifyLevel.fullBuildThrowaway);
         }
         catch (BuildNotRunException ex)
         {

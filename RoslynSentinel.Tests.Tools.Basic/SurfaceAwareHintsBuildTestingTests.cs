@@ -20,7 +20,7 @@ public class SurfaceAwareHintsBuildTestingTests
         workspaceManager.SetTestSolution(TestSolutionBuilder.CreateEmptySolution());
         var buildEngine = TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager));
 
-        var ex = await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunQuickBuildCoreAsync(ToolScope.solution, null, maxDetails: 50, CancellationToken.None));
+        var ex = await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunQuickBuildAsync(ToolScope.solution, null, maxDetails: 50, CancellationToken.None));
 
         var listAll = ToolCallHint.Call("ListAll", ("kind", "all"));
         var expected = "Quick build compiled zero projects. Scope 'solution' with scopeName '' resolved to nothing -- no compile verdict is available. Call "
@@ -38,7 +38,7 @@ public class SurfaceAwareHintsBuildTestingTests
         workspaceManager.SolutionPath = "C:/fake/EmptySolution.slnx";
         var buildEngine = TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager));
 
-        var ex = await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50));
+        var ex = await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50));
 
         var loadSolution = ToolCallHint.Call("LoadSolution");
         var listAll = ToolCallHint.Call("ListAll", ("kind", "all"));
@@ -58,7 +58,7 @@ public class SurfaceAwareHintsBuildTestingTests
         workspaceManager.SolutionPath = "C:/fake/Real.slnx";
         var buildEngine = TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager));
 
-        var ex = await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50,
+        var ex = await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50,
             level: BuildVerifyLevel.fullBuildThrowaway, scope: ToolScope.project, scopeName: "Nope"));
 
         var listAll = ToolCallHint.Call("ListAll", ("kind", "all"));
@@ -76,7 +76,7 @@ public class SurfaceAwareHintsBuildTestingTests
         workspaceManager.SetTestSolution(TestSolutionBuilder.CreateEmptySolution());
         var buildEngine = TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager));
 
-        var ex = await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunQuickBuildCoreAsync(ToolScope.solution, null, maxDetails: 50, CancellationToken.None, isCallable: _ => true));
+        var ex = await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunQuickBuildAsync(ToolScope.solution, null, maxDetails: 50, CancellationToken.None, isCallable: _ => true));
 
         var listAll = ToolCallHint.Call("ListAll", ("kind", "all"));
         var expected = "Quick build compiled zero projects. Scope 'solution' with scopeName '' resolved to nothing -- no compile verdict is available. Call "
@@ -94,7 +94,7 @@ public class SurfaceAwareHintsBuildTestingTests
         workspaceManager.SolutionPath = "C:/fake/EmptySolution.slnx";
         var buildEngine = TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager));
 
-        var ex = await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50, isCallable: _ => true));
+        var ex = await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50, isCallable: _ => true));
 
         var loadSolution = ToolCallHint.Call("LoadSolution");
         var listAll = ToolCallHint.Call("ListAll", ("kind", "all"));
@@ -114,7 +114,7 @@ public class SurfaceAwareHintsBuildTestingTests
         workspaceManager.SolutionPath = "C:/fake/Real.slnx";
         var buildEngine = TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager));
 
-        var ex = await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50,
+        var ex = await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50,
             level: BuildVerifyLevel.fullBuildThrowaway, scope: ToolScope.project, scopeName: "Nope", isCallable: _ => true));
 
         var listAll = ToolCallHint.Call("ListAll", ("kind", "all"));
@@ -157,7 +157,7 @@ public class SurfaceAwareHintsBuildTestingTests
         workspaceManager.SetTestSolution(TestSolutionBuilder.CreateEmptySolution());
         var buildEngine = TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager));
 
-        var ex = await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunQuickBuildCoreAsync(ToolScope.solution, null, maxDetails: 50, CancellationToken.None, isCallable: LeanPredicate));
+        var ex = await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunQuickBuildAsync(ToolScope.solution, null, maxDetails: 50, CancellationToken.None, isCallable: LeanPredicate));
 
         var listing = ToolCallHint.Call("ListSolutionItems", ("kind", "all"));
         var expected = "Quick build compiled zero projects. Scope 'solution' with scopeName '' resolved to nothing -- no compile verdict is available. Call "
@@ -176,7 +176,7 @@ public class SurfaceAwareHintsBuildTestingTests
         workspaceManager.SolutionPath = "C:/fake/EmptySolution.slnx";
         var buildEngine = TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager));
 
-        var ex = await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50, isCallable: LeanPredicate));
+        var ex = await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50, isCallable: LeanPredicate));
 
         var listing = ToolCallHint.Call("ListSolutionItems", ("kind", "all"));
         var expected = "Full build compiled zero projects. The loaded solution contains no projects -- no compile verdict is available. Call "
@@ -196,7 +196,7 @@ public class SurfaceAwareHintsBuildTestingTests
         workspaceManager.SolutionPath = "C:/fake/Real.slnx";
         var buildEngine = TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager));
 
-        var ex = await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50,
+        var ex = await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50,
             level: BuildVerifyLevel.fullBuildThrowaway, scope: ToolScope.project, scopeName: "Nope", isCallable: LeanPredicate));
 
         var listing = ToolCallHint.Call("ListSolutionItems", ("kind", "all"));
@@ -214,7 +214,7 @@ public class SurfaceAwareHintsBuildTestingTests
         var quickManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         quickManager.SetTestSolution(TestSolutionBuilder.CreateEmptySolution());
         var quickEngine = TestEngines.BuildEngine(quickManager, TestEngines.DiagnosticEngine(quickManager));
-        var quickEx = await Assert.ThrowsAsync<BuildNotRunException>(async () => await quickEngine.RunQuickBuildCoreAsync(ToolScope.solution, null, maxDetails: 50, CancellationToken.None, isCallable: _ => false));
+        var quickEx = await Assert.ThrowsAsync<BuildNotRunException>(async () => await quickEngine.RunQuickBuildAsync(ToolScope.solution, null, maxDetails: 50, CancellationToken.None, isCallable: _ => false));
         AssertNoCallableHint(quickEx.Message);
         quickManager.Dispose();
 
@@ -222,7 +222,7 @@ public class SurfaceAwareHintsBuildTestingTests
         emptyManager.SetTestSolution(TestSolutionBuilder.CreateEmptySolution());
         emptyManager.SolutionPath = "C:/fake/EmptySolution.slnx";
         var emptyEngine = TestEngines.BuildEngine(emptyManager, TestEngines.DiagnosticEngine(emptyManager));
-        var noProjectsEx = await Assert.ThrowsAsync<BuildNotRunException>(async () => await emptyEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50, isCallable: _ => false));
+        var noProjectsEx = await Assert.ThrowsAsync<BuildNotRunException>(async () => await emptyEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50, isCallable: _ => false));
         AssertNoCallableHint(noProjectsEx.Message);
         emptyManager.Dispose();
 
@@ -231,7 +231,7 @@ public class SurfaceAwareHintsBuildTestingTests
             "Real", new[] { ("C:/fake/Real/RealValue.cs", "namespace Fake; public static class RealValue { }") }));
         projectManager.SolutionPath = "C:/fake/Real.slnx";
         var projectEngine = TestEngines.BuildEngine(projectManager, TestEngines.DiagnosticEngine(projectManager));
-        var unknownEx = await Assert.ThrowsAsync<BuildNotRunException>(async () => await projectEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50,
+        var unknownEx = await Assert.ThrowsAsync<BuildNotRunException>(async () => await projectEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50,
             level: BuildVerifyLevel.fullBuildThrowaway, scope: ToolScope.project, scopeName: "Nope", isCallable: _ => false));
         AssertNoCallableHint(unknownEx.Message);
         projectManager.Dispose();
