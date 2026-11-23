@@ -205,7 +205,7 @@ public class WorkspaceTools
         => _fileEdit.RetryFailedChanges(reason, specificFiles, retryCount, cancellationToken);
 
     // WriteBlobForApplyAsync moved to OperationBlobHelper.WriteBlobForApplyAsync (Decision 7 step 1).
-    [McpServerTool(Name = "GetDiagnostics")]
+    [McpServerTool(Name = "GetDiagnostics", ReadOnly = true)]
     [Produces(DataTag.Report)]
     [Description("Gets compiler diagnostics for a file, project, or the whole solution.")]
     public Task<SentinelCallToolResult<object>> GetDiagnosticsTool(
@@ -220,7 +220,7 @@ public class WorkspaceTools
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 50,
         [Description("Caps groups returned. Only used when summarize=true.")]
         [ToolOptionAttribute(ToolOptionTag.TopN)] int topN = 20,
-        [Description("quickBuild/fullBuild/fullBuildThrowaway also run a build check.")]
+        [Description("quickBuild/fullBuild/fullBuildThrowaway also run a build check; fullBuild runs as fullBuildThrowaway here, so the solution's bin/obj are untouched. A build that could not run is reported as a finding.")]
         BuildVerifyLevel verify = BuildVerifyLevel.noBuild,
         CancellationToken cancellationToken = default)
         => _buildTest.GetDiagnostics(reason, scope, scopeName, summarize, maxDetails, topN, verify, cancellationToken);
@@ -369,11 +369,12 @@ public class WorkspaceTools
 
     // ── 8. GetWorkspaceHealthTool ─────────────────────────────────────────────────
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
-    [McpServerTool(Name = "GetWorkspaceHealth")]
+    [McpServerTool(Name = "GetWorkspaceHealth", ReadOnly = true)]
     [Produces(DataTag.ResultOnly)]
     [Description("Reports live workspace/solution health: loaded state, project/document counts, and staleness.")]
     public Task<SentinelCallToolResult<WorkspaceHealthReport, ResultError>> GetWorkspaceHealthTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
+        [Description("quickBuild/fullBuild/fullBuildThrowaway also run a build check; fullBuild runs as fullBuildThrowaway here, so the solution's bin/obj are untouched. A build that could not run is reported as a finding.")]
         BuildVerifyLevel verify = BuildVerifyLevel.noBuild,
         CancellationToken cancellationToken = default)
         => _healthMisc.GetWorkspaceHealth(reason, verify, cancellationToken);

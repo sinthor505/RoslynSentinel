@@ -38,7 +38,7 @@ public class IntelligenceTools
         _antiPatternEngine = antiPatternEngine;
     }
 
-    [McpServerTool(Name = "GetComprehensiveHealthReport")]
+    [McpServerTool(Name = "GetComprehensiveHealthReport", ReadOnly = true)]
     [Produces(DataTag.Report)]
     [Description("Generates a paged health report across one or more engines (Structure, Modernization, Performance, Safety, Architecture).")]
     public async Task<SentinelCallToolResult<object>> GetComprehensiveHealthReportTool([Description(ToolParams.Reason)] ToolCallReason reason, [Description("Engines to include. Omit for all.")] List<HealthEngineType>? engines = null, [Description("Restricts to one project. Omit for the whole solution.")][Consumes(DataTag.ProjectName)] string? projectName = null, [Description("Restricts to one file. Omit for the whole solution.")][Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null, [Description("Number of project results to skip before taking limit.")][ToolOption(ToolOptionTag.Offset)] int offset = 0, [Description("Maximum number of project results to return.")][ToolOption(ToolOptionTag.ResultLimit)] int limit = 10, [Description("Maximum seconds to spend before returning partial results.")][ToolOption(ToolOptionTag.Timeout)] int timeoutSeconds = 25, // RequestContext<CallToolRequestParams> requestParams = null,
