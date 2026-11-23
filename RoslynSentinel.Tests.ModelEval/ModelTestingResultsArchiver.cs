@@ -11,6 +11,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// explorer left its transcript stranded under the scratch build's own bin/obj output, never
 /// reaching the durable archive a later pattern-analysis pass would read.
 /// </summary>
+// TODO move with ModelTestingResultsArchiverTests and RewriteBodyArchivedOutcome* to Tests.Harness: needs this type public (about 15 live fixtures use it) and an [assembly: RewriteBodyArchivedOutcome] line in both assemblies (TODO.md "remaining model-free Tests.ModelEval fixtures")
 internal static class ModelTestingResultsArchiver
 {
     /// <summary>

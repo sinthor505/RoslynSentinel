@@ -47,7 +47,8 @@
 
 .PARAMETER Projects
     Test project names (e.g. RoslynSentinel.Tests.Basic). Default: every RoslynSentinel.Tests*
-    project except Support libraries, ModelEval (needs a live LLM), PlanStepRunner and SubAgent.
+    project except Support libraries and ModelEval (its live fixtures need a model host; the model-free
+    fixtures now run in Tests.Harness).
 
 .PARAMETER Filter
     Passed to `dotnet test --filter` for every project (combined with -Suite). A full unfiltered run
@@ -149,7 +150,7 @@ $effectiveFilter = if ($WithRatchets -and $Filter) { "($suiteFilter)|TestCategor
 
 $ErrorActionPreference = 'Stop'
 $mainRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path.TrimEnd('\')
-$excludedByDefault = @('ModelEval', 'PlanStepRunner', 'SubAgent')
+$excludedByDefault = @('ModelEval')
 
 $isolated = $false
 $slot = $null
