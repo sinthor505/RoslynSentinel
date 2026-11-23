@@ -535,7 +535,29 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
     untested in the report).
   - Pins from the review (Step 0 adds more): `RunTestTests.cs:158,173`, `RunTestMissTests.cs:43`,
     `LoopLatchTests.cs:128-129`.
-  - Pins from Step 0: (filled in by Step 0)
+  - Pins from Step 0 (explore 2026-11-22, against the tree mid-Batch A; line numbers drift, locate by content):
+    - `RunTestTests.cs:158` (unresolved scope name) -> `NotFound`; rename `:148` `...ReturnsTestRunFailed`.
+    - `RunTestTests.cs:173` (`scope=file`) -> `InvalidArgument`; rename `:163`.
+    - `RunTestMissTests.cs:43` (`RunMissAsync`) -> `NotFound`.
+    - `BatteryTwentyTests.cs:1358` -> `SolutionNotLoaded` (review: hits `:258`) or `BuildNotRun` (Step 0: the
+      no-FilePath branch at `:311`); the two reads disagree, so confirm by running it. Its inline TODO feeds
+      `docs/generated/todo_markers.md:593` (regenerates).
+    - `BuildEngineTests.cs:17-29`, `:33-45` (zero-project quick and full) -> `ThrowsAsync<NoProjectsException>`;
+      rename `...WithBuildNotRun`.
+    - `BuildScopeFullBuildTests.cs:218-234` (unknown project `Nope`) -> `ThrowsAsync<ToolNotFoundException>`.
+    - `SurfaceAwareHintsBuildTestingTests.cs:35,94,179,234-235` -> `NoProjectsException` message reads; comment at
+      `:9` names BuildNotRun.
+    - Unchanged (still correct): `ResultStatusTests.cs:593-594,803,830,841`, `LoopLatchTests.cs:128-129`,
+      `ErrorPolicySymbolWireResolverRouteTests.cs:39`, `ResultStatusSubAgentEvalTests.cs:47-64`,
+      `SubAgentEvalResultTests.cs`; launcher-marker `BuildFailed` flags (`LaunchBuildMarker*`, `IdleRestartPolicy*`)
+      are unrelated.
+    - No test or generator reflects over `ToolErrorCode` constants; no model-eval, AgentLoop, PlanStepRunner or
+      `.claude` prompt names these codes. New codes fall to `ResultStatus.Failed` in `FromErrorCode`
+      (`IResultStatus.cs:60-69`), as intended.
+    - Step 17 doc hits: `BuildResultProjector.cs:69` comment "(or NotRun)" (fold into Step 12b),
+      `reference_not_found_error_inventory.md:395`, `proposal_result_status_and_code_on_the_wire.md:82`,
+      `finding_anonymous_and_untyped_return_shapes.md:27`, `finding_engine_layer_anonymous_and_untyped_returns.md:36`
+      (line citations into `EngineResultWrapper.cs`); historical proposals and findings stay as written.
 - Done when: the named classes and every Step 0 pin pass.
 
 ### Step 17 - Docs and close-out (dispatcher)
@@ -561,6 +583,8 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
 - Surfacing a skipped build verification in `GetDiagnostics`/`GetWorkspaceHealth` as a finding (TODO left in
   Steps 8 and 9).
 - `EngineError.ToToolResponse` (dead) and retiring `EngineError`/`EngineErrorCode`.
+- `SubAgentChildServerLauncher.cs:226,232` reports `BuildFailed` for "Could not run 'dotnet build'" (a launcher
+  build that did not run, outside the engines). Step 17 leaves a TODO and INBOX line there.
 
 ## Risks and open decisions
 
