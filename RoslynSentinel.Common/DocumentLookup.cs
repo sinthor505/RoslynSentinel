@@ -116,7 +116,7 @@ public sealed record DocumentLookupResult(
         if (Status == DocumentLookupStatus.Ambiguous)
         {
             return $"'{RequestedPath}' matches {CandidatePaths.Count} different files in the solution, so a bare file name is ambiguous. " +
-                   "You MUST retry with the full path of the one you meant:\n" + list;
+                   "Pass the full path of the one you meant as filePath:\n" + list;
         }
 
         // The shared builder also probes the disk (directory / project file / file outside the solution) before falling back to the lookup wording.
