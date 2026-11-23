@@ -23,7 +23,10 @@
     Server --mode value. Default: all.
 
 .PARAMETER Tools
-    Maps to --include-tools=<value>.
+    Maps to --include-tools=<value>: comma-separated tool CLASS names (for example GitTools), not tool
+    names (Git, ReadFile). The classes are unioned with whatever -Mode selects, so with the default
+    -Mode all every tool stays active; the include list only narrows when -Mode selects fewer classes.
+    The server logs a startup warning listing the valid class names for any unknown name.
 
 .PARAMETER ExcludeTools
     Maps to --exclude-tools=<value>.
@@ -45,11 +48,11 @@
     Print the resolved output folder and argument list; build nothing, start nothing, exit 0.
 
 .EXAMPLE
-    .\Launch-RoslynSentinelHttpServer.ps1 -Port 5199 -Tools 'Search'
-    Build and start a server on port 5199 exposing only the Search tool class.
+    .\Launch-RoslynSentinelHttpServer.ps1 -Port 5199 -Tools 'GitTools'
+    Build and start a server on port 5199 with the default -Mode all plus the GitTools tool class (include adds to the mode).
 
 .EXAMPLE
-    .\Launch-RoslynSentinelHttpServer.ps1 -Mode all -Port 5199 -Tools 'Search' -DryRun
+    .\Launch-RoslynSentinelHttpServer.ps1 -Mode all -Port 5199 -Tools 'GitTools' -DryRun
     Show what would be built and started.
 #>
 [CmdletBinding()]

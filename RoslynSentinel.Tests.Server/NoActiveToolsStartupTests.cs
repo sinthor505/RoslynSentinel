@@ -125,6 +125,44 @@ public class NoActiveToolsStartupTests
     }
 
     [Test]
+    [Category("ServerStartupHelpers")]
+    public void UnknownIncludeToolsName_IsWarnedAbout_NamingTheNameAndListingTheValidClassNames()
+    {
+        // --include-tools takes class names. A tool name such as ReadFile is silently ignored, so the
+        // warning is the only signal the operator gets.
+        var warning = ServerStartupHelpers.DescribeUnknownIncludeTools(
+            ToolClassRegistry.ModeToToolClasses, Names("ReadFile"));
+
+        Assert.That(warning, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(warning, Does.StartWith("WARNING: --include-tools name(s) not recognised and ignored: ReadFile."));
+            Assert.That(warning, Does.Contain("GitTools"), "must list a valid class name");
+        });
+    }
+
+    [Test]
+    [Category("ServerStartupHelpers")]
+    public void AllKnownIncludeToolsNames_ProduceNoWarning()
+    {
+        var warning = ServerStartupHelpers.DescribeUnknownIncludeTools(
+            ToolClassRegistry.ModeToToolClasses, Names("GitTools"));
+
+        Assert.That(warning, Is.Null, "a registered class name must not be flagged");
+    }
+
+    [Test]
+    [Category("ServerStartupHelpers")]
+    public void IncludeToolsLookup_IsCaseInsensitive()
+    {
+        // Lookup is case-insensitive, so a registered class name in another case is not flagged.
+        var warning = ServerStartupHelpers.DescribeUnknownIncludeTools(
+            ToolClassRegistry.ModeToToolClasses, Names("gittools", "GITTOOLS"));
+
+        Assert.That(warning, Is.Null, "class names must match regardless of case");
+    }
+
+    [Test]
     public void ExcludeToolsRemovingEverything_IsReportedAsAnExcludeProblem()
     {
         // Third distinct route to zero. Exclude wins and is applied last, so the operator needs to

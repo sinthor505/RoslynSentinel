@@ -94,7 +94,6 @@ public static class ServerStartupHelpers
             }
         }
 
-        // TODO --include-tools silently ignores unknown names (tool names like ReadFile are not class names) and only adds to --mode (default all), so "--include-tools=ReadFile,..." exposed all 114 tools; warn on unknown class names at startup and in Launch-RoslynSentinelHttpServer.ps1
         includeTools = NormalizeToolClassNames(ParseNameList(GetArgValue(args, "--include-tools")));
         excludeTools = NormalizeToolClassNames(ParseNameList(GetArgValue(args, "--exclude-tools")));
     }
@@ -560,6 +559,31 @@ public static class ServerStartupHelpers
     }
 
     /// <summary>
+    /// Returns a startup warning naming every <paramref name="includeTools"/> entry that is not a tool class name in
+    /// <paramref name="modeToToolClasses"/> (for example a tool name such as ReadFile, which --include-tools ignores),
+    /// together with the valid class names; null when all are known. Names are compared case-insensitively.
+    /// </summary>
+    public static string? DescribeUnknownIncludeTools(
+        IReadOnlyDictionary<string, string[]> modeToToolClasses,
+        HashSet<string> includeTools)
+    {
+        var knownClasses = new HashSet<string>(
+            modeToToolClasses.Values.SelectMany(classes => classes),
+            StringComparer.OrdinalIgnoreCase);
+        var unknown = includeTools
+            .Where(name => !knownClasses.Contains(name))
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (unknown.Length == 0)
+        {
+            return null;
+        }
+
+        var validClasses = string.Join(", ", knownClasses.OrderBy(name => name, StringComparer.OrdinalIgnoreCase));
+        return $"WARNING: --include-tools name(s) not recognised and ignored: {string.Join(", ", unknown)}. --include-tools takes tool class names (for example GitTools), not tool names (for example Git). Valid class names: {validClasses}.";
+    }
+
+    /// <summary>
     /// Checks the no-active-tools condition and, when it applies, reports it and returns true so
     /// the caller can return without building a host. Shared by all four entry points so the
     /// message and exit behaviour can't drift between transports.
@@ -584,6 +608,13 @@ public static class ServerStartupHelpers
         {
             Console.Error.WriteLine(unknownModes);
             Debug.WriteLine(unknownModes);
+        }
+
+        var unknownIncludeTools = DescribeUnknownIncludeTools(modeToToolClasses, includeTools);
+        if (unknownIncludeTools is not null)
+        {
+            Console.Error.WriteLine(unknownIncludeTools);
+            Debug.WriteLine(unknownIncludeTools);
         }
 
         var failure = DescribeNoActiveToolsFailure(modeArg, modeToToolClasses, activeModes, includeTools, excludeTools);
