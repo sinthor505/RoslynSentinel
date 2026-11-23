@@ -1,6 +1,8 @@
 # Plan: guard test placement (core-subject tests out of Advanced test projects) and share the test helpers that keep being copied
 
-**Status:** READY 2026-11-22 (todo review: decisions settled, see Decisions at the end). Not started. MoveFile is live, so Steps 7 and 9 are no longer blocked.
+**Status:** IN PROGRESS 2026-11-23: Steps 1-6 DONE (punchlist #29, commits below); Steps 7-7.5 (relocation) and 8-10 not started. MoveFile is live, so Steps 7 and 9 are no longer blocked.
+
+Step status (2026-11-23): Step 1 DONE (0aa661aa; baseline 63 classes: 49 `Tests.Basic`, 14 `Tests.Tools.Basic`; 23 of them are class-level finds in 12 `Tests.Battery.Advanced` files, the preliminary file-level census had none there; `BugFixTests`, `BugHuntSevenTests`, `SentinelAccuracyTests`, `ConstructionSiteFindingsTests` classes are also new to the list). Step 2 DONE except `TestInstanceLauncherTests` (2a 2c3fce5f, 2b 76b0878d, 2c 51a804ea, 2d 96b4c624; four walk-ups with their own miss behaviour carry `// TODO`, marker commit e94af4f1; hashes abbreviated). Step 3 DONE (3a db4711f6, 3b 369a64f1, 3c dc47e396; only 5 `Src` and 1 `WithStrayCrlf` copies equaled the kit, the others differ and stay). Step 4 DONE (4a 71146e5e, 4b e5da9c26). Step 5 DONE (5a 01324c10: 275 pins in 87 files by the syntax scan; 5b 97adc445: five classes exempt, 197 pins left). Step 6 DONE (6a b095bac7, 6b 15154bcc: 266 Tests.Tools.Advanced tests in the 16 call-site classes green, wiring equivalent; 6c ff2ac1fc).
 
 ## Problem
 
