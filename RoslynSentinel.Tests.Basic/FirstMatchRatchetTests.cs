@@ -154,6 +154,7 @@ public class FirstMatchRatchetTests
     {
         // TODO triage: unclassified first-match pick. Each entry needs a read of the site to decide between routing it
         // through ProjectLookup.FindProject / NameTargetLookup.RequireSingle / DocumentLookup.RequireDocument and a reasoned exemption.
+        ["RoslynSentinel.Common/OperationBlobWriter.cs::BuildApplyItems"] = 1, // picks the first item with identical pre-image text; any equal item is a correct source
         ["RoslynSentinel.Common/PersistentWorkspaceManager.cs::ApplyInMemoryDocumentUpdatesAsync"] = 1,
         ["RoslynSentinel.Common/ToolCallHint.cs::FindSpec"] = 1,
         ["RoslynSentinel.Common/ValidateAndApplyHelper.cs::DetachChangedFiles"] = 1, // looks up a detached payload by name; ToolCallContext.Detach rejects a duplicate name, so the name match is exactly one, not a first-match among several

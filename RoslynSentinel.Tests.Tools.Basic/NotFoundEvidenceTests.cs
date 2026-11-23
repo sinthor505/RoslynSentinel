@@ -539,7 +539,8 @@ public class NotFoundEvidenceTests
     public async Task AcrossFiles_ForeignDestinationNamesSiblingBeforeSourceHoldingTerm_DiskLacksIt_Note()
     {
         // Mirrors AcrossFiles_ForeignAfterSourceHoldsTerm_DiskLacksIt_Note, except the move destination stores no text:
-        // its AfterSourceFromFilePath names the sibling item whose BeforeSource holds the term.
+        // its AfterSourceFromFilePath names the sibling item whose BeforeSource holds the term. The sibling item
+        // produces its own separate note (its pre-image was removed by this write), so only the Bar.cs finding is asserted here.
         var context = new ToolCallContext("b7", "implementer", "RenameSymbol", "stamped write", 0) { SessionId = "s1" };
         context.MarkWritten(DateTime.UtcNow.AddMinutes(-5));
         ToolCallContext.Set(context);
@@ -560,11 +561,12 @@ public class NotFoundEvidenceTests
         }
 
         var findings = NotFoundEvidence.FindAcrossFiles(_root, "Widget", false, "main", "s1", DateTime.UtcNow);
+        var barFindings = findings.Where(f => f.Message.Contains("Bar.cs")).ToList();
 
-        Assert.That(findings, Has.Count.EqualTo(1));
-        Assert.That(findings[0].Message, Does.Contain("Widget"));
-        Assert.That(findings[0].Message, Does.Contain("Bar.cs"));
-        Assert.That(findings[0].Message, Does.Contain("b7"));
-        Assert.That(findings[0].Message, Does.Contain("still in"));
+        Assert.That(barFindings, Has.Count.EqualTo(1));
+        Assert.That(barFindings[0].Message, Does.Contain("Widget"));
+        Assert.That(barFindings[0].Message, Does.Contain("Bar.cs"));
+        Assert.That(barFindings[0].Message, Does.Contain("b7"));
+        Assert.That(barFindings[0].Message, Does.Contain("still in"));
     }
 }
