@@ -396,7 +396,8 @@ public class ScenarioAgentTests
                 restorePackages: false,
                 beforeLoad: null,
                 afterLoad: (fixture, workspaceManager, token) => StageScenarioFilesAsync(scenario, fixture, workspaceManager, token),
-                cancellationToken);
+                cancellationToken,
+                fullToolSchema: scenario.OfferFullToolSchema);
 
         // The solution reloads once, on the last staged file (no reload when the scenario stages nothing).
         private static async Task StageScenarioFilesAsync(
