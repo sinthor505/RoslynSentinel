@@ -219,6 +219,44 @@ public sealed class MoveFileTests
     }
 
     [Test]
+    public async Task MoveFile_Keep_StoresTheTextOnceInTheBlob_AndUndoChangeRestoresTheSourceAsync()
+    {
+        // A keep move's destination carries the source's text by reference: the blob stores the text once
+        // (on the deleted source) and the destination names that source in AfterSourceFromFilePath.
+        using var fixture = new TestSolutionFixture();
+        using var manager = await LoadAsync(fixture);
+        var workspaceTools = Battery.Basic.TestTools.WorkspaceTools(manager);
+        var tools = BuildTools(manager, workspaceTools);
+        const string text = "namespace ContosoOrders.Core;\r\n\r\n// STORED_ONCE_MARKER\r\npublic class StoredOnce\r\n{\r\n}\r\n";
+        await fixture.AddFileToSolution(manager, Path.Combine(CoreFolder, "StoredFrom.cs"), text);
+        var source = PathIn(fixture, CoreFolder, "StoredFrom.cs");
+        var destination = PathIn(fixture, CoreFolder, "Moved", "StoredTo.cs");
+
+        var moved = await tools.MoveFileTool(reason: "test message", source, destination, MoveFileNamespaceHandling.keep);
+
+        Assert.That(moved.IsError, Is.False, moved.ErrorData?.Message);
+        var changeId = moved.SuccessData!.ChangeId!;
+        var blobPath = OperationBlobWriter.FindBlobPath(changeId, fixture.SolutionDirectory);
+        Assert.That(blobPath, Is.Not.Null);
+        var blobText = File.ReadAllText(blobPath!);
+        Assert.That(blobText.Split("STORED_ONCE_MARKER").Length - 1, Is.EqualTo(1), "the moved text must be stored exactly once");
+        using var doc = System.Text.Json.JsonDocument.Parse(blobText);
+        var items = doc.RootElement.GetProperty("items").EnumerateArray()
+            .Select(e => System.Text.Json.JsonSerializer.Deserialize<OperationItemRecord>(e.GetRawText())!)
+            .ToList();
+        var destinationItem = items.Single(i =>
+            string.Equals(Path.GetFullPath(i.FilePath!), Path.GetFullPath(destination), StringComparison.OrdinalIgnoreCase));
+        Assert.That(destinationItem.AfterSourceFromFilePath, Is.Not.Null);
+        Assert.That(Path.GetFullPath(destinationItem.AfterSourceFromFilePath!), Is.EqualTo(Path.GetFullPath(source)).IgnoreCase);
+
+        var undone = await workspaceTools.UndoChangeTool(reason: "test message", changeId);
+
+        Assert.That(undone.IsError, Is.False, undone.ErrorData?.Message);
+        Assert.That(File.ReadAllText(source), Is.EqualTo(text));
+        Assert.That(File.Exists(destination), Is.False);
+    }
+
+    [Test]
     public async Task MoveFile_MissingSource_FailsWithNotFoundAsync()
     {
         using var fixture = new TestSolutionFixture();

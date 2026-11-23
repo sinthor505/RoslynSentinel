@@ -263,6 +263,114 @@ public class OperationBlobWriterTests
     }
 
     [Test]
+    public async Task BuildApplyItems_CreatedItemWithTextOfDeletedItem_StoresTextOnceAsync()
+    {
+        // A move: src is deleted (its pre-image holds the text) and dst is created with the same text.
+        // dst must reference src rather than carry a second copy of the text in the blob.
+        const string moved = "// MOVED_BODY_MARKER";
+        var result = new ApplyChangesResult(
+            IsError: false,
+            SucceededFiles: ["C:/fake/src.cs", "C:/fake/dst.cs"],
+            FailedFiles: new(),
+            Summary: "ok",
+            PreImages: new Dictionary<string, string?> { ["C:/fake/src.cs"] = moved },
+            PostImages: new Dictionary<string, string?> { ["C:/fake/dst.cs"] = moved },
+            CreatedFiles: ["C:/fake/dst.cs"]);
+
+        var items = OperationBlobWriter.BuildApplyItems(result);
+
+        Assert.Multiple(() =>
+        {
+            var src = items.Single(i => i.FilePath == "C:/fake/src.cs");
+            var dst = items.Single(i => i.FilePath == "C:/fake/dst.cs");
+            Assert.That(src.BeforeSource, Is.EqualTo(moved));
+            Assert.That(src.AfterSource, Is.Null);
+            Assert.That(dst.Created, Is.True);
+            Assert.That(dst.AfterSource, Is.Null);
+            Assert.That(dst.AfterSourceFromFilePath, Is.EqualTo("C:/fake/src.cs"));
+        });
+
+        var blob = await OperationBlobWriter.WriteApplyBlobAsync("Member", "hhh88888", result, _solutionRoot);
+
+        Assert.That(blob.Written, Is.True, blob.Diagnostic);
+        var blobText = File.ReadAllText(OperationBlobWriter.FindBlobPath("hhh88888", _solutionRoot)!);
+        Assert.That(blobText.Split(moved).Length - 1, Is.EqualTo(1), "the moved text must be stored exactly once");
+    }
+
+    [Test]
+    public void BuildApplyItems_CreatedItemWithDifferentText_KeepsAfterSource()
+    {
+        var result = new ApplyChangesResult(
+            IsError: false,
+            SucceededFiles: ["C:/fake/src.cs", "C:/fake/dst.cs"],
+            FailedFiles: new(),
+            Summary: "ok",
+            PreImages: new Dictionary<string, string?> { ["C:/fake/src.cs"] = "// SRC_TEXT" },
+            PostImages: new Dictionary<string, string?> { ["C:/fake/dst.cs"] = "// DIFFERENT_TEXT" },
+            CreatedFiles: ["C:/fake/dst.cs"]);
+
+        var items = OperationBlobWriter.BuildApplyItems(result);
+
+        var dst = items.Single(i => i.FilePath == "C:/fake/dst.cs");
+        Assert.Multiple(() =>
+        {
+            Assert.That(dst.Created, Is.True);
+            Assert.That(dst.AfterSource, Is.EqualTo("// DIFFERENT_TEXT"));
+            Assert.That(dst.AfterSourceFromFilePath, Is.Null);
+        });
+    }
+
+    [Test]
+    public void BuildApplyItems_NonCreatedItem_KeepsAfterSourceEvenWhenEqualToAnotherItemsBeforeSource()
+    {
+        // Only created items are deduplicated: an edited file keeps its after-text even when that text
+        // happens to equal another file's before-text.
+        const string shared = "// SHARED_TEXT";
+        var result = new ApplyChangesResult(
+            IsError: false,
+            SucceededFiles: ["C:/fake/a.cs", "C:/fake/b.cs"],
+            FailedFiles: new(),
+            Summary: "ok",
+            PreImages: new Dictionary<string, string?> { ["C:/fake/a.cs"] = shared, ["C:/fake/b.cs"] = "// B before" },
+            PostImages: new Dictionary<string, string?> { ["C:/fake/b.cs"] = shared });
+
+        var items = OperationBlobWriter.BuildApplyItems(result);
+
+        var b = items.Single(i => i.FilePath == "C:/fake/b.cs");
+        Assert.Multiple(() =>
+        {
+            Assert.That(b.Created, Is.False);
+            Assert.That(b.AfterSource, Is.EqualTo(shared));
+            Assert.That(b.AfterSourceFromFilePath, Is.Null);
+        });
+    }
+
+    [Test]
+    public void ResolveAfterSources_FillsAfterSourceFromTheReferencedItem_AndLeavesOldBlobItemsAlone()
+    {
+        var src = new OperationItemRecord { FilePath = "C:/fake/src.cs", Outcome = ItemRecordOutcome.Succeeded, BeforeSource = "// RESOLVED_TEXT" };
+        var dst = new OperationItemRecord { FilePath = "C:/fake/dst.cs", Outcome = ItemRecordOutcome.Succeeded, Created = true, AfterSourceFromFilePath = "C:/FAKE/SRC.cs" };
+        var orphan = new OperationItemRecord { FilePath = "C:/fake/orphan.cs", Outcome = ItemRecordOutcome.Succeeded, Created = true, AfterSourceFromFilePath = "C:/fake/missing.cs" };
+        var noBefore = new OperationItemRecord { FilePath = "C:/fake/nobefore.cs", Outcome = ItemRecordOutcome.Succeeded, BeforeSource = null };
+        var nullRef = new OperationItemRecord { FilePath = "C:/fake/nullref.cs", Outcome = ItemRecordOutcome.Succeeded, Created = true, AfterSourceFromFilePath = "C:/fake/nobefore.cs" };
+        // An item written before AfterSourceFromFilePath existed: the key is absent from the JSON.
+        var legacy = System.Text.Json.JsonSerializer.Deserialize<OperationItemRecord>(
+            "{\"FilePath\":\"C:/fake/legacy.cs\",\"AfterSource\":\"// LEGACY_AFTER\"}")!;
+
+        OperationItemRecord.ResolveAfterSources([src, dst, orphan, noBefore, nullRef, legacy]);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(dst.AfterSource, Is.EqualTo("// RESOLVED_TEXT"), "FilePath matches OrdinalIgnoreCase");
+            Assert.That(orphan.AfterSource, Is.Null, "an unmatched reference leaves AfterSource null");
+            Assert.That(nullRef.AfterSource, Is.Null, "a referenced item with a null BeforeSource leaves AfterSource null");
+            Assert.That(legacy.AfterSource, Is.EqualTo("// LEGACY_AFTER"));
+            Assert.That(legacy.AfterSourceFromFilePath, Is.Null);
+            Assert.That(src.AfterSource, Is.Null);
+        });
+    }
+
+    [Test]
     public async Task WriteBatchBlobOrTripAsync_OnFailure_TripsTheBreakerAsync()
     {
         // The batch path (Asyncify, BulkComment, …). Their result shape carries a BlobName string
