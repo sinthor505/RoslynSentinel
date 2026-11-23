@@ -8,6 +8,24 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## LoadSolution(forceReload) restores first - resolved (2026-11-22)
+
+`LoadSolution(forceReload)` runs `dotnet restore` first (2026-11-22) - after a project was added mid-session the workspace said "Unable to find project RoslynSentinel.AgentLoop.csproj" until a manual restore plus forceReload (Build restores into the throwaway artifacts path, `BuildEngine.cs:387-398`, and reloads nothing); decided 2026-11-22: forceReload restores before loading (latency accepted); acceptance: scratch solution, add a csproj, `LoadSolution(forceReload)` loads it with no "Unable to find project" diagnostic; Medium
+
+Evidence: 71c0c512; LoadSolutionForceReloadRestore(Integration)Tests, SolutionRestoreTests green (OutOfProcess)
+
+## AfterSource from the chokepoint written text at self-building blob sites - resolved (2026-11-22)
+
+Set AfterSource from the chokepoint's written text at the self-building blob sites (2026-11-21) - decided 2026-11-22 (reverses the slice-3 out-of-scope decision): use the written text after the EOL pre-pass, never `AttemptedSource`, at AsyncifyTools (TODOs :1499, :2199, :2718; AttemptedSource at :1892, :2936, :3059), AsyncBatchEngine and the 3 UpliftCallers sites; acceptance: after an Asyncify apply the blob's AfterSource equals the disk text; Medium - [idea](ideas/idea_store_aftersource_in_chokepoint_operation_blobs.md)
+
+Evidence: f6450470; AsyncifyToolsTests T31-T35 green (Tests.Asyncify 42/42). Refused items now carry no AfterSource; bridge/uplift-phase BeforeSource gap left as INBOX item
+
+## CopyAndObsolete follow-ups (16.1-16.5) - resolved (2026-11-22)
+
+CopyAndObsolete follow-ups, sub-items ship separately (2026-11-22) - (1) `HasStaticFields` also counts static auto-properties and field-like events (`CopyAndObsoleteChecks.cs:140`; accept: a copy with a static auto-property is refused; Small); (2) `CollectUsings`/`CollectUsedTypes` see extension methods reached without a name node (foreach, collection-initializer Add, await) and cref names (`CopyAndObsoleteEdits.cs:176`, `CopyAndObsoleteCallerRewrite.cs:436`; accept: foreach over an extension GetEnumerator keeps/adds the using; Medium); (3) dedupe the four helpers copied into `CopyAndObsoleteCallerRewrite.cs:610` (accept: tests unchanged; Small); (4) RunTest the 13 `CopyAndObsoleteMigrationTests` and add tests for the `AttributeAsync` fallbacks (`CopyAndObsoleteMigration.cs:199`, add the missing TODO; accept: green; Small); (5) one compile instead of two in `MoveFileCopyAndObsolete.cs:67` (accept: a spy sees one compile; Medium) - [doc](proposals/proposal_move_file_tool.md)
+
+Evidence: f03d2e05 (16.1), 39355cfc (16.2), 1c1c1280 (16.3), 5600d8c5 + 9c0741b9 (16.4), 3cbce16b (16.5); CopyAndObsolete*Tests, MoveFileCopyAndObsoleteTests green. 16.1 reports static auto-properties/events in StaticFieldTypeNames (the existing warning list), it does not refuse
+
 ## Git stage lineRange stages partial hunks - resolved (2026-11-22)
 
 Git stage `lineRange` stages partial hunks (2026-11-22) - two sessions appending to INBOX.md form one zero-context hunk and `lineRange`/`hunkIds` select whole hunks (`GitImpl.cs:2222-2233`, `GitHunkParser.cs:223` refuses a straddling range), so a session cannot commit only its own lines; decided 2026-11-22: build a patch from the selected lines and apply it to the index (`git apply --cached` or a libgit2 index write); acceptance: two appended blocks in one hunk are staged separately, CRLF preserved, a concurrent index change is refused; Medium-Large
