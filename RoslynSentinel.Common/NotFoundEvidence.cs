@@ -178,7 +178,7 @@ public static class NotFoundEvidence
                 var writerAgent = StringOf(item, "AppliedByAgentId");
                 var kind = Classify(writerSession, writerAgent, sessionId, agentId);
                 callerWrote |= kind == WriterKind.Self;
-                var afterHolds = Holds(StringOf(item, "AfterSource"), term);
+                var afterHolds = Holds(AfterSourceOf(item, items), term);
                 var beforeHolds = Holds(StringOf(item, "BeforeSource"), term);
                 if (!beforeHolds && !afterHolds)
                 {
@@ -359,7 +359,7 @@ public static class NotFoundEvidence
                 var age = utcNow - blob.Written!.Value;
                 var agentType = StringOf(item, "AppliedByAgentType");
                 var otherSession = writerSession is not null && sessionId is not null && !string.Equals(writerSession, sessionId, StringComparison.Ordinal);
-                var afterHeld = TermHeld(StringOf(item, "AfterSource"), term, isRegex);
+                var afterHeld = TermHeld(AfterSourceOf(item, items), term, isRegex);
                 if (TermHeld(StringOf(item, "BeforeSource"), term, isRegex) && !afterHeld)
                 {
                     notes.Add(BlobNote(term, itemPath, writerAgent, agentType, otherSession, StringOf(document.RootElement, "toolName"), StringOf(item, "AppliedByReason"), age) + scopeLabel);
@@ -507,6 +507,32 @@ public static class NotFoundEvidence
         {
             return null;
         }
+    }
+
+    /// <summary>Returns AfterSource, or for a move destination (AfterSourceFromFilePath) the BeforeSource of the item at that path.</summary>
+    private static string? AfterSourceOf(JsonElement item, JsonElement items)
+    {
+        var inline = StringOf(item, "AfterSource");
+        if (inline is not null)
+        {
+            return inline;
+        }
+
+        var sourcePath = StringOf(item, "AfterSourceFromFilePath");
+        if (string.IsNullOrEmpty(sourcePath))
+        {
+            return null;
+        }
+
+        foreach (var sibling in items.EnumerateArray())
+        {
+            if (string.Equals(StringOf(sibling, "FilePath"), sourcePath, StringComparison.OrdinalIgnoreCase))
+            {
+                return StringOf(sibling, "BeforeSource");
+            }
+        }
+
+        return null;
     }
 
     private static string? StringOf(JsonElement element, string name) =>

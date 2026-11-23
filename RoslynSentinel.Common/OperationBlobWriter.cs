@@ -210,6 +210,53 @@ public static class OperationBlobWriter
     }
 
     /// <summary>
+    /// Builds the per-file items for a completed apply. Shared by WriteApplyBlobAsync and
+    /// OperationBlobHelper.WriteBlobForApplyAsync so both write the same blob shape.
+    /// </summary>
+    public static List<OperationItemRecord> BuildApplyItems(ApplyChangesResult result)
+    {
+        var items = result.SucceededFiles.Select(f =>
+        {
+            string? before = null;
+            result.PreImages?.TryGetValue(f, out before);
+            // No PostImages entry (no-op write, delete, or a result built without the map) leaves AfterSource null.
+            string? after = null;
+            result.PostImages?.TryGetValue(f, out after);
+            return new OperationItemRecord
+            {
+                FilePath = f,
+                Outcome = ItemRecordOutcome.Succeeded,
+                BeforeSource = before,
+                AfterSource = after,
+                // Created comes from the chokepoint's did-not-exist signal; a null BeforeSource alone also means the pre-image read failed.
+                Created = result.CreatedFiles?.Contains(f, StringComparer.OrdinalIgnoreCase) == true,
+            };
+        }).ToList();
+
+        // A created item has no pre-image of its own, so this fires for a move (destination text == deleted source's text)
+        // and stores the text once; non-created items keep their AfterSource.
+        foreach (var item in items)
+        {
+            if (item.Created != true || string.IsNullOrEmpty(item.AfterSource))
+            {
+                continue;
+            }
+
+            var source = items.FirstOrDefault(other =>
+                !string.Equals(other.FilePath, item.FilePath, StringComparison.OrdinalIgnoreCase)
+                && other.BeforeSource is not null
+                && string.Equals(other.BeforeSource, item.AfterSource, StringComparison.Ordinal));
+            if (source is not null)
+            {
+                item.AfterSourceFromFilePath = source.FilePath;
+                item.AfterSource = null;
+            }
+        }
+
+        return items;
+    }
+
+    /// <summary>
     /// Writes a forensic blob for a completed write-through apply (direct-apply refactoring
     /// tools that no longer go through the staging dictionaries). Mirrors the per-changeId blob
     /// shape used by staged-change applies so UndoChange/GetOperationDetail resolve it
@@ -229,23 +276,7 @@ public static class OperationBlobWriter
             return BlobWriteResult.NotNeeded("no files written - blob not needed");
         }
 
-        var items = result.SucceededFiles.Select(f =>
-        {
-            string? before = null;
-            result.PreImages?.TryGetValue(f, out before);
-            // No PostImages entry (no-op write, delete, or a result built without the map) leaves AfterSource null.
-            string? after = null;
-            result.PostImages?.TryGetValue(f, out after);
-            return new OperationItemRecord
-            {
-                FilePath = f,
-                Outcome = ItemRecordOutcome.Succeeded,
-                BeforeSource = before,
-                AfterSource = after,
-                // Created comes from the chokepoint's did-not-exist signal; a null BeforeSource alone also means the pre-image read failed.
-                Created = result.CreatedFiles?.Contains(f, StringComparer.OrdinalIgnoreCase) == true,
-            };
-        }).ToList();
+        var items = BuildApplyItems(result);
 
         return await WriteAsync(toolName, changeId, items, solutionRoot, logger);
     }

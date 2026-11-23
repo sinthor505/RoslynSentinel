@@ -33,23 +33,7 @@ public static class OperationBlobHelper
         }
 
         var changeId = blobChangeId ?? Guid.NewGuid().ToString("n")[..8];
-        var items = result.SucceededFiles.Select(f =>
-        {
-            string? before = null;
-            result.PreImages?.TryGetValue(f, out before);
-            // No PostImages entry (no-op write, delete, or a result built without the map) leaves AfterSource null.
-            string? after = null;
-            result.PostImages?.TryGetValue(f, out after);
-            return new OperationItemRecord
-            {
-                FilePath = f,
-                Outcome = ItemRecordOutcome.Succeeded,
-                BeforeSource = before,
-                AfterSource = after,
-                // Created comes from the chokepoint's did-not-exist signal; a null BeforeSource alone also means the pre-image read failed.
-                Created = result.CreatedFiles?.Contains(f, StringComparer.OrdinalIgnoreCase) == true,
-            };
-        }).ToList();
+        var items = OperationBlobWriter.BuildApplyItems(result);
         var blob = await OperationBlobWriter.WriteAsync(
             toolName, changeId, items, workspaceManager.GetSolutionRoot(), logger, cancellationToken);
 
