@@ -67,6 +67,23 @@ public class CopyAndObsoleteMigrationTests
     private static void AssertRemaining(CopyAndObsoleteMigrationResult result, params string[] relatives)
         => Assert.That(result.RemainingCallers.Select(caller => caller.FilePath.Absolute), Is.EquivalentTo(relatives.Select(Abs)).IgnoreCase);
 
+    // Adds a project holding one document; the solution only needs the file, not a compiling project, for AttributeAsync's lookups.
+    private static Solution AddProjectWithDocument(Solution solution, string projectName, string relative, string content)
+    {
+        var projectId = ProjectId.CreateNewId();
+        var projectInfo = ProjectInfo.Create(projectId, VersionStamp.Default, projectName, projectName, LanguageNames.CSharp).WithFilePath(Path.Combine(ProjectDirectory, projectName, projectName + ".csproj"));
+        var fileName = Path.GetFileName(relative);
+        return solution.AddProject(projectInfo).AddDocument(DocumentId.CreateNewId(projectId, fileName), fileName, Microsoft.CodeAnalysis.Text.SourceText.From(content), filePath: Abs(relative));
+    }
+
+    private static DiagnosticInfo ErrorIn(FilePathWrapper path) => new("CS1503", "Error", "Argument 1: cannot convert from 'Demo.Other.Foo' to 'Demo.Models.Foo'", path, 1, 1, 1, 1);
+
+    private static Dictionary<FilePathWrapper, CallerFileRewrite> Rewrites(params (string Relative, CallerRewriteMode Mode)[] files)
+        => files.ToDictionary(file => new FilePathWrapper(Abs(file.Relative)), file => new CallerFileRewrite(new FilePathWrapper(Abs(file.Relative)), "// rewritten", file.Mode, 1));
+
+    private static void AssertReverted(CopyAndObsoleteMigration.Attribution attribution, params string[] relatives)
+        => Assert.That(attribution.Reverts.Keys.Select(path => path.Absolute), Is.EquivalentTo(relatives.Select(Abs)).IgnoreCase);
+
     [Test]
     public async Task NoCallers_IsDoneInOneRound_WithTheBaseSetOnly()
     {
@@ -244,5 +261,73 @@ public class CopyAndObsoleteMigrationTests
         await cancellation.CancelAsync();
 
         await Assert.CatchAsync<OperationCanceledException>(async () => await CopyAndObsoleteMigration.RunAsync(solution, Abs(SourceRelative), Abs(DestinationRelative), FooSource, check, cancellation.Token));
+    }
+
+    [TestCase("empty")]
+    [TestCase("source")]
+    [TestCase("destination")]
+    public async Task ErrorWithNoFileOrInTheCopyOrTheOriginal_RevertsEveryRewrittenFile(string location)
+    {
+        var solution = CreateSolution(GoodCaller, Caller("Stuck", "public class Stuck { }"));
+        var current = Rewrites(("Consumers/Good.cs", CallerRewriteMode.Using), ("Consumers/Stuck.cs", CallerRewriteMode.Qualify));
+        var errorPath = location switch
+        {
+            "empty" => new FilePathWrapper(string.Empty),
+            "source" => new FilePathWrapper(Abs(SourceRelative)),
+            _ => new FilePathWrapper(Abs(DestinationRelative)),
+        };
+
+        var attribution = await CopyAndObsoleteMigration.AttributeAsync(solution, solution, new[] { ErrorIn(errorPath) }, current, new FilePathWrapper(Abs(SourceRelative)), new FilePathWrapper(Abs(DestinationRelative)), allowRetry: true, CancellationToken.None);
+
+        AssertReverted(attribution, "Consumers/Good.cs", "Consumers/Stuck.cs");
+        Assert.That(attribution.Retries, Is.Empty);
+    }
+
+    [Test]
+    public async Task ErrorInAnUnrelatedFileOfAProjectHoldingRewrittenFiles_RevertsOnlyThatProjectsRewrittenFiles()
+    {
+        // Loose binds to nothing rewritten (global namespace, no references), so the blame falls back to the rewritten files of its own project.
+        var solution = AddProjectWithDocument(CreateSolution(GoodCaller, ("Consumers/Loose.cs", Lf("public class Loose { }"))), "Extra", "Extra/Caller.cs", Lf("public class Caller { }"));
+        var current = Rewrites(("Consumers/Good.cs", CallerRewriteMode.Using), ("Extra/Caller.cs", CallerRewriteMode.Using));
+
+        var attribution = await CopyAndObsoleteMigration.AttributeAsync(solution, solution, new[] { ErrorIn(new FilePathWrapper(Abs("Consumers/Loose.cs"))) }, current, new FilePathWrapper(Abs(SourceRelative)), new FilePathWrapper(Abs(DestinationRelative)), allowRetry: true, CancellationToken.None);
+
+        AssertReverted(attribution, "Consumers/Good.cs");
+        Assert.That(attribution.Retries, Is.Empty);
+    }
+
+    [Test]
+    public async Task ErrorInAnUnrelatedFileOfAProjectWithNoRewrittenFiles_RevertsEveryRewrittenFile()
+    {
+        // Lonely is a project of its own with no rewritten file, so the blame falls back to the whole rewrite set, including the file in Extra.
+        var solution = AddProjectWithDocument(AddProjectWithDocument(CreateSolution(GoodCaller), "Extra", "Extra/Caller.cs", Lf("public class Caller { }")), "Lonely", "Lonely/Loose.cs", Lf("public class Loose { }"));
+        var current = Rewrites(("Consumers/Good.cs", CallerRewriteMode.Using), ("Extra/Caller.cs", CallerRewriteMode.Using));
+
+        var attribution = await CopyAndObsoleteMigration.AttributeAsync(solution, solution, new[] { ErrorIn(new FilePathWrapper(Abs("Lonely/Loose.cs"))) }, current, new FilePathWrapper(Abs(SourceRelative)), new FilePathWrapper(Abs(DestinationRelative)), allowRetry: true, CancellationToken.None);
+
+        AssertReverted(attribution, "Consumers/Good.cs", "Extra/Caller.cs");
+        Assert.That(attribution.Retries, Is.Empty);
+    }
+
+    [TestCase(CallerRewriteMode.Using, true, true)]
+    [TestCase(CallerRewriteMode.Using, false, false)]
+    [TestCase(CallerRewriteMode.Qualify, true, false)]
+    public async Task ErrorInARewrittenFile_RetriesAUsingRewriteWhenAllowed_OtherwiseReverts(CallerRewriteMode mode, bool allowRetry, bool expectRetry)
+    {
+        var solution = CreateSolution(GoodCaller);
+        var current = Rewrites(("Consumers/Good.cs", mode));
+
+        var attribution = await CopyAndObsoleteMigration.AttributeAsync(solution, solution, new[] { ErrorIn(new FilePathWrapper(Abs("Consumers/Good.cs"))) }, current, new FilePathWrapper(Abs(SourceRelative)), new FilePathWrapper(Abs(DestinationRelative)), allowRetry, CancellationToken.None);
+
+        if (expectRetry)
+        {
+            Assert.That(attribution.Retries.Select(path => path.Absolute), Is.EquivalentTo(new[] { Abs("Consumers/Good.cs") }).IgnoreCase);
+            Assert.That(attribution.Reverts, Is.Empty);
+        }
+        else
+        {
+            AssertReverted(attribution, "Consumers/Good.cs");
+            Assert.That(attribution.Retries, Is.Empty);
+        }
     }
 }

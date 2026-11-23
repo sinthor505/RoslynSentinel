@@ -192,11 +192,11 @@ public static class CopyAndObsoleteMigration
         return (result.Report.Diagnostics, result.Candidate);
     }
 
-    private sealed record Attribution(Dictionary<FilePathWrapper, DiagnosticInfo> Reverts, HashSet<FilePathWrapper> Retries);
+    internal sealed record Attribution(Dictionary<FilePathWrapper, DiagnosticInfo> Reverts, HashSet<FilePathWrapper> Retries);
 
     // Decides per error which rewritten file is retried in Qualify mode and which is reverted (see RunAsync for the rules). Every call with errors and a
     // non-empty rewrite set changes at least one file, so the loop always makes progress.
-    private static async Task<Attribution> AttributeAsync(Solution baseline, Solution candidate, IReadOnlyList<DiagnosticInfo> errors, Dictionary<FilePathWrapper, CallerFileRewrite> current, FilePathWrapper source, FilePathWrapper destination, bool allowRetry, CancellationToken cancellationToken)
+    internal static async Task<Attribution> AttributeAsync(Solution baseline, Solution candidate, IReadOnlyList<DiagnosticInfo> errors, Dictionary<FilePathWrapper, CallerFileRewrite> current, FilePathWrapper source, FilePathWrapper destination, bool allowRetry, CancellationToken cancellationToken)
     {
         var reverts = new Dictionary<FilePathWrapper, DiagnosticInfo>();
         var retries = new HashSet<FilePathWrapper>();
@@ -218,7 +218,6 @@ public static class CopyAndObsoleteMigration
                 continue;
             }
 
-            // TODO the same-project and revert-all fallbacks below, and an error in the copy or the original, have no test yet (a fixture that binds to no rewritten file is needed)
             IReadOnlyCollection<FilePathWrapper> blamed;
             if (path.Absolute.Length == 0 || path == source || path == destination)
             {
