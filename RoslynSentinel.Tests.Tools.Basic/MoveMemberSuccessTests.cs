@@ -1,14 +1,12 @@
 using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tests.Fakes;
-using RoslynSentinel.Tools.Advanced;
 using static RoslynSentinel.Tests.Support.Sources;
 
 namespace RoslynSentinel.Tests.Tools.Advanced;
 
 // In-memory (InMemoryWorkspace) success tests for MoveMemberTool, split out of BatteryTwentyFourTests so they cannot
 // leak files into the bin dir. Sources are written with CRLF; text read back is normalized to LF before comparing.
-// TODO move this whole file (542 lines, MoveMemberTool only) to Tests.Tools.Basic: needs a MoveFile tool or cross-project MoveType (MoveType is a no-op for a sole type)
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
 public sealed class MoveMemberSuccessTests
@@ -56,8 +54,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_InstanceSingleField_BareSameClassCall_ReportsRewriteFinding()
+        public async Task MoveMember_InstanceSingleField_BareSameClassCall_ReportsRewriteFinding()
     {
         var original = "public class Source\n{\n    private readonly Target _impl = new Target();\n    public int Foo(int x)\n    {\n        return x + 1;\n    }\n\n    public int Caller()\n    {\n        return Foo(2);\n    }\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")), ("Target.cs", "public class Target\n{\n}\n".ReplaceLineEndings("\r\n")));
@@ -69,8 +66,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_FieldMapValidInstanceMove_RewritesBodyToTargetField()
+        public async Task MoveMember_FieldMapValidInstanceMove_RewritesBodyToTargetField()
     {
         var source = "public class Source\n{\n    private string _a = \"source\";\n    public string M() { var first = _a; return first + this._a; }\n}\n\npublic class Target\n{\n    private string _b = \"target\";\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", source.ReplaceLineEndings("\r\n")));
@@ -85,8 +81,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_FieldMapDryRun_AppliesMappingWithoutWriting()
+        public async Task MoveMember_FieldMapDryRun_AppliesMappingWithoutWriting()
     {
         var source = "public class Source\n{\n    private string _a = \"source\";\n    public string M() { var first = _a; return first + this._a; }\n}\n\npublic class Target\n{\n    private string _b = \"target\";\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", source.ReplaceLineEndings("\r\n")));
@@ -101,8 +96,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_DefaultOldMember_RemovesSourceMemberAndMovesBodyToTarget()
+        public async Task MoveMember_DefaultOldMember_RemovesSourceMemberAndMovesBodyToTarget()
     {
         var source = "public class Source\n{\n    public int Get() => 1;\n}\n\npublic class Target\n{\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", source.ReplaceLineEndings("\r\n")));
@@ -115,8 +109,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_StaticToExistingClass_LeavesForwarder()
+        public async Task MoveMember_KeepDelegator_StaticToExistingClass_LeavesForwarder()
     {
         var original = "public class Src\n{\n    public static int Foo(int x) { return x + 1; }\n}\n\npublic class Target\n{\n}\n";
         var caller = "public class Caller\n{\n    public int Call() => Src.Foo(1);\n}\n";
@@ -133,8 +126,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepAsDeprecatedWrapper_StaticToExistingClass_AddsObsoleteAttribute()
+        public async Task MoveMember_KeepAsDeprecatedWrapper_StaticToExistingClass_AddsObsoleteAttribute()
     {
         var original = "public class Src\n{\n    public static int Foo(int x) { return x + 1; }\n}\n\npublic class Target\n{\n}\n";
         var caller = "public class Caller\n{\n    public int Call() => Src.Foo(1);\n}\n";
@@ -153,8 +145,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_StaticToNewClass_LeavesForwarder()
+        public async Task MoveMember_KeepDelegator_StaticToNewClass_LeavesForwarder()
     {
         var original = "public class Src\n{\n    public static int Foo(int x) { return x + 1; }\n}\n";
         var caller = "public class Caller\n{\n    public int Call() => Src.Foo(1);\n}\n";
@@ -173,8 +164,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepAsDeprecatedWrapper_StaticToNewClass_AddsObsoleteAttribute()
+        public async Task MoveMember_KeepAsDeprecatedWrapper_StaticToNewClass_AddsObsoleteAttribute()
     {
         var original = "public class Src\n{\n    public static int Foo(int x) { return x + 1; }\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
@@ -187,8 +177,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_StaticToExistingClass_DryRun_WritesNothing()
+        public async Task MoveMember_KeepDelegator_StaticToExistingClass_DryRun_WritesNothing()
     {
         var original = "public class Src\n{\n    public static int Foo(int x) { return x + 1; }\n}\n\npublic class Target\n{\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
@@ -203,8 +192,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_InstanceToExistingClass_SingleField_LeavesForwarder()
+        public async Task MoveMember_KeepDelegator_InstanceToExistingClass_SingleField_LeavesForwarder()
     {
         var original = "public class Source\n{\n    private readonly Target _impl = new Target();\n    public int Foo(int x) { return x + 1; }\n}\n\npublic class Target\n{\n}\n";
         var caller = "public class Caller\n{\n    public int Call(Source s) => s.Foo(1);\n}\n";
@@ -221,8 +209,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_InstanceTwoCandidateFields_WithForwarderReceiver_UsesGivenReceiver()
+        public async Task MoveMember_KeepDelegator_InstanceTwoCandidateFields_WithForwarderReceiver_UsesGivenReceiver()
     {
         var original = "public class Source\n{\n    private readonly Target _a = new Target();\n    private readonly Target _b = new Target();\n    public int Foo(int x) { return x + 1; }\n}\n\npublic class Target\n{\n}\n";
         var caller = "public class Caller\n{\n    public int Call(Source s) => s.Foo(1);\n}\n";
@@ -239,8 +226,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepAsDeprecatedWrapper_InstanceToExistingClass_AddsObsoleteAttribute()
+        public async Task MoveMember_KeepAsDeprecatedWrapper_InstanceToExistingClass_AddsObsoleteAttribute()
     {
         var original = "public class Source\n{\n    private readonly Target _impl = new Target();\n    public int Foo(int x) { return x + 1; }\n}\n\npublic class Target\n{\n}\n";
         var caller = "public class Caller\n{\n    public int Call(Source s) => s.Foo(1);\n}\n";
@@ -256,8 +242,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_InstanceWithFieldMap_RewritesBodyAndLeavesForwarder()
+        public async Task MoveMember_KeepDelegator_InstanceWithFieldMap_RewritesBodyAndLeavesForwarder()
     {
         var original = "public class Source\n{\n    private int _base = 1;\n    private readonly Target _impl = new Target();\n    public int Foo(int x) { return x + _base; }\n}\n\npublic class Target\n{\n    private int _b = 0;\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
@@ -275,8 +260,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_InstanceAutoResolveCallSitesFalse_LeavesForwarderAndCallerUntouched()
+        public async Task MoveMember_KeepDelegator_InstanceAutoResolveCallSitesFalse_LeavesForwarderAndCallerUntouched()
     {
         var original = "public class Source\n{\n    private readonly Target _impl = new Target();\n    public int Foo(int x) { return x + 1; }\n}\n\npublic class Target\n{\n}\n";
         var caller = "public class Caller\n{\n    public int Call(Source s) => s.Foo(1);\n}\n";
@@ -289,8 +273,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_InstanceSameClassBareCall_LeftValid()
+        public async Task MoveMember_KeepDelegator_InstanceSameClassBareCall_LeftValid()
     {
         var original = "public class Source\n{\n    private readonly Target _impl = new Target();\n    public int Foo(int x) { return x + 1; }\n    public int Bar() => Foo(1);\n}\n\npublic class Target\n{\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
@@ -306,8 +289,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_ToBaseClass_PullsMemberUpIntoBaseClass()
+        public async Task MoveMember_ToBaseClass_PullsMemberUpIntoBaseClass()
     {
         // Self-contained source (replaces BatteryTwentyFourTests RefactorSource, whose Sound override conflicts with
         // the abstract base member, so its outcome was not a clean pull-up).
@@ -323,8 +305,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_InstanceToStaticClass_LeavesForwarder()
+        public async Task MoveMember_KeepDelegator_InstanceToStaticClass_LeavesForwarder()
     {
         var original = "public class Source\n{\n    public int Foo(int x) { return x + 1; }\n}\n\npublic static class Target\n{\n}\n";
         var caller = "public class Caller\n{\n    public int Call(Source s) => s.Foo(1);\n}\n";
@@ -341,8 +322,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepAsDeprecatedWrapper_InstanceToStaticClass_AddsObsoleteAttribute()
+        public async Task MoveMember_KeepAsDeprecatedWrapper_InstanceToStaticClass_AddsObsoleteAttribute()
     {
         var original = "public class Source\n{\n    public int Foo(int x) { return x + 1; }\n}\n\npublic static class Target\n{\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
@@ -355,8 +335,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_InstanceToNewClass_LeavesNewInstanceForwarder()
+        public async Task MoveMember_KeepDelegator_InstanceToNewClass_LeavesNewInstanceForwarder()
     {
         var original = "namespace App\n{\n    public class Source\n    {\n        public int Foo(int x) { return x + 1; }\n    }\n}\n";
         var caller = "namespace App\n{\n    public class Caller\n    {\n        public int Call(Source s) => s.Foo(1);\n    }\n}\n";
@@ -375,8 +354,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepAsDeprecatedWrapper_InstanceToNewClass_AddsObsoleteAttribute()
+        public async Task MoveMember_KeepAsDeprecatedWrapper_InstanceToNewClass_AddsObsoleteAttribute()
     {
         var original = "namespace App\n{\n    public class Source\n    {\n        public int Foo(int x) { return x + 1; }\n    }\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
@@ -390,8 +368,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_GenericInstanceMethodSingleConstraint_DryRun_ShowsForwarderAndWritesNothing()
+        public async Task MoveMember_KeepDelegator_GenericInstanceMethodSingleConstraint_DryRun_ShowsForwarderAndWritesNothing()
     {
         var original = "public class Src\n{\n    private readonly Target _impl = new Target();\n    public T Get<T>(int id) where T : class => default;\n}\n\npublic class Target\n{\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
@@ -407,8 +384,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_GenericStaticMethodIntoStaticTarget_DryRun_ShowsQualifiedForwarder()
+        public async Task MoveMember_KeepDelegator_GenericStaticMethodIntoStaticTarget_DryRun_ShowsQualifiedForwarder()
     {
         var original = "public static class Src\n{\n    public static T Make<T>(int id) where T : class => default;\n}\n\npublic static class Target\n{\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
@@ -424,8 +400,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_GenericMultipleTypeParamsWithConstraints_DryRun_ShowsAllConstraints()
+        public async Task MoveMember_KeepDelegator_GenericMultipleTypeParamsWithConstraints_DryRun_ShowsAllConstraints()
     {
         var original = "public static class Src\n{\n    public static TValue Pair<TKey, TValue>(TKey key, TValue value) where TKey : notnull where TValue : struct => value;\n}\n\npublic static class Target\n{\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
@@ -442,8 +417,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_GenericNewInterfaceAndUnmanagedConstraints_DryRun_ShowsAllConstraints()
+        public async Task MoveMember_KeepDelegator_GenericNewInterfaceAndUnmanagedConstraints_DryRun_ShowsAllConstraints()
     {
         var original = "using System;\n\npublic static class Src\n{\n    public static T Build<T>() where T : IDisposable, new() => new T();\n    public static T Raw<T>(T value) where T : unmanaged => value;\n}\n\npublic static class Target\n{\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
@@ -460,8 +434,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_GenericRefOutInParamsDefaults_DryRun_ShowsForwarderWithModifiers()
+        public async Task MoveMember_KeepDelegator_GenericRefOutInParamsDefaults_DryRun_ShowsForwarderWithModifiers()
     {
         var original = "public static class Src\n{\n    public static int Mix<T>(ref T target, out int count, in T probe, int offset = 0, string label = null, params T[] items) where T : struct\n    {\n        count = items.Length + offset + (label == null ? 0 : label.Length);\n        target = probe;\n        return items.Length;\n    }\n}\n\npublic static class Target\n{\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
@@ -478,8 +451,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_GenericAsyncTaskOfT_DryRun_ShowsForwarder()
+        public async Task MoveMember_KeepDelegator_GenericAsyncTaskOfT_DryRun_ShowsForwarder()
     {
         var original = "using System.Threading.Tasks;\n\npublic static class Src\n{\n    public static async Task<T> LoadAsync<T>(int id) where T : class\n    {\n        await Task.Yield();\n        return default;\n    }\n}\n\npublic static class Target\n{\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
@@ -495,8 +467,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepAsDeprecatedWrapper_GenericMethod_DryRun_ShowsObsoleteGenericForwarder()
+        public async Task MoveMember_KeepAsDeprecatedWrapper_GenericMethod_DryRun_ShowsObsoleteGenericForwarder()
     {
         var original = "public static class Src\n{\n    public static T Fetch<T>(int id) where T : class => default;\n}\n\npublic static class Target\n{\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
@@ -513,8 +484,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_GenericStaticMethods_AllConstraintKinds_SolutionCompilesAfterMove()
+        public async Task MoveMember_KeepDelegator_GenericStaticMethods_AllConstraintKinds_SolutionCompilesAfterMove()
     {
         var original = "using System;\nusing System.Threading.Tasks;\n\npublic static class Src\n{\n    public static T Build<T>() where T : IDisposable, new() => new T();\n    public static T Raw<T>(T value) where T : unmanaged => value;\n    public static int Mix<T>(ref T target, out int count, in T probe, int offset = 0, string label = null, params T[] items) where T : struct\n    {\n        count = items.Length + offset + (label == null ? 0 : label.Length);\n        target = probe;\n        return items.Length;\n    }\n    public static TValue Pair<TKey, TValue>(TKey key, TValue value) where TKey : notnull where TValue : struct => value;\n    public static async Task<T> LoadAsync<T>(int id) where T : class\n    {\n        await Task.Yield();\n        return default;\n    }\n}\n\npublic static class Target\n{\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
@@ -526,8 +496,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_GenericInstanceMethod_SolutionCompilesAfterMove()
+        public async Task MoveMember_KeepDelegator_GenericInstanceMethod_SolutionCompilesAfterMove()
     {
         var original = "public class Src\n{\n    private readonly Target _impl = new Target();\n    public T Get<T>(int id) where T : class => default;\n}\n\npublic class Target\n{\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
@@ -544,8 +513,7 @@ public sealed class MoveMemberSuccessTests
     // a bare call to a public sibling is refused by the compile gate with ValidationFailed and a CS0103 detail naming Source.Helper;
     // bare reads of private instance state are refused up front by RequireNoUnmovedDependencies (InvalidArgument).
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_InstanceBodyCallsPublicSiblingByBareName_RefusesWithoutWriting()
+        public async Task MoveMember_InstanceBodyCallsPublicSiblingByBareName_RefusesWithoutWriting()
     {
         var original = "public class Source\n{\n    private readonly Target _impl = new Target();\n    public int Helper() { return 1; }\n    public int Foo(int x) { return Helper() + x; }\n}\n\npublic class Target\n{\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
@@ -559,8 +527,7 @@ public sealed class MoveMemberSuccessTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_InstanceBodyReadsInstanceStateByBareName_RefusesWithoutWriting()
+        public async Task MoveMember_InstanceBodyReadsInstanceStateByBareName_RefusesWithoutWriting()
     {
         var original = "public class Source\n{\n    private readonly Target _impl = new Target();\n    private int _count;\n    public int Foo(int x) { return _count + x; }\n}\n\npublic class Target\n{\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));

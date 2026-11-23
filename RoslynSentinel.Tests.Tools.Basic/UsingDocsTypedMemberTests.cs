@@ -1,7 +1,6 @@
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tests.Fakes;
 using RoslynSentinel.Tests.Support;
-using RoslynSentinel.Tools.Advanced;
 using RoslynSentinel.Tools.Basic;
 using RoslynSentinel.Common;
 

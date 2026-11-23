@@ -1,9 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Common;
-using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
-using RoslynSentinel.Tools.Advanced;
 using RoslynSentinel.Tools.Basic;
 
 #pragma warning disable CS8618
@@ -15,7 +13,6 @@ namespace RoslynSentinel.Tests.Tools.Advanced;
 /// namespace line), a change the move did not make. The guard must refuse it with CollateralChangeRefused and write
 /// nothing. Control: the plain engine passes the same call, so the refusal is the normalizer's doing.
 /// </summary>
-// TODO move this whole file (446 lines, MoveMemberTool only) to Tests.Tools.Basic: needs a MoveFile tool or cross-project MoveType (MoveType is a no-op for a sole type)
 [TestFixture]
 // Runs exclusively: the leak guard wipes top-level *.cs in the shared working directory, which would delete files parallel fixtures in this assembly are using (AssemblyInfo.cs sets ParallelScope.Fixtures).
 [NonParallelizable]
@@ -128,8 +125,7 @@ public class MoveMemberToolCollateralRefusalTests
     private static string Lines(params string[] lines) => string.Join(Eol, lines) + Eol;
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_NormalizedSourceFile_IsRefusedUnmaskedAndWritesNothing()
+        public async Task MoveMember_NormalizedSourceFile_IsRefusedUnmaskedAndWritesNothing()
     {
         SetRefactorSource();
         var symbolNav = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
@@ -148,8 +144,7 @@ public class MoveMemberToolCollateralRefusalTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_PlainEngine_SameCallSucceeds()
+        public async Task MoveMember_PlainEngine_SameCallSucceeds()
     {
         SetRefactorSource();
         var symbolNav = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
@@ -163,8 +158,7 @@ public class MoveMemberToolCollateralRefusalTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_DryRun_ReturnsEditSpansForTheTouchedFilesAndWritesNothing()
+        public async Task MoveMember_DryRun_ReturnsEditSpansForTheTouchedFilesAndWritesNothing()
     {
         SetRefactorSource();
         var symbolNav = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
@@ -213,8 +207,7 @@ public class MoveMemberToolCollateralRefusalTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_DryRun_ReturnDiffShowsTheDiffNotTheWholeFileAndWritesNothing()
+        public async Task MoveMember_DryRun_ReturnDiffShowsTheDiffNotTheWholeFileAndWritesNothing()
     {
         SetRefactorSource();
         var symbolNav = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
@@ -234,8 +227,7 @@ public class MoveMemberToolCollateralRefusalTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_RealApply_ReturnsNoEditSpans()
+        public async Task MoveMember_RealApply_ReturnsNoEditSpans()
     {
         SetRefactorSource();
         var symbolNav = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
@@ -252,8 +244,7 @@ public class MoveMemberToolCollateralRefusalTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_InstanceToNewClass_LocalReceiverCaller_IsRefusedWithUnresolvedCallSitesAndWritesNothing()
+        public async Task MoveMember_InstanceToNewClass_LocalReceiverCaller_IsRefusedWithUnresolvedCallSitesAndWritesNothing()
     {
         SetInstanceSolution();
         var symbolNav = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
@@ -274,8 +265,7 @@ public class MoveMemberToolCollateralRefusalTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_InstanceToNewClass_LocalReceiverCaller_RetryWithNewFixupSucceeds()
+        public async Task MoveMember_InstanceToNewClass_LocalReceiverCaller_RetryWithNewFixupSucceeds()
     {
         SetInstanceSolution();
         var symbolNav = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
@@ -293,8 +283,7 @@ public class MoveMemberToolCollateralRefusalTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_SkippedCallSiteAndNormalizedText_CollateralRefusalIsNotMaskedByUnresolvedCallSites()
+        public async Task MoveMember_SkippedCallSiteAndNormalizedText_CollateralRefusalIsNotMaskedByUnresolvedCallSites()
     {
         SetInstanceSolution();
         var symbolNav = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
@@ -315,8 +304,7 @@ public class MoveMemberToolCollateralRefusalTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_PendingLedgerRealApply_OpensLedgerThatBlocksOnlyUnrelatedFiles()
+        public async Task MoveMember_PendingLedgerRealApply_OpensLedgerThatBlocksOnlyUnrelatedFiles()
     {
         SetRefactorSource();
         var tools = CreateLedgerSeamTools();
@@ -335,8 +323,7 @@ public class MoveMemberToolCollateralRefusalTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_PendingLedgerDryRun_OpensNoLedger()
+        public async Task MoveMember_PendingLedgerDryRun_OpensNoLedger()
     {
         SetRefactorSource();
         var tools = CreateLedgerSeamTools();
@@ -350,8 +337,7 @@ public class MoveMemberToolCollateralRefusalTests
     }
 
     [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_PendingLedgerWhileLedgerAlreadyOpen_TakesTheWarningBranch()
+        public async Task MoveMember_PendingLedgerWhileLedgerAlreadyOpen_TakesTheWarningBranch()
     {
         SetRefactorSource();
         var ledger = (IScopedOperationLedger)_workspaceManager;

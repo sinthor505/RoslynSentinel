@@ -40,13 +40,8 @@ RoslynSentinel.Tests.Battery.Advanced/BatteryTwentySixTests.cs::ThreadSafeLockGo
 RoslynSentinel.Tests.Tools.Advanced/DeclarationModifierTests.cs::DeclarationModifierTests | RoslynSentinel.Tests.Tools.Basic
 RoslynSentinel.Tests.Tools.Advanced/ExtractLocalVariableSnippetMissTests.cs::ExtractLocalVariableSnippetMissTests | RoslynSentinel.Tests.Tools.Basic
 RoslynSentinel.Tests.Tools.Advanced/ImpactMissAdvancedTests.cs::ImpactMissAdvancedTests | RoslynSentinel.Tests.Tools.Basic
-RoslynSentinel.Tests.Tools.Advanced/MemberAddReplaceViewTests.cs::MemberAddReplaceViewTests | RoslynSentinel.Tests.Tools.Basic
-RoslynSentinel.Tests.Tools.Advanced/MemberRemoveTests.cs::MemberRemoveTests | RoslynSentinel.Tests.Tools.Basic
 RoslynSentinel.Tests.Tools.Advanced/MethodSignatureCallSiteTests.cs::MethodSignatureCallSiteTests | RoslynSentinel.Tests.Tools.Basic
-RoslynSentinel.Tests.Tools.Advanced/MoveMemberSuccessTests.cs::MoveMemberSuccessTests | RoslynSentinel.Tests.Tools.Basic
-RoslynSentinel.Tests.Tools.Advanced/MoveMemberToolCollateralRefusalTests.cs::MoveMemberToolCollateralRefusalTests | RoslynSentinel.Tests.Tools.Basic
 RoslynSentinel.Tests.Tools.Advanced/RenameNamespaceTests.cs::RenameNamespaceTests | RoslynSentinel.Tests.Tools.Basic
 RoslynSentinel.Tests.Tools.Advanced/RenameSymbolTests.cs::RenameSymbolTests | RoslynSentinel.Tests.Tools.Basic
 RoslynSentinel.Tests.Tools.Advanced/StructuralRefinementMissAdvancedTests.cs::StructuralRefinementMissAdvancedTests | RoslynSentinel.Tests.Tools.Basic
 RoslynSentinel.Tests.Tools.Advanced/SyncTypeAndFilenameTests.cs::SyncTypeAndFilenameTests | RoslynSentinel.Tests.Tools.Basic
-RoslynSentinel.Tests.Tools.Advanced/UsingDocsTypedMemberTests.cs::UsingDocsTypedMemberTests | RoslynSentinel.Tests.Tools.Basic
