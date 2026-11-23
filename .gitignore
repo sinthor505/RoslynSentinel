@@ -51,7 +51,6 @@ TestResults/
 !.claude/skills/
 !.claude/skills/**
 !.claude/implementer-tiers.json
-docs/known-build-warnings.Solution.txt
 *.tmp
 # Server runtime state (operation blobs, large results, scans, test instances, write lock). Nothing here is tracked.
 /.roslynsentinel/
