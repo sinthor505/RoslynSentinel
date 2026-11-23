@@ -15,8 +15,7 @@ public static class FolderNamespace
     /// namespace (the project name when it has none) plus the file's folder path under the project directory.
     /// Null when the project has no file path, so there is no project directory to measure the folder against.
     /// </summary>
-    // Root choice: Project.DefaultNamespace (the evaluated RootNamespace). SolutionStructureEngine keeps its own csproj-XML root
-    // (GetRootNamespace) and shares only FromFolder; the two agree unless a props file or an expression sets RootNamespace.
+    // Root choice: FolderNamespace.RootOf. SolutionStructureEngine uses the same RootOf and shares this convention.
     public static string? Expected(Project project, FilePathWrapper file)
     {
         if (project.FilePath is not { } projectPath || Path.GetDirectoryName(projectPath) is not { } projectDirectory)
@@ -24,9 +23,13 @@ public static class FolderNamespace
             return null;
         }
 
-        var root = string.IsNullOrEmpty(project.DefaultNamespace) ? project.Name : project.DefaultNamespace;
-        return FromFolder(root, projectDirectory, file);
+        return FromFolder(RootOf(project), projectDirectory, file);
     }
+
+    /// <summary>
+    /// The root namespace of <paramref name="project"/>: its default namespace, or the project name when that is null or empty.
+    /// </summary>
+    public static string RootOf(Project project) => string.IsNullOrEmpty(project.DefaultNamespace) ? project.Name : project.DefaultNamespace;
 
     /// <summary>
     /// <paramref name="rootNamespace"/> plus the folder of <paramref name="file"/> relative to <paramref name="projectDirectory"/>,

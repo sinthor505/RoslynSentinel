@@ -1298,7 +1298,7 @@ public class SolutionStructureEngine
         var findings = new List<(Document Doc, string? DeclaredNs, string ExpectedNs, List<string> TypeNames, string ProjectName)>();
         foreach (var project in projects)
         {
-            var rootNamespace = GetRootNamespace(project);
+            var rootNamespace = FolderNamespace.RootOf(project);
             var projectRoot = project.FilePath is not null ? Path.GetDirectoryName(project.FilePath) : null;
             foreach (var doc in project.Documents)
             {
@@ -1476,36 +1476,8 @@ public class SolutionStructureEngine
     /// <summary>
     /// Derives the expected namespace for a file based on its path relative to the project root.
     /// </summary>
-    // The root here comes from GetRootNamespace (csproj XML); only the folder-to-namespace part is shared with MoveFile (FolderNamespace.Expected uses Project.DefaultNamespace).
+    // The root comes from FolderNamespace.RootOf (Project.DefaultNamespace); the folder-to-namespace part is shared through FolderNamespace.FromFolder.
     private static string DeriveExpectedNamespace(FilePathWrapper filePath, string projectRoot, string rootNamespace) => FolderNamespace.FromFolder(rootNamespace, projectRoot, filePath);
-
-    /// <summary>
-    /// Reads the <c><RootNamespace></c> MSBuild property from the project file,
-    /// falling back to the project name (the .csproj stem).
-    /// </summary>
-    private static string GetRootNamespace(Project project)
-    {
-        // TODO reads RootNamespace from the raw csproj XML, so a value from a props file or an expression is missed; FolderNamespace.Expected (MoveFile) uses Project.DefaultNamespace - unify on one root
-        // Try to read <RootNamespace> from the .csproj XML directly -> works for both
-        // SDK-style and legacy project formats, and doesn't require a compilation.
-        if (project.FilePath is not null)
-        {
-            try
-            {
-                var xdoc = System.Xml.Linq.XDocument.Load(project.FilePath);
-                var ns = xdoc.Descendants().FirstOrDefault(e => string.Equals(e.Name.LocalName, "RootNamespace", StringComparison.OrdinalIgnoreCase))?.Value;
-                if (!string.IsNullOrWhiteSpace(ns))
-                {
-                    return ns.Trim();
-                }
-            }
-            catch
-            { /* best effort - fall through to project name */
-            }
-        }
-
-        return project.Name;
-    }
 
     /// <summary>
     /// Returns all project and NuGet dependencies for a specific project.

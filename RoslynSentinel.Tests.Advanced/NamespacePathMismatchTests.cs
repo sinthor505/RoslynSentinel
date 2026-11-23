@@ -35,6 +35,26 @@ public class NamespacePathMismatchTests
         return TestSolutionBuilder.CreateSolutionWithProject(projectName, projectPath, documents.Select(d => (Path.GetFileName(d.relPath), d.content, Path.Combine(projectRoot, d.relPath))).ToArray());
     }
 
+    // TestSolutionBuilder always sets DefaultNamespace to the project name, so this local helper sets a different root.
+    private static Solution CreateSolutionWithDefaultNamespace(string projectName, string defaultNamespace, (string relPath, string content)[] documents)
+    {
+        var projectRoot = Path.Combine(Path.GetTempPath(), projectName);
+        var projectPath = Path.Combine(projectRoot, $"{projectName}.csproj");
+        var projectId = ProjectId.CreateNewId();
+        var projectInfo = ProjectInfo.Create(projectId, VersionStamp.Default, projectName, projectName, LanguageNames.CSharp)
+            .WithCompilationOptions(new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary))
+            .WithFilePath(projectPath)
+            .WithDefaultNamespace(defaultNamespace);
+        var solution = new AdhocWorkspace().CurrentSolution.AddProject(projectInfo);
+        foreach (var (relPath, content) in documents)
+        {
+            var fileName = Path.GetFileName(relPath);
+            solution = solution.AddDocument(DocumentId.CreateNewId(projectId, fileName), fileName, SourceText.From(content), filePath: Path.Combine(projectRoot, relPath));
+        }
+
+        return solution;
+    }
+
     // ─────────────────────────────────────────────────────────────────────────────
     // Test 1 -> Clean solution: all namespaces match folder paths -> IsClean = true
     // ─────────────────────────────────────────────────────────────────────────────
@@ -206,6 +226,16 @@ public class NamespacePathMismatchTests
         var solution = CreateSolutionWithAbsolutePaths("MyApp", [(@"Core\Processor.cs", "namespace MyApp.Core { public class Processor {} }"),]);
         var report = await Battery.Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration()).FindNamespacePathMismatchesAsync(solution, null);
         Assert.That(report.IsClean, Is.True, "When root namespace = project name, 'MyApp.Core' should match path 'Core\\'");
+    }
+
+    [Test]
+    public async Task RootNamespaceFromDefaultNamespace_IsUsedForExpectedNamespace()
+    {
+        // Project name is "MyApp" but DefaultNamespace is "Custom.Root": the expected root is "Custom.Root",
+        // so Core\Processor.cs declaring Custom.Root.Core must be clean.
+        var solution = CreateSolutionWithDefaultNamespace("MyApp", "Custom.Root", [(@"Core\Processor.cs", "namespace Custom.Root.Core { public class Processor {} }")]);
+        var report = await Battery.Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration()).FindNamespacePathMismatchesAsync(solution, null);
+        Assert.That(report.IsClean, Is.True, "When DefaultNamespace = 'Custom.Root', 'Custom.Root.Core' should match path 'Core\\'");
     }
 
     // ─────────────────────────────────────────────────────────────────────────────

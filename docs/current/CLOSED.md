@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## GetRootNamespace uses Project.DefaultNamespace - resolved (2026-11-22)
+
+`GetRootNamespace` uses `project.DefaultNamespace ?? project.Name` instead of raw csproj XML (2026-11-22) - `ProjectStructureEngine.cs:1485-1508` (only caller :1301; the rest of the engine and `FolderNamespace.Expected` already do this); delete the XML read and the :1479 comment; acceptance: RootNamespace set in Directory.Build.props gives the same result as MoveFile, mismatch tests green; Small
+
+Evidence: punchlist #5: FolderNamespace.RootOf shared by SolutionStructureEngine and MoveFile; NamespacePathMismatchTests incl. RootNamespaceFromDefaultNamespace test
+
 ## AgentLoop dead InternalsVisibleTo - resolved (2026-11-22)
 
 Remove the dead InternalsVisibleTo entries for Tests and Tests.Basic from `RoslynSentinel.AgentLoop.csproj` (:16, :19) (2026-11-22) - confirmed 2026-11-22: neither project references AgentLoop directly or transitively; keep the ModelEval and ErrorVariants entries; acceptance: Build 0 errors; Small
