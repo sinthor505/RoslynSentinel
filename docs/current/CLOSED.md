@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Git stage lineRange stages partial hunks - resolved (2026-11-22)
+
+Git stage `lineRange` stages partial hunks (2026-11-22) - two sessions appending to INBOX.md form one zero-context hunk and `lineRange`/`hunkIds` select whole hunks (`GitImpl.cs:2222-2233`, `GitHunkParser.cs:223` refuses a straddling range), so a session cannot commit only its own lines; decided 2026-11-22: build a patch from the selected lines and apply it to the index (`git apply --cached` or a libgit2 index write); acceptance: two appended blocks in one hunk are staged separately, CRLF preserved, a concurrent index change is refused; Medium-Large
+
+Evidence: 4b08e885 (GitHunkParser.SelectLines/BuildPatch, 12 unit tests) and 3040c675 (StageHunksAsync wiring via git apply --cached --unidiff-zero, GitHunkStale when the index entry changed after the diff was read, GitStageLineRangeTests); scope: a hunk can be cut only when it is made purely of added lines, mixed and deletion hunks partly inside the range are still refused with facts-and-options text
+
 ## AgentIdentityFilterTests left ToolCallEchoOptions enabled - resolved (2026-11-22)
 
 SetUp enabled `ToolCallEchoOptions` (--echo-tool-args=true) and TearDown never reset it, so the echo could stay on for later fixtures in the process (INBOX line, 2026-11-22 21:00). TearDown now calls `ToolCallEchoOptions.Configure(Array.Empty<string>())`.
