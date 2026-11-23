@@ -8,6 +8,18 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Compile-gate hint "every affected use in ONE call" read as policy - resolved (2026-11-23)
+
+INBOX 2026-11-23 08:20: the edit gate hint "Make the change and every affected use in ONE call" steered models to edit callers in tasks that require callers unchanged (4B WideningRejectedByGate: caller files changed in 3/4 runs, overnight runs 20261123-091450-528, -102214-665, -102706-975) - `ValidateAndApplyHelper.cs:42`, `EditImpactAnalyzer.cs:678-679`
+
+Evidence: f16f4458 (hint now states the options: keep uses compiling, or one call carrying every affected use; EditImpactAnalyzerTests updated)
+
+## ObsoleteNamespaceCopy scenario prompt read as contradictory - resolved (2026-11-23)
+
+INBOX 2026-11-23 08:20: 5/5 runs (Ornith 113 x3, 4B 85 x2) put `[System.Obsolete]` on the Modern copy instead of Legacy; the one-sentence prompt was read as contradictory (113 run 20261123-093439-973 T1 reasoning) - `ObsoleteNamespaceCopyScenario.cs` prompt text
+
+Evidence: f16f4458 (prompt split into one numbered step per file); not yet re-run
+
 ## Core split test-move remainder - resolved (2026-11-23)
 
 Core split test-move remainder (2026-11-10) - mixed files done (444e5a53, fdeba2d2, c8d2dbfc, 4beb7a2b); left: move `MoveMemberSuccessTests` and `MoveMemberToolCollateralRefusalTests` (Tests.Tools.Advanced, both marked `// TODO`) whole to Tests.Tools.Basic and drop the misleading `[Category("AdvancedRefactoringTools")]` on the ~31 tests that build `CreateCoreRefactoringTools` (`MoveMemberSuccessTests.cs:59`); MoveFile is live, parked by owner 2026-11-22: unpark when plan_test_placement_guardrail_and_shared_test_helpers Step 7.5 runs (it moves these files) or the owner picks it; MoveType promotion is later - [doc](proposals/proposal_usage_based_core_split.md)

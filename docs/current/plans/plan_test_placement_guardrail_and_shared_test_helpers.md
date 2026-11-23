@@ -566,3 +566,13 @@ If unused Advanced tools are frozen out of the main solution:
 - **MoveFile is live** (`WholeFileWriteTools.cs`, MoveFile tool): the TOOL-GAP on Steps 7 and 9 is gone; ignore the "not built" wording in Step 7. Each `keep` move stores the full file in its blob (a READY TODO halves it); accepted.
 - **Order:** Steps 1-6 before plan_central_engine_throw_and_lookup_helpers (ErrorAssert makes its text changes cheap). Step 7.5 also does the parked "Core split test-move remainder" TODO line (MoveMemberSuccessTests, MoveMemberToolCollateralRefusalTests; drop the misleading `[Category("AdvancedRefactoringTools")]`).
 - **Acceptance:** as in the plan's Done-when sections; TestPlacementRatchetTests green with no baseline line for a moved class.
+
+## Decisions (todo review 2026-11-23)
+
+- **Step 10d, the two classes left unexempted at Step 5:** `SearchSolutionTextIncludeTestsTests` (Tests.Tools.Basic) gets class-level
+  `[Category("MessageTextSubject")]`: every pin is on a success `StatusMessage` (e.g. `"+1 more in test projects (TestsProj 1)"`), which
+  is the signal under test and has no error for `ErrorAssert`. In `MoveMemberOverloadFallbackTests` (Tests.Battery.Basic) only
+  `InstanceMove_FallbackCallWithNoReceiver_RefusesWholeMoveAndWritesNothing` gets the method-level mark (8 asserts on the hint's
+  content); the other refusal pins migrate to `ErrorAssert.Is(refusal, <code>, "Example.Source.Save(long)")`. Why: wording is the
+  subject only where the text itself is the agent-facing signal. Acceptance: `MessageTextRatchetTests.LongMessagePins_NeverExceedTheBaseline`
+  green with both baseline entries lowered or removed (refresh with `ROSLYNSENTINEL_UPDATE_LONG_MESSAGE_BASELINE=1`).
