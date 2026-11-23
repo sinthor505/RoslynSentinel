@@ -1,6 +1,6 @@
 # Plan: Remove EngineResultWrapper<T>; engines return IOperationResult types and throw typed exceptions when a build or test run did not run
 
-**Status:** IN PROGRESS 2026-11-22. Steps 0-4 and 7 done (da9817ed, 66f9940a, e2d2f67b, 7f5e3fa0, 4d038a3f, 43a96682); Batch B next.
+**Status:** IN PROGRESS 2026-11-22. Steps 0-10e done (Batch A 66f9940a..4d038a3f, Batch B 08d07f5b..34103e7e); Batch C (Steps 11, 12, 12b) next.
 
 ## Problem
 
@@ -245,6 +245,7 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
   `ErrorPolicyKindRatchetTests` and `ToolHintRatchetTests`.
 
 ### Step 5 - RunQuickBuildAsync: Core method plus obsolete shim
+- Done: 08d07f5b12ea5322bb1d9d6e5f802835fff44ad3
 - Files: `RoslynSentinel.Engines.Basic/BuildEngine.cs`
 - Depends on: Steps 1, 2
 - Pairs with: Step 10a
@@ -263,6 +264,7 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
 - Done when: `Build` 0 errors. Dispatcher runs `BuildEngineTests`, `SurfaceAwareHintsBuildTestingTests`.
 
 ### Step 6 - RunFullBuildAsync: Core method plus obsolete shim
+- Done: 715f1750c42e21774bd960f3da003b1035f48b53
 - Files: `RoslynSentinel.Engines.Basic/BuildEngine.cs`
 - Depends on: Steps 1, 5 (same file)
 - Pairs with: Step 10b
@@ -295,6 +297,7 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
 - Done when: the new tests pass.
 
 ### Step 8a - GetDiagnostics moves to Core
+- Done: 6561cdae902b6dcfd263bef8cf05a1bd96da577e
 - Files: `RoslynSentinel.Tools.Basic/WorkspaceBuildTestImpl.cs`
 - Depends on: Steps 3, 5, 6
 - Pairs with: Step 10e
@@ -312,6 +315,7 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
 - Done when: `Build` 0 errors, and GetDiagnostics has no CS0618 for the shims.
 
 ### Step 8b - Build tool moves to Core
+- Done: bfe4de33e51918aaec98d3d1de9da36ed54cdd5c
 - Files: `RoslynSentinel.Tools.Basic/WorkspaceBuildTestImpl.cs`
 - Depends on: Step 8a (same file)
 - Pairs with: Step 10c
@@ -326,6 +330,7 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
 - Done when: `Build` 0 errors, and `WorkspaceBuildTestImpl.cs` has no CS0618 for the five shims.
 
 ### Step 9 - Remaining production callers move to Core
+- Done: 430fb31374e45e0e36519211ddaa6bdfa1464bc3
 - Files: `RoslynSentinel.Tools.Basic/WorkspaceHealthMiscImpl.cs`, `RoslynSentinel.Engines.Basic/TestInstanceLauncher.cs`
 - Depends on: Steps 5, 6
 - Pairs with: Step 10d1 (disjoint files)
@@ -340,6 +345,7 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
 - Done when: `Build` 0 errors.
 
 ### Step 10a - Diagnostics test callers move to Core
+- Done: edf372d2b7d1d834dd7b06739af0b8e3e910bf96
 - Files: `RoslynSentinel.Tests.Basic/DiagnosticEngineTests.cs`, `RoslynSentinel.Tests.Battery.Advanced/BatteryTenTests.cs`,
   `RoslynSentinel.Tests.Tools.Advanced/BatteryTwentyThreeTests.cs`
 - Depends on: Step 2
@@ -354,6 +360,7 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
 - Done when: `Build` 0 errors; the three classes pass.
 
 ### Step 10b - Diagnostics test callers move to Core (Tools.Basic)
+- Done: 660c88222a42d327850db2e3cbe53afb7c0ab188
 - Files: `RoslynSentinel.Tests.Tools.Basic/PathCaseLookupRegressionTests.cs`, `RoslynSentinel.Tests.Tools.Basic/NewToolTests.cs`,
   `RoslynSentinel.Tests.Tools.Basic/RegressionTests.cs`
 - Depends on: Step 2
@@ -365,6 +372,7 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
 - Done when: `Build` 0 errors; the three classes pass.
 
 ### Step 10c - Build test callers move to Core (engine and scope tests)
+- Done: 89bd4c505975ae303e61264b80a2e80caf181105
 - Files: `RoslynSentinel.Tests.Tools.Basic/BuildEngineTests.cs`, `RoslynSentinel.Tests.Tools.Basic/BuildScopeFullBuildTests.cs`
 - Depends on: Steps 5, 6
 - Pairs with: Step 8b
@@ -381,6 +389,7 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
 - Done when: `Build` 0 errors; both classes pass.
 
 ### Step 10d1 - Build test callers move to Core (hints)
+- Done: 030c343206b032e63be4d2620cedf74e90c369dd
 - Files: `RoslynSentinel.Tests.Tools.Basic/SurfaceAwareHintsBuildTestingTests.cs`
 - Depends on: Steps 5, 6
 - Pairs with: Step 9
@@ -392,6 +401,7 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
 - Done when: `Build` 0 errors; the class passes.
 
 ### Step 10d2 - Build test callers move to Core (isolation, fixtures)
+- Done: 34103e7ee31948819733c31aa846a8f12984bb6e
 - Files: `RoslynSentinel.Tests.Tools.Basic/BuildIsolationTests.cs`, `RoslynSentinel.Tests.Tools.Basic/BuildCascadeFixtureTests.cs`
 - Depends on: Steps 5, 6
 - Effect: text-neutral
@@ -403,6 +413,7 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
 - Done when: `Build` 0 errors; both classes pass.
 
 ### Step 10e - Fixture restore test
+- Done: 9be1fa34c532a7dfb713a9156660d253f59ca2da
 - Files: `RoslynSentinel.Tests/TestSolutionFixtureRestoreTests.cs`
 - Depends on: Step 5
 - Pairs with: Step 8a
