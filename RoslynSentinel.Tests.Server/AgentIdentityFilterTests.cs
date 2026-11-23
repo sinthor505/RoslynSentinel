@@ -78,6 +78,7 @@ public class AgentIdentityFilterTests
 
         AgentOperatingModeOptions.Configure(System.Array.Empty<string>());
         ToolCallContext.Set(null);
+        // TODO SetUp enables ToolCallEchoOptions (--echo-tool-args=true) and nothing resets it here, so the echo stays on for later fixtures in the process (hypothesis for the filtered-vs-full difference seen in #20); reset with ToolCallEchoOptions.Configure(empty) and confirm
     }
 
     [Test]

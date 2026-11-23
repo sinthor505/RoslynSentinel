@@ -10,3 +10,4 @@ close it with a reason in [CLOSED.md](./CLOSED.md), then delete the line here. C
 [todo_markers.md](../generated/todo_markers.md) (regenerate with `pwsh -NoProfile -File scripts/Get-TodoMarkers.ps1`).
 
 ## Untriaged
+- 2026-11-22 21:00 AgentIdentityFilterTests.SetUp enables ToolCallEchoOptions and TearDown never resets it, so the echo (which re-serializes tool text with the relaxed encoder) may stay on for later fixtures and mask encoder differences in full runs - RoslynSentinel.Tests.Server/AgentIdentityFilterTests.cs:40 (SetUp), TearDown - TODO in AgentIdentityFilterTests.TearDown

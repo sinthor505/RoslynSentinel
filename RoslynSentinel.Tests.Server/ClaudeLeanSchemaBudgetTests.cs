@@ -38,14 +38,18 @@ public class ClaudeLeanSchemaBudgetTests
     // Raised 45500 -> 46500 on 2026-11-20 (TODO punchlist #15): Build and RunTest gained the optional repoPath parameter (~200 chars each) and a longer useScratchDir text; measured 45975 (headroom 525; measured + 300 rounded up to 500 gives 46500).
     // Raised 46500 -> 47500 on 2026-11-22 (TODO punchlist #10): the ReplaceRange tool joined the claude-lean core; measured 46833 (headroom 667).
     // Raised 47500 -> 48000 on 2026-11-22 (TODO punchlist #11): the MoveFile tool joined the claude-lean core; measured 47688 (headroom 312).
-    private const int AdvancedTotalBudget = 48000;
+    // Raised 48000 -> 48400: the growth is the readOnlyHint annotation added by punchlist #14 (ReadOnly = true on 37 read tools).
+    private const int AdvancedTotalBudget = 48400;
     // Basic raised 40000 -> 45000 on 2026-11-10 (core split slice 1): ChangeSignature (~1.9k) and MoveMember (3356) moved from Tools.Advanced to Tools.Basic (CoreRefactoringTools), so the Basic flavor now serves them and measures 44948 chars, the same as Advanced.
-    private const int BasicTotalBudget = 48000; // raised with AdvancedTotalBudget on 2026-11-15 (three times) and 2026-11-20 and 2026-11-22 (#10, #11)
+    // Raised 48000 -> 48400: the growth is the readOnlyHint annotation added by punchlist #14 (ReadOnly = true on 37 read tools).
+    private const int BasicTotalBudget = 48400; // raised with AdvancedTotalBudget on 2026-11-15 (three times) and 2026-11-20 and 2026-11-22 (#10, #11)
     private const int AdvancedMaxToolBudget = 5000;
     private const int BasicMaxToolBudget = 5000;
     // Search per-tool budget.
-    private const int AdvancedSearchToolBudget = 2450;
-    private const int BasicSearchToolBudget = 2450;
+    // Raised 2450 -> 2550: the growth is the readOnlyHint annotation added by punchlist #14 (ReadOnly = true on 37 read tools).
+    private const int AdvancedSearchToolBudget = 2550;
+    // Raised 2450 -> 2550: the growth is the readOnlyHint annotation added by punchlist #14 (ReadOnly = true on 37 read tools).
+    private const int BasicSearchToolBudget = 2550;
 
     private const string RaiseHint = "if this growth is intended, raise the constant in ClaudeLeanSchemaBudgetTests and note why in the commit message";
 
