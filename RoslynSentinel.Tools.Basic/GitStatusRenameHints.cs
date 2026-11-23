@@ -161,11 +161,10 @@ internal static class GitStatusRenameHints
 
     /// <summary>
     /// The (source, destination, change id) of every <c>move_file</c> blob under <paramref name="solutionRoot"/> that is not undone, newest first,
-    /// as repo-relative paths with '/' (relative to <paramref name="gitRoot"/>). A path outside the repository is dropped. Never throws.
+    /// as repo-relative paths with '/' (relative to <paramref name="gitRoot"/>). A path outside the repository is dropped. A chain of moves (A to B, then B to C) also yields the joined pair A to C, appended after the pairs it joins. Never throws.
     /// </summary>
     internal static IReadOnlyList<(string Source, string Destination, string ChangeId)> ReadMovePairs(string? solutionRoot, string gitRoot)
     {
-        // TODO a chained move A -> B -> C (two move_file blobs) is not joined into A -> C, so tier 1 stays silent for it; only tier 2 (identical content) can name it
         var pairs = new List<(string Source, string Destination, string ChangeId)>();
         try
         {
@@ -204,7 +203,76 @@ internal static class GitStatusRenameHints
             // A hint only: an unreadable operations folder costs the definitive tier, never the status call.
         }
 
-        return pairs;
+        return JoinChains(pairs);
+    }
+
+    // Adds the joined pair of every chain head: a pair whose source is not the destination of another pair, followed through
+    // Destination -> Source links (visited-set cycle guard) to the last destination. Only chains of 2+ links add a pair; a joined
+    // pair that is a self-move or duplicates an existing pair is skipped. The original pairs are kept in order, joined pairs after them.
+    private static List<(string Source, string Destination, string ChangeId)> JoinChains(IReadOnlyList<(string Source, string Destination, string ChangeId)> pairs)
+    {
+        var result = new List<(string Source, string Destination, string ChangeId)>(pairs);
+        for (var head = 0; head < pairs.Count; head++)
+        {
+            var source = pairs[head].Source;
+            var isChainHead = true;
+            for (var other = 0; other < pairs.Count; other++)
+            {
+                if (other != head && string.Equals(pairs[other].Destination, source, StringComparison.OrdinalIgnoreCase))
+                {
+                    isChainHead = false;
+                    break;
+                }
+            }
+
+            if (!isChainHead)
+            {
+                continue;
+            }
+
+            var visited = new HashSet<int> { head };
+            var last = head;
+            var links = 1;
+            while (true)
+            {
+                var next = -1;
+                for (var candidate = 0; candidate < pairs.Count; candidate++)
+                {
+                    if (!visited.Contains(candidate)
+                        && string.Equals(pairs[candidate].Source, pairs[last].Destination, StringComparison.OrdinalIgnoreCase))
+                    {
+                        next = candidate;
+                        break;
+                    }
+                }
+
+                if (next < 0)
+                {
+                    break;
+                }
+
+                visited.Add(next);
+                last = next;
+                links++;
+            }
+
+            if (links < 2)
+            {
+                continue;
+            }
+
+            var destination = pairs[last].Destination;
+            if (string.Equals(source, destination, StringComparison.OrdinalIgnoreCase)
+                || result.Any(existing => string.Equals(existing.Source, source, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(existing.Destination, destination, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            result.Add((source, destination, pairs[last].ChangeId));
+        }
+
+        return result;
     }
 
     // One blob: toolName move_file, exactly one created item (the destination) and one item without an after-source that was not created (the deleted source).

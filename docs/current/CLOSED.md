@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Git(status) rename hint joins chained MoveFile blobs - resolved (2026-11-22)
+
+Git(status) rename hint joins chained MoveFile blobs (2026-11-22) - in `GitStatusRenameHints.ReadMovePairs` (:166, code TODO) follow Destination -> Source links (cycle-safe) so A->B plus B->C yields A->C; acceptance: a Tools.Basic test with two move blobs asserts the A -> C hint; Small
+
+Evidence: punchlist #6: GitStatusRenameHints.JoinChains; two tests in GitStatusRenameHintTests
+
 ## GetRootNamespace uses Project.DefaultNamespace - resolved (2026-11-22)
 
 `GetRootNamespace` uses `project.DefaultNamespace ?? project.Name` instead of raw csproj XML (2026-11-22) - `ProjectStructureEngine.cs:1485-1508` (only caller :1301; the rest of the engine and `FolderNamespace.Expected` already do this); delete the XML read and the :1479 comment; acceptance: RootNamespace set in Directory.Build.props gives the same result as MoveFile, mismatch tests green; Small

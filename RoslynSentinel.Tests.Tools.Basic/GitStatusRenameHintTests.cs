@@ -102,6 +102,19 @@ public class GitStatusRenameHintTests
         return Path.Combine(_repoDir, ".roslynsentinel", "operations", written.FileName!);
     }
 
+    // A move_file blob from sourcePath to destinationPath (repo-relative, '/'): the same shape as WriteMoveBlobAsync, with the paths as parameters.
+    private async Task<string> WriteMoveBlobBetweenAsync(string changeId, string sourcePath, string destinationPath)
+    {
+        List<OperationItemRecord> items =
+        [
+            new() { FilePath = Path.Combine(_repoDir, sourcePath.Replace('/', Path.DirectorySeparatorChar)), Outcome = ItemRecordOutcome.Succeeded, BeforeSource = Content },
+            new() { FilePath = Path.Combine(_repoDir, destinationPath.Replace('/', Path.DirectorySeparatorChar)), Outcome = ItemRecordOutcome.Succeeded, AfterSource = Content, Created = true },
+        ];
+        var written = await OperationBlobWriter.WriteAsync("move_file", changeId, items, _repoDir);
+        Assert.That(written.Written, Is.True, written.Diagnostic);
+        return Path.Combine(_repoDir, ".roslynsentinel", "operations", written.FileName!);
+    }
+
     private static List<string> GitMessages(SentinelCallToolResult<object> result) =>
         [.. (result.Findings ?? []).Where(f => f.Source == "Git").Select(f => f.Message)];
 
@@ -220,5 +233,27 @@ public class GitStatusRenameHintTests
         var result = await _gitTools.GitTool(reason: "test message", GitOperation.status, repoPath: _repoDir);
 
         Assert.That(GitMessages(result), Is.Empty, "repoPath names another repo, so this server's MoveFile record is not consulted.");
+    }
+
+    [Test]
+    public async Task ReadMovePairs_TwoChainedMoves_AlsoYieldsTheJoinedFirstSourceToLastDestinationAsync()
+    {
+        await WriteMoveBlobBetweenAsync("aaaa1111", "src/Old.cs", "moved/New.cs");
+        await WriteMoveBlobBetweenAsync("bbbb2222", "moved/New.cs", "final/Last.cs");
+
+        var pairs = GitStatusRenameHints.ReadMovePairs(_repoDir, _repoDir);
+
+        Assert.That(pairs.Any(p => p.Source == "src/Old.cs" && p.Destination == "final/Last.cs"), Is.True, "A -> B then B -> C must join into A -> C.");
+    }
+
+    [Test]
+    public async Task ReadMovePairs_MoveCycle_DoesNotHangAndYieldsNoSelfMoveAsync()
+    {
+        await WriteMoveBlobBetweenAsync("aaaa1111", "src/Old.cs", "moved/New.cs");
+        await WriteMoveBlobBetweenAsync("bbbb2222", "moved/New.cs", "src/Old.cs");
+
+        var pairs = GitStatusRenameHints.ReadMovePairs(_repoDir, _repoDir);
+
+        Assert.That(pairs.Where(p => p.Source == p.Destination), Is.Empty, "A move cycle must not produce a pair whose source equals its destination.");
     }
 }
