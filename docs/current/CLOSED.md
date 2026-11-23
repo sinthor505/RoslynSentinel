@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Core split test-move remainder - resolved (2026-11-23)
+
+Core split test-move remainder (2026-11-10) - mixed files done (444e5a53, fdeba2d2, c8d2dbfc, 4beb7a2b); left: move `MoveMemberSuccessTests` and `MoveMemberToolCollateralRefusalTests` (Tests.Tools.Advanced, both marked `// TODO`) whole to Tests.Tools.Basic and drop the misleading `[Category("AdvancedRefactoringTools")]` on the ~31 tests that build `CreateCoreRefactoringTools` (`MoveMemberSuccessTests.cs:59`); MoveFile is live, parked by owner 2026-11-22: unpark when plan_test_placement_guardrail_and_shared_test_helpers Step 7.5 runs (it moves these files) or the owner picks it; MoveType promotion is later - [doc](proposals/proposal_usage_based_core_split.md)
+
+Evidence: 43f4f37a (plan_test_placement Step 7.5: MoveMemberSuccessTests and MoveMemberToolCollateralRefusalTests moved to Tests.Tools.Basic, [Category("AdvancedRefactoringTools")] dropped on 31 + 11 tests, TODO markers removed); filtered run green
+
 ## SubAgentChildServerLauncher.BuildServerAsync reports BuildFailed when dotnet build could not start - resolved (2026-11-23)
 
 `SubAgentChildServerLauncher.BuildServerAsync` reports BuildFailed when `dotnet build` could not start (2026-11-23) - Win32Exception/InvalidOperationException should map to `ToolErrorCode.BuildNotRun` (did-not-run); code TODO there; Small

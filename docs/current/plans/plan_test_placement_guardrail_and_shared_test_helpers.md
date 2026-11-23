@@ -1,6 +1,6 @@
 # Plan: guard test placement (core-subject tests out of Advanced test projects) and share the test helpers that keep being copied
 
-**Status:** IN PROGRESS 2026-11-23: Steps 1-6 DONE (punchlist #29, commits below); Steps 7-7.5 (relocation) and 8-10 not started. MoveFile is live, so Steps 7 and 9 are no longer blocked.
+**Status:** IN PROGRESS 2026-11-23: Steps 1-9 and 10a-10c DONE; only Step 10d (message-pin migration in Advanced tests) is left. Step 7 batches 7.1-7.14 (commits 83ee573d, cf019f42, 81c34058, 8a30b7f5, 43f4f37a, 8559809b, 9b4eeb8b, 063b79cb, 31fb1869, 4a056e51, a323caa6, e3932cec, 9690fb34, c33457fd, bb8d1121; hashes abbreviated) took `docs/known-misplaced-core-tests.txt` from 63 classes to 0. Step 8: nothing to delete (all 7 Basic-returning `BatteryToolFactory` methods are still referenced by `BasicRefactoringNameMissTests`, `BatteryTwentyFourTests`, `BatteryTwentyTwoTests`, `DryRunLineChangesTests`, which stay). Step 9: a9e791c7 (see its note). Step 10a/10b: 1b74b013, 18d326bf. Step 10c: 731d759d, a40e6f29, b0e170a4.
 
 Step status (2026-11-23): Step 1 DONE (0aa661aa; baseline 63 classes: 49 `Tests.Basic`, 14 `Tests.Tools.Basic`; 23 of them are class-level finds in 12 `Tests.Battery.Advanced` files, the preliminary file-level census had none there; `BugFixTests`, `BugHuntSevenTests`, `SentinelAccuracyTests`, `ConstructionSiteFindingsTests` classes are also new to the list). Step 2 DONE except `TestInstanceLauncherTests` (2a 2c3fce5f, 2b 76b0878d, 2c 51a804ea, 2d 96b4c624; four walk-ups with their own miss behaviour carry `// TODO`, marker commit e94af4f1; hashes abbreviated). Step 3 DONE (3a db4711f6, 3b 369a64f1, 3c dc47e396; only 5 `Src` and 1 `WithStrayCrlf` copies equaled the kit, the others differ and stay). Step 4 DONE (4a 71146e5e, 4b e5da9c26). Step 5 DONE (5a 01324c10: 275 pins in 87 files by the syntax scan; 5b 97adc445: five classes exempt, 197 pins left). Step 6 DONE (6a b095bac7, 6b 15154bcc: 266 Tests.Tools.Advanced tests in the 16 call-site classes green, wiring equivalent; 6c ff2ac1fc).
 
@@ -453,6 +453,24 @@ earlier TOOL-GAP is gone. The existing TODO.md entry "Core split test-move remai
 - Done when per slice: `Build` 0 errors; the touched classes pass; the baseline is regenerated and each touched file's count
   is lower; `MessageTextRatchetTests` is green. Core-project migration follows the same recipe on touch (no slice is
   scheduled for the 419 core pins; see decision 4).
+
+## Outcomes (todo-punchlist #11, 2026-11-23)
+
+- Step 7: a `Tests.*Advanced` file with `using RoslynSentinel.Engines.Advanced;` / `...Tools.Advanced;` is refused by the MoveFile
+  compile gate in a Basic project even when it names no Advanced type; the batches removed those using lines (`UsingDirective`) first.
+  Batch 7.12 ran as 7.12a/7.12b (tool-call budget). `Tests.Basic` already had a `DiagnosticEngineTests.cs`, so the Battery class was
+  renamed `BatteryDiagnosticEngineTests` before the move. Extracting a class into its own file changes the file-name key of
+  `docs/known-long-message-pins.txt`: it was regenerated (commit 24942ee2, total pins unchanged). The moved files keep their old
+  namespaces (decision D3); a folder-matching namespace pass is optional (no TODO line: MoveFile `update` is not built).
+- Step 9: `FakeLlmClient` is also used by `StaleReadCommentingTests` (stays) and `McpTasksHarnessTestSupport` could not move to
+  `Tests.Server` ahead of its callers (MoveFile refuses leaving callers behind), so both went to the shared
+  `RoslynSentinel.Tests/Support` and the four tests moved to `Tests.Server`. `Tests.Advanced.csproj` and `Tests.Asyncify.csproj` build
+  without `Server.Advanced`; `architecture_projects.md` regenerated.
+- Step 10a/10b: `Member(remove)` refuses a private `Src` that has callers; the copies were deleted with one `ReplaceSnippet` each after
+  adding `using static ...FormatKit`. The `WithStrayCrlf` copies in the 10a files and in `InstrumentationEngineFormatCharacterizationTests`
+  differ from the kit (anchor-substring and uniqueness asserts) and stay; `RoslynFormattingHelperFormatSpansTests.Src` (Tests.Basic, step 3c)
+  also differs, so the "no copy outside FormatKit.cs" search still finds it.
+- Step 10c: all walk-ups delegate to `RepoRootLocator` (`Find` or `TryFind`, own miss behaviour kept); the TODO markers are gone.
 
 ## Out of scope
 
