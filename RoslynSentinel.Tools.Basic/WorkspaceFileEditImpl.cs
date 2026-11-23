@@ -1242,6 +1242,39 @@ public class WorkspaceFileEditImpl
         => root is null ? null : position => EnclosingMemberResolver.GetEnclosingMemberName(root, position);
 
     /// <summary>
+    /// The one lookup ReplaceSnippet (single and batch) and ReplaceRange share. A project document comes back as <c>Document</c>. When the
+    /// lookup missed with NotFound and the path is an existing plain-text file under the solution root that no project owns
+    /// (<see cref="NonProjectFile.Classify"/>, the rule DeleteFile shares), its disk text comes back as <c>NonProjectText</c> and
+    /// the caller edits it as plain text: no syntax tree, no member names, no re-indentation, and no compile gate (the write chokepoint's
+    /// validation skips a non-.cs path no project contains). Every other miss (missing file, outside the root, ambiguous bare name, .cs outside
+    /// every project, binary) leaves both null, so <c>Lookup</c> carries the unchanged NotFound or Ambiguous text.
+    /// </summary>
+    private async Task<(Microsoft.CodeAnalysis.Document? Document, SourceText? NonProjectText, DocumentLookupResult Lookup)> ResolveEditTargetAsync(
+        FilePathWrapper path, CancellationToken cancellationToken)
+    {
+        // One lookup, owned by the read chokepoint: case-insensitive exact path, then a unique bare name; a miss names the closest real paths (or the ambiguous candidates).
+        var lookup = await _workspaceManager.GetDocumentAsync(path, ReadSource.Committed, cancellationToken);
+        if (lookup.TryGetDocument(out var document))
+        {
+            return (document, null, lookup);
+        }
+
+        if (lookup.Status != DocumentLookupStatus.NotFound)
+        {
+            return (null, null, lookup);
+        }
+
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        if (NonProjectFile.Classify(solution, _workspaceManager.GetSolutionRoot(), path) != NonProjectFileStatus.EligibleText)
+        {
+            return (null, null, lookup);
+        }
+
+        var diskText = await FileIoHelper.ReadAllTextIfExistsAsync(path, cancellationToken);
+        return diskText is null ? (null, null, lookup) : (null, SourceText.From(diskText), lookup);
+    }
+
+    /// <summary>
     /// Resolves oldContent to the single span a ReplaceSnippetTool edit may splice, shared by the single and batch
     /// paths. The request tier is IgnoreLineEndings with case-sensitive comparison: the ordinal stage, then the
     /// CR/LF/CRLF-interchangeable stage, exactly what the removed legacy ReplaceSnippetTool matcher did, so the returned
@@ -1685,8 +1718,8 @@ public class WorkspaceFileEditImpl
                 {
                     // One lookup, owned by the read chokepoint: case-insensitive exact path, then a unique
                     // bare name; a miss names the closest real paths (or the ambiguous candidates).
-                    var lookup = await _workspaceManager.GetDocumentAsync(filePathResolved, ReadSource.Committed, cancellationToken);
-                    if (!lookup.TryGetDocument(out var document))
+                    var (document, nonProjectText, lookup) = await ResolveEditTargetAsync(filePathResolved, cancellationToken);
+                    if (document is null && nonProjectText is null)
                     {
                         return new SentinelCallToolResult<ReplaceSnippetResult>()
                         {
@@ -1695,7 +1728,8 @@ public class WorkspaceFileEditImpl
                         };
                     }
 
-                    var oldText = await document.GetTextAsync(cancellationToken: cancellationToken);
+                    // A non-project text file has no Document: its disk text is matched as plain text (no syntax root, no member names, no re-indent).
+                    var oldText = nonProjectText ?? await document!.GetTextAsync(cancellationToken: cancellationToken);
                     var leakedMarkup = DescribeLeakedNewContentMarkup(newContent, () => oldText.ToString());
                     if (leakedMarkup is not null)
                     {
@@ -1711,7 +1745,7 @@ public class WorkspaceFileEditImpl
                     // span. Using oldContent.Length instead of match.Length used to corrupt adjacent
                     // lines when a fallback match fired (see
                     // project_replacesnippet_silent_splice_corruption_adjacent_lines memory).
-                    var root = await document.GetSyntaxRootAsync(cancellationToken);
+                    var root = document is null ? null : await document.GetSyntaxRootAsync(cancellationToken);
                     SnippetMatch match;
                     // Set when a wrong matchLine was ignored for a unique match; prefixed to the apply summary.
                     string? selectorNote = null;
@@ -1722,9 +1756,9 @@ public class WorkspaceFileEditImpl
                             withinMember: withinMember, matchLine: matchLine);
                     }
                     // Batch H4 R1: an identical edit sent twice (e.g. action replace + apply in one turn) is a no-op success, not a not-found failure.
-                    catch (ToolNotFoundException) when (_appliedEdits.FindDuplicate((string)(document.FilePath ?? filePathResolved), oldContent, newContent, oldText.ToString()) is not null)
+                    catch (ToolNotFoundException) when (_appliedEdits.FindDuplicate((string)(document?.FilePath ?? filePathResolved), oldContent, newContent, oldText.ToString()) is not null)
                     {
-                        var duplicateOf = _appliedEdits.FindDuplicate((string)(document.FilePath ?? filePathResolved), oldContent, newContent, oldText.ToString());
+                        var duplicateOf = _appliedEdits.FindDuplicate((string)(document?.FilePath ?? filePathResolved), oldContent, newContent, oldText.ToString());
                         return new SentinelCallToolResult<ReplaceSnippetResult>()
                         {
                             IsError = false,
@@ -1737,20 +1771,23 @@ public class WorkspaceFileEditImpl
                                 null, null, null)
                         };
                     }
-                    catch (ToolNotFoundException notFound) when (_rejectedEdits.Explains((string)(document.FilePath ?? filePathResolved), oldContent, oldText.ToString()))
+                    catch (ToolNotFoundException notFound) when (_rejectedEdits.Explains((string)(document?.FilePath ?? filePathResolved), oldContent, oldText.ToString()))
                     {
                         // Same error and code; only the text grows, so callers branching on NotFound are unaffected.
                         throw new ToolNotFoundException(notFound.Message + " " + RejectedOriginNote, notFound.MissingTargetKind, notFound.MissingTargetName, notFound.Snippet, notFound.Candidates);
                     }
-                    catch (ToolNotFoundException notFound) when (RewrittenLineMemory.Shared.Explain((string)(document.FilePath ?? filePathResolved), oldContent, oldText.ToString()) is { } rewriteNote)
+                    catch (ToolNotFoundException notFound) when (RewrittenLineMemory.Shared.Explain((string)(document?.FilePath ?? filePathResolved), oldContent, oldText.ToString()) is { } rewriteNote)
                     {
                         // H3: the oldContent holds the old text of a line the server rewrote (a lifted rename or RenameSymbol) earlier.
                         throw new ToolNotFoundException(notFound.Message + " " + rewriteNote, notFound.MissingTargetKind, notFound.MissingTargetName, notFound.Snippet, notFound.Candidates);
                     }
                     // The indent pass runs on every successful match, exact ones included, apply and validate alike.
-                    var reindent = await NewContentIndenter.ReindentAsync(document, [new TextChange(new TextSpan(match.Start, match.Length), newContent)], cancellationToken);
+                    IReadOnlyList<TextChange> spliceEdits = [new TextChange(new TextSpan(match.Start, match.Length), newContent)];
+                    var reindent = document is null
+                        ? NewContentIndenter.SplicePlain(oldText, spliceEdits)
+                        : await NewContentIndenter.ReindentAsync(document, spliceEdits, cancellationToken);
                     var newFileContent = reindent.Text;
-                    var targetPath = document.FilePath ?? filePathResolved;
+                    var targetPath = document?.FilePath ?? filePathResolved;
                     var targetEol = _workspaceManager.ResolveEol((string)targetPath, oldText.ToString());
                     var normalizedContent = EolUtilities.NormalizeEol(newFileContent, targetEol);
                     var noTypeLeft = DescribeNoTypeLeft(DisplayPath(filePathResolved), oldText.ToString(), normalizedContent, batch: false);
@@ -1895,13 +1932,14 @@ public class WorkspaceFileEditImpl
                     : Refuse(ToolErrorCode.InvalidArgument, "ReplaceRange: 'filePath' could not be resolved.");
             }
 
-            var lookup = await _workspaceManager.GetDocumentAsync(filePathResolved, ReadSource.Committed, cancellationToken);
-            if (!lookup.TryGetDocument(out var document))
+            var (document, nonProjectText, lookup) = await ResolveEditTargetAsync(filePathResolved, cancellationToken);
+            if (document is null && nonProjectText is null)
             {
                 return new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = true, ErrorData = lookup.ToResultError() };
             }
 
-            var oldText = await document.GetTextAsync(cancellationToken: cancellationToken);
+            // A non-project text file has no Document: its disk text is edited as plain text and written through the same tail (no compile gate applies to it).
+            var oldText = nonProjectText ?? await document!.GetTextAsync(cancellationToken: cancellationToken);
             if (string.IsNullOrWhiteSpace(oldText.ToString()))
             {
                 return Refuse(ToolErrorCode.InvalidArgument, DescribeEmptyFile(DisplayPath(filePathResolved), "ReplaceRange"));
@@ -1946,7 +1984,7 @@ public class WorkspaceFileEditImpl
             var rangeStart = oldText.Lines[firstLine].Start;
             var rangeEnd = oldText.Lines[lastLine].EndIncludingLineBreak;
             var rangeEndedWithTerminator = rangeEnd > oldText.Lines[lastLine].End;
-            var targetPath = document.FilePath ?? filePathResolved;
+            var targetPath = document?.FilePath ?? filePathResolved;
             var targetEol = _workspaceManager.ResolveEol((string)targetPath, oldText.ToString());
 
             // Only the replacement is normalized to the file's line ending; the chokepoint keeps the untouched lines as they are.
@@ -2150,8 +2188,8 @@ public class WorkspaceFileEditImpl
 
             // One lookup, owned by the read chokepoint: case-insensitive exact path, then a unique
             // bare name; a miss names the closest real paths (or the ambiguous candidates).
-            var lookup = await _workspaceManager.GetDocumentAsync(filePathResolved, ReadSource.Committed, cancellationToken);
-            if (!lookup.TryGetDocument(out var document))
+            var (document, nonProjectText, lookup) = await ResolveEditTargetAsync(filePathResolved, cancellationToken);
+            if (document is null && nonProjectText is null)
             {
                 perEditErrors.Add(lookup.Describe());
                 failureCodes.Add(lookup.Status == DocumentLookupStatus.Ambiguous ? ToolErrorCode.Ambiguous : ToolErrorCode.NotFound);
@@ -2162,16 +2200,17 @@ public class WorkspaceFileEditImpl
             // reach the same file under different spellings (e.g. a bare name and a full path); each
             // would otherwise be spliced against the original text and the later one would silently
             // overwrite the earlier one's batchEdits.
-            var canonicalPath = new FilePathWrapper(document.FilePath ?? filePathResolved.Absolute, _workspaceManager.GetSolutionRoot(), validated: true);
+            var canonicalPath = new FilePathWrapper(document?.FilePath ?? filePathResolved.Absolute, _workspaceManager.GetSolutionRoot(), validated: true);
             if (finalContents.ContainsKey(canonicalPath))
             {
                 perEditErrors.Add($"'{fileGroup.Key}' resolves to '{canonicalPath}', which another edit entry in this batch already targets under a different spelling. Use the same path string for every edit to one file so they are anchored together.");
                 continue;
             }
 
-            var originalText = await document.GetTextAsync(cancellationToken);
+            // A non-project text file has no Document: its disk text is matched as plain text (no syntax root, no member names, no re-indent).
+            var originalText = nonProjectText ?? await document!.GetTextAsync(cancellationToken);
             var originalString = originalText.ToString();
-            var fileRoot = await document.GetSyntaxRootAsync(cancellationToken);
+            var fileRoot = document is null ? null : await document.GetSyntaxRootAsync(cancellationToken);
             var memberNameAt = MemberNameResolverFor(fileRoot);
 
             // Resolve every edit's match against the file's ORIGINAL text -> never against a prior
@@ -2242,7 +2281,10 @@ public class WorkspaceFileEditImpl
 
             // All matches were computed against originalString, so one indent-aware splice applies them
             // together. The indent pass runs on every successful match, exact ones included.
-            var reindent = await NewContentIndenter.ReindentAsync(document, resolved.Select(r => new TextChange(new TextSpan(r.match.Start, r.match.Length), r.newContent)).ToList(), cancellationToken);
+            IReadOnlyList<TextChange> spliceEdits = resolved.Select(r => new TextChange(new TextSpan(r.match.Start, r.match.Length), r.newContent)).ToList();
+            var reindent = document is null
+                ? NewContentIndenter.SplicePlain(originalText, spliceEdits)
+                : await NewContentIndenter.ReindentAsync(document, spliceEdits, cancellationToken);
             var spliced = reindent.Text;
             if (reindent.LinesAdjusted > 0)
                 selectorNotes.Add($"{DisplayPath(filePathResolved)}: newContent indentation was adjusted to the file's on {reindent.LinesAdjusted} line(s); returnDiff shows the written text.");

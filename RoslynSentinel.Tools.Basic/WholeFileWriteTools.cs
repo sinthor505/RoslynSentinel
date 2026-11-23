@@ -141,7 +141,8 @@ public class WholeFileWriteTools
         FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         try
         {
-            if (!File.Exists(filePathResolved))
+            // The same existence decision the text edit tools use (NonProjectFile); DeleteFile keeps accepting any existing file, including one outside the solution root.
+            if (!NonProjectFile.ExistsOnDisk(filePathResolved))
             {
                 return new SentinelCallToolResult<object>()
                 {

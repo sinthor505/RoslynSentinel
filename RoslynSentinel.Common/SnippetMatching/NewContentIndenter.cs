@@ -20,6 +20,21 @@ public sealed record NewContentIndentResult(string Text, IReadOnlyList<string> I
 public static class NewContentIndenter
 {
     /// <summary>
+    /// Splices <paramref name="edits"/> into <paramref name="originalText"/> (original-text coordinates, non-overlapping, any order) with no
+    /// re-indentation: the path for a file that has no syntax tree (a plain-text file no project owns, or a document that does not
+    /// support one). <see cref="ReindentAsync"/> returns exactly this for such a document.
+    /// </summary>
+    public static NewContentIndentResult SplicePlain(SourceText originalText, IReadOnlyList<TextChange> edits)
+    {
+        ArgumentNullException.ThrowIfNull(originalText);
+        ArgumentNullException.ThrowIfNull(edits);
+
+        var sortedIndexes = Enumerable.Range(0, edits.Count).OrderBy(index => edits[index].Span.Start).ToArray();
+        var spliced = edits.Count == 0 ? originalText : originalText.WithChanges(sortedIndexes.Select(index => edits[index]));
+        return new NewContentIndentResult(spliced.ToString(), edits.Select(edit => edit.NewText ?? string.Empty).ToList(), 0, false);
+    }
+
+    /// <summary>
     /// Splices <paramref name="edits"/> into the pre-edit text of <paramref name="document"/> (edits are in original-text
     /// coordinates, non-overlapping, any order) and re-indents only the leading whitespace of the inserted lines. The
     /// formatter path runs when the edited text parses; the delta-shift fallback runs otherwise. The result keeps the
@@ -39,7 +54,7 @@ public static class NewContentIndenter
         var plainTexts = edits.Select(edit => edit.NewText ?? string.Empty).ToList();
         if (edits.Count == 0 || !document.SupportsSyntaxTree)
         {
-            return new NewContentIndentResult(spliced.ToString(), plainTexts, 0, false);
+            return SplicePlain(originalText, edits);
         }
 
         // Inserted spans in spliced coordinates (running offset), indexed in input order.
