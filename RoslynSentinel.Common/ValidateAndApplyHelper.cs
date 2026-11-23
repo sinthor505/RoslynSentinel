@@ -39,7 +39,9 @@ public static class ValidateAndApplyHelper
         var more = untouched.Count > 5 ? $" and {untouched.Count - 5} more" : string.Empty;
         var route = atomicRouteHint ?? "a batch with one item per file (each item has its own filePath), or a refactoring tool that updates call sites";
         return $"The new errors are in file(s) this edit did not change: {shown}{more}. They still use what this edit removed or renamed. " +
-            $"Make the change and every affected use in ONE call: {route}.";
+            // Facts and options only: the imperative "Make the change and every affected use in ONE call" steered models to
+            // edit callers in tasks that require them unchanged (WideningRejectedByGate, 2026-11-23 overnight runs).
+            $"Options: an edit that leaves those uses compiling, or one call that carries this edit and every affected use: {route}.";
 
         static string NormalizeSeparators(string path) => path.Trim().Replace('/', '\\');
 

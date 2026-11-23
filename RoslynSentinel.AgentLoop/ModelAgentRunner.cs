@@ -394,6 +394,7 @@ public sealed class ModelAgentRunner
             catch (StreamTruncatedException ex)
             {
                 // The client already retried once; the discarded response is not added to messages or transcript turns; no tool was executed.
+                // TODO a truncated turn that streamed a phrase loop (~16k tokens, 16-19 min) is retried and loops again; detect repetition mid-stream or skip the retry (INBOX 2026-11-23 08:20 StreamTruncated)
                 stopReason = AgentStopReason.StreamTruncated;
                 _logger.LogWarning(
                     ex,

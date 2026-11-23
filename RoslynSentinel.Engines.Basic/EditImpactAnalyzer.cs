@@ -675,8 +675,8 @@ public static class EditImpactAnalyzer
         int files = uses.Select(u => Path.GetFileName(u.FilePath.ToString())).Distinct(StringComparer.OrdinalIgnoreCase).Count();
         var name = change.OldName;
         var batch = isToolActive("ReplaceSnippet")
-            ? "make the change and every affected use in ONE call: ReplaceSnippet with batchEdits, one item per file (each item has its own filePath)."
-            : "make the change and every affected use in ONE call that edits each affected file.";
+            ? "one call can carry this edit and every affected use: ReplaceSnippet with batchEdits, one item per file (each item has its own filePath)."
+            : "one call that edits each affected file can carry this edit and every affected use.";
         switch (change.Kind)
         {
             case SymbolChangeKind.Renamed:

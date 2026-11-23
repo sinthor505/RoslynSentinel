@@ -211,12 +211,17 @@ public class ObsoleteNamespaceCopyStep1Tests
 
     private const string StepPrompt = """
 In ContosoOrders.Core/Evals/ObsoleteNamespaceCopy the file Legacy/Orders.cs declares three top-level types in the namespace
-ContosoOrders.Evals.ObsoleteNamespaceCopy.Legacy. Create Modern/Orders.cs (same folder tree) as a copy of it in the namespace
-ContosoOrders.Evals.ObsoleteNamespaceCopy.Modern, and mark every top-level type of the legacy file with the attribute
-[System.Obsolete("Use ContosoOrders.Evals.ObsoleteNamespaceCopy.Modern.<Type>")], where <Type> is that type's name; write the
-attribute fully qualified as System.Obsolete and place it below the type's XML doc comment. Legacy/Orders.cs must keep its UTF-8 byte order mark, CRLF line endings and doc comments exactly as they are.
-Modern/Orders.cs keeps CRLF line endings and the doc comments; it has no byte order mark requirement. Do not add a using
-directive, do not edit Consumer.cs or any test, and leave the copy without any Obsolete attribute.
+ContosoOrders.Evals.ObsoleteNamespaceCopy.Legacy. Two files change:
+
+1. New file Modern/Orders.cs (same folder tree): a copy of Legacy/Orders.cs in the namespace
+   ContosoOrders.Evals.ObsoleteNamespaceCopy.Modern. It keeps the doc comments and CRLF line endings, has no byte order mark
+   requirement, and carries no Obsolete attribute.
+2. Existing file Legacy/Orders.cs: every top-level type gets the attribute
+   [System.Obsolete("Use ContosoOrders.Evals.ObsoleteNamespaceCopy.Modern.<Type>")], where <Type> is that type's name, written
+   fully qualified as System.Obsolete and placed below the type's XML doc comment. The attribute points at the Modern type; it
+   goes on the Legacy type. The file keeps its UTF-8 byte order mark, CRLF line endings and doc comments exactly as they are.
+
+Do not add a using directive, and do not edit Consumer.cs or any test.
 """;
 
     public static ImplementationScenario Definition { get; } = new ImplementationScenario(

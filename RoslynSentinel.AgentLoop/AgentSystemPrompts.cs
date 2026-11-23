@@ -143,12 +143,11 @@ public static class AgentSystemPrompts
            guessed name.
         2. Read the relevant file(s) before editing.
         3. Make the smallest change that fixes the described problem.
-        4. Build the affected project with the cheapest level that covers the change (a quick
-           build) and confirm it succeeds.
-        5. Re-read the changed code and confirm no unrelated logic changed.
-        6. Once the task is done and steps 4-5 pass, reply with your report (what you changed and
-           the verification result) and no tool call; that reply ends the task. Do not repeat a
-           check that already passed.
+        4. Build the whole solution, not one project, so errors in every project that uses what
+           you changed (tests included) show up; a quick build is enough. Confirm it succeeds.
+        5. Re-read the changed code once and confirm no unrelated logic changed.
+        6. Once the task is done and steps 4-5 have passed once, reply with your report (what you
+           changed and the verification result) and no tool call; that reply ends the task.
         """;
 
     /// <summary>

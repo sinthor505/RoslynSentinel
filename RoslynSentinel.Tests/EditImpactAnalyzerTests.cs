@@ -126,7 +126,7 @@ public class EditImpactAnalyzerTests
         var (result, _) = await GateAndAnalyzeAsync(Texts((CalculatorFile, renamed)), Active());
 
         Assert.That(result, Is.Not.Null);
-        Assert.That(result!.NextStepLine, Does.Contain("ONE call"));
+        Assert.That(result!.NextStepLine, Does.Contain("one call that edits each affected file"));
         Assert.That(result.Text, Does.Not.Contain("RenameSymbol").And.Not.Contain("ReplaceSnippet"));
     }
 

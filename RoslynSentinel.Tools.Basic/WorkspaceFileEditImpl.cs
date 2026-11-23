@@ -1449,6 +1449,7 @@ public class WorkspaceFileEditImpl
         var impactNote = impact?.Text;
         // The edit-impact report, when it can attribute the errors to unedited files, replaces the generic untouched-file sentence (it already covers it).
         var untouchedNote = impactNote
+            // TODO name which batchEdits item introduced each new error, so a model can drop just that item (INBOX 2026-11-23 08:20 ReplaceSnippet batchEdits)
             ?? ValidateAndApplyHelper.DescribeUntouchedFileErrors(changedPaths, validation.Diagnostics.Select(d => d.FilePath.ToString()), "one ReplaceSnippet call with batchEdits, one item per file, each with its own filePath");
         var repeatNote = isRepeat ? RepeatedRejectionNote + (impactNote is null ? RepeatedRejectionChangeApproach : RepeatedRejectionFollowNextStep) + " " : "";
         var nearMisses = await EditImpactGate.DetectNearMissesAsync(_workspaceManager, changes, validation.Diagnostics, cancellationToken);
