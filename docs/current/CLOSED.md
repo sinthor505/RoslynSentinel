@@ -8,6 +8,30 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Mark GetComprehensiveHealthReport, GetDiagnostics and GetWorkspaceHealth ReadOnly - resolved (2026-11-23)
+
+Mark GetComprehensiveHealthReport, GetDiagnostics and GetWorkspaceHealth `ReadOnly = true` (2026-11-22) - decided 2026-11-22: GetComprehensiveHealthReport writes nothing (`IntelligenceTools.cs:41-66`, `HealthOrchestrationEngine.cs:35-166` only warm the in-memory compilation; first confirm its structure/performance/async-safety sub-engines write nothing); GetDiagnostics and GetWorkspaceHealth (`WorkspaceTools.cs:208`, `:372`) read at the default `verify` = noBuild and a non-default `verify` only builds into the throwaway artifacts path, accepted by the owner as not a solution write (first confirm the `_buildTest`/`_healthMisc` engine paths write nothing else); also remove `ReadOnly = true` from `GenerateClassesFromJson` (`GenerationTools.cs:82`, marked in 7a8163ed): owner rule 2026-11-22, ReadOnly means "returns information about the solution", and Generate* tools return generated content instead, so they stay unmarked even though they write nothing; acceptance: tools/list shows readOnlyHint true for the three and absent for every Generate* tool, `ClaudeLeanSchemaBudgetTests` stays green (GetDiagnostics is on claude-lean; raise the budget with a comment if needed); Small
+
+Evidence: 224b1b1c (verify fullBuild -> fullBuildThrowaway), 5fcaeddc (marks; GenerateClassesFromJson unmarked), cbe374b5 (SchemaLeanProfileTests readOnlyHint test); BuildVerificationNotRunTests, SchemaLeanProfileTests, ClaudeLeanSchemaBudgetTests green at cbe374b5 (budget unchanged). GetComprehensiveHealthReport sub-engines confirmed to write nothing (only the response pipeline large-result offload, shared by every ReadOnly tool). The live plan-mode check stays on the tracker morning checklist.
+
+## GetDiagnostics and GetWorkspaceHealth skip build verification silently - resolved (2026-11-23)
+
+GetDiagnostics and GetWorkspaceHealth skip build verification silently (2026-11-23) - with `verify` != noBuild a caught `BuildNotRunException` surfaces no finding; surface a "build verification did not run" finding instead; code TODOs in `WorkspaceBuildTestImpl.cs` GetDiagnostics and `WorkspaceHealthMiscImpl.cs` GetWorkspaceHealth; Small
+
+Evidence: 515db200; BuildVerificationNotRunTests (green at 515db200). Only BuildNotRunException is caught and reported as a BuildVerification Caution finding; GetWorkspaceHealth skips verification when no solution/projects are loaded.
+
+## GetComprehensiveHealthReport counts async void file- and project-wide - resolved (2026-11-23)
+
+GetComprehensiveHealthReport counts async void file- and project-wide (2026-11-22) - the AsyncVoidUsage branch (`HealthOrchestrationEngine.cs:116-123`, on by default `SentinelConfiguration.cs:88`) runs an empty task because the `AsyncSafetyEngine.DetectAsyncVoidMethodsAsync` call (needs a file) is commented out; decided 2026-11-22 (owner): restore it for file scope and iterate the project's documents (or reuse `AntiPatternEngine.DetectAsyncVoidMethod`, :258) for project scope; acceptance: file- and project-scoped reports both count an `async void` method under AsyncVoidUsage; Medium
+
+Evidence: 38ceeeea; HealthOrchestrationEngineTests (3 tests, green at 38ceeeea). New AntiPatternEngine.CountAsyncVoidMethodsAsync; event-handler signatures are not counted (AntiPatternEngine detector skips them).
+
+## GetDiagnostics ignores DiagnosticSuppressors - resolved (2026-11-23)
+
+GetDiagnostics ignores DiagnosticSuppressors (2026-11-22) - the CS8604 at `ChangeSignatureWrapperTests.cs:313` is suppressed in the real build by NUnit.Analyzers NUnit3001 (build log: info SP0001), not by a compilation option (all options match); `DiagnosticEngine.cs:40/55/108` use raw `GetDiagnostics`; fix: collect DiagnosticSuppressor analyzers from `project.AnalyzerReferences` and take diagnostics from `compilation.WithAnalyzers(suppressors, new CompilationWithAnalyzersOptions(project.AnalyzerOptions, ...)).GetAllDiagnosticsAsync()` (file scope: filter by tree); acceptance: GetDiagnostics on `ChangeSignatureWrapperTests.cs` no longer reports CS8604 at 313 and solution-wide counts match Build; cost of the analyzer driver over a whole solution is unmeasured; Small - [finding](findings/finding_getdiagnostics_ignores_diagnostic_suppressors.md)
+
+Evidence: 3daad2ab; DiagnosticEngineTests (4 suppressor tests, run green at 38ceeeea). Suppressors from project.AnalyzerReferences run through CompilationWithAnalyzers; projects without one unchanged. Not measured: solution-wide cost with many suppressor-bearing projects.
+
 ## SemanticFindReplace(replaceConstruction) accepts generic constructed types when the factory returns an assignable type - resolved (2026-11-23)
 
 `SemanticFindReplace(replaceConstruction)` accepts generic constructed types when the factory returns an assignable type (2026-11-21) - decided 2026-11-22: the up-front refusal at `ConstructionReplacer.cs:72` (TargetIneligible, the real reason plan_document_changeset_type Step 7 hand-batched ~140 sites) becomes a per-site check that the factory's return type is assignable to the closed constructed type; declared local types are left as they are; acceptance: a preview of `new Dictionary<FilePathWrapper, string>()` -> a `DocumentChangeSet` factory rewrites the sites with no TargetIneligible, and a non-assignable factory is still refused; Medium - [proposal](proposals/proposal_semantic_find_replace_construction_initializers_and_skip_echo.md)

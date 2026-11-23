@@ -1,6 +1,6 @@
 # Finding: GetDiagnostics reports compiler warnings that a project's DiagnosticSuppressor analyzers suppress in the real build
 
-**Status:** OPEN 2026-11-22. Cause established (not a compilation option); fix proposed, not built.
+**Status:** FIXED 2026-11-23 (3daad2ab). Cause established (not a compilation option); the suppressor pass is built in `DiagnosticEngine`. The text below is the original analysis.
 
 ## Context
 
