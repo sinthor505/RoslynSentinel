@@ -1018,4 +1018,84 @@ public class ResultStatusTests
         Assert.That(explicitStatus, Is.Not.Null);
         Assert.That(explicitStatus!.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), false), Is.Not.Empty, "IOperationResult.Status");
     }
+
+    [Test]
+    public void BuildNotRunException_MapsToBuildNotRunCode_AndFailedCategory()
+    {
+        const string message = "no projects to build";
+        var ex = new BuildNotRunException(message);
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.BuildNotRun));
+        Assert.That(ex.Category, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(ex.Message, Is.EqualTo(message));
+    }
+
+    [Test]
+    public void TestRunNotRunException_MapsToTestRunNotRunCode_AndFailedCategory()
+    {
+        const string message = "test gate busy";
+        var ex = new TestRunNotRunException(message);
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.TestRunNotRun));
+        Assert.That(ex.Category, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(ex.Message, Is.EqualTo(message));
+    }
+
+    [Test]
+    public void ToolTimedOutException_MapsToTimedOutCode_AndTimedOutCategory()
+    {
+        const string message = "operation exceeded its time limit";
+        var ex = new ToolTimedOutException(message);
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.TimedOut));
+        Assert.That(ex.Category, Is.EqualTo(ResultStatus.TimedOut));
+        Assert.That(ex.Message, Is.EqualTo(message));
+    }
+
+    [Test]
+    public void NoProjectsException_MapsToNoProjectsCode_AndFailedCategory()
+    {
+        const string message = "scope holds no project";
+        var ex = new NoProjectsException(message);
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NoProjects));
+        Assert.That(ex.Category, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(ex.Message, Is.EqualTo(message));
+    }
+
+    [Test]
+    public void DiagnosticSummary_StatusIsSuccess_AndSerializationHasNoStatusOrIsErrorFields()
+    {
+        var summary = new DiagnosticSummary(0, 0, []);
+        IOperationResult result = summary;
+
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
+
+        using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize(summary));
+        Assert.That(doc.RootElement.TryGetProperty("Status", out _), Is.False);
+        Assert.That(doc.RootElement.TryGetProperty("IsError", out _), Is.False);
+    }
+
+    [Test]
+    public void MultiDocumentEditResult_SerializesAsBareArray_IdenticalToPlainList()
+    {
+        var items = new List<DocumentEditResult>
+        {
+            new DocumentEditResult(EditOutcome.Modified, default(FilePathWrapper), "change-1", true),
+            new DocumentEditResult(EditOutcome.AlreadyInTargetState, default(FilePathWrapper), "change-2"),
+        };
+        var multi = new MultiDocumentEditResult(items);
+
+        string multiJson = JsonSerializer.Serialize(multi);
+        string listJson = JsonSerializer.Serialize(items);
+
+        using JsonDocument doc = JsonDocument.Parse(multiJson);
+        Assert.That(doc.RootElement.ValueKind, Is.EqualTo(JsonValueKind.Array));
+        Assert.That(doc.RootElement.GetArrayLength(), Is.EqualTo(2));
+        foreach (JsonElement element in doc.RootElement.EnumerateArray())
+        {
+            Assert.That(element.ValueKind, Is.EqualTo(JsonValueKind.Object));
+        }
+        Assert.That(multiJson, Is.EqualTo(listJson));
+    }
 }
