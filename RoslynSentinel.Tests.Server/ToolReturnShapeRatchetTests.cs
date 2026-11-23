@@ -268,21 +268,7 @@ public class ToolReturnShapeRatchetTests
         return $"scanned {scanned} tool methods; untyped offenders {offenders.Count}: {string.Join(", ", perCategory)}";
     }
 
-    private static string FindRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "RoslynSentinel.slnx")))
-            {
-                return dir.FullName;
-            }
-
-            dir = dir.Parent;
-        }
-
-        throw new InvalidOperationException("RoslynSentinel.slnx not found above " + AppContext.BaseDirectory);
-    }
+    private static string FindRepoRoot() => RepoRootLocator.Find(AppContext.BaseDirectory);
 
     private static HashSet<string> LoadBaseline(string path)
     {

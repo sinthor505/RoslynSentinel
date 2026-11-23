@@ -391,21 +391,7 @@ public class ToolHintRatchetTests
         return hits.Where(pair => ToolOf(pair.Key) == tool).Sum(pair => pair.Value);
     }
 
-    private static string FindRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "RoslynSentinel.slnx")))
-            {
-                return dir.FullName;
-            }
-
-            dir = dir.Parent;
-        }
-
-        throw new InvalidOperationException("RoslynSentinel.slnx not found above " + AppContext.BaseDirectory);
-    }
+    private static string FindRepoRoot() => RepoRootLocator.Find(AppContext.BaseDirectory);
 
     private static Dictionary<string, int> LoadBaseline(string path)
     {
