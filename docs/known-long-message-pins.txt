@@ -15,8 +15,6 @@ BasicRefactoringNameMissTests.cs | 2
 BatteryFifteenTests.cs | 1
 BatteryFourTests.cs | 1
 BatteryNineteenTests.cs | 1
-BatterySevenTests.cs | 1
-BatterySixTests.cs | 2
 BatteryTwentyTests.cs | 2
 BatteryTwentyThreeTests.cs | 1
 BatteryTwentyTwoTests.cs | 7
@@ -56,6 +54,7 @@ LocateSymbolNotFoundCandidateTests.cs | 3
 MakeStaticRewritesCallersTests.cs | 1
 MemberAddManyGuardTests.cs | 2
 MemberInsertAnchorTests.cs | 3
+MemberRefactoringEngineTests.cs | 1
 MemberRefactoringMissClassEnumTests.cs | 4
 MemberRefactoringTests.cs | 19
 MemberRemoveTests.cs | 2
@@ -85,4 +84,5 @@ SemanticRefactoringMissAdvancedTests.cs | 3
 SemanticReplaceEngineTests.cs | 2
 SequenceLargeResultPagingTests.cs | 3
 SnippetLookupTests.cs | 1
+SolutionStructureEngineTests.cs | 2
 WorkspaceLookupMissTests.cs | 3
