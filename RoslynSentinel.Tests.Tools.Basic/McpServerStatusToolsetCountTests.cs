@@ -79,6 +79,25 @@ public class McpServerStatusToolsetCountTests
     }
 
     [Test]
+    public void FreshService_SubscriptionCountIsZero()
+    {
+        var (service, _) = CreateService();
+
+        Assert.That(service.ToolListSubscriptionRequests, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void RecordToolListSubscriptionRequest_CountsEachCall()
+    {
+        var (service, _) = CreateService();
+
+        service.RecordToolListSubscriptionRequest();
+        service.RecordToolListSubscriptionRequest();
+
+        Assert.That(service.ToolListSubscriptionRequests, Is.EqualTo(2));
+    }
+
+    [Test]
     public void McpServerStatus_WithoutRequestContext_ReportsNullProtocolVersionAndCount()
     {
         var (service, _) = CreateService();
@@ -94,5 +113,6 @@ public class McpServerStatusToolsetCountTests
 
         Assert.That(status.ClientProtocolVersion, Is.Null);
         Assert.That(status.ToolListChangedRaised, Is.EqualTo(1));
+        Assert.That(status.ToolListSubscriptionRequests, Is.EqualTo(0));
     }
 }

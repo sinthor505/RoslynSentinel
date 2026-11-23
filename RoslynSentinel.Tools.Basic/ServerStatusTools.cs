@@ -52,7 +52,7 @@ public class ServerStatusTools
         " lastLaunch = the launcher's last build of source HEAD (buildFailed = it fell back to the older servedSha; firstErrors and hint say why)." +
         " operatingMode/operatingModeSource = SingleAgent or MultiAgent and why; callerAgentId = agent id of this call (null if none)." +
         " eolMode = line-ending policy for writes (--eol / ROSLYNSENTINEL_EOL): auto keeps each file's existing endings (else .editorconfig), crlf or lf forces that ending." +
-        " clientProtocolVersion = this session's negotiated MCP version; toolListChangedRaised = tool-list changes applied (not proof of delivery).")]
+        " clientProtocolVersion = this session's negotiated MCP version; toolListChangedRaised = tool-list changes applied (not proof of delivery); toolListSubscriptionRequests = subscriptions/listen requests that asked for tool-list notifications (2026-07-28 clients only).")]
     public SentinelCallToolResult<McpServerStatusResult> McpServerStatusTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("inactive: declared tools not active in this mode, with an enabledBy hint. all: every declared tool.")]
@@ -185,7 +185,9 @@ public class ServerStatusTools
             // Negotiated MCP version of the calling session; null when the call carries no request context (tests, in-process callers).
             ClientProtocolVersion: requestContext?.JsonRpcRequest.Context?.ProtocolVersion ?? requestContext?.Server.NegotiatedProtocolVersion,
             // Tool-list change scopes this process applied; not proof a client received notifications/tools/list_changed.
-            ToolListChangedRaised: _toolsets?.ToolListChangedRaised
+            ToolListChangedRaised: _toolsets?.ToolListChangedRaised,
+            // subscriptions/listen requests asking for tool-list notifications (2026-07-28 clients); null without ToolsetService.
+            ToolListSubscriptionRequests: _toolsets?.ToolListSubscriptionRequests
         )
         };
     }
@@ -309,7 +311,8 @@ public sealed record McpServerStatusResult(
     // Negotiated MCP protocol version of the calling session (null without a request context).
     string? ClientProtocolVersion = null,
     // Tool-list change scopes ToolsetService applied in this process (null when no ToolsetService is injected).
-    int? ToolListChangedRaised = null);
+    int? ToolListChangedRaised = null,
+    int? ToolListSubscriptionRequests = null);
 /// <summary>
 /// One <see cref="McpServerToolAttribute"/>-carrying method discovered via reflection, as reported
 /// by McpServerStatusTool's <c>AllDeclaredTools</c>. Ground truth for "does this tool exist in this

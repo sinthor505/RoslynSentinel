@@ -11,6 +11,7 @@ using RoslynSentinel.Common;
 using RoslynSentinel.Common.AgentLoop;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tools.Basic;
+using System.Text.Json.Nodes;
 
 namespace RoslynSentinel.Server.Advanced;
 
@@ -91,6 +92,7 @@ public static class RoslynSentinelServiceExtensionsBasic
 
         AddResponseGatedExitMessageFilter(mcpBuilder);
         AddRestoredToolsetListChangedMessageFilter(mcpBuilder);
+        AddProtocolDiagnosticsMessageFilter(mcpBuilder);
 
         return mcpBuilder;
     }
@@ -149,6 +151,71 @@ public static class RoslynSentinelServiceExtensionsBasic
             catch (Exception ex)
             {
                 logger?.LogWarning(ex, "Failed to send tools/list_changed after initialized for restored toolsets.");
+            }
+        }));
+    }
+
+    /// <summary>
+    /// Registers the incoming-message filter that records which MCP protocol revision the client uses and whether it asks for
+    /// tool-list notifications (plan_stateless_http_toolset_enablement): logs the requested and negotiated version of
+    /// <c>initialize</c>, each <c>server/discover</c>, each change of the per-request protocol version, and every
+    /// <c>subscriptions/listen</c> request with its notification flags. A listen request with <c>toolsListChanged: true</c>
+    /// also counts in <see cref="ToolsetService.ToolListSubscriptionRequests"/>. Diagnostics only: the pre-pipeline part runs
+    /// before <c>next</c> because a listen request does not return until its stream closes, and every failure is swallowed.
+    /// </summary>
+    private static void AddProtocolDiagnosticsMessageFilter(IMcpServerBuilder mcpBuilder)
+    {
+        // Per host, like the restored-toolset filter: the last per-request protocol version logged, so each change is logged once.
+        string? lastLoggedVersion = null;
+        mcpBuilder.WithMessageFilters(filters => filters.AddIncomingFilter(next => async (context, cancellationToken) =>
+        {
+            ILogger? logger = null;
+            var request = context.JsonRpcMessage as JsonRpcRequest;
+            try
+            {
+                logger = context.Services?.GetService<ILoggerFactory>()?.CreateLogger("RoslynSentinel.ProtocolDiagnostics");
+                var version = context.JsonRpcMessage.Context?.ProtocolVersion;
+                if (version is not null && Interlocked.Exchange(ref lastLoggedVersion, version) != version)
+                {
+                    logger?.LogInformation("MCP per-request protocol version: {ProtocolVersion}.", version);
+                }
+
+                switch (request?.Method)
+                {
+                    case RequestMethods.Initialize:
+                        logger?.LogInformation("MCP initialize: client requested protocol version {ProtocolVersion}.", request.Params?["protocolVersion"]?.ToString());
+                        break;
+                    case RequestMethods.ServerDiscover:
+                        logger?.LogInformation("MCP server/discover received (2026-07-28 or later client).");
+                        break;
+                    case RequestMethods.SubscriptionsListen:
+                        var notifications = request.Params?["notifications"];
+                        logger?.LogInformation("MCP subscriptions/listen: notifications {Notifications}.", notifications?.ToJsonString() ?? "(none)");
+                        if (notifications?["toolsListChanged"] is JsonValue flag && flag.TryGetValue<bool>(out var wantsTools) && wantsTools)
+                        {
+                            context.Services?.GetService<ToolsetService>()?.RecordToolListSubscriptionRequest();
+                        }
+
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                logger?.LogWarning(ex, "Protocol diagnostics failed before handling an incoming message; the message is handled normally.");
+            }
+
+            await next(context, cancellationToken).ConfigureAwait(false);
+
+            if (request?.Method == RequestMethods.Initialize)
+            {
+                try
+                {
+                    logger?.LogInformation("MCP initialize: negotiated protocol version {ProtocolVersion}.", context.Server.NegotiatedProtocolVersion);
+                }
+                catch (Exception ex)
+                {
+                    logger?.LogWarning(ex, "Protocol diagnostics failed to read the negotiated protocol version.");
+                }
             }
         }));
     }

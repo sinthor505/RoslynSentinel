@@ -62,6 +62,7 @@ public sealed class ToolsetService
     private readonly Func<IEnumerable<Assembly>> _assemblySource;
     private readonly Dictionary<ToolSetName, List<McpServerTool>> _enabled = new();
     private int _toolListChangedRaised; // guarded by _gate
+    private int _toolListSubscriptionRequests; // guarded by _gate
 
     /// <summary>
     /// Raised after a real enable or disable (not a no-op), outside the lock, with every set that is on after the call.
@@ -125,6 +126,31 @@ public sealed class ToolsetService
             {
                 return _toolListChangedRaised;
             }
+        }
+    }
+
+    /// <summary>
+    /// Number of subscriptions/listen requests (2026-07-28 and later clients) that asked for notifications/tools/list_changed. Zero with a client on the initialize handshake (2025-11-25 and earlier), which gets the session-wide broadcast instead.
+    /// </summary>
+    public int ToolListSubscriptionRequests
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _toolListSubscriptionRequests;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Called by the incoming message filter for each subscriptions/listen request whose notifications.toolsListChanged is true.
+    /// </summary>
+    public void RecordToolListSubscriptionRequest()
+    {
+        lock (_gate)
+        {
+            _toolListSubscriptionRequests++;
         }
     }
 
