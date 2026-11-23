@@ -14,16 +14,7 @@ public class EolAuditRatchetTests
 {
     private static readonly string[] ExcludedDirectoryNames = new[] { "bin", "obj", ".git", ".roslynsentinel", "node_modules", "Worktree" };
 
-    private static string RepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "RoslynSentinel.slnx")))
-        {
-            dir = dir.Parent;
-        }
-
-        return dir?.FullName ?? throw new InvalidOperationException("RoslynSentinel.slnx not found above " + AppContext.BaseDirectory);
-    }
+    private static string RepoRoot() => RepoRootLocator.Find(AppContext.BaseDirectory);
 
     // Walks the tree by hand so excluded directories are never entered. The extension check is exact because "*.cs" on Windows also
     // matches names such as "x.csproj".

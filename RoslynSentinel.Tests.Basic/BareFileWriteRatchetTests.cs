@@ -105,16 +105,7 @@ public class BareFileWriteRatchetTests
             || name is "Create" or "CreateText" or "Copy";
     }
 
-    private static string RepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "RoslynSentinel.slnx")))
-        {
-            dir = dir.Parent;
-        }
-
-        return dir?.FullName ?? throw new InvalidOperationException("RoslynSentinel.slnx not found above " + AppContext.BaseDirectory);
-    }
+    private static string RepoRoot() => RepoRootLocator.Find(AppContext.BaseDirectory);
 
     private static bool IsProductionProject(string directoryName) =>
     directoryName.StartsWith("RoslynSentinel.", StringComparison.Ordinal)

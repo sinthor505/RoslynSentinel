@@ -28,16 +28,7 @@ public class ErrorPolicyKindRatchetTests
     // Statement-like and structural targets with no policy key. Compared case-insensitively.
     private static readonly IReadOnlySet<string> DeliberatelyUnmappedKinds = MissingTargetKinds.UnmappedKinds;
 
-    private static string RepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "RoslynSentinel.slnx")))
-        {
-            dir = dir.Parent;
-        }
-
-        return dir?.FullName ?? throw new InvalidOperationException("RoslynSentinel.slnx not found above " + AppContext.BaseDirectory);
-    }
+    private static string RepoRoot() => RepoRootLocator.Find(AppContext.BaseDirectory);
 
     private static bool IsScannedProject(string directoryName) => ScannedProjects.Contains(directoryName, StringComparer.Ordinal);
 
