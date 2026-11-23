@@ -212,20 +212,14 @@ public class ServerBinaryStalenessTests
     [Test]
     public void SourcePathPrefixes_MatchScriptsServerSourcePathsFile()
     {
-        // TODO walk-up copy of RepoRootLocator.Find(AppContext.BaseDirectory); delegate once its miss behaviour (Assert.Fail when RoslynSentinel.slnx is absent) is kept by the caller (plan_test_placement, punchlist 29)
-        var dir = new DirectoryInfo(TestContext.CurrentContext.TestDirectory);
-        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "RoslynSentinel.slnx")))
-        {
-            dir = dir.Parent;
-        }
-
-        if (dir == null)
+        string? repoRoot = RepoRootLocator.TryFind(AppContext.BaseDirectory);
+        if (repoRoot == null)
         {
             Assert.Fail("Could not find RoslynSentinel.slnx walking up from " + TestContext.CurrentContext.TestDirectory);
             return;
         }
 
-        var listed = File.ReadAllLines(Path.Combine(dir.FullName, "scripts", "server-source-paths.txt"))
+        var listed = File.ReadAllLines(Path.Combine(repoRoot, "scripts", "server-source-paths.txt"))
             .Select(line => line.Trim())
             .Where(line => line.Length > 0 && !line.StartsWith('#'))
             .ToArray();

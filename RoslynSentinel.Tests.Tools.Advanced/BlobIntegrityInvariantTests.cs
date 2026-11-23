@@ -191,13 +191,6 @@ public class BlobIntegrityInvariantTests
 
     private static string FindRepoRoot()
     {
-        var dir = new DirectoryInfo(TestContext.CurrentContext.TestDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "RoslynSentinel.slnx")))
-        {
-            dir = dir.Parent;
-        }
-
-        Assert.That(dir, Is.Not.Null, "could not locate the repo root (no RoslynSentinel.slnx found)");
-        return dir!.FullName;
+        return RepoRootLocator.Find(AppContext.BaseDirectory);
     }
 }
