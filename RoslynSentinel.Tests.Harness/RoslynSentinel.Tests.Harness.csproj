@@ -59,6 +59,7 @@
 
   <ItemGroup>
     <Content Include="..\scripts\eval-hosts.json" Link="eval-hosts.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\RoslynSentinel.Tests.ModelEval\error-policy.md" Link="error-policy.md" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

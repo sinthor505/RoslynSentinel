@@ -3,7 +3,6 @@ using NUnit.Framework;
 using RoslynSentinel.Common;
 using RoslynSentinel.Common.AgentLoop;
 using RoslynSentinel.Server.Advanced;
-using RoslynSentinel.Tests.ModelEval.LiveModel;
 
 namespace RoslynSentinel.Tests.ModelEval;
 
@@ -121,7 +120,7 @@ public sealed class ErrorPolicyFileTests
         Assert.That(resolvedPath, Is.EqualTo(ErrorPolicyFile.OutputPath));
         Assert.That(File.Exists(resolvedPath), Is.True, resolvedPath);
 
-        var stamp = ModelEvalAssemblySetUp.BuildProcessStamp(("abc123", false), ErrorPolicyMode.Pointer, resolvedPath);
+        var stamp = EvalRunStamp.BuildProcessStamp(("abc123", false), ErrorPolicyMode.Pointer, resolvedPath);
 
         Assert.That(stamp, Is.Not.Null);
         Assert.That(stamp!.Value.ErrorPolicyMode, Is.EqualTo("pointer"));
@@ -135,13 +134,13 @@ public sealed class ErrorPolicyFileTests
     {
         using (NotFoundInventoryOptions.OverrideForCurrentContext(true))
         {
-            var on = ModelEvalAssemblySetUp.BuildProcessStamp(("abc123", false))!.Value.ErrorPolicyMode;
+            var on = EvalRunStamp.BuildProcessStamp(("abc123", false))!.Value.ErrorPolicyMode;
             Assert.That(on, Does.EndWith(NotFoundInventoryOptions.StampSuffix));
         }
 
         using (NotFoundInventoryOptions.OverrideForCurrentContext(false))
         {
-            Assert.That(ModelEvalAssemblySetUp.BuildProcessStamp(("abc123", false))!.Value.ErrorPolicyMode, Does.Not.Contain("inventory"));
+            Assert.That(EvalRunStamp.BuildProcessStamp(("abc123", false))!.Value.ErrorPolicyMode, Does.Not.Contain("inventory"));
         }
     }
 }
