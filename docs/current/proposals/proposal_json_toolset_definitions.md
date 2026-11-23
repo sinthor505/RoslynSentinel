@@ -1,7 +1,7 @@
 # Named JSON toolset files replace mode + include + exclude + hide as the one way to choose a tool surface
 
 **Status:** PROPOSED 2026-11-22. Design decisions settled with the owner on 2026-11-22. Prerequisite
-[plan_tab_scoped_toolset_persistence.md](../plans/closed/plan_tab_scoped_toolset_persistence.md) closed 2026-11-23. Next step: a plan.
+[plan_tab_scoped_toolset_persistence.md](../plans/closed/plan_tab_scoped_toolset_persistence.md) closed 2026-11-23. Plan: [plan_json_toolset_definitions.md](../plans/plan_json_toolset_definitions.md) (DRAFT 2026-11-23; adds the owner rulings on group shape, HTTP fold and flag removal).
 
 ## Motivation
 
@@ -292,6 +292,6 @@ migration can prove it changes nothing.
 - [reference_changing_claude_lean_tools.md](../references/reference_changing_claude_lean_tools.md): replaced by editing `claude-lean.json` once built.
 - [plan_modeleval_lean_tool_surface.md](../plans/closed/plan_modeleval_lean_tool_surface.md) and
   [proposal_modeleval_lean_tool_surface.md](proposal_modeleval_lean_tool_surface.md): origin of the eval lean list.
-- [plan_stateless_http_toolset_enablement.md](../plans/closed/plan_stateless_http_toolset_enablement.md)
+- [plan_stateless_http_toolset_enablement.md](../plans/plan_stateless_http_toolset_enablement.md)
 - [blocking_error_gitremote_not_callable_after_toolset_enable.md](../blockers/blocking_error_gitremote_not_callable_after_toolset_enable.md)
 - Memory: Tab-scoped toolset persistence run; Idle restart drops toolsets.

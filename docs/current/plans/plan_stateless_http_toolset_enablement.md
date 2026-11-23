@@ -1,6 +1,6 @@
 # Plan: Make runtime toolset enablement work over stateless HTTP, then restore Stateless = true
 
-**Status:** DRAFT 2026-10-11. Not started; Step 1 must confirm the SDK behaviour this plan rests on.
+**Status:** DRAFT 2026-10-11. Not started; Step 1 must confirm the SDK behaviour this plan rests on. Reopened 2026-11-23 from `closed/`: the per-request rebuild was confirmed from SDK v2.4.0 source (`StreamableHttpHandler.cs:585-589`, `McpServerOptionsSetup.cs:30-39`, no list_changed when stateless `McpServerImpl.cs:117-121`); HTTP is stateless again since `7595cff6`. Follow-up of [plan_json_toolset_definitions.md](plan_json_toolset_definitions.md), which folds `--toolsets` groups at startup on HTTP meanwhile.
 
 ## Problem
 
