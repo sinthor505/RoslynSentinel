@@ -99,6 +99,12 @@ Findings that shape the design:
 | Positive controls | Every conditional scenario has a twin where the condition holds, and graders gain a false-BLOCKED outcome, before the A/B runs. |
 | First slice | ImplementationScenario and the two StopAdherence scenarios. OrderPricing stays on the old prompt as the regression check until the A/B is read. |
 | Offer to real clients | As an MCP prompt, after the A/B, using the winning text. |
+| `validateOnApply` | Removed from the eval tool surface: hidden from the schema, `false` refused. A scenario opts back in to the full schema only when shown to need it; none does today. Evidence: Ornith on 112 (run 20261123-155817-336) sent the gate-rejected edits again with `validateOnApply: false` at T5. |
+| Finish rule | `CodingAgent` workflow step 6 stays as it is until the contract replaces it. |
+| A/B arms | Old vs new contract, both on the reworked prompts at the same commit; no pinned pre-migration arm. |
+| WideningRejectedByGate overload outcome | Grader unchanged until the rework; the overload outcome is recorded as its own outcome class. |
+| Authoring and grading | Scenarios are realistic briefs graded by behavioural tests the model can run, with no hidden criteria (section 3). An audit of the first slice comes before any migration. |
+| Comparability | Not a goal. Results across revisions are noted as not comparable; the metric is whether models complete realistic refactoring tasks with the server tools. |
 
 ## Proposal
 
@@ -132,9 +138,7 @@ stop, make no further changes and list what you wrote.
 4. The server rejects an edit that adds a compiler error and lists the errors.
    - Error in code you may change: correct your edit, or reorder edits so each compiles.
    - Error that shows a Condition fails: that is the answer. Take the BLOCKED ending.
-5. Keep validateOnApply at its default unless the task says otherwise. With it off, the
-   server writes code that does not compile.
-6. Check each Done-when item once: quick build of the whole solution, then re-read the
+5. Check each Done-when item once: quick build of the whole solution, then re-read the
    changed code and confirm nothing unrelated changed.
 
 ## When a tool call fails
@@ -207,8 +211,61 @@ Done when: the three signatures use IReadOnlyDictionary and a quick build of the
 Report: if a condition fails, each caller that would fail and its compiler error code.
 ```
 
-### 3. Graders
+### 3. Scenario authoring rules
 
+Scenarios written so far were designed outcome-first: the author fixed one expected end state, then wrote
+a prompt that steers toward it, filling gaps with assumptions the author never noticed making. The eval
+model reads such a prompt as a plain "do this", so the result depends on how each model (or seed) reads
+the gaps, not on whether it can do the refactoring. Worked example, SweepConstructionSites
+(SweepConstructionSitesScenario.cs):
+
+- The task says "replace each `new Dictionary<FilePath, string>`"; three sites (`FromResult`, `Choose`,
+  `Latest`, e.g. line 263: `var latest = new Dictionary<FilePath, string>();` later assigned a plain
+  Dictionary) stop compiling (CS0266) once converted.
+- Declaring the local as `Dictionary<FilePath, string> latest = new DocumentChangeSet();` is correct and
+  satisfies the task, but the grader fails it: it counts exactly 14 `new DocumentChangeSet` and 4
+  `new Dictionary` left (CheckSweep, line 319).
+- A cast (`(DocumentChangeSet)second.Changes`) compiles and throws at run time; failing it is right, but
+  the prompt never says why, only "if converting makes the build fail, leave that site".
+- "In as few edit calls as you can" is an eval measurement inside the task.
+
+Rules for every new or migrated scenario:
+
+1. **Realistic brief first.** Write the prompt as it would be handed to a human or Haiku implementer
+   (the dispatch-implementer brief is the model): goal, why, constraints, acceptance. Write the grader
+   after, from the brief.
+2. **Behavioural acceptance.** The fixture's test project carries tests that exercise the behaviour the
+   task changes; `Done when` names them, the model can run them, and the grader runs the same tests. A
+   failing test tells the model what is wrong while it can still fix it; a hidden check only tells the
+   grader afterwards.
+3. **No hidden criteria.** Every grader failure traces to a sentence of the prompt (`Files`, `Conditions`,
+   `Done when`, `Report`). A check with no sentence behind it is removed or the sentence is added.
+4. **List the acceptable outcomes.** For each scenario record the plausible solutions (for Sweep: explicit
+   type, cast, leave the site, BLOCKED) with pass or fail and the prompt sentence that decides it.
+5. **No text counting.** No regex or occurrence counts over source for anything a test or a compiled-symbol
+   check can decide (see proposal_modeleval_test_axes_and_aligned_grading.md section 2).
+6. **Measurements are metrics.** Edit-call counts, turns and failed calls are recorded, never graded and
+   never written into the task.
+7. **Cold-read review before a scenario lands.** A fresh agent gets only the rendered prompt (never the
+   grader or fixture answers) and lists its interpretations and the questions it would ask. Each question
+   is answered in the prompt or accepted as a passing variant.
+
+### 4. Eval tool surface: `validateOnApply` hidden
+
+Evals run with `validateOnApply` hidden from the tool schema; a call passing `false` is refused with the
+existing facts-only error ("Nothing was executed", ToolArgumentValidator.cs:1292-1305). The machinery
+exists for the lean schema profile (`SchemaOptions`, `McpToolSchemaPatcher.ApplyLeanProfile`,
+`HiddenSchemaParams.IsHidden`), but lean also hides `autoStage`, `returnDiff`, `lineBefore` and
+`lineAfter`, which would confound the A/B; phase 1 adds a switch that hides only `validateOnApply`. A
+scenario can opt back in to the full schema; no current scenario does. To verify while planning: that
+the eval harness's tool calls pass through schema patching and `ToolArgumentValidator` at all.
+
+### 5. Graders
+
+- Pass/fail comes from the build and the fixture's acceptance tests (the ones `Done when` names), plus
+  the scope stated in `Files` (no other file changed) and, where the prompt has a `Report` field, the
+  final-message content it asks for. Structural facts no test can reach are checked on compiled symbols,
+  not source text.
 - Parse the outcome token from the final message: `DONE:`, `BLOCKED:` or none.
 - Outcome classes: correct-done, correct-blocked, false-blocked (BLOCKED on a task that was doable),
   bypass (files changed against IfFails, e.g. BuildBroken), silent-incomplete (no token or DONE with a
@@ -216,17 +273,17 @@ Report: if a condition fails, each caller that would fail and its compiler error
 - Every conditional scenario has a positive-control twin. Verify WidenToReadOnlyDictionary as the
   WideningRejectedByGate twin (write one if its grader does not fit); StopAdherenceControl covers the
   StopAdherence pair.
-- Existing ImplementationScenario graders are re-checked against each scenario's new IfFails line when
-  the scenario migrates.
+- Existing graders are rewritten to these rules when their scenario migrates, using the audit's
+  outcome list.
 
-### 4. Version stamping
+### 6. Version stamping
 
 Hash the contract text the way `ErrorPolicyHash` is computed and record it beside it: transcript
 (ModelAgentRunner.cs:272) and the per-sample CSV (ScenarioSample.cs:57-58), plus the renderer's
 placement option. runs.csv needs no change while variants are separate commits (`pinnedCommit` fixes the
 text); add a variant column only if the A/B uses a runtime switch.
 
-### 5. Offer the same text to real clients (after the A/B)
+### 7. Offer the same text to real clients (after the A/B)
 
 If the contract exists only in the harness, evals measure a crutch real clients do not have. Expose the
 winning text as an MCP prompt (not server `instructions`: the contract is policy, and server text is
@@ -238,19 +295,23 @@ unmigrated prompts is removed before publishing.
 
 1. **Contract and record behind a switch.** New contract text beside the old (`CodingAgent` kept,
    selected by a harness option, old text default); `ScenarioTask` record and renderer; contract hash
-   stamped. Migrate ImplementationScenario and the two StopAdherence scenarios, each with an explicit
-   IfFails line, re-checking its grader.
-2. **Controls.** Positive-control twins verified or written; grader outcome classes including
+   stamped; `validateOnApply` hidden on the eval surface with a per-scenario opt-in. No scenario
+   changes yet.
+2. **Audit the first-slice scenarios** (ImplementationScenario and the two StopAdherence scenarios):
+   cold read of each prompt, acceptable-outcome list, every grader check traced to a prompt sentence,
+   and the behavioural tests each scenario lacks. Output: one findings doc.
+3. **Rework the first slice from the audit.** Each scenario becomes a realistic brief in `ScenarioTask`
+   form with behavioural acceptance tests in the fixture's test project; graders follow section 5.
+4. **Controls.** Positive-control twins verified or written; grader outcome classes including
    false-BLOCKED.
-3. **A/B.** Old vs new contract on Qwen3.5-4B and Ornith, at least 5 runs per arm, on the first-slice
-   scenarios plus OrderPricing as regression check. Success: WideningRejectedByGate and StopAdherence
-   pass rate up, cap hits down, false-BLOCKED not up, overall pass rate not down. Optional second A/B:
-   endings repeated in the user turn.
-4. **Switch and migrate.** New contract becomes the default; migrate WholeFileRewrite, OrderPricing,
-   ShippingKind, PlanOnly and the unclassified families, deleting their own ending lines; review the
-   PlanStepRunner and SubAgentEval prompt builders; remove the fallback sentence when the last consumer
-   is migrated; re-baseline each family once.
-5. **MCP prompt** with the winning text.
+5. **A/B.** Old vs new contract on Qwen3.5-4B and Ornith, both arms on the reworked prompts at the same
+   commit, at least 5 runs per arm. Success: pass rate up, cap hits down, false-BLOCKED not up. Optional
+   second A/B: endings repeated in the user turn.
+6. **Switch and migrate.** New contract becomes the default; migrate WholeFileRewrite, OrderPricing,
+   ShippingKind, PlanOnly and the unclassified families under the same rules, deleting their own ending
+   lines; review the PlanStepRunner and SubAgentEval prompt builders; remove the fallback sentence when
+   the last consumer is migrated.
+7. **MCP prompt** with the winning text.
 
 ## Alternatives considered, not pursued
 
@@ -258,8 +319,11 @@ unmigrated prompts is removed before publishing.
   scenarios, and the same failure class returns in the next scenario.
 - **Append a separate rules block to the existing prompt**: adds length for weak models and keeps the
   contradictions; restructure instead.
-- **Remove `validateOnApply` from the eval tool surface**: hides a legitimate escape hatch and stops the
-  eval measuring whether a model respects the gate under clear wording; a contract rule is preferred.
+- **Keep `validateOnApply` visible and add a contract rule**: would measure whether wording alone holds
+  the model to the gate, but a model already reasoned its way to switching validation off (Ornith T5
+  above); the owner chose to remove the parameter instead (2026-11-23).
+- **Hide `validateOnApply` via the whole lean profile**: also hides four other parameters and confounds
+  the A/B.
 - **A generic finish rule only** (tried a70b9f7e): no measurable effect on 4B cap hits.
 - **A contract default for the stop state**: an unchecked grader could disagree with it and fail a model
   that stopped correctly; each scenario states it instead.
@@ -277,17 +341,22 @@ unmigrated prompts is removed before publishing.
   (including its "{2}" user-prompt splice) and ScenarioAgentTests.
 - How PlanStepRunner builds its user prompt (Program.cs:239): if plan steps already carry a Done-when
   field (the plan-writer skill requires one), the record maps onto plan steps directly.
-- Whether `validateOnApply` appears in Harness prompts (only ModelEval was searched).
 
 ## Cost / risk
 
-- Every eval's baseline shifts; comparisons across the change need the contract hash.
+- Results before and after the change are not comparable, and that is accepted: the metric is whether
+  models complete realistic refactoring tasks with the server tools, not a continuous history. The hash
+  labels which text ran; no re-baselining effort.
+- Writing behavioural tests for each reworked scenario costs more than a regex grader; it is the price
+  of grading what a real reviewer would accept.
 - Concurrent eval queues pin commits, so running jobs are unaffected; new submissions see the new text.
 - Risk of over-blocking under the new gate rule; the controls and the false-BLOCKED outcome measure it.
 - Risk of over-length for 4B-class models; the draft is shorter than today's prompt.
 
 ## Related
 
+- [proposal_modeleval_test_axes_and_aligned_grading.md](./proposal_modeleval_test_axes_and_aligned_grading.md)
+  (one axis per test, symbol-based structural checks; section 3 here adopts its grading direction)
 - [proposal_parallel_change_deprecated_wrappers.md](./proposal_parallel_change_deprecated_wrappers.md)
   (migration-first shape for the code change)
 - docs/current/references/reference_tool_error_text_facts_options_policy.md (facts vs. policy split)

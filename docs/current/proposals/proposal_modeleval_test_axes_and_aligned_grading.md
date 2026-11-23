@@ -1,6 +1,10 @@
 # Classify ModelEval tests by one primary axis and grade each on that axis
 
 **Status:** PROPOSED 2026-11-09. Raised by the owner after the 2026-11-09 10-chain runs. Awaiting a fresh session to inventory the tests and settle the decisions below.
+2026-11-23: the scenario authoring rules (realistic brief, behavioural acceptance tests the model can run,
+no hidden criteria, no text counting, cold-read review) and the grading direction of section 2 are adopted
+in [proposal_modeleval_standing_workflow_contract.md](./proposal_modeleval_standing_workflow_contract.md),
+section 3. Comparability across revisions is not a goal (owner, 2026-11-23).
 
 ## Motivation
 
@@ -161,8 +165,8 @@ No more failure-specific sentences in the chain prompts until the axis of each t
 
 - **Touches:** the `RoslynSentinel.Tests.ModelEval` prompts, assertions and categories; maybe
   `scripts/roslynsentinel-modeleval.ps1` and the `results.csv` writer; the PlanStepRunner step set.
-- **Risk:** history becomes harder to compare. Pass rates before and after the split are not comparable.
-  Record the cut-over date in each test's comment and in the eval write-ups.
+- **Comparability:** pass rates before and after the split are not comparable. Accepted (owner,
+  2026-11-23): note the cut-over in the eval write-ups; no effort to keep a continuous history.
 - **Run cost:** two 10-chain variants double the 10-chain run time, about 10-30 minutes a run on host 113.
 
 ## Related
