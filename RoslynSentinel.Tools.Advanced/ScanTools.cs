@@ -780,7 +780,7 @@ public class ScanTools
         }
     }
 
-    [McpServerTool(Name = "DescribeScanDetectors")]
+    [McpServerTool(Name = "DescribeScanDetectors", ReadOnly = true)]
     [Produces(DataTag.Report)]
     [Description("Lists available scan detectors with their id, domain, and scope requirements.")]
     public Task<SentinelCallToolResult<object>> DescribeScanDetectorsTool([Description(ToolParams.Reason)] ToolCallReason reason, [Description("Filter by domain (async/concurrency/config/convention/correctness/dead-code/misc/performance/security/structure). Omit for all.")][ToolOption(ToolOptionTag.Domain)] string? domain = null, [Description("Look up one detector by exact id. Omit for all.")][ToolOption(ToolOptionTag.Detector)] string? detector = null, // RequestContext<CallToolRequestParams> requestParams = null,
@@ -815,7 +815,7 @@ public class ScanTools
         }
     }
 
-    [McpServerTool(Name = "AnalyzeMethod")]
+    [McpServerTool(Name = "AnalyzeMethod", ReadOnly = true)]
     [Produces(DataTag.Report)]
     [Description("Analyses a method from a chosen angle: control flow, data flow, path coverage, or unreachable code.")]
     public async Task<SentinelCallToolResult<object>> AnalyzeMethodTool([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string methodName, [Description("controlFlow: return paths, throw sites, infinite loop detection. dataFlow: unassigned reads, written/read variables, closure captures. pathCoverage: execution paths for test coverage. unreachableCode: statements after an unconditional return/throw.")][ToolOption(ToolOptionTag.Aspect)] string aspect, // RequestContext<CallToolRequestParams> requestParams = null,
@@ -1008,7 +1008,7 @@ public class ScanTools
         type_cohesion
     }
 
-    [McpServerTool(Name = "ScanBreakingChanges")]
+    [McpServerTool(Name = "ScanBreakingChanges", ReadOnly = true)]
     [Produces(DataTag.ApiBaseline)]
     [Description("Compares a captured API baseline against current code and reports breaking changes.")]
     public async Task<SentinelCallToolResult<object>> ScanBreakingChangesTool([Description(ToolParams.Reason)] ToolCallReason reason, [Description("From GetPublicApiSurface(persistBaseline: true).")][ExternalInputRequired(DataTag.ApiBaseline)] List<PublicApiMember> baseline, [Description("Scope to the project the baseline was captured from.")][Consumes(DataTag.ProjectName)] string? projectName = null, [Description("Scope to the file the baseline was captured from.")][Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null, // RequestContext<CallToolRequestParams> requestParams = null,
@@ -1031,7 +1031,7 @@ public class ScanTools
         }
     }
 
-    [McpServerTool(Name = "ScanDuplicateBlocksInClass")]
+    [McpServerTool(Name = "ScanDuplicateBlocksInClass", ReadOnly = true)]
     [Produces(DataTag.Report)]
     [Description("Finds duplicate statement sequences within a single class's methods via structural hashing.")]
     public async Task<SentinelCallToolResult<object>> ScanDuplicateBlocksInClassTool([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.ClassName)] string className, [Description("Minimum statement-sequence length to report. Lower finds more/smaller clones.")][ToolOption(ToolOptionTag.Filter)] int minStatements = 4, // RequestContext<CallToolRequestParams> requestParams = null,

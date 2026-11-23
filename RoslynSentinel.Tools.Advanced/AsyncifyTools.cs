@@ -283,7 +283,7 @@ public class AsyncifyTools
 
     // ── get_async_migration_progress ─────────────────────────────────────────
 
-    [McpServerTool(Name = "GetAsyncMigrationProgress")]
+    [McpServerTool(Name = "GetAsyncMigrationProgress", ReadOnly = true)]
     [Produces(DataTag.AsyncMigrationProgressReport)]
     [Description("Returns async migration progress statistics: CancellationToken coverage, pending Asyncify-bridge call sites, and async void event handlers.")]
     public async Task<SentinelCallToolResult<AsyncMigrationProgressReport>> GetAsyncMigrationProgressTool(
@@ -1266,7 +1266,7 @@ public class AsyncifyTools
 
     // ── Async migration state query tools ──────────────────────────────────────────
 
-    [McpServerTool(Name = "GetAsyncMigrationState")]
+    [McpServerTool(Name = "GetAsyncMigrationState", ReadOnly = true)]
     [Description("Returns the persisted async migration state: a cross-run record of every method touched by a migration phase and every idempotency/stale-flag skip. Survives server restarts and accumulates across sessions.")]
     public SentinelCallToolResult<LedgerSnapshot> GetAsyncMigrationStateTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
@@ -4009,7 +4009,7 @@ public class AsyncifyTools
         };
     }
 
-    [McpServerTool(Name = "GetMutationBreakerStatus")]
+    [McpServerTool(Name = "GetMutationBreakerStatus", ReadOnly = true)]
     [Produces(DataTag.ResultOnly)]
     [Description("Returns the current batch-mutation circuit breaker state: severity (ok/caution/halt), trip-condition counters, and thresholds. Use to assess failure health before running large batch operations. Unrelated to the SearchSolutionText orientation breaker, which resets itself automatically.")]
     public SentinelCallToolResult<object> GetAsyncifyMutationBreakerStatusTool([Description(ToolParams.Reason)] ToolCallReason reason)

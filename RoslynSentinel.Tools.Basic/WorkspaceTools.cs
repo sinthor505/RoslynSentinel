@@ -90,7 +90,7 @@ public class WorkspaceTools
         CancellationToken cancellationToken = default)
         => _healthMisc.Features(reason, action, names, enabled, delaySeconds, cancellationToken);
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
-    [McpServerTool(Name = "ListSolutionItems")]
+    [McpServerTool(Name = "ListSolutionItems", ReadOnly = true)]
     [Produces(DataTag.FileList)]
     [Produces(DataTag.ProjectList)]
     [Produces(DataTag.DependencyList)]
@@ -111,7 +111,7 @@ public class WorkspaceTools
     /// (e.g. a node_modules-style tree, or a root one level above the intended one).
     /// </summary>
     private const int ListWorkspaceSolutionsMaxFilesWalked = 200_000;
-    [McpServerTool(Name = "ListWorkspaceSolutions")]
+    [McpServerTool(Name = "ListWorkspaceSolutions", ReadOnly = true)]
     [Produces(DataTag.FileList)]
     [Produces(DataTag.SolutionList)]
     [Description("Lists .sln/.slnx files under a directory, for use with LoadSolution.")]
@@ -312,7 +312,7 @@ public class WorkspaceTools
         => _readNavTools.GetMethodSourceTool(reason, filePath, methodName, containerName, cancellationToken);
 
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
-    [McpServerTool(Name = "ReadFile")]
+    [McpServerTool(Name = "ReadFile", ReadOnly = true)]
     [Produces(DataTag.SourceCode)]
     [Description("Returns a file's raw text verbatim, or a 1-based line-range slice via startLine/endLine. To read a single member, pass memberName (optionally containerName).")]
     public Task<SentinelCallToolResult<object>> ReadFileTool(
@@ -378,7 +378,7 @@ public class WorkspaceTools
         CancellationToken cancellationToken = default)
         => _healthMisc.GetWorkspaceHealth(reason, verify, cancellationToken);
 
-    [McpServerTool(Name = "ListProjectFrameworkTargets")]
+    [McpServerTool(Name = "ListProjectFrameworkTargets", ReadOnly = true)]
     [Produces(DataTag.Report)]
     [Description("Returns each project's TargetFramework value.")]
     public Task<SentinelCallToolResult<List<ProjectFrameworkSummary>, ResultError>> ListProjectFrameworkTargetsTool(

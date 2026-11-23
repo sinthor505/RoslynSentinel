@@ -79,7 +79,7 @@ public class GenerationTools
             describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable),
             describeEditImpact: EditImpactGate.Describer(_workspaceManager, changes, _activeToolSurface, removePaths, deletePaths));
 
-    [McpServerTool(Name = "GenerateClassesFromJson")]
+    [McpServerTool(Name = "GenerateClassesFromJson", ReadOnly = true)]
     [Produces(DataTag.ResultOnly)]
     [Description("Generates C# class declarations from a JSON string using rootClassName as the top-level type name under the specified namespace.")]
     public SentinelCallToolResult<object> GenerateClassesFromJsonTool(

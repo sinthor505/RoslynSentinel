@@ -26,7 +26,7 @@ public class WorkspaceReadNavigationTools
         _symbolNavigation = symbolNavigation;
         _symbolRelationship = symbolRelationship;
     }
-    [McpServerTool(Name = "GetMethodSource")]
+    [McpServerTool(Name = "GetMethodSource", ReadOnly = true)]
     [Produces(DataTag.SourceCode)]
     [Description("Returns a method's or constructor's full source text and attributes. For a constructor, pass the class name.")]
     public Task<SentinelCallToolResult<MethodSourceResult, ResultError>> GetMethodSourceTool(
@@ -38,7 +38,7 @@ public class WorkspaceReadNavigationTools
         => _impl.GetMethodSource(reason, filePath, methodName, containerName, cancellationToken);
 
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
-    [McpServerTool(Name = "GetFileOutline")]
+    [McpServerTool(Name = "GetFileOutline", ReadOnly = true)]
     [Produces(DataTag.Report)]
     [Description("Returns a structural outline of a file's types and members with 1-based line ranges (no bodies).")]
     public Task<SentinelCallToolResult<FileOutlineResult, ResultError>> GetFileOutlineTool(
@@ -48,7 +48,7 @@ public class WorkspaceReadNavigationTools
         => _impl.GetFileOutline(reason, filePath, cancellationToken);
 
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
-    [McpServerTool(Name = "ListAll")]
+    [McpServerTool(Name = "ListAll", ReadOnly = true)]
     [Produces(DataTag.Report)]
     [Description("Lists every declared symbol in the loaded solution with file, kind, name, container, and line range. Call this first if you don't know an exact symbol name.")]
     public Task<SentinelCallToolResult<object>> ListAllTool(
@@ -79,7 +79,7 @@ public class WorkspaceReadNavigationTools
         CancellationToken cancellationToken = default)
         => _impl.SearchSolutionText(reason, pattern, fileGlob, maxResults, includeTests, cancellationToken: cancellationToken);
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
-    [McpServerTool(Name = "GetOperationDetail")]
+    [McpServerTool(Name = "GetOperationDetail", ReadOnly = true)]
     [Produces(DataTag.ResultOnly)]
     [Description("Returns a filtered, paged slice of an operation result blob by changeId.")]
     public Task<SentinelCallToolResult<object>> GetOperationDetailTool(
@@ -93,7 +93,7 @@ public class WorkspaceReadNavigationTools
         [ToolOptionAttribute(ToolOptionTag.Offset)] int offset = 0,
         CancellationToken cancellationToken = default)
         => _impl.GetOperationDetail(reason, changeId, filter, maxItems, offset, cancellationToken);
-    [McpServerTool(Name = "GetLargeResult")]
+    [McpServerTool(Name = "GetLargeResult", ReadOnly = true)]
     [Produces(DataTag.Report)]
     [Description("Pages a stored large result (the largeResult pointer). offset counts units of its sequence (list records interleaved, or lines); follow nextOffset until hasMoreData is false. path is only for results whose largeResult lists omitted.")]
     public Task<SentinelCallToolResult<object>> GetLargeResultTool(
@@ -113,7 +113,7 @@ public class WorkspaceReadNavigationTools
         CancellationToken cancellationToken = default)
         => _impl.GetLargeResult(reason, resultId, filePath, limit, offset, path: path, cancellationToken: cancellationToken);
 
-    [McpServerTool(Name = "Search")]
+    [McpServerTool(Name = "Search", ReadOnly = true)]
     [Produces(DataTag.Report)]
     [Produces(DataTag.FileList)]
     [Produces(DataTag.DocCommentId)]

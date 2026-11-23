@@ -47,7 +47,7 @@ public class QualityTools
 
     // ── describe_advanced_tool_options ─────────────────────────────────────────────────
 
-    [McpServerTool(Name = "DescribeAdvancedToolOptions")]
+    [McpServerTool(Name = "DescribeAdvancedToolOptions", ReadOnly = true)]
     [Produces(DataTag.Report)]
     [Description("""
         Returns reference documentation for a named tool's valid input values - transform/kind/detector catalogues and parameter defaults. Only covers tools whose valid values cannot be inferred from the schema alone. Covered tools: scan, apply_file_codetransform, apply_method_codetransform, apply_class_codetransform, generate, convert_switch_to_pattern_safe, analyze_switch_for_pattern_conversion, analyze_foreach_for_linq_conversion. Returns ErrorCode="NoFurtherDocumentation" if the tool is not in the covered set - this does not mean the tool is invalid, only that its schema is self-describing.
@@ -91,7 +91,7 @@ public class QualityTools
         };
     }
 
-    [McpServerTool(Name = "GetTestCoverageMap")]
+    [McpServerTool(Name = "GetTestCoverageMap", ReadOnly = true)]
     [Produces(DataTag.Report)]
     [Description("Returns execution paths to cover and test methods that exercise a production method. Finds covering tests by name convention (test method name contains production method name) and by direct call-site presence. Returns BranchesToTest, CoveringTests (test file, method, line), and HasAnyCoverage flag.")]
     public async Task<SentinelCallToolResult<object>> GetTestCoverageMapTool(
@@ -122,7 +122,7 @@ public class QualityTools
         }
     }
 
-    [McpServerTool(Name = "GetMethodComplexity")]
+    [McpServerTool(Name = "GetMethodComplexity", ReadOnly = true)]
     [Produces(DataTag.Report)]
     [Description("Calculates cyclomatic complexity of a method: 1 + one per if/else/case/while/for/foreach/catch/&&/||/?? branch. Returns complexity score and contributing conditionals. Guide: 1–4 = Low, 5–7 = Medium, 8–10 = High (refactoring candidate), >10 = Very High.")]
     public async Task<SentinelCallToolResult<object>> GetMethodComplexityTool(
@@ -156,7 +156,7 @@ public class QualityTools
 
     // ── 7. AnalyzeForeachForLinqConversionTool ────────────────────────────────────
 
-    [McpServerTool(Name = "AnalyzeForeachForLinqConversion")]
+    [McpServerTool(Name = "AnalyzeForeachForLinqConversion", ReadOnly = true)]
     [Produces(DataTag.ResultOnly)]
     [Description("Pre-flight safety check before converting a foreach loop to LINQ: detects mutation of the collection being iterated within the loop body (a common pattern the standard conversion tool produces incorrect code for) using Roslyn's ControlFlowAnalysis and DataFlowAnalysis. Returns IsSafeToConvert and rejection reasons.")]
     public async Task<SentinelCallToolResult<object>> AnalyzeForeachForLinqConversionTool(
@@ -198,7 +198,7 @@ public class QualityTools
 
     // ── 2. AnalyzeSwitchForPatternConversionTool ─────────────────────────────────
 
-    [McpServerTool(Name = "AnalyzeSwitchForPatternConversion")]
+    [McpServerTool(Name = "AnalyzeSwitchForPatternConversion", ReadOnly = true)]
     [Produces(DataTag.Analysis)]
     [Description("Pre-flight safety check before converting a switch statement to a switch expression: detects variables assigned in more than one case arm, or read later in the method (indicating a dependency on the variable retaining its value across cases) - a pattern the standard conversion tool silently drops, using Roslyn's ControlFlowAnalysis and DataFlowAnalysis. Returns IsSafeToConvert and rejection reasons.")]
     public async Task<SentinelCallToolResult<object>> AnalyzeSwitchForPatternConversionTool(

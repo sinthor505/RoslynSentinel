@@ -12,7 +12,7 @@ public class SymbolNavigationTools
         _impl = impl;
     }
 
-    [McpServerTool(Name = "LocateSymbol", UseStructuredContent = false, OutputSchemaType = typeof(LocateSymbolResult))]
+    [McpServerTool(Name = "LocateSymbol", UseStructuredContent = false, OutputSchemaType = typeof(LocateSymbolResult), ReadOnly = true)]
     [Produces(DataTag.DocCommentId)]
     [Produces(DataTag.ProjectName)]
     [Description("Locates declaration sites for a symbol by name. Only matches declared symbols, not arbitrary text - use Search for free text. Returns SymbolHandles containing projectName, docCommentId, and filePath.")]
@@ -32,7 +32,7 @@ public class SymbolNavigationTools
         CancellationToken cancellationToken = default) =>
         _impl.LocateSymbol(reason, symbolName, symbolKind, containingType, containingNamespace, projectName, filePath, exactMatch, cancellationToken: cancellationToken);
 
-    [McpServerTool(Name = "InspectSymbol")]
+    [McpServerTool(Name = "InspectSymbol", ReadOnly = true)]
     [Produces(DataTag.DocCommentId)]
     [Description("Inspects a symbol in depth. Requires a file and a context snippet to resolve the symbol - if you only have a name, use Search(mode: symbol) first to find the declaring file.")]
     public Task<SentinelCallToolResult<object>> InspectSymbolTool(
@@ -47,7 +47,7 @@ public class SymbolNavigationTools
         ) =>
         _impl.InspectSymbol(reason, filePath, contextSnippet, aspect, lineBefore, lineAfter, cancellationToken);
 
-    [McpServerTool(Name = "GetTypeInfo")]
+    [McpServerTool(Name = "GetTypeInfo", ReadOnly = true)]
     [Produces(DataTag.Report)]
     [Description("Returns type information for a type you already know the name of - hierarchy, members, or both. If unsure it exists or the name is ambiguous, use Search(mode: symbol) first. To change an enum's values, use ModifyEnum.")]
     public Task<SentinelCallToolResult<object>> GetTypeInfoTool(
