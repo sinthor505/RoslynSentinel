@@ -82,6 +82,11 @@ public static class LlmOptions
     public static IReadOnlyDictionary<string, double> HostSampler { get; private set; } = new Dictionary<string, double>();
 
     /// <summary>
+    /// True when the operator accepted that the declared sampler values (HostSampler, TopK, RepeatPenalty, MinP) cannot be verified from the host's responses; read from --llm-accept-unverified-sampler / ROSLYNSENTINEL_LLM_ACCEPT_UNVERIFIED_SAMPLER ('true' or '1'); recorded in the transcript's Settings block.
+    /// </summary>
+    public static bool AcceptUnverifiedSampler { get; private set; }
+
+    /// <summary>
     /// Parses the --llm-host-sampler format into canonical keys (topK, minP, repeatPenalty, presencePenalty, frequencyPenalty).
     /// Unknown keys and malformed pairs are skipped.
     /// </summary>
@@ -171,6 +176,10 @@ public static class LlmOptions
         if (MinP is { } minP) hostSampler.TryAdd("minP", minP);
         if (RepeatPenalty is { } repeatPenalty) hostSampler.TryAdd("repeatPenalty", repeatPenalty);
         HostSampler = hostSampler;
+
+        var acceptRaw = GetArgValue(args, "--llm-accept-unverified-sampler")
+            ?? Environment.GetEnvironmentVariable("ROSLYNSENTINEL_LLM_ACCEPT_UNVERIFIED_SAMPLER");
+        AcceptUnverifiedSampler = string.Equals(acceptRaw, "true", StringComparison.OrdinalIgnoreCase) || acceptRaw == "1";
     }
 
     private static double? ParseNullableDouble(string? raw) =>

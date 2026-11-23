@@ -101,6 +101,32 @@ public class LlmOptionsHostSamplerTests
     }
 
     [Test]
+    public void AcceptUnverifiedSampler_DefaultsToFalse()
+    {
+        LlmOptions.Configure(Array.Empty<string>());
+
+        Assert.That(LlmOptions.AcceptUnverifiedSampler, Is.False);
+    }
+
+    [Test]
+    public void Configure_ReadsAcceptUnverifiedSamplerFromArgument()
+    {
+        LlmOptions.Configure(new[] { "--llm-accept-unverified-sampler", "true" });
+        Assert.That(LlmOptions.AcceptUnverifiedSampler, Is.True);
+
+        LlmOptions.Configure(new[] { "--llm-accept-unverified-sampler=1" });
+        Assert.That(LlmOptions.AcceptUnverifiedSampler, Is.True);
+    }
+
+    [Test]
+    public void Configure_TreatsFalseAcceptUnverifiedSamplerValueAsFalse()
+    {
+        LlmOptions.Configure(new[] { "--llm-accept-unverified-sampler", "false" });
+
+        Assert.That(LlmOptions.AcceptUnverifiedSampler, Is.False);
+    }
+
+    [Test]
     public void Configure_FoldsLegacySamplerOptionsIntoHostSamplerAndHostSamplerWins()
     {
         LlmOptions.Configure(new[] { "--llm-host-sampler=topK=40", "--llm-top-k=10", "--llm-min-p=0.1", "--llm-repeat-penalty=1.0" });
