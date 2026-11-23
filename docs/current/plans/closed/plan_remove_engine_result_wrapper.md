@@ -1,6 +1,6 @@
 # Plan: Remove EngineResultWrapper<T>; engines return IOperationResult types and throw typed exceptions when a build or test run did not run
 
-**Status:** IN PROGRESS 2026-11-23. Steps 0-12b done (Batch A 66f9940a..4d038a3f, Batch B 08d07f5b..34103e7e, Batch C 568801d8..9b9e420d); Batch D (Steps 13-16, one commit) next.
+**Status:** IMPLEMENTED 2026-11-23. Steps 0-17 done: Batch A 66f9940a..4d038a3f, Batch B 08d07f5b..34103e7e, Batch C 568801d8..9b9e420d, Batch D d15f67b6 (wire codes), Step 17 7e310bf7; full suite green at d15f67b6.
 
 ## Problem
 
@@ -590,6 +590,7 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
 - Done when: the named classes and every Step 0 pin pass.
 
 ### Step 17 - Docs and close-out (dispatcher)
+- Done: 7e310bf717485232eebf67eed864e797de0d30f2
 - Files: `.claude/skills/dto-conventions/SKILL.md`, the non-test hits from Step 0, this plan
 - Depends on: Step 16
 - Effect: text-neutral
