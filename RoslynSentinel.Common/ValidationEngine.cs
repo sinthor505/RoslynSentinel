@@ -177,6 +177,13 @@ public class ValidationEngine
 
             if (documentId == null)
             {
+                // A text, markdown or json file is never a compile item, so it must not be added to the candidate as C# source.
+                if (!string.Equals(Path.GetExtension((string)filePath), ".cs", StringComparison.OrdinalIgnoreCase))
+                {
+                    Debug.WriteLine($"New non-.cs file is not compiled, skipping in-memory validation: {filePath}");
+                    continue;
+                }
+
                 var project = SolutionProjectLocator.FindContainingProject(baseline, filePath);
                 if (project == null)
                 {

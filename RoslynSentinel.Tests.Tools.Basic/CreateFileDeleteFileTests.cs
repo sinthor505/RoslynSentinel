@@ -203,6 +203,30 @@ public class CreateFileDeleteFileTests
 
     [Test]
     [Category("WorkspaceTools")] // sentinel:auto-category
+    public async Task CreateFile_TxtInsideProjectFolder_IsNotCompileValidatedAsync()
+    {
+        // A .txt file placed inside a project folder must not be parsed as C# by the compile gate
+        // (ValidationEngine skips non-.cs paths when building the candidate solution).
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+        var diffEngine = Basic.TestEngines.DiffEngine();
+        var validationEngine = Basic.TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        WholeFileWriteTools wholeFileWriteTools = Basic.TestTools.WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+
+        var newFile = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "Probe.txt");
+        var content = "Probe = 1 +\n";
+
+        var createResult = await wholeFileWriteTools.WriteFileTool(reason: "test message", WriteFileOperation.CreateFile, newFile, content);
+
+        Assert.That(!createResult.IsError, Is.True, createResult.ErrorData?.Message);
+        Assert.That(File.Exists(newFile), Is.True);
+        Assert.That(File.ReadAllText(newFile).Trim(), Is.EqualTo(content.Trim()));
+    }
+
+    [Test]
+    [Category("WorkspaceTools")] // sentinel:auto-category
     public async Task CreateFile_CsFileWithContent_WritesTheFullBodyInOneCallAsync()
     {
         using var fixture = new TestSolutionFixture();
