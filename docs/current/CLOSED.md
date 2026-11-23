@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Four repo-root walk-ups with their own miss behaviour - folded into plan (2026-11-23)
+
+INBOX 2026-11-23 01:00: four hand-written repo-root walk-ups keep their own miss behaviour, so plan_test_placement Step 2 did not delegate them to `RepoRootLocator.Find`; two more walk-ups were uncounted by the plan.
+
+Evidence: tracked in plan_test_placement_guardrail_and_shared_test_helpers.md Step 10c ("Also (INBOX triage 2026-11-23)"), which the READY TODO line covers; the code `// TODO` markers stay (e94af4f1)
+
 ## Stale eval Lean count in FilteringToolHostTests - resolved (2026-11-23)
 
 Fix the stale eval Lean count in `FilteringToolHostTests.cs:95` (2026-11-22) - asserts 18 entries but `AgentToolAllowLists.Lean` has 19 since ReplaceRange joined (`AgentToolAllowLists.cs:12-14`); red but unseen because Tests.PlanStepRunner is excluded from full runs; acceptance: `PlanStepRunnerSurface_IsLeanPlusGetDiagnostics` passes; Small

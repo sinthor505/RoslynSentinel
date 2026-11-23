@@ -416,6 +416,12 @@ The existing TODO.md entry (line 38, "Core split test-move remainder", BLOCKED) 
 - Files: `Tests.Tools.Advanced/BlobIntegrityInvariantTests.cs` (`FindRepoRoot`, line 192).
 - Depends on: none. Effect: text-neutral. Lane: `implementer`, tier 1. Same replacement as Step 2.
 - Done when: `Build` 0 errors; `BlobIntegrityInvariantTests` passes; the Step 2 search finds no walk-up copy left.
+- Also (INBOX triage 2026-11-23): the four Step 2 walk-ups that keep their own miss behaviour
+  (`Tests.Tools.Basic/TestInstanceLauncherTests.cs` `FindRepoRoot`, `Tests.Tools.Basic/ServerBinaryStalenessTests.cs`,
+  `Tests.Server/AgentCallShapeBlocksTests.cs` `ReadAgentFile`, `Tests.Server/ArchitectureDocFreshnessTests.cs`
+  `GetRepoRoot`; each marked `// TODO`) delegate only the walk to a non-throwing `RepoRootLocator` lookup and keep their
+  `Assert.Ignore` / `Assert.Fail` / `InvalidOperationException`; two walk-ups the plan never counted go the same way:
+  `Tests.Server` `ArchitectureDocGenerator.DiscoverProjects` and `ClaudeLeanSchemaBudgetTests.WriteSizeReport`.
 
 #### Step 10d - migrate message pins in Advanced tests (slice map derived after Step 7)
 - Files: the Advanced entries left in `docs/known-long-message-pins.txt` after Step 7 (the baseline had 104 pins in 32
