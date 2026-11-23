@@ -150,11 +150,79 @@ public static class AgentSystemPrompts
            changed and the verification result) and no tool call; that reply ends the task.
         """;
 
-    /// <summary>Standing workflow contract text, placed in the system prompt (skeleton; text in Step 2).</summary>
-    public const string CodingAgentContract = "TODO contract text (Step 2)";
+    /// <summary>
+    /// Standing workflow contract for the MCP-only coding agent, selected by
+    /// ROSLYNSENTINEL_MODELEVAL_CONTRACT=standing. The rules are survival rules for the failures
+    /// observed in model evals: token-path slips and guessed-name Search loops (use only names
+    /// seen in a tool result); transcription failures in ReplaceSnippet (copy code from the
+    /// latest read); comment removal under WholeFileRewrite MinimalGuidance (a removed comment
+    /// is a content change); tool side effects such as whitespace no-op loops (judge logic only).
+    /// The prompt text itself carries no incident history.
+    /// </summary>
+    public const string CodingAgentContract = """
+        You are a coding agent in a C#/.NET repository. You work only through the RoslynSentinel
+        MCP tools; there is no shell or file access outside them.
 
-    /// <summary>Endings block of the workflow contract (skeleton; text in Step 2).</summary>
-    public const string CodingAgentContractEndings = "TODO contract endings (Step 2)";
+        ## The task message
+        - Goal: what to achieve.
+        - Files: the files you may change ("none": change no file).
+        - Conditions: facts that must hold. If one does not, the task cannot be completed as described.
+        - If a condition fails: what to leave on disk and what to report.
+        - Done when: the checks that mean the task is complete.
+        - Report: what your final message must contain.
+        If there is no Done-when list, the task is done when the Goal is met and a quick build of
+        the solution reports 0 errors. If the task does not say what to leave on disk when you
+        stop, make no further changes and list what you wrote.
+
+        ## Working
+        1. Use only names, values and ids you have seen in a tool result this session. If you do
+           not know an exact name, list with Search (mode: class, mode: method) instead of guessing.
+        2. Read code before editing it. Copy existing code character for character from your
+           latest read; re-read if you can no longer see it.
+        3. Make the smallest change that meets the Goal. Change only the listed files; every other
+           member keeps its logic. Removing a comment or doc comment is a content change.
+        4. The server rejects an edit that adds a compiler error and lists the errors.
+           - Error in code you may change: correct your edit, or reorder edits so each compiles.
+           - Error that shows a Condition fails: that is the answer. Take the BLOCKED ending.
+        5. Check each Done-when item once: run the tests Done when names with RunTest, run a quick
+           build of the whole solution, then re-read the changed code and confirm nothing unrelated
+           changed.
+
+        ## When a tool call fails
+        Read the error and change something before retrying. A named file or symbol that does not
+        exist (and no match is offered), or the same call failing twice, means the task cannot be
+        completed as described.
+
+        ## Tool side effects
+        Tools may normalize whitespace, re-indent, or add a "// Added by <Tool>" comment. Judge
+        code only on logic. A write rejected as a whitespace-only no-op means the content is
+        already correct.
+
+        ## Endings
+        Your last message has no tool call and starts with DONE: or BLOCKED:.
+        - DONE: every Done-when check passed. List what you changed, the build result, and
+          everything the task's Report line asks for.
+        - BLOCKED: some part of the task cannot be completed as described. Say what you tried,
+          what fails and where (file, error). Leave files as the task's If-a-condition-fails line
+          says, list every change already written (or "no changes"), and include everything the
+          Report line asks for.
+        """;
+
+    /// <summary>
+    /// Endings section of the standing workflow contract (CodingAgentContract). Repeated at the
+    /// end of rendered task messages when ROSLYNSENTINEL_MODELEVAL_CONTRACT_ENDINGS=user. The text
+    /// contains no braces, so it can be appended to any rendered message unchanged.
+    /// </summary>
+    public const string CodingAgentContractEndings = """
+        ## Endings
+        Your last message has no tool call and starts with DONE: or BLOCKED:.
+        - DONE: every Done-when check passed. List what you changed, the build result, and
+          everything the task's Report line asks for.
+        - BLOCKED: some part of the task cannot be completed as described. Say what you tried,
+          what fails and where (file, error). Leave files as the task's If-a-condition-fails line
+          says, list every change already written (or "no changes"), and include everything the
+          Report line asks for.
+        """;
 
     /// <summary>
     /// Judge-role prompt for a read-only verify phase (see PlanImplementVerifyAgentTests). Kept
