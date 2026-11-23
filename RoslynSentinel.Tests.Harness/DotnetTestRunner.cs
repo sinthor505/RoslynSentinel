@@ -7,7 +7,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// Result of a single `dotnet test` invocation, parsed from the console summary line
 /// (e.g. "Passed!  - Failed:     0, Passed:     2, Skipped:     0, Total:     2, Duration: 20 ms").
 /// </summary>
-internal sealed record DotnetTestResult(int Passed, int Failed, int Skipped, int Total, int ExitCode, string RawOutput);
+public sealed record DotnetTestResult(int Passed, int Failed, int Skipped, int Total, int ExitCode, string RawOutput);
 
 /// <summary>
 /// Runs `dotnet test` against a real test project (e.g. ContosoOrders.Tests) and parses its
@@ -20,7 +20,7 @@ internal sealed record DotnetTestResult(int Passed, int Failed, int Skipped, int
 /// RunTestTool MCP tool, so a bug in RunTestTool can't mask a real fixture failure -> the agent under
 /// test already exercises RunTestTool live during its own run.
 /// </summary>
-internal static class DotnetTestRunner
+public static class DotnetTestRunner
 {
     private static readonly Regex SummaryLineRegex = new(
         @"Failed:\s*(?<failed>\d+),\s*Passed:\s*(?<passed>\d+),\s*Skipped:\s*(?<skipped>\d+),\s*Total:\s*(?<total>\d+)",

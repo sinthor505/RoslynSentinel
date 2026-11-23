@@ -2,7 +2,7 @@ using RoslynSentinel.Tests.Battery.Basic;
 
 namespace RoslynSentinel.Tests.ModelEval;
 
-internal sealed class GoldenStepRepository
+public sealed class GoldenStepRepository
 {
     private GoldenStepRepository(string repoDirectory)
     {

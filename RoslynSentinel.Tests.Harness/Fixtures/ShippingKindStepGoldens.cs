@@ -1,6 +1,6 @@
 namespace RoslynSentinel.Tests.ModelEval.Fixtures;
 
-internal static class ShippingKindStepGoldens
+public static class ShippingKindStepGoldens
 {
     public const int LastStep = 6;
 

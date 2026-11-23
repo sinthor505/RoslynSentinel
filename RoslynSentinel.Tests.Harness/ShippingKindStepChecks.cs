@@ -2,7 +2,7 @@ using RoslynSentinel.Tests.ModelEval.Fixtures;
 
 namespace RoslynSentinel.Tests.ModelEval;
 
-internal enum ShippingKindStepOutcome
+public enum ShippingKindStepOutcome
 {
     Pass,
     OutOfScopeEdit,
@@ -16,7 +16,7 @@ internal enum ShippingKindStepOutcome
     NotConverged
 }
 
-internal static class ShippingKindStepChecks
+public static class ShippingKindStepChecks
 {
     public static async Task<(ShippingKindStepOutcome Outcome, string Detail)> CheckAsync(int step, string solutionDirectory, string? finalMessage, IReadOnlyList<string> changedPaths, CancellationToken cancellationToken, ShippingKindFixtureStyle style = ShippingKindFixtureStyle.Default)
     {
