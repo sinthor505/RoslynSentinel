@@ -7,6 +7,8 @@ using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.Text;
 using RoslynSentinel.Common;
 
+using static RoslynSentinel.Engines.Basic.CopyAndObsoleteEdits;
+
 namespace RoslynSentinel.Engines.Basic;
 
 /// <summary>
@@ -616,90 +618,7 @@ public static class CopyAndObsoleteCallerRewrite
         return Math.Max(lineStart, bomOffset);
     }
 
-    // TODO the helpers below (Apply, DetectEol, CompareNamespaces, AnchorPosition) duplicate the private ones in CopyAndObsoleteEdits; share one internal copy once slices 14-2 and 14-3 are both committed
 
-    private static string Apply(string text, List<(int Position, int Length, string Text)> edits)
-    {
-        var builder = new StringBuilder(text.Length + 64);
-        var cursor = 0;
 
-        // OrderBy is stable: insertions at one position keep the order they were added in.
-        foreach (var edit in edits.OrderBy(edit => edit.Position))
-        {
-            if (edit.Position < cursor)
-            {
-                continue;
-            }
 
-            builder.Append(text, cursor, edit.Position - cursor);
-            builder.Append(edit.Text);
-            cursor = edit.Position + edit.Length;
-        }
-
-        builder.Append(text, cursor, text.Length - cursor);
-        return builder.ToString();
-    }
-
-    private static string DetectEol(string text)
-    {
-        var crlf = 0;
-        var lf = 0;
-        for (var i = 0; i < text.Length; i++)
-        {
-            if (text[i] != '\n')
-            {
-                continue;
-            }
-
-            if (i > 0 && text[i - 1] == '\r')
-            {
-                crlf++;
-            }
-            else
-            {
-                lf++;
-            }
-        }
-
-        return lf > crlf ? "\n" : "\r\n";
-    }
-
-    // System namespaces first, then ordinal: the order the common usings convention uses.
-    private static int CompareNamespaces(string a, string b)
-    {
-        var aSystem = a == "System" || a.StartsWith("System.", StringComparison.Ordinal);
-        var bSystem = b == "System" || b.StartsWith("System.", StringComparison.Ordinal);
-        return aSystem != bSystem ? (aSystem ? -1 : 1) : string.CompareOrdinal(a, b);
-    }
-
-    // Where text goes ahead of the member: after the last blank line of its leading trivia (so a header comment stays on top and a comment or doc comment
-    // directly above the member stays attached), else the member's full start.
-    private static int AnchorPosition(MemberDeclarationSyntax member)
-    {
-        var anchor = member.FullSpan.Start;
-        var lineBlank = true;
-        foreach (var trivia in member.GetLeadingTrivia())
-        {
-            if (trivia.IsKind(SyntaxKind.WhitespaceTrivia))
-            {
-                continue;
-            }
-
-            if (trivia.IsKind(SyntaxKind.EndOfLineTrivia))
-            {
-                if (lineBlank)
-                {
-                    anchor = trivia.FullSpan.End;
-                }
-
-                lineBlank = true;
-                continue;
-            }
-
-            // Doc comments and directives carry their own line ending; a // or /* */ comment does not.
-            lineBlank = trivia.HasStructure;
-        }
-
-        return anchor;
-    }
 }

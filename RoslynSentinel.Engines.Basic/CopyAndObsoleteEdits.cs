@@ -300,7 +300,7 @@ public static class CopyAndObsoleteEdits
 
     // Where text goes ahead of the member: after the last blank line of its leading trivia (so a header comment stays on top and a comment or doc comment
     // directly above the member stays attached), else the member's full start.
-    private static int AnchorPosition(MemberDeclarationSyntax member)
+    internal static int AnchorPosition(MemberDeclarationSyntax member)
     {
         var anchor = member.FullSpan.Start;
         var lineBlank = true;
@@ -329,7 +329,7 @@ public static class CopyAndObsoleteEdits
         return anchor;
     }
 
-    private static string Apply(string text, List<(int Position, int Length, string Text)> edits)
+    internal static string Apply(string text, List<(int Position, int Length, string Text)> edits)
     {
         var builder = new StringBuilder(text.Length + 64);
         var cursor = 0;
@@ -337,6 +337,12 @@ public static class CopyAndObsoleteEdits
         // OrderBy is stable: insertions at one position keep the order they were added in.
         foreach (var edit in edits.OrderBy(edit => edit.Position))
         {
+            // Guard shared with the caller-rewrite pass: skip an overlapping edit rather than garble the output.
+            if (edit.Position < cursor)
+            {
+                continue;
+            }
+
             builder.Append(text, cursor, edit.Position - cursor);
             builder.Append(edit.Text);
             cursor = edit.Position + edit.Length;
@@ -346,7 +352,7 @@ public static class CopyAndObsoleteEdits
         return builder.ToString();
     }
 
-    private static string DetectEol(string text)
+    internal static string DetectEol(string text)
     {
         var crlf = 0;
         var lf = 0;
@@ -386,7 +392,7 @@ public static class CopyAndObsoleteEdits
     }
 
     // System namespaces first, then ordinal: the order the common usings convention uses.
-    private static int CompareNamespaces(string a, string b)
+    internal static int CompareNamespaces(string a, string b)
     {
         var aSystem = a == "System" || a.StartsWith("System.", StringComparison.Ordinal);
         var bSystem = b == "System" || b.StartsWith("System.", StringComparison.Ordinal);
