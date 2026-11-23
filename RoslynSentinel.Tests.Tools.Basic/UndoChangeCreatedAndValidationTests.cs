@@ -236,4 +236,28 @@ public class UndoChangeCreatedAndValidationTests
         Assert.That(undo.ErrorData!.ErrorCode, Is.EqualTo("NoReversibleItems"));
         Assert.That(File.Exists(file), Is.True, "an unmarked null pre-image must never lead to a delete");
     }
+
+    [Test]
+    [Description("Undoing the creation of a type that other code still uses is refused, and the refusal carries the edit-impact wording that the type was removed")]
+    public async Task UndoChange_CreatedTypeStillUsed_RefusalNamesTheRemovedTypeAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = await LoadAsync(fixture);
+        var workspaceTools = TestTools.WorkspaceTools(workspaceManager);
+        var created = CoreFile(fixture, "CreatedByTool.cs");
+
+        var create = await workspaceTools.CreateFileTool(reason: "test message", created, content: CreatedTypeSource);
+        Assert.That(create.IsError, Is.False, create.ErrorData?.Message);
+        var changeId = ((ApplyChangesResult)create.SuccessData!).ChangeId!;
+        await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Core", "CreatedUser.cs"),
+            "namespace UndoFixtureCode;\n\npublic class CreatedUser\n{\n    public CreatedByTool Held { get; set; } = new();\n}\n");
+
+        var undo = await workspaceTools.UndoChangeTool(reason: "test message", changeId: changeId);
+
+        Assert.That(undo.IsError, Is.True);
+        Assert.That(undo.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.ValidationFailed));
+        Assert.That(undo.ErrorData!.Message, Does.Contain("removed"), "the edit-impact text names the deleted type as removed");
+        Assert.That(undo.ErrorData!.Message, Does.Contain("CreatedByTool"));
+        Assert.That(File.Exists(created), Is.True, "a refused undo must keep the created file");
+    }
 }

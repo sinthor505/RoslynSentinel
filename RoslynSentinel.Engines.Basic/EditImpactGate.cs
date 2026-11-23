@@ -99,6 +99,7 @@ public static class EditImpactGate
     /// nothing is attributable); <c>structuredDetail[0]</c> is the <see cref="EditImpactDetail"/> (see <see cref="BuildDetail"/>), always present.
     /// Those sites add no untouched-file sentence, so nothing is duplicated.
     /// </summary>
+    /// <param name="deletePaths">Files the edit deletes; their declarations count as removed.</param>
     public static async Task<ResultError> RejectionAsync(
         IWorkspaceManager workspaceManager,
         IReadOnlyDictionary<FilePathWrapper, string> changes,
@@ -106,9 +107,10 @@ public static class EditImpactGate
         ActiveToolSurface? activeToolSurface,
         string messagePrefix,
         string existingText,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlyCollection<FilePathWrapper>? deletePaths = null)
     {
-        var impact = await AnalyzeAsync(workspaceManager, changes, report, activeToolSurface, cancellationToken: cancellationToken);
+        var impact = await AnalyzeAsync(workspaceManager, changes, report, activeToolSurface, deletePaths: deletePaths, cancellationToken: cancellationToken);
         var text = impact is null ? existingText : impact.Text + "\n" + existingText;
         var nearMisses = await DetectNearMissesAsync(workspaceManager, changes, report.Diagnostics, cancellationToken);
         return new ResultError(ToolErrorCode.ValidationFailed, messagePrefix + text, StructuredDetail: BuildDetail(impact, report.Diagnostics, nearMisses: nearMisses));

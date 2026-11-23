@@ -480,7 +480,7 @@ public class WorkspaceFileEditImpl
                     return new SentinelCallToolResult<object>()
                     {
                         IsError = true,
-                        ErrorData = await ComposeUndoValidationRefusalAsync(changeId, revertChanges, revertResult.ValidationResult, cancellationToken)
+                        ErrorData = await ComposeUndoValidationRefusalAsync(changeId, revertChanges, revertResult.ValidationResult, deletePaths, cancellationToken)
                     };
                 }
 
@@ -571,16 +571,15 @@ public class WorkspaceFileEditImpl
     /// Nothing was written. Facts and options only: the new compiler errors (with the edit-impact attribution when one applies), then what can be done about them.
     /// </summary>
     private async Task<ResultError> ComposeUndoValidationRefusalAsync(
-        string changeId, IReadOnlyDictionary<FilePathWrapper, string> restored, DiagnosticReport validation, CancellationToken cancellationToken)
+        string changeId, IReadOnlyDictionary<FilePathWrapper, string> restored, DiagnosticReport validation, IReadOnlyCollection<FilePathWrapper> deletePaths, CancellationToken cancellationToken)
     {
-        // TODO EditImpactGate.RejectionAsync takes no deletePaths, so an error caused by deleting a created file gets the compiler-error list but no edit-impact attribution ("type X was removed"); add a deletePaths overload and pass the undo's delete targets
         var errorCount = validation.Diagnostics.Count(d => d.Severity == "Error");
         var errors = await CompilerErrorLookupHelper.DescribeAsync(validation, _symbolNavigationEngine, cancellationToken, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable);
         return await EditImpactGate.RejectionAsync(_workspaceManager, restored, validation, _activeToolSurface,
             $"Undo refused: restoring changeId '{changeId}' would introduce {errorCount} new compiler error(s); nothing was written. ",
             "Compiler errors the undo would introduce:\n[COMPILER ERROR]\n" + errors +
             "\nOptions: the dependent code can be edited by hand first, or the dependent change undone first (newest first).",
-            cancellationToken);
+            cancellationToken, deletePaths: deletePaths);
     }
 
     /// <summary>
