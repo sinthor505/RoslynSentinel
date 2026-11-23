@@ -8,6 +8,24 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Undo refusal for a deleted created file gets edit-impact attribution - resolved (2026-11-22)
+
+Undo refusal for a deleted created file gets edit-impact attribution (2026-11-22) - add an optional deletePaths parameter to `EditImpactGate.RejectionAsync` (`EditImpactGate.cs:102`), forward it to AnalyzeAsync, pass it from `WorkspaceFileEditImpl.ComposeUndoValidationRefusalAsync` (code TODO there); other 5 callers unchanged; acceptance: undo of a created file still referenced elsewhere names the removed type; Small
+
+Evidence: aace29c3 (punchlist #9); UndoChangeCreatedAndValidationTests (result pending)
+
+## ReadFile reports an inverted range as inverted - resolved (2026-11-22)
+
+ReadFile reports an inverted range as inverted (2026-11-22) - today "requested range 409-215 is out of bounds for a 553-line file" and a model repeated the call (.111 `t2-s06-run2.jsonl`); add a from > to branch before the bounds check (`WorkspaceFileEditImpl.cs:960-967` and ReadFileWithoutSolutionAsync) with the text "ReadFile: the range is inverted: startLine 409 is greater than endLine 215. Options: startLine 215, endLine 409 reads lines 215-409."; acceptance: ReadFile(409, 215) returns that text, startLine past EOF keeps the bounds text; Small
+
+Evidence: 0745bd39 (punchlist #4); ReadFileRecordsObservedTests InvertedRange_ReturnsSwappedCallHint_RecordsNothing and StartLinePastEof_KeepsOutOfBoundsText green (ReadFileWithoutSolutionAsync branch has no test)
+
+## Ambiguous-file text drops "You MUST retry" - resolved (2026-11-22)
+
+Replace "You MUST retry with the full path of the one you meant:" with "Pass the full path of the one you meant as filePath:" (`DocumentLookup.cs:119`) (2026-11-21) - facts-and-options rule; no test pins it; acceptance: Search text "MUST retry" finds nothing in production code; Small
+
+Evidence: 4724c9fd (punchlist #1); "MUST retry" no longer in the tree; DocumentLookupTests green
+
 ## Construction-site findings honour includeTests - resolved (2026-11-22)
 
 Construction-site findings honour `includeTests` (2026-11-21) - `ExcludeTestHits` filters hit rows but `ConstructionSiteFindings.ForSymbolAsync` runs unfiltered (`SymbolRelationshipImpl.cs:351-355`, code TODO above `FindCallersWithTargetAsync`); decided 2026-11-22: drop findings in test projects when includeTests is false, in callers and references modes; acceptance: Search(callers, includeTests:false) on a symbol constructed only in tests returns no construction-site finding; Small
