@@ -2480,7 +2480,7 @@ public class WorkspaceFileEditImpl
                     ErrorData = await EditImpactGate.RejectionAsync(_workspaceManager, changes, result.ValidationResult, _activeToolSurface,
                         "CreateFile: this content would introduce new compiler errors - not written to disk. Fix the issue(s) below and retry:\n" +
                         "[COMPILER ERROR]\n",
-                        await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable), cancellationToken)
+                        renamedAway => CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable, renamedAwayNames: renamedAway), cancellationToken)
                 };
             }
 

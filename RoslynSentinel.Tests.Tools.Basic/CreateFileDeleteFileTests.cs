@@ -1347,4 +1347,48 @@ public class CreateFileDeleteFileTests
         Assert.That(changeId, Is.Not.Null.And.Not.Empty);
         Assert.That(RoslynSentinel.Common.OperationBlobWriter.FindBlobPath(changeId!, fixture.SolutionDirectory), Is.Not.Null);
     }
+
+    [Test]
+    [Category("WorkspaceTools")]
+    public async Task WriteFile_RenamedFieldStillUsedByOldName_RejectionOmitsTypoHintAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+        var wholeFileWriteTools = BuildWholeFileWriteTools(workspaceManager);
+
+        var file = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "RateHolder.cs");
+        var created = await workspaceTools.CreateFileTool(reason: "test message", file, content: "public class RateHolder\n{\n    int rate;\n    public int Get() { return rate; }\n}\n");
+        Assert.That(created.IsError, Is.False, created.ErrorData?.Message);
+
+        // Field rate is renamed to rate2 while the use of rate stays: CS0103 for rate, and the impact analysis pairs rate -> rate2 as Renamed.
+        var result = await wholeFileWriteTools.WriteFileTool(reason: "test message", WriteFileOperation.ReplaceFile, file, "public class RateHolder\n{\n    int rate2;\n    public int Get() { return rate; }\n}\n");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.Message, Does.Contain("this content would introduce new compiler errors"));
+        Assert.That(result.ErrorData!.Message, Does.Not.Contain("likely a typo"), "a name renamed away by this edit must not get a closest-name typo hint");
+        Assert.That(File.ReadAllText(file), Does.Contain("int rate;"));
+    }
+
+    [Test]
+    [Category("WorkspaceTools")]
+    public async Task WriteFile_TypoOfExistingMemberWithNoRename_RejectionKeepsTypoHintAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+        var wholeFileWriteTools = BuildWholeFileWriteTools(workspaceManager);
+
+        var file = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "RateTypo.cs");
+        var created = await workspaceTools.CreateFileTool(reason: "test message", file, content: "public class RateTypo\n{\n    int rate;\n    public int Get() { return rate; }\n}\n");
+        Assert.That(created.IsError, Is.False, created.ErrorData?.Message);
+
+        // Control: no declaration is renamed, so the CS0103 for rte keeps the closest-name typo hint.
+        var result = await wholeFileWriteTools.WriteFileTool(reason: "test message", WriteFileOperation.ReplaceFile, file, "public class RateTypo\n{\n    int rate;\n    public int Get() { return rte; }\n}\n");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.Message, Does.Contain("likely a typo"));
+    }
 }
