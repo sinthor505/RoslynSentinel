@@ -339,43 +339,34 @@ public static class ArchitectureDocGenerator
     {
         return text.Replace("|", "\\|").Replace("\n", " ").Replace("\r", "");
     }
-    
+
     /// <summary>
     /// Discovers all .csproj files in the repo, excluding bin/, obj/, and Worktree folders.
     /// </summary>
     private static List<ProjectInfo> DiscoverProjects()
     {
         var result = new List<ProjectInfo>();
-        
+
         // Find repo root
-        var current = AppContext.BaseDirectory;
-        while (!string.IsNullOrEmpty(current))
+        var root = RepoRootLocator.TryFind(AppContext.BaseDirectory);
+        if (root != null)
         {
-            var slnxPath = Path.Combine(current, "RoslynSentinel.slnx");
-            if (File.Exists(slnxPath))
+            var csprojFiles = Directory.GetFiles(root, "*.csproj", SearchOption.AllDirectories)
+                .Where(f => !f.Contains("\\bin\\") && !f.Contains("\\obj\\") && !f.Contains("\\Worktree\\"))
+                .OrderBy(f => Path.GetFileName(f))
+                .ToList();
+
+            foreach (var csprojPath in csprojFiles)
             {
-                // Found repo root, search for .csproj files
-                var csprojFiles = Directory.GetFiles(current, "*.csproj", SearchOption.AllDirectories)
-                    .Where(f => !f.Contains("\\bin\\") && !f.Contains("\\obj\\") && !f.Contains("\\Worktree\\"))
-                    .OrderBy(f => Path.GetFileName(f))
-                    .ToList();
-                
-                foreach (var csprojPath in csprojFiles)
-                {
-                    var projectName = Path.GetFileNameWithoutExtension(csprojPath);
-                    var refs = ExtractProjectReferences(csprojPath);
-                    result.Add(new ProjectInfo { Name = projectName, References = refs });
-                }
-                
-                break;
+                var projectName = Path.GetFileNameWithoutExtension(csprojPath);
+                var refs = ExtractProjectReferences(csprojPath);
+                result.Add(new ProjectInfo { Name = projectName, References = refs });
             }
-            
-            current = Path.GetDirectoryName(current);
         }
-        
+
         return result;
     }
-    
+
     /// <summary>
     /// Extracts ProjectReference Include names from a .csproj file using XDocument.
     /// </summary>

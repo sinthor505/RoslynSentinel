@@ -100,18 +100,13 @@ public class ClaudeLeanSchemaBudgetTests
     {
         try
         {
-            var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
-            while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "RoslynSentinel.slnx")))
-            {
-                dir = dir.Parent;
-            }
-
-            if (dir == null)
+            var root = RepoRootLocator.TryFind(AppContext.BaseDirectory);
+            if (root == null)
             {
                 return;
             }
 
-            var outDir = System.IO.Path.Combine(dir.FullName, ".roslynsentinel", "schema-sizes");
+            var outDir = System.IO.Path.Combine(root, ".roslynsentinel", "schema-sizes");
             System.IO.Directory.CreateDirectory(outDir);
             var lines = new List<string> { $"total={total} budget={budget} headroom={budget - total} tools={tools.Count}" };
             lines.AddRange(tools.Select(t => $"{t.Name} {t.Chars} inputSchema={t.InputSchemaChars}"));
