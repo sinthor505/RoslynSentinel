@@ -1,6 +1,6 @@
 # Plan: Remove EngineResultWrapper<T>; engines return IOperationResult types and throw typed exceptions when a build or test run did not run
 
-**Status:** APPROVED 2026-11-22. Remove EngineResultWrapper<T>; a build or test run that did not start throws a typed exception with a cause-specific code (Batched mode, owner present).
+**Status:** IN PROGRESS 2026-11-22. Steps 0-4 and 7 done (da9817ed, 66f9940a, e2d2f67b, 7f5e3fa0, 4d038a3f, 43a96682); Batch B next.
 
 ## Problem
 
@@ -115,6 +115,7 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
 ## Steps
 
 ### Step 0 - Inventory of everything pinned to the build/test error codes
+- Done: da9817ed8697d0522a91f8cda9d447c9b80c671f
 - Files: none (read-only; output goes into this plan under Step 16)
 - Depends on: none
 - Effect: none
@@ -133,6 +134,7 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
 - Done when: the hit list is pasted under Step 16 "Pins from Step 0", with file:line and the new expected code.
 
 ### Step 1 - Contract types
+- Done: 66f9940a6a184f2140e5e0617ac17e6523ae19c7
 - Files: `RoslynSentinel.Common/ToolException.cs`, `RoslynSentinel.Common/SentinelCallToolResult.cs`,
   `RoslynSentinel.Common/MultiDocumentEditResult.cs` (new)
 - Depends on: none
@@ -175,6 +177,7 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
 - Done when: `Build` 0 errors.
 
 ### Step 2 - DiagnosticEngine: Core methods plus obsolete shims
+- Done: e2d2f67b8e60285bfc7911da794bb11656969212
 - Files: `RoslynSentinel.Engines.Basic/DiagnosticEngine.cs`
 - Depends on: none
 - Pairs with: Step 3 (disjoint files)
@@ -195,6 +198,7 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
 - Done when: `Build` 0 errors. Dispatcher runs `DiagnosticEngineTests` (both classes of that name).
 
 ### Step 3 - TestRunEngine.RunAsync in place, with the RunTest consumer
+- Done: 7f5e3fa08ad42027964db158c6f63c1f37b52da8
 - Files: `RoslynSentinel.Engines.Basic/TestRunEngine.cs`, `RoslynSentinel.Tools.Basic/WorkspaceBuildTestImpl.cs`
 - Depends on: Step 1
 - Pairs with: Step 7
@@ -216,6 +220,7 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
   `RunTestMissTests.cs:43`).
 
 ### Step 4 - InvertBooleanLogicAsync in place, with the tool
+- Done: 4d038a3f64fc4ff60b2682c28edbdab88d03f549
 - Files: `RoslynSentinel.Engines.Advanced/LogicOptimizationEngine.cs`, `RoslynSentinel.Tools.Advanced/ModernizationTools.cs`
 - Depends on: Step 1
 - Pairs with: Step 3 (own commit; any time after Step 1, before Step 12)
@@ -236,7 +241,7 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
     maps the exception.
   - `BatteryTwentyOneTests.cs:486-517` pins only the error code (review 2026-11-22); no test edit.
 - Done when: `Build` 0 errors. Dispatcher runs `BatteryTwentyOneTests` (InvertBooleanLogic tests), the
-  `RoslynSentinel.Tests.Battery.Advanced/BatteryFourteenTests.cs:35-40` InvertBooleanLogic test,
+  `AdvancedLogicEngineTests` InvertBooleanLogic test (`RoslynSentinel.Tests.Battery.Advanced/BatteryFourteenTests.cs:35-40`; filter on the class name),
   `ErrorPolicyKindRatchetTests` and `ToolHintRatchetTests`.
 
 ### Step 5 - RunQuickBuildAsync: Core method plus obsolete shim
@@ -274,6 +279,7 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
   and the `BatteryTwentyTests.cs:1358` pin.
 
 ### Step 7 - Tests for the new contracts
+- Done: 43a96682c6ffb6021d9bbe889130e18e7252495a
 - Files: `RoslynSentinel.Tests.Basic/ResultStatusTests.cs`
 - Depends on: Steps 1, 2
 - Pairs with: Step 3
@@ -443,7 +449,8 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
 - Change: `Search(mode: references)` on `BuildOutcome.NotRun` with `includeTests: true` first; if it has references
   outside these two files, report them and stop (re-slice). Remove the enum member; in `BuildResult`, `Code` becomes
   `Outcome == BuildOutcome.Failed ? ToolErrorCode.BuildFailed : null` (a switch without `_` would raise CS8509),
-  `Message` drops the `"Build was not run"` fallback, and the `IsError` summary drops the NotRun sentence. Delete the `NotRun` pin at `ResultStatusTests.cs:579-590`.
+  `Message` drops the `"Build was not run"` fallback, and the `IsError` summary drops the NotRun sentence. Delete the `NotRun` pin at `ResultStatusTests.cs:579-590`. Drop "(or NotRun)" from the comment
+  at `BuildResultProjector.cs:69` (comment-only third file).
 - Done when: `Build` 0 errors; `ResultStatusTests` passes.
 
 ### Step 13 - Tool boundary emits the exception's own code
