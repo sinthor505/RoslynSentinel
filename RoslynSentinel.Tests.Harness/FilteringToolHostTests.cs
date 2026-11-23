@@ -92,7 +92,7 @@ public class FilteringToolHostTests
             Assert.That(surface, Is.SupersetOf(AgentToolAllowLists.Lean));
             Assert.That(surface, Does.Contain("GetDiagnostics"));
             Assert.That(surface, Has.Count.EqualTo(AgentToolAllowLists.Lean.Count + 1));
-            Assert.That(AgentToolAllowLists.Lean, Has.Count.EqualTo(18));
+            Assert.That(AgentToolAllowLists.Lean, Has.Count.EqualTo(19)); // pins the current Lean list size; update when AgentToolAllowLists.Lean changes
         });
     }
 
