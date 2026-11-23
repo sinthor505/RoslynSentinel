@@ -121,9 +121,9 @@ public class CopyAndObsoleteMigrationTests
     }
 
     [Test]
-    public async Task CallerThatFailsInUsingMode_IsRetriedQualified_AndMigrates()
+    public async Task CallerRelyingOnAnExtensionGetEnumerator_IsRewrittenQualifiedInTheFirstRound_AndMigrates()
     {
-        // The foreach finds GetEnumerator through 'using Demo.Models;'; the pass does not see that, so the default Using mode drops the using.
+        // The foreach finds the extension GetEnumerator through 'using Demo.Models;', so the rewrite pass sees it and picks Qualify mode in round 1; no retry is needed.
         var extension = ("Models/FooExtensions.cs", Lf("namespace Demo.Models;", "", "public static class FooExtensions { public static System.Collections.IEnumerator GetEnumerator(this Foo foo) => new int[] { 1, 2 }.GetEnumerator(); }"));
         var counter = Caller("Counter", "public class Counter { public int Count(Foo foo) { var n = 0; foreach (var item in foo) { n++; } return n; } }");
         var solution = CreateSolution(extension, counter);
@@ -138,8 +138,8 @@ public class CopyAndObsoleteMigrationTests
         var migrated = result.MigratedCallers.Single(file => file.FilePath == Abs("Consumers/Counter.cs"));
         Assert.That(migrated.Mode, Is.EqualTo(CallerRewriteMode.Qualify));
         Assert.That(migrated.NewText, Does.Contain("Demo.Other.Foo foo").And.Contain("using Demo.Models;"));
-        Assert.That(result.RoundsUsed, Is.EqualTo(2));
-        Assert.That(result.Facts.Any(fact => fact.Contains("Counter.cs", StringComparison.Ordinal) && fact.Contains("retried", StringComparison.Ordinal)), Is.True, string.Join(" | ", result.Facts));
+        Assert.That(result.RoundsUsed, Is.EqualTo(1), "The rewrite pass chose Qualify for Counter in round 1, so no retry round is needed.");
+        Assert.That(result.Facts.Any(fact => fact.Contains("retried", StringComparison.Ordinal)), Is.False, string.Join(" | ", result.Facts));
     }
 
     [Test]
