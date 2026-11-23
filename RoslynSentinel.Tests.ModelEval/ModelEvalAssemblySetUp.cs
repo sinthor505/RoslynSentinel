@@ -50,6 +50,9 @@ public class ModelEvalAssemblySetUp
             Environment.GetEnvironmentVariable("ROSLYNSENTINEL_ERROR_POLICY_FILE")));
         // RepoRootLocator.TryFind() with no argument consults ROSLYNSENTINEL_REPO_ROOT; TryFind(startDirectory) ignores it.
         ModelAgentRunner.ProcessStamp = EvalRunStamp.BuildProcessStamp(EvalRunStamp.ReadWorkingTreeStamp(RepoRootLocator.TryFind() ?? AppContext.BaseDirectory));
+        // Reads ROSLYNSENTINEL_MODELEVAL_CONTRACT / _CONTRACT_ENDINGS (unset = legacy contract, system endings). Runs before the
+        // Assert.Ignore model check below so a bad value fails loudly rather than being skipped.
+        ModelAgentRunner.ContractStamp = EvalContractOptions.BuildContractStamp();
 
         if (string.IsNullOrEmpty(LlmOptions.Model))
         {
