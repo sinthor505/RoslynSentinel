@@ -8,6 +8,18 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## AgentIdentityFilterTests left ToolCallEchoOptions enabled - resolved (2026-11-22)
+
+SetUp enabled `ToolCallEchoOptions` (--echo-tool-args=true) and TearDown never reset it, so the echo could stay on for later fixtures in the process (INBOX line, 2026-11-22 21:00). TearDown now calls `ToolCallEchoOptions.Configure(Array.Empty<string>())`.
+
+Evidence: 90af57f4.
+
+## Resolve the GitResult Message/Status name collision (five CS0108) - resolved (2026-11-22)
+
+Resolve the GitResult Message/Status name collision (five CS0108) (2026-11-21) - the base members are IOperationResult plumbing (Message => Error, Status from Code; `[JsonIgnore]`, `GitImpl.cs:11-50`) while the derived ones are payload (commit message :254,277,289; stash status :480); decided 2026-11-22: make the base members explicit interface implementations so nothing is hidden (check no caller reads them via the concrete type), wire unchanged; update `known-build-warnings.Solution.txt`; acceptance: no CS0108, a test pins `message` on GitCommitResult and `status` on GitStashResult; Small
+
+Evidence: 854e5cbd; ToolsBasicResultStatusTests.GitCommitResult_Serialization_MessagePayloadIsKept and GitStashResult_Status_PayloadIsObjectAndCanonicalStatusIsSuccess; Status is now an explicit IOperationResult member, the unused base Message was deleted (it was on no interface and nothing read it); no CS0108 left in the build
+
 ## Serializer escaping apostrophe in toolset rejection text - resolved (2026-11-22)
 
 Find which serializer JSON-escapes the toolset rejection text in filtered runs and fix it (2026-11-22) - `Declaration_`/`ParameterEdit_EnabledOnLean_IsCallable_AndRejectsAWrongParamSubsetByName` fail only in subset runs: the text arrives with `'` vs a plain-quote assert (`McpToolsetControlTests.cs:844,929`; runs e92f17ae-20261121-235202-13476, 35e24cfa-20261122-000251-42200); SharedJsonOptions uses UnsafeRelaxedJsonEscaping, so another serializer emits it; decided 2026-11-22: fix server-side (models get a literal quote), relax the assert only if it is test-only; acceptance: both tests pass filtered and full, text has a literal '; Small-Medium
