@@ -75,19 +75,19 @@ public class BuildIsolationTests
         var binBefore = SnapshotFileSystemEntries(projectBin);
         var assembliesBefore = SnapshotAssemblyWriteTimes(projectDirectory);
 
-        var result = await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50, level: BuildVerifyLevel.fullBuildThrowaway);
+        var result = await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50, level: BuildVerifyLevel.fullBuildThrowaway);
 
-        Assert.That(result.Outcome, Is.EqualTo(EngineOutcome.Success), result.Error?.Message);
-        Assert.That(result.Data!.ErrorCount, Is.Zero, result.Data.StdoutTail);
-        Assert.That(result.Data.Level, Is.EqualTo(BuildVerifyLevel.fullBuildThrowaway));
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.ErrorCount, Is.Zero, result.StdoutTail);
+        Assert.That(result.Level, Is.EqualTo(BuildVerifyLevel.fullBuildThrowaway));
         var instanceId = BuildIsolation.ResolveInstanceId();
         var buildRoot = Path.Combine(solutionDirectory, ".roslynsentinel", "build");
         var instanceBin = Path.Combine(buildRoot, instanceId, "bin");
         Assert.That(Directory.Exists(instanceBin), Is.True, "instance bin/ should exist after a throwaway build");
         Assert.That(Directory.EnumerateFiles(instanceBin, "ContosoOrders.Core.dll", SearchOption.AllDirectories), Is.Not.Empty);
-        Assert.That(result.Data.Detail, Does.Contain(".roslynsentinel/build/" + instanceId));
-        Assert.That(result.Data.Detail, Does.Contain("bin/ was not updated"));
-        Assert.That(result.Data.Detail, Does.Not.Contain(".scratch"));
+        Assert.That(result.Detail, Does.Contain(".roslynsentinel/build/" + instanceId));
+        Assert.That(result.Detail, Does.Contain("bin/ was not updated"));
+        Assert.That(result.Detail, Does.Not.Contain(".scratch"));
         // Loading the workspace can create empty bin/Debug folders, so compare before/after rather than demanding absence.
         Assert.That(SnapshotFileSystemEntries(projectBin), Is.EqualTo(binBefore),
             "a throwaway build must not write into the project's own bin/ folder");
@@ -111,12 +111,12 @@ public class BuildIsolationTests
         var solutionDirectory = Path.GetDirectoryName(fixture.SolutionPath)!;
         var projectDirectory = Path.Combine(solutionDirectory, "ContosoOrders.Core");
 
-        var result = await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50, level: BuildVerifyLevel.fullBuild);
+        var result = await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50, level: BuildVerifyLevel.fullBuild);
 
-        Assert.That(result.Outcome, Is.EqualTo(EngineOutcome.Success), result.Error?.Message);
-        Assert.That(result.Data!.ErrorCount, Is.Zero, result.Data.StdoutTail);
-        Assert.That(result.Data.Level, Is.EqualTo(BuildVerifyLevel.fullBuild));
-        Assert.That(result.Data.Detail, Is.Null.Or.Not.Contain(".roslynsentinel"));
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.ErrorCount, Is.Zero, result.StdoutTail);
+        Assert.That(result.Level, Is.EqualTo(BuildVerifyLevel.fullBuild));
+        Assert.That(result.Detail, Is.Null.Or.Not.Contain(".roslynsentinel"));
         Assert.That(Directory.EnumerateFiles(Path.Combine(projectDirectory, "bin"), "ContosoOrders.Core.dll", SearchOption.AllDirectories), Is.Not.Empty,
             "fullBuild is the level that updates the project's own bin/");
         Assert.That(Directory.Exists(Path.Combine(solutionDirectory, ".roslynsentinel", "build", BuildIsolation.ResolveInstanceId())), Is.False);

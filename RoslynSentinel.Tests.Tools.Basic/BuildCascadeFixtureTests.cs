@@ -15,9 +15,10 @@ public class BuildCascadeFixtureTests
     // Characterises MSBuild's behaviour: a project whose ProjectReference failed to compile is not
     // compiled itself, so a full build reports only the root layer (here Base). Mid and Top are valid
     // code that would compile if Base succeeded, so any error from them would mean MSBuild cascaded.
-    // FLAKY on full-suite runs (confirmed 2026-10-22): occasionally fails there with "No data on Failure
-    // result" (result.Data read on a failed RunFullBuildAsync) yet passes alone; it may always have been
-    // flaky and gone unnoticed. Not worth chasing each time - re-run it alone before treating it as new.
+    // FLAKY on full-suite runs (confirmed 2026-10-22): occasionally fails there yet passes alone; it may
+    // always have been flaky and gone unnoticed. A build that did not run now throws BuildNotRunException
+    // (the old result.Data read on a failed wrapper threw InvalidOperationException "No data on Failure
+    // result"). Not worth chasing each time - re-run it alone before treating it as new.
     [Test]
     [NonParallelizable]
     // TODO hit the 5-minute full-build timeout on a full solution test run (2026-11-09, other sessions building); passes when run alone.
@@ -32,13 +33,13 @@ public class BuildCascadeFixtureTests
             await workspaceManager.LoadSolutionAsync(Path.Combine(root, "CascadeFixture.slnx"));
             var buildEngine = TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager));
 
-            var result = await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50, level: BuildVerifyLevel.fullBuildThrowaway);
+            var result = await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50, level: BuildVerifyLevel.fullBuildThrowaway);
 
-            Assert.That(result.Data, Is.Not.Null, result.Error?.Message);
-            Assert.That(result.Data!.Outcome, Is.EqualTo(BuildOutcome.Failed), result.Data.StdoutTail);
-            Assert.That(result.Data.ErrorCount, Is.GreaterThan(0), result.Data.StdoutTail);
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result.Outcome, Is.EqualTo(BuildOutcome.Failed), result.StdoutTail);
+            Assert.That(result.ErrorCount, Is.GreaterThan(0), result.StdoutTail);
 
-            var outside = result.Data.Errors
+            var outside = result.Errors
                 .Where(e => !e.FilePath.ToString().Replace('/', '\\').Contains("Base\\", StringComparison.OrdinalIgnoreCase))
                 .Select(e => $"{e.Id} {e.FilePath} :: {e.Message}")
                 .ToList();
