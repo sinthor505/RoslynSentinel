@@ -1,10 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
-
-using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tests.Fakes;
 using RoslynSentinel.Tests.Support;
-using RoslynSentinel.Tools.Advanced;
 using RoslynSentinel.Tools.Basic;
 
 namespace RoslynSentinel.Tests.Tools.Advanced;

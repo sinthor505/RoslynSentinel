@@ -36,11 +36,3 @@ RoslynSentinel.Tests.Battery.Advanced/BatteryTwentyFiveTests.cs::SyntaxUpgradeEn
 RoslynSentinel.Tests.Battery.Advanced/BatteryTwentySevenTests.cs::B03_SolutionStructureEngine_ValidMemberAccess | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Battery.Advanced/BatteryTwentySevenTests.cs::B18_ContextHelper_CaseSensitiveKeywords | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Battery.Advanced/BatteryTwentySixTests.cs::ThreadSafeLockGotchaTests | RoslynSentinel.Tests.Basic
-RoslynSentinel.Tests.Tools.Advanced/DeclarationModifierTests.cs::DeclarationModifierTests | RoslynSentinel.Tests.Tools.Basic
-RoslynSentinel.Tests.Tools.Advanced/ExtractLocalVariableSnippetMissTests.cs::ExtractLocalVariableSnippetMissTests | RoslynSentinel.Tests.Tools.Basic
-RoslynSentinel.Tests.Tools.Advanced/ImpactMissAdvancedTests.cs::ImpactMissAdvancedTests | RoslynSentinel.Tests.Tools.Basic
-RoslynSentinel.Tests.Tools.Advanced/MethodSignatureCallSiteTests.cs::MethodSignatureCallSiteTests | RoslynSentinel.Tests.Tools.Basic
-RoslynSentinel.Tests.Tools.Advanced/RenameNamespaceTests.cs::RenameNamespaceTests | RoslynSentinel.Tests.Tools.Basic
-RoslynSentinel.Tests.Tools.Advanced/RenameSymbolTests.cs::RenameSymbolTests | RoslynSentinel.Tests.Tools.Basic
-RoslynSentinel.Tests.Tools.Advanced/StructuralRefinementMissAdvancedTests.cs::StructuralRefinementMissAdvancedTests | RoslynSentinel.Tests.Tools.Basic
-RoslynSentinel.Tests.Tools.Advanced/SyncTypeAndFilenameTests.cs::SyncTypeAndFilenameTests | RoslynSentinel.Tests.Tools.Basic
