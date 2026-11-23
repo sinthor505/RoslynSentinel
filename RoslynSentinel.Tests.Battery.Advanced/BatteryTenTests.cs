@@ -225,27 +225,27 @@ public class DiagnosticEngineTests
     [Test]
     public async Task GetFileDiagnostics_CleanFile_ReturnsZeroErrors()
     {
-        var summary = await _engine.GetFileDiagnosticsAsync("Clean.cs");
+        var summary = await _engine.GetFileDiagnosticsCoreAsync("Clean.cs");
 
-        Assert.That(summary.Data.Errors, Is.Zero, "Clean file should report no errors");
+        Assert.That(summary.Errors, Is.Zero, "Clean file should report no errors");
     }
 
     [Test]
     public async Task GetFileDiagnostics_UnknownFile_ThrowsFileNotFound()
     {
         await Assert.ThrowsAsync<ToolNotFoundException>(
-            () => _engine.GetFileDiagnosticsAsync("DoesNotExist.cs"));
+            () => _engine.GetFileDiagnosticsCoreAsync("DoesNotExist.cs"));
     }
 
     [Test]
     public async Task GetProjectDiagnostics_KnownProject_ReturnsSummaryWithNonNegativeCounts()
     {
-        var summary = await _engine.GetProjectDiagnosticsAsync("Source");
+        var summary = await _engine.GetProjectDiagnosticsCoreAsync("Source");
 
         Assert.That(summary, Is.Not.Null, "Known project should return a summary");
-        Assert.That(summary.Outcome, Is.EqualTo(EngineOutcome.Success), "Known project should succeed");
-        Assert.That(summary.Data.Errors, Is.Zero, "Known project should report no errors");
-        Assert.That(summary.Data.Warnings, Is.Zero, "Known project should report no warnings");
+        Assert.That(summary, Is.Not.Null, "Known project should succeed");
+        Assert.That(summary.Errors, Is.Zero, "Known project should report no errors");
+        Assert.That(summary.Warnings, Is.Zero, "Known project should report no warnings");
     }
 }
 

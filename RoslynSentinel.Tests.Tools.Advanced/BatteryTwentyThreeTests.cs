@@ -970,14 +970,14 @@ namespace TestProj
     public async Task GetDiagnosticsSummary_ValidFile_ReturnsSummaryResult()
     {
         SetSource("public class E { public int M() { int x = \"s\"; return x; } }", "Diag.cs");
-        var result = await _diagnosticEngine.GetFileDiagnosticsAsync("Diag.cs");
-        Assert.That(result.Data.Errors, Is.EqualTo(1));
-        Assert.That(result.Data.Warnings, Is.EqualTo(0));
-        Assert.That(result.Data.Details, Has.Some.Property("Id").EqualTo("CS0029"));
-        Assert.That(result.Data.Details, Has.Some.Property("Severity").EqualTo("Error"));
+        var result = await _diagnosticEngine.GetFileDiagnosticsCoreAsync("Diag.cs");
+        Assert.That(result.Errors, Is.EqualTo(1));
+        Assert.That(result.Warnings, Is.EqualTo(0));
+        Assert.That(result.Details, Has.Some.Property("Id").EqualTo("CS0029"));
+        Assert.That(result.Details, Has.Some.Property("Severity").EqualTo("Error"));
         SetSource("public class E { public int M() { return 1; } }", "Diag.cs");
-        var clean = await _diagnosticEngine.GetFileDiagnosticsAsync("Diag.cs");
-        Assert.That(clean.Data.Errors, Is.EqualTo(0));
-        Assert.That(clean.Data.Details, Is.Empty);
+        var clean = await _diagnosticEngine.GetFileDiagnosticsCoreAsync("Diag.cs");
+        Assert.That(clean.Errors, Is.EqualTo(0));
+        Assert.That(clean.Details, Is.Empty);
     }
 }

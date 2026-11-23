@@ -25,10 +25,10 @@ public class DiagnosticEngineTests
         fake.SetTestSolution(solution);
         var engine = Battery.Basic.TestEngines.DiagnosticEngine(fake);
 
-        var result = await engine.GetFileDiagnosticsAsync(new FilePathWrapper("Test.cs"));
+        var result = await engine.GetFileDiagnosticsCoreAsync(new FilePathWrapper("Test.cs"));
 
-        Assert.That(result.Outcome, Is.EqualTo(EngineOutcome.Success));
-        Assert.That(result.Data.Errors, Is.Zero);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Errors, Is.Zero);
     }
 
     [Test]
@@ -42,10 +42,10 @@ public class DiagnosticEngineTests
         fake.SetTestSolution(solution);
         var engine = Battery.Basic.TestEngines.DiagnosticEngine(fake);
 
-        var result = await engine.GetFileDiagnosticsAsync(new FilePathWrapper("Test.cs"));
+        var result = await engine.GetFileDiagnosticsCoreAsync(new FilePathWrapper("Test.cs"));
 
-        Assert.That(result.Data.Errors, Is.GreaterThan(0));
-        var cs0103 = result.Data.Details.Single(d => d.Id == "CS0103");
+        Assert.That(result.Errors, Is.GreaterThan(0));
+        var cs0103 = result.Details.Single(d => d.Id == "CS0103");
         Assert.That(cs0103.Severity, Is.EqualTo("Error"));
         Assert.That(cs0103.StartLine, Is.EqualTo(1), "the unresolved call is on the file's only line");
     }
@@ -61,12 +61,12 @@ public class DiagnosticEngineTests
         fake.SetTestSolution(solution);
         var engine = Battery.Basic.TestEngines.DiagnosticEngine(fake);
 
-        var result = await engine.GetFileDiagnosticsAsync(new FilePathWrapper("Test.cs"));
+        var result = await engine.GetFileDiagnosticsCoreAsync(new FilePathWrapper("Test.cs"));
 
-        Assert.That(result.Data.Errors, Is.EqualTo(1));
-        Assert.That(result.Data.Warnings, Is.Zero);
-        Assert.That(result.Data.Details, Has.Count.EqualTo(1));
-        Assert.That(result.Data.Details[0].Severity, Is.EqualTo("Error"));
+        Assert.That(result.Errors, Is.EqualTo(1));
+        Assert.That(result.Warnings, Is.Zero);
+        Assert.That(result.Details, Has.Count.EqualTo(1));
+        Assert.That(result.Details[0].Severity, Is.EqualTo("Error"));
     }
 
     [Test]
@@ -76,7 +76,7 @@ public class DiagnosticEngineTests
         var engine = Battery.Basic.TestEngines.DiagnosticEngine(fake);
 
         await Assert.ThatAsync(
-            () => engine.GetFileDiagnosticsAsync(new FilePathWrapper("Test.cs")),
+            () => engine.GetFileDiagnosticsCoreAsync(new FilePathWrapper("Test.cs")),
             Throws.TypeOf<SolutionNotLoadedException>());
     }
 
@@ -97,14 +97,14 @@ public class DiagnosticEngineTests
         fake.SetTestSolution(solution);
         var engine = Battery.Basic.TestEngines.DiagnosticEngine(fake);
 
-        var result = await engine.GetSolutionDiagnosticsAsync(maxDetails: 1);
+        var result = await engine.GetSolutionDiagnosticsCoreAsync(maxDetails: 1);
 
-        Assert.That(result.Data.Errors, Is.EqualTo(3));
-        Assert.That(result.Data.Details.Count, Is.LessThanOrEqualTo(2), "one error row plus the SENTINEL-TRUNCATED row");
-        Assert.That(result.Data.ErrorFilePaths, Is.Not.Null);
-        Assert.That(result.Data.ErrorFilePaths!.Count, Is.EqualTo(3), "every error file is listed, not just the ones under the cap");
-        Assert.That(result.Data.ErrorFilePaths!.All(p => Path.IsPathRooted(p)), Is.True, "last-writer lookup needs absolute paths");
-        Assert.That(result.Data.ErrorFilePaths!.Select(p => Path.GetFileName(p)), Is.EquivalentTo(new[] { "A.cs", "B.cs", "C.cs" }));
+        Assert.That(result.Errors, Is.EqualTo(3));
+        Assert.That(result.Details.Count, Is.LessThanOrEqualTo(2), "one error row plus the SENTINEL-TRUNCATED row");
+        Assert.That(result.ErrorFilePaths, Is.Not.Null);
+        Assert.That(result.ErrorFilePaths!.Count, Is.EqualTo(3), "every error file is listed, not just the ones under the cap");
+        Assert.That(result.ErrorFilePaths!.All(p => Path.IsPathRooted(p)), Is.True, "last-writer lookup needs absolute paths");
+        Assert.That(result.ErrorFilePaths!.Select(p => Path.GetFileName(p)), Is.EquivalentTo(new[] { "A.cs", "B.cs", "C.cs" }));
     }
 
     [Test]
@@ -131,10 +131,10 @@ public class DiagnosticEngineTests
         fake.SetTestSolution(solution);
         var engine = Battery.Basic.TestEngines.DiagnosticEngine(fake);
 
-        var result = await engine.GetSolutionDiagnosticsAsync();
+        var result = await engine.GetSolutionDiagnosticsCoreAsync();
 
-        Assert.That(result.Data.Errors, Is.Zero);
-        Assert.That(result.Data.ErrorFilePaths, Is.Not.Null);
-        Assert.That(result.Data.ErrorFilePaths!, Is.Empty);
+        Assert.That(result.Errors, Is.Zero);
+        Assert.That(result.ErrorFilePaths, Is.Not.Null);
+        Assert.That(result.ErrorFilePaths!, Is.Empty);
     }
 }
