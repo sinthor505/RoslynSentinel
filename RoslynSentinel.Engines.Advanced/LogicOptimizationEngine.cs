@@ -617,7 +617,7 @@ public class LogicSimplificationEngine
         }
     }
 
-    public async Task<EngineResultWrapper<List<DocumentEditResult>>> InvertBooleanLogicAsync(string filePath, string boolName, CancellationToken cancellationToken = default)
+    public async Task<MultiDocumentEditResult> InvertBooleanLogicAsync(string filePath, string boolName, CancellationToken cancellationToken = default)
     {
         FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -642,7 +642,7 @@ public class LogicSimplificationEngine
 
         if (symbol == null)
         {
-            return new EngineResultWrapper<List<DocumentEditResult>>(EngineOutcome.TargetNotFound, null, new EngineError("Symbol not found"));
+            throw new ToolNotFoundException($"Variable or method '{boolName}' was not found in {filePath} (searched variable declarators and method declarations). " + ToolCallHint.Next("GetFileOutline", "to list the declarations in that file.", ("filePath", filePath)), missingTargetKind: MissingTargetKinds.Symbol, missingTargetName: boolName);
         }
 
         var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
@@ -682,7 +682,7 @@ public class LogicSimplificationEngine
             }
         }
 
-        return new EngineResultWrapper<List<DocumentEditResult>>(EngineOutcome.Success, changes, null);
+        return new MultiDocumentEditResult(changes);
     }
 
     public async Task<DocumentEditResult> ConvertIfToSwitchExpressionAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
