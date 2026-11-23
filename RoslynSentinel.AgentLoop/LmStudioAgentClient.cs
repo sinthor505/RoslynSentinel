@@ -382,25 +382,32 @@ public sealed class LmStudioAgentClient
         // LM Studio always echoes back whatever value it actually used, including its own default
         // when the request omitted the field -> so a mismatch against a value we explicitly sent
         // means LM Studio silently coerced or ignored it (seen for temperature/top_p with certain
-        // presets -> see LM Studio bug tracker #1389), which is worth surfacing loudly rather than
+        // presets -> see LM Studio bug tracker #1389). A mismatch now refuses the run instead of
         // silently trusting the request body we sent.
+        var samplerMismatches = new List<string>();
         if (LlmOptions.Temperature is { } requestedTemperature &&
             completedResponse.Temperature is { } actualTemperature &&
             Math.Abs(requestedTemperature - actualTemperature) > 0.0001)
         {
-            _logger.LogWarning(
-                "Requested temperature {Requested} but LM Studio reports it used {Actual} - a preset or " +
-                "server-side override may be silently taking precedence over the request body.",
-                requestedTemperature, actualTemperature);
+            samplerMismatches.Add(FormattableString.Invariant(
+                $"temperature sent {requestedTemperature:0.###} but the host echoed {actualTemperature:0.###}"));
         }
         if (LlmOptions.TopP is { } requestedTopP &&
             completedResponse.TopP is { } actualTopP &&
             Math.Abs(requestedTopP - actualTopP) > 0.0001)
         {
-            _logger.LogWarning(
-                "Requested top_p {Requested} but LM Studio reports it used {Actual} - a preset or " +
-                "server-side override may be silently taking precedence over the request body.",
-                requestedTopP, actualTopP);
+            samplerMismatches.Add(FormattableString.Invariant(
+                $"top_p sent {requestedTopP:0.###} but the host echoed {actualTopP:0.###}"));
+        }
+        if (samplerMismatches.Count > 0)
+        {
+            throw new SamplerMismatchException(
+                "The model host did not use the sampler value(s) this run sent: " +
+                string.Join("; ", samplerMismatches) + ". " +
+                "The echoed value is what the host applied to the request (a preset or server-side override " +
+                "can take precedence over the request body, LM Studio issue 1389). " +
+                "Options: make the host's preset or load settings agree with the value sent, change the value " +
+                "sent (--llm-temperature / --llm-top-p), or omit it so the host default is used.");
         }
 
         if (ReportedSampler is null)
@@ -1118,6 +1125,13 @@ public sealed class ContextSizeExceededException(string message) : Exception(mes
 /// <c>CompleteAsync</c>'s generic retry filter does not catch it; it has its own single retry.
 /// </summary>
 public sealed class StreamRunawayException(string message) : Exception(message);
+
+/// <summary>
+/// Thrown when LM Studio echoes a temperature or top_p that differs from the value this run sent, so the run is refused
+/// rather than continued on a sampler the caller did not ask for. Deliberately NOT an <see cref="InvalidOperationException"/>,
+/// so <c>CompleteAsync</c>'s generic retry filter does not retry it: the same host configuration mismatches again.
+/// </summary>
+public sealed class SamplerMismatchException(string message) : Exception(message);
 
 /// <summary>
 /// Thrown when an SSE stream ends without a <c>response.completed</c> event (the connection closed early, e.g. the host

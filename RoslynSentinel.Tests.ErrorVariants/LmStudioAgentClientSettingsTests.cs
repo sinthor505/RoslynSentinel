@@ -176,6 +176,52 @@ public class LmStudioAgentClientSettingsTests
         }
     }
 
+    [Test]
+    public async Task CompleteAsync_WhenTheEchoedTemperatureDiffersFromTheSentOne_ThrowsSamplerMismatch()
+    {
+        var handler = new ScriptedModelHandler(ScriptedModelHandler.FinalMessageSse("done", 0.3));
+        var client = NewClient(handler, "--llm-temperature", "0.7");
+
+        var ex = await Assert.ThrowsAsync<SamplerMismatchException>(() => CompleteOnceAsync(client));
+
+        Assert.That(ex.Message, Does.Contain("temperature").And.Contain("0.7").And.Contain("0.3"));
+        // SamplerMismatchException is not an InvalidOperationException, so CompleteAsync does not retry it.
+        Assert.That(handler.Requests, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public async Task CompleteAsync_WhenTheEchoedTopPDiffersFromTheSentOne_ThrowsSamplerMismatch()
+    {
+        var client = NewClient(new ScriptedModelHandler(ScriptedModelHandler.FinalMessageSse("done", null, 0.5)),
+            "--llm-top-p", "0.9");
+
+        var ex = await Assert.ThrowsAsync<SamplerMismatchException>(() => CompleteOnceAsync(client));
+
+        Assert.That(ex.Message, Does.Contain("top_p").And.Contain("0.9").And.Contain("0.5"));
+    }
+
+    [Test]
+    public async Task CompleteAsync_WhenEchoedValuesMatchWhatWasSent_Completes()
+    {
+        var client = NewClient(new ScriptedModelHandler(ScriptedModelHandler.FinalMessageSse("done", 0.7, 0.9)),
+            "--llm-temperature", "0.7", "--llm-top-p", "0.9");
+
+        var reply = await CompleteOnceAsync(client);
+
+        Assert.That(reply, Is.Not.Null);
+        Assert.That(client.ReportedSampler, Is.Not.Null);
+    }
+
+    private static LmStudioAgentClient NewClient(ScriptedModelHandler handler, params string[] extraArgs)
+    {
+        LlmOptions.Configure(["--llm-model", "settings-test-model", .. extraArgs]);
+        var httpClient = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("http://localhost/v1/"),
+        };
+        return new LmStudioAgentClient(httpClient, "settings-test-model", NullLogger<LmStudioAgentClient>.Instance);
+    }
+
     private static LmStudioAgentClient NewClient(ScriptedModelHandler handler)
     {
         LlmOptions.Configure(["--llm-model", "settings-test-model"]);
