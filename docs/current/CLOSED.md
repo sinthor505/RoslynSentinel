@@ -8,6 +8,24 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## evalqueue SetupStalled watches a SetUp-complete marker - resolved (2026-11-22)
+
+evalqueue SetupStalled watches a SetUp-complete marker instead of the run folder (2026-11-22) - run folders appear only after the test ends, so tests longer than `-NoRunFolderMinutes` (20) are killed (job 20261122-101641-001 at 1202 s; workaround `-NoRunFolderMinutes 0`); decided 2026-11-22: the ModelEval fixture SetUp writes a "setup complete" marker the queue watches (`scripts/roslynsentinel-evalqueue.ps1:1065-1070`, `# TODO` in the Invoke-JobRun wait loop); fix the help text; acceptance: a 45-min ImplementationScenario job is not killed, a test stuck before SetUp ends is still flagged SetupStalled; Medium
+
+Evidence: ae497653; EvalQueueSetupMarkerTests 3/3; marker written at ModelAgentRunner.RunAsync start, queue accepts marker or run folder; manual acceptance left: a 45-min ImplementationScenario job through the queue is not killed (no scripted dry test, the wait loop is a nested function)
+
+## Server-side per-session JSONL call transcript - resolved (2026-11-22)
+
+Server-side per-session JSONL call transcript (2026-11-22) - the http-host log has tool name, IsError and body but no inputs, so it cannot stand in for a transcript for a client that keeps none (`http-host-20261122-003711-33568.log` on .111); decided 2026-11-22: the server writes one JSONL line per tools/call (timestamp, tool, arguments, isError, response) to a per-session file under the scratch root; locate the current call-log writer first (not found by the investigation; ConsoleMode.cs:428 is the REPL); acceptance: a session against the HTTP host yields a JSONL file whose lines carry each call's arguments and response; Medium
+
+Evidence: b400b39f, 891d4b06; ToolCallTranscriptTests (in-process server yields one JSONL line per call with arguments, response, isError; write failure and sweep covered); call filter third in the chain, files under <scratch>/call-transcripts
+
+## SubAgent / SubAgentEval per-call hostAlias plus liveness check - resolved (2026-11-22)
+
+SubAgent / SubAgentEval per-call `hostAlias` plus liveness check (2026-11-22) - runs use process-wide `LlmOptions.BaseUrl` (`SubAgentModelRun.cs:87-121`, code TODO there); decided 2026-11-22: `hostAlias` resolved through `scripts/eval-hosts.json`, a pre-run `GET /models` refuses an unreachable host or a missing model, descriptions drop "LM Studio"; queue coordination out of scope (eval runs go through evalqueue); acceptance: unknown alias returns a structured error, a closed port is refused before any agent turn; Small-Medium
+
+Evidence: 2129c5ec, 891d4b06 (doc regen); SubAgentModelRunTests 6 new (unknown alias, no table, closed port, error status, missing model, present model); eval-hosts.json now copied to the server output; follow-ups (evalqueue coordination, LmStudioAgentClient loaded-model log host) are INBOX lines with // TODO markers
+
 ## Fold the ReplaceSnippetBatch apply tail into ApplyEditTailAsync - resolved (2026-11-22)
 
 Fold the ReplaceSnippetBatch apply tail into `ApplyEditTailAsync`, text-neutral (2026-11-22) - parameterise the headline/next-step text and take a list of edit-memory keys; the batch keeps its exception boundary and validate-only branch (`WorkspaceFileEditImpl.cs:2281` vs `:1414-1527`, code TODO in ReplaceSnippetBatch); acceptance: batch tests pass unchanged and a rejected batch's text is byte-identical; Medium
