@@ -1,6 +1,6 @@
 # Plan: Standing workflow contract behind a switch, ScenarioTask record and renderer, contract stamp, validateOnApply hide switch (proposal Phasing step 1)
 
-**Status:** DRAFT 2026-11-23 (restructured after the owner's decisions on the proposal's Scenario authoring rules and Graders). Phasing step 1 of [proposal_modeleval_standing_workflow_contract.md](../proposals/proposal_modeleval_standing_workflow_contract.md); nothing built.
+**Status:** APPROVED 2026-11-23. Review fixes folded in (Decision 7); runs Batched with the owner present. Phasing step 1 of [proposal_modeleval_standing_workflow_contract.md](../proposals/proposal_modeleval_standing_workflow_contract.md).
 
 ## Problem
 
@@ -69,11 +69,23 @@ prompt and no grader. Auditing and reworking the first-slice scenarios, controls
    `ToolArgumentValidator.Validate`), and tools are built by `McpToolSchemaPatcher.CreateSentinelTool`, which calls `ApplyLeanProfile` at registration. The
    agent loop lists and calls tools through the `McpClient` on the other end of the pipes, so its tools/list is patched and its calls are validated. The harness
    never calls `SchemaOptions.Configure`, so the process profile is Full today. Hiding at the harness's tool-schema layer is therefore not needed; the
-   option is set per world, before the tools are registered (Step 12). Spawned servers (PlanStepRunner via `ErrorPolicyWiring.ChildServerArgs`) are not
+   option is set per world, before the tools are registered (Step 12). Correction (review 2026-11-23): tools are not built at registration;
+   `McpToolSchemaPatcher.cs:153-155` registers a lazy `AddSingleton<McpServerTool>(services => CreateSentinelTool(...))` factory that runs when the host
+   resolves the tool singletons (`ToolsetService.cs:189` and `ToolSignatureCatalogReflection.cs:77` also build tools later from the same statics). Setting
+   the statics before registration still works because worlds run sequentially and nothing restores them; code comments say "built lazily at host start". Spawned servers (PlanStepRunner via `ErrorPolicyWiring.ChildServerArgs`) are not
    eval worlds and are untouched.
    **Harness wiring:** `ModelEvalMcpEnvironment.CreateAsync` gains an optional `fullToolSchema` argument (default false = `validateOnApply` hidden). The two
    scenario families expose the per-scenario switch as a trailing property `OfferFullToolSchema` (default false) on `ScenarioDefinition` and
    `ImplementationScenario`. No scenario sets it; the property is a mechanism only.
+
+7. **Review decisions (owner, 2026-11-23).**
+   - The existing CSV and rescoring assertions that Step 6 breaks are fixed in Step 6's slice (suite stays green); Step 18 adds only the new tests.
+   - Steps 19 and 20 test `ReplaceSnippet` and `ApplyDiff`, not `Member` (Member has no `validateOnApply`). WriteFile is never offered to eval models, so it is not
+     a test case. The test-writer first confirms `ApplyDiff` is on the default eval surface (Step 20) and falls back to `ReplaceSnippet` alone if not.
+   - Hiding applies to every eval world, including the OrderPricing, WholeFileRewrite and ShippingKind families (comparability is a non-goal; see R5).
+   - Step 13 depends on Step 8 (same two files). Slice acceptance is the `Build`; the extra searches in Steps 2, 3, 8, 10, 11 and 13 are re-checked in Step 21.
+   - Land before `plan_json_toolset_definitions` (its Step 21 also edits `ModelEvalMcpEnvironment.cs`; both unstarted).
+   - Mode: Batched, owner present. Orchestrators may brief `implementer-senior` directly when that is faster than a Haiku round trip.
 
 NEW-DTO: ScenarioTask (Request, AgentLoop)
 Evaluated: ImplementationScenarioStep (internal, Tests.ModelEval) - holds a finished prompt string plus golden files and grader callbacks, not visible below the test layer; ScenarioDefinition (Tests.Harness) - `PromptTemplate` string plus scoring fields, same visibility problem; PlanStepFile (RoslynSentinel.Utilities.PlanStepRunner/PlanStepFile.cs:28) - parsed plan-step markdown in a project above AgentLoop, so AgentLoop cannot reference it (mapping plan steps onto the record is proposal Phasing step 6)
@@ -82,6 +94,10 @@ Wire impact: none (authoring input to a renderer, never serialized or returned b
 ## Execution rules
 
 - Plan ID for commit trailers: `plan_modeleval_workflow_contract_phase1` (`Plan:` on each slice, `Closes:` on the last).
+- Batches (one orchestrator each, in order; inside a batch two lanes run in parallel on disjoint files; these supersede the per-step "Pairs with"):
+  A = Steps 1, 2, 3, 4, 5, 10, 11, 15, 19 (lane 1 contract/stamp: 1, then 2+3, 15, 4, 5; lane 2 schema: 10+11, then 19).
+  B = Steps 6 (with the existing-test fixes), 7, 8, 9, 16, 17, 18 (lane 1 CSV: 6, 7, 18; lane 2 seam: 8, 9, 16, 17).
+  C = Steps 12, 13, 14, 20 (behaviour-changing hide switch). Step 21 is the main session's.
 - One `Build`/`RunTest` at a time (subagents included). Slice Done-when uses `Build` quickBuild on the solution (0 errors); Step 21 uses the default
   fullBuildThrowaway. Implementers never run tests; the named tests are run by the dispatcher in Step 21.
 - **No scenario prompt or grader changes in any step.** The scenario files under RoslynSentinel.Tests.ModelEval/ImplementationScenarios, the prompts and
@@ -98,8 +114,8 @@ Wire impact: none (authoring input to a renderer, never serialized or returned b
 - A hook may ask for `DTO-EXEMPT: <why>` on a new static class, enum or test fixture; give it (these are not DTOs). `ScenarioTask` carries the NEW-DTO block above in the `reason` of the call that creates it.
 - No new MCP tool, so no registration step. New files in SDK-style projects need no csproj edit.
 - Verified anchors (2026-11-23): AgentSystemPrompts.cs `CodingAgent` 21-151, `WithErrorHandling` 204; ErrorPolicyWiring.cs `ComposePrompt` 13/21;
-  AgentTranscript.cs `ErrorPolicyHash` 76 (properties end at `FinalMessage` 197); ModelAgentRunner.cs `ProcessStamp` 93, assignment block ~268-273 inside `RunCoreAsync`;
-  EvalRunStamp.cs `BuildProcessStamp` 14/33; ScenarioSample.cs record 33-52, `Header` 57-58, `Parse` ~121-170; ModelEvalAssemblySetUp.cs `ProcessStamp` line ~57;
+  AgentTranscript.cs `ErrorPolicyHash` 76 (properties end at `FinalMessage` 197); ModelAgentRunner.cs `ProcessStamp` 93, assignment block ~267-273 inside `RunCoreAsync`;
+  EvalRunStamp.cs `BuildProcessStamp` 14/33; ScenarioSample.cs record 29-51, `Header` 57-58, `Parse` ~119-168; ModelEvalAssemblySetUp.cs `ProcessStamp` line ~52;
   ImplementationScenarioAgentTests.cs `ComposePrompt` 127, `ModelEvalMcpEnvironment.CreateAsync` ~101; `ContentFingerprint.Compute` (Common/ContentFingerprint.cs);
   SchemaOptions.cs (`Configure`, `ParseProfile`, `SchemaProfile`), McpToolSchemaPatcher.cs `ApplyLeanProfile` ~625 (caller ~214), HiddenSchemaParams.cs,
   ToolArgumentValidator.cs `Validate` refusal block ~1287-1305.
@@ -169,8 +185,12 @@ Wire impact: none (authoring input to a renderer, never serialized or returned b
 - Depends on: none
 - Effect: behaviour-changing for results.csv only: two columns appended (`contractHash`, `contractPlacement`); old rows still parse. No prompt or grader changes.
 - Change: append `string ContractHash = ""` and `string ContractPlacement = ""` to the `ScenarioSample` record after `TopP` (with `<param>` docs: stamped contract hash and placement name; "" when unstamped or for an old CSV row without the column). `Header`: append `,contractHash,contractPlacement`. Add `public const int PreContractColumnCount = 36;` with a doc comment in the style of the neighbours. `ToCsvLine`: append `Csv(sample.ContractHash), Csv(sample.ContractPlacement)`. `Parse`: accept `PreContractColumnCount` as a fifth legal count (update the condition, the exception text and the doc comment); the three conditions `f.Count == expected ? f[33]/f[34]/f[35]` for ModelKey, Temperature and TopP become `f.Count >= PreContractColumnCount`; add `f.Count == expected ? f[36] : string.Empty` and `f[37]` for the two new fields. Existing construction sites compile unchanged (defaulted parameters).
-- Done when: `Build` quickBuild 0 errors.
-- Lane: implementer (1 file, ~8 edits). Pairs with: Step 4.
+  Same slice (Decision 7), fix the existing assertions the two columns break: RoslynSentinel.Tests.Harness/ScenarioSampleCsvTests.cs (the `Does.EndWith(",...,topP")` at ~162 ends with `,contractHash,contractPlacement`;
+  every 36-column count, including `Header.Split(',').Length` ~102, `Has.Length` ~114 and ~163/220/234/259/272, becomes 38; the `dropped < 5` loop becomes 7 and `dropped < 3` becomes 5; the
+  expected exception text ~334 and comment ~331 list 30, 31, 33, 36 or 38; test names containing `ThirtySix` at ~158 and ~241 say `ThirtyEight`) and
+  RoslynSentinel.Tests.Harness/ScenarioRescoringTests.cs:16 `LegacyHeader` `SkipLast(6)` becomes `SkipLast(8)`.
+- Done when: `Build` quickBuild 0 errors; dispatcher's filtered run of `ScenarioSampleCsvTests|ScenarioRescoringTests` passes.
+- Lane: implementer (3 files, ~15 edits; depth tier per the brief, or implementer-senior). Pairs with: Step 12.
 
 ### Step 7 - Fill the contract columns where samples are built
 - Files: RoslynSentinel.Tests.Harness/ScenarioSampleLoop.cs, RoslynSentinel.Tests.Harness/ScenarioRescoring.cs, RoslynSentinel.Tests.Harness/SavedTranscriptScoring.cs
@@ -228,7 +248,7 @@ Wire impact: none (authoring input to a renderer, never serialized or returned b
 
 ### Step 13 - Harness: pass the per-scenario switch at the two scenario call sites
 - Files: RoslynSentinel.Tests.ModelEval/ImplementationScenarioAgentTests.cs, RoslynSentinel.Tests.ModelEval/ScenarioAgentTests.cs
-- Depends on: 12
+- Depends on: 8 (same files), 12
 - Effect: text-neutral (every property is false, so the default applies).
 - Change: `ImplementationScenarioAgentTests.RunStepAsync`: add `fullToolSchema: scenario.OfferFullToolSchema` to the `ModelEvalMcpEnvironment.CreateAsync` call (~line 101, after `configureToolSurface:`). `ScenarioAgentTests.ScenarioEnvironment.CreateAsync` (~line 394): add `fullToolSchema: scenario.OfferFullToolSchema`. The other `CreateAsync` callers (stepped, chain, size-threshold, whole-file, plan and resume tests) take the default (hidden) with no edit; that is the intended "evals run with the parameter hidden by default".
 - Done when: `Build` quickBuild 0 errors; `Search(mode: text, query: "OfferFullToolSchema")` lists the two record declarations, the two call sites and no scenario definition that sets it to true.
@@ -281,7 +301,7 @@ Wire impact: none (authoring input to a renderer, never serialized or returned b
 - Depends on: 10, 11
 - Effect: text-neutral (tests).
 - Change: model on `SchemaLeanProfileTests` (RoslynSentinel.Tests.Server, namespace `RoslynSentinel.Tests.Server`): `[TestFixture]`, `[NonParallelizable]` (comment: mutates the process-wide `SchemaOptions`, `HiddenSchemaParams` and the validator schema cache), the same in-process `WithClientAsync` over `AddRoslynSentinelToolsBasic` with modes Workspace and Refactor (copy the helper; the originals are private), `ResetStatics` in SetUp and TearDown extended with `SchemaOptions.ConfigureHiddenParameters([])`. Class `SchemaHiddenParametersTests`, methods:
-  - `HideParams_ValidateOnApply_TopLevelSchemaLacksExactlyThatName` (TestCase `ReplaceSnippet`, `Member`; the hidden schema's property set equals the Full schema's minus `validateOnApply`; so `autoStage`, `returnDiff`, `lineBefore`, `lineAfter` stay wherever Full has them);
+  - `HideParams_ValidateOnApply_TopLevelSchemaLacksExactlyThatName` (TestCase `ReplaceSnippet`, `ApplyDiff`; not `Member`, which has no `validateOnApply`; the hidden schema's property set equals the Full schema's minus `validateOnApply`; so `autoStage`, `returnDiff`, `lineBefore`, `lineAfter` stay wherever Full has them);
   - `HideParams_ValidateOnApply_RequiredNoLongerListsIt`;
   - `HideParams_DoesNotTouchNestedBatchEditItemSchemas`;
   - `HideParams_RegistersExactlyValidateOnApply` (`HiddenSchemaParams.IsHidden("ReplaceSnippet", "validateOnApply")` true; `returnDiff` false);
@@ -301,7 +321,7 @@ Wire impact: none (authoring input to a renderer, never serialized or returned b
 - Depends on: 12, 13
 - Effect: text-neutral (tests).
 - Change: model on `ModelEvalToolSurfacesTests` (namespace `RoslynSentinel.Tests.ModelEval`, not `.LiveModel`; builds worlds with `ModelEvalMcpEnvironment.CreateAsync`, no LM Studio needed, no live-model attributes), `[TestFixture]`, `[NonParallelizable]` with the same process-static comment. Class `EvalToolSchemaVisibilityTests`, methods:
-  - `Default_ValidateOnApplyIsHiddenFromTheListedSchemas` (ReplaceSnippet and Member via `environment.Client.ListToolsAsync`);
+  - `Default_ValidateOnApplyIsHiddenFromTheListedSchemas` (ReplaceSnippet and ApplyDiff via `environment.Client.ListToolsAsync`; first confirm the default surface lists ApplyDiff, else ReplaceSnippet only; never WriteFile);
   - `Default_OtherBoilerplateParametersStayListed` (`returnDiff`, `lineBefore`, `lineAfter` present where the full world has them);
   - `Default_ValidateOnApplyFalse_IsRefusedThroughTheClient` (a `ReplaceSnippet` call with `action: validate` and `validateOnApply: false`: text contains `Nothing was executed`);
   - `OptIn_FullToolSchema_ListsValidateOnApply_AndAcceptsFalse`;
@@ -355,7 +375,7 @@ No owner decision is open for this plan. Decided by the owner and recorded in th
 
 **R4 - Process-static state.** `SchemaOptions`, `HiddenSchemaParams` and the validator's `SchemaCache` are process-wide and keyed by tool name. Step 12 resets all three per world and Step 11 makes the refusal ignore a stale hidden registration, which is what lets a default world and an opt-in world coexist in turn. They would not coexist concurrently: the ModelEval and Harness assemblies have no assembly-level `Parallelizable` (only the Server, Basic, Advanced, Tools and Battery test assemblies do; verified by search), so fixtures run sequentially; if parallelism is ever added there, mixed hidden/opt-in worlds would race and the opt-in scenario's fixture would need `[NonParallelizable]`. Accepted, not mitigated: a Tests.ModelEval test that lists tools without `CreateAsync` (for example `ChainEvalToolSurfaceLeanTests`, which builds its own server) sees whatever the last world left in the statics; those tests assert on tool names, not parameters.
 
-**R5 - The schema variant is not stamped.** Hiding `validateOnApply` changes what models are offered but is not recorded in transcripts or the CSV; the commit that holds Step 12 identifies it (evalqueue jobs pin commits). Stamping it is out of scope; add it only if a runtime switch is ever introduced.
+**R5 - The schema variant is not stamped.** Hiding `validateOnApply` changes what models are offered but has no stamp column; it is recoverable from transcript.json, which already records `ToolSchemas` (AgentTranscript.cs:160), and the commit that holds Step 12 identifies it (evalqueue jobs pin commits). It applies to every eval world, including the OrderPricing, WholeFileRewrite and ShippingKind families that the proposal keeps as an old-prompt regression check, so their results before and after Step 12 are not comparable (accepted, owner 2026-11-23). Stamping it is out of scope; add it only if a runtime switch is ever introduced.
 
 **R6 - Refusal text names "schema configuration".** Step 11 rewords the one clause because the hide can now come from `--hide-params`; no test pins the old words (searched). The text stays facts and options only.
 
