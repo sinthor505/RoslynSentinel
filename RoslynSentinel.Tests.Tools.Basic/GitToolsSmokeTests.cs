@@ -2974,16 +2974,18 @@ public class GitToolsSmokeTests
     }
 
     [Test]
-    public async Task Git_Stage_LineRange_StraddlingHunk_ReportsGitHunkSelectionNamingTheHunkAsync()
+    public async Task Git_Stage_LineRange_StraddlingMixedHunk_IsCutNotRefusedAsync()
     {
         CommitFileWithFiveLineEditAndSingleLineEdit();
 
         var result = await StageHunksAsync("a.txt", lineRange: "12-30");
 
-        AssertCoded(result, "GitHunkSelection");
-        Assert.That(result.ErrorData?.Message, Does.Contain("Hunk 1 spans lines 10-14"));
-        Assert.That(result.ErrorData?.Message, Does.Contain("Widen the range to 10-30"));
-        Assert.That(StagedPaths(), Is.Empty, "a refused selection must stage nothing.");
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var staged = (GitStageHunksResult)result.SuccessData!;
+        Assert.That(staged.Note, Does.Contain("only in part"));
+        Assert.That(staged.Warning, Is.Null.Or.Empty);
+        Assert.That(StagedPaths(), Does.Contain("a.txt"));
+        Assert.That(staged.StagedHunks.Select(h => h.Index), Is.EqualTo(new[] { 1, 2 }));
     }
 
     [Test]
