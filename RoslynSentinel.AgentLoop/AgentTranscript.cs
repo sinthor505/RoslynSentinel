@@ -602,7 +602,14 @@ public sealed class AgentRunResult
     {
         get; init;
     }
+    /// <summary>Recorded turns: the number of transcript turns (the same value as <c>Transcript.Summary.TurnCount</c>). A turn whose model call was dropped mid-call is not counted here; see <see cref="StartedTurnCount"/>.</summary>
     public required int TurnCount
+    {
+        get; init;
+    }
+
+    /// <summary>Turns started, including one dropped mid-call (wall-clock cap, stream runaway or truncation, context overflow) that never got a transcript turn. 0 when not set.</summary>
+    public int StartedTurnCount
     {
         get; init;
     }

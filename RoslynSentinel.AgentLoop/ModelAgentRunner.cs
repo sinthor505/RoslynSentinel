@@ -754,7 +754,7 @@ public sealed class ModelAgentRunner
         var assistOutcome = assistTracker.Enabled
             ? " " + LoopAssistTracker.DescribeRunOutcome(stopReason is AgentStopReason.ModelFinished or AgentStopReason.TargetReached, transcript.AssistCount ?? 0)
             : "";
-        _logger.LogInformation("Agent run finished: {StopReason} after {TurnCount} turn(s), {Elapsed}.{AssistOutcome}", stopReason, turnNumber, overallStopwatch.Elapsed, assistOutcome);
+        _logger.LogInformation("Agent run finished: {StopReason} after turns={TurnCount} started={StartedTurns}, {Elapsed}.{AssistOutcome}", stopReason, transcript.Turns.Count, turnNumber, overallStopwatch.Elapsed, assistOutcome);
 
         transcript.StopReason = stopReason;
         transcript.Summary = RunTotals.FromTranscript(transcript, overallStopwatch.Elapsed);
@@ -765,7 +765,8 @@ public sealed class ModelAgentRunner
             StopReason = stopReason,
             Transcript = transcript,
             TranscriptPath = transcriptPath,
-            TurnCount = turnNumber,
+            TurnCount = transcript.Turns.Count,
+            StartedTurnCount = turnNumber,
             RepeatedFailure = repeatedFailure,
         };
     }

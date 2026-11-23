@@ -263,6 +263,30 @@ public class RunnerToolHostTests
     }
 
     [Test]
+    public async Task WallClockCancelMidCall_RecordedTurnsExcludeTheDroppedTurn()
+    {
+        var host = new FakeToolHost(
+            "Summarised",
+            new CallToolResult
+            {
+                Content = [new TextContentBlock { Text = "{\"ok\":true}" }],
+            });
+        var model = new HangAfterFirstPostHandler(new ScriptedModelHandler(
+            ScriptedModelHandler.FunctionCallSse("Summarised", "{}")));
+        var runner = NewRunner(model, host, wallClockCap: TimeSpan.FromSeconds(3));
+
+        var result = await runner.RunAsync("system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.StopReason, Is.EqualTo(AgentStopReason.WallClockCapExceeded));
+            Assert.That(result.TurnCount, Is.EqualTo(result.Transcript.Summary!.TurnCount));
+            Assert.That(result.TurnCount, Is.EqualTo(1), "only the completed first turn is recorded");
+            Assert.That(result.StartedTurnCount, Is.EqualTo(result.TurnCount + 1), "the cancelled second turn was started but not recorded");
+        });
+    }
+
+    [Test]
     public async Task CancelledMidTurn_StillWritesTranscriptWithCancelledStopReason()
     {
         using var cancellation = new CancellationTokenSource();
@@ -354,7 +378,7 @@ public class RunnerToolHostTests
         });
     }
 
-    private static ModelAgentRunner NewRunner(ScriptedModelHandler model, IAgentToolHost host, int turnCap = 5, string? hostSampler = null)
+    private static ModelAgentRunner NewRunner(HttpMessageHandler model, IAgentToolHost host, int turnCap = 5, string? hostSampler = null, TimeSpan? wallClockCap = null)
     {
         if (hostSampler is null)
         {
@@ -376,7 +400,7 @@ public class RunnerToolHostTests
             repeatedFailureLimit: 10,
             maxTokensPerTurn: 8192,
             turnCap: turnCap,
-            wallClockCap: TimeSpan.FromMinutes(2),
+            wallClockCap: wallClockCap ?? TimeSpan.FromMinutes(2),
             logger: new NullLogger<ModelAgentRunner>(),
             loopAssist: LoopAssistOptions.Off);
     }
@@ -449,6 +473,23 @@ public class RunnerToolHostTests
             {
                 Content = [new TextContentBlock { Text = "{\"ok\":true}" }],
             });
+        }
+    }
+
+    /// <summary>Serves POSTs through the inner handler until the second POST, which never answers: only the caller's cancellation ends that model call.</summary>
+    private sealed class HangAfterFirstPostHandler(ScriptedModelHandler inner) : HttpMessageHandler
+    {
+        private readonly HttpMessageInvoker _inner = new(inner, disposeHandler: false);
+        private int _posts;
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.Method == HttpMethod.Post && ++_posts > 1)
+            {
+                await Task.Delay(System.Threading.Timeout.Infinite, cancellationToken);
+            }
+
+            return await _inner.SendAsync(request, cancellationToken);
         }
     }
 }

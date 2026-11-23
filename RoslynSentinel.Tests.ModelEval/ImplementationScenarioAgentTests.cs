@@ -162,7 +162,7 @@ public class ImplementationScenarioAgentTests
         }
 
         var summary =
-            $"{scenario.Id} step {step}: outcome={outcome}, turns={result.TurnCount}, wallTime={stopwatch.Elapsed:hh\\:mm\\:ss}, wallClockCap={wallClockCap.TotalMinutes}m, stopReason={result.StopReason}. {detail}";
+            $"{scenario.Id} step {step}: outcome={outcome}, turns={result.TurnCount}, started={result.StartedTurnCount}, wallTime={stopwatch.Elapsed:hh\\:mm\\:ss}, wallClockCap={wallClockCap.TotalMinutes}m, stopReason={result.StopReason}. {detail}";
         TestContext.Out.WriteLine(summary);
         File.WriteAllText(Path.Combine(_runDirectory, $"step-{step}.outcome.txt"), summary + "\r\n");
 
