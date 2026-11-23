@@ -53,6 +53,8 @@ public static class TestEngines
     public static PersistentWorkspaceManager PersistentWorkspaceManager(ILogger<IWorkspaceManager> logger, string? solutionPath = null)
     {
         var manager = ActivatorUtilities.CreateInstance<PersistentWorkspaceManager>(CreateProvider(), logger);
+        // 120 s: the 30 s product default flakes with SolutionLoadTimeoutException under full/parallel runs (punchlist F1); same value as TestSolutionFixture.LoadTimeout.
+        manager.DefaultLoadTimeout = TimeSpan.FromSeconds(120);
         if (solutionPath is not null)
         {
             manager.SolutionPath = solutionPath;

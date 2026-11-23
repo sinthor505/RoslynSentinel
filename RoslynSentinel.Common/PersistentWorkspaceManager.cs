@@ -342,6 +342,13 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     // concurrently under NUnit's ParallelScope.Fixtures).
     private static readonly Lock MsBuildRegistrationLock = new();
 
+    /// <summary>
+    /// Timeout the LoadSolutionAsync overloads without an explicit timeout apply; defaults to
+    /// SolutionLoadWait.DefaultTimeout (30 s). Test factories raise it because full/parallel runs
+    /// contend on MSBuild loads.
+    /// </summary>
+    public TimeSpan DefaultLoadTimeout { get; set; } = SolutionLoadWait.DefaultTimeout;
+
     public PersistentWorkspaceManager(ILogger<IWorkspaceManager> logger, IScopedOperationLedger? ledger = null, ActiveToolSurface? activeToolSurface = null)
     {
         _logger = logger;
@@ -824,7 +831,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     /// Takes precedence over the server-wide <see cref="BaseRepoDirectory"/>.
     /// </param>
     public Task LoadSolutionAsync(string solutionPath, string? baseRepoDir, CancellationToken cancellationToken = default)
-        => LoadSolutionAsync(solutionPath, baseRepoDir, SolutionLoadWait.DefaultTimeout, cancellationToken);
+        => LoadSolutionAsync(solutionPath, baseRepoDir, DefaultLoadTimeout, cancellationToken);
 
     /// <param name="baseRepoDir">
     /// Optional per-call base directory used to resolve a relative <paramref name="solutionPath"/>.

@@ -29,7 +29,8 @@ public class ReplaceSnippetNonProjectFileTests
     {
         var fixture = new TestSolutionFixture();
         var manager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await manager.LoadSolutionAsync(fixture.SolutionPath);
+        // 120 s load timeout: the 30 s default flakes under full/parallel runs (punchlist F1).
+        await manager.LoadSolutionAsync(fixture.SolutionPath, null, TestSolutionFixture.LoadTimeout);
         var tools = TestTools.WorkspaceTools(manager);
         var diffEngine = TestEngines.DiffEngine();
         var validationEngine = TestEngines.ValidationEngine(manager, diffEngine, NullLogger<ValidationEngine>.Instance);
