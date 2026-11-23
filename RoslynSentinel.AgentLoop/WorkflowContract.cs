@@ -29,30 +29,63 @@ public static class WorkflowContract
     /// <summary>Returns the contract text for a variant.</summary>
     public static string TextFor(ContractVariant variant)
     {
-        throw new NotImplementedException(); // TODO implement (Step 3)
+        return variant switch
+        {
+            ContractVariant.Legacy => AgentSystemPrompts.CodingAgent,
+            ContractVariant.Standing => AgentSystemPrompts.CodingAgentContract,
+            _ => throw new ArgumentOutOfRangeException(nameof(variant), variant, "Unknown contract variant."),
+        };
     }
 
     /// <summary>Returns a short hash of the contract text, used to stamp runs.</summary>
     public static string Hash(string contractText)
     {
-        throw new NotImplementedException(); // TODO implement (Step 3)
+        var normalised = contractText.Replace("\r\n", "\n");
+        return ContentFingerprint.Compute(normalised)[..HashLength];
     }
 
     /// <summary>Returns the stable name of an endings placement.</summary>
     public static string PlacementName(EndingsPlacement placement)
     {
-        throw new NotImplementedException(); // TODO implement (Step 3)
+        return placement switch
+        {
+            EndingsPlacement.System => "system",
+            EndingsPlacement.SystemAndUser => "system+user",
+            _ => throw new ArgumentOutOfRangeException(nameof(placement), placement, "Unknown endings placement."),
+        };
     }
 
     /// <summary>Parses a variant name; null or unknown values are handled by the implementation.</summary>
     public static ContractVariant ParseVariant(string? value)
     {
-        throw new NotImplementedException(); // TODO implement (Step 3)
+        var trimmed = value?.Trim();
+        if (string.IsNullOrEmpty(trimmed) || string.Equals(trimmed, "legacy", StringComparison.OrdinalIgnoreCase))
+        {
+            return ContractVariant.Legacy;
+        }
+
+        if (string.Equals(trimmed, "standing", StringComparison.OrdinalIgnoreCase))
+        {
+            return ContractVariant.Standing;
+        }
+
+        throw new ArgumentException($"Unknown contract variant '{value}'. Accepted values: legacy, standing.", nameof(value));
     }
 
     /// <summary>Parses an endings placement name; null or unknown values are handled by the implementation.</summary>
     public static EndingsPlacement ParsePlacement(string? value)
     {
-        throw new NotImplementedException(); // TODO implement (Step 3)
+        var trimmed = value?.Trim();
+        if (string.IsNullOrEmpty(trimmed) || string.Equals(trimmed, "system", StringComparison.OrdinalIgnoreCase))
+        {
+            return EndingsPlacement.System;
+        }
+
+        if (string.Equals(trimmed, "user", StringComparison.OrdinalIgnoreCase))
+        {
+            return EndingsPlacement.SystemAndUser;
+        }
+
+        throw new ArgumentException($"Unknown endings placement '{value}'. Accepted values: system, user.", nameof(value));
     }
 }
