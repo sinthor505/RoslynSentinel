@@ -194,4 +194,32 @@ public class HealthOrchestrationEngineTests
         var report = await _engine.GenerateComprehensiveHealthReportAsync();
         Assert.That(report.TotalIssues, Is.EqualTo(0), "minimal solution with no planted issues should report zero issues");
     }
+
+    [Test]
+    public async Task GenerateHealthReport_ProjectScope_CountsAsyncVoidMethod()
+    {
+        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Bad.cs", "public class Bad { public async void Run() { await System.Threading.Tasks.Task.Delay(1); } }"), ("Other.cs", "public class Other {}")]));
+        var report = await _engine.GenerateComprehensiveHealthReportAsync(engines: [HealthEngineType.Safety]);
+        var asyncVoid = report.TotalIssuesByCategory.SingleOrDefault(c => c.Category == "AsyncVoidUsage");
+        Assert.That(asyncVoid, Is.Not.Null, "project-scope Safety run should report an AsyncVoidUsage category for the async void method");
+        Assert.That(asyncVoid!.Count, Is.EqualTo(1), "exactly one async void method is planted");
+    }
+
+    [Test]
+    public async Task GenerateHealthReport_FileScope_CountsAsyncVoidMethod()
+    {
+        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Bad.cs", "public class Bad { public async void Run() { await System.Threading.Tasks.Task.Delay(1); } }"), ("Other.cs", "public class Other {}")]));
+        var report = await _engine.GenerateComprehensiveHealthReportAsync(engines: [HealthEngineType.Safety], filePath: "Bad.cs");
+        var asyncVoid = report.TotalIssuesByCategory.SingleOrDefault(c => c.Category == "AsyncVoidUsage");
+        Assert.That(asyncVoid, Is.Not.Null, "file-scope Safety run on Bad.cs should report an AsyncVoidUsage category");
+        Assert.That(asyncVoid!.Count, Is.EqualTo(1), "exactly one async void method is planted in Bad.cs");
+    }
+
+    [Test]
+    public async Task GenerateHealthReport_FileScope_OtherFile_NoAsyncVoid()
+    {
+        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Bad.cs", "public class Bad { public async void Run() { await System.Threading.Tasks.Task.Delay(1); } }"), ("Other.cs", "public class Other {}")]));
+        var report = await _engine.GenerateComprehensiveHealthReportAsync(engines: [HealthEngineType.Safety], filePath: "Other.cs");
+        Assert.That(report.TotalIssuesByCategory.Any(c => c.Category == "AsyncVoidUsage"), Is.False, "Other.cs has no async void method, so no AsyncVoidUsage category should appear");
+    }
 }

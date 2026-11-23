@@ -117,8 +117,8 @@ public class HealthOrchestrationEngine
                     {
                         engineTasks.Add(Task.Run(async () =>
                         {
-                            // var items = await _asyncSafetyEngine.DetectAsyncVoidMethodsAsync(filePath: filePath ?? "", cancellationToken: cts.Token);
-                            //IncrementCount(projectCategoryCounts, "AsyncVoidUsage", items.Count);
+                            var count = await _antiPatternEngine.CountAsyncVoidMethodsAsync(filePath: filePath, projectName: project.Name, cancellationToken: cts.Token);
+                            IncrementCount(projectCategoryCounts, "AsyncVoidUsage", count);
                         }, cts.Token));
                     }
 

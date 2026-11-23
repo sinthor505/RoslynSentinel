@@ -3370,6 +3370,20 @@ public class AntiPatternEngine
         return results;
     }
 
+    public async Task<int> CountAsyncVoidMethodsAsync(string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var count = 0;
+        var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, false, cancellationToken);
+        foreach (var target in targets)
+        {
+            // Test files are not skipped: an async void in a test is still an async void.
+            count += DetectAsyncVoidMethod(target.Root, target.Document.FilePath ?? target.Document.Name).Count();
+        }
+
+        return count;
+    }
+
     public async Task<List<string>> FindLargeSwitchStatementsAsync(int threshold = 10, string? projectName = null, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("LargeSwitchStatements"))
