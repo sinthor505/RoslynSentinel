@@ -73,4 +73,18 @@ public class BuildVerificationNotRunTests
         Assert.That(text, Does.Not.Contain("do not"));
         Assert.That(text, Does.Not.Contain("stop"));
     }
+
+    [Test]
+    public void VerificationBuildLevel_FullBuild_MapsToThrowaway()
+    {
+        Assert.That(WorkspaceBuildTestImpl.VerificationBuildLevel(BuildVerifyLevel.fullBuild), Is.EqualTo(BuildVerifyLevel.fullBuildThrowaway));
+    }
+
+    [TestCase(BuildVerifyLevel.noBuild)]
+    [TestCase(BuildVerifyLevel.quickBuild)]
+    [TestCase(BuildVerifyLevel.fullBuildThrowaway)]
+    public void VerificationBuildLevel_OtherLevels_AreUnchanged(BuildVerifyLevel level)
+    {
+        Assert.That(WorkspaceBuildTestImpl.VerificationBuildLevel(level), Is.EqualTo(level));
+    }
 }

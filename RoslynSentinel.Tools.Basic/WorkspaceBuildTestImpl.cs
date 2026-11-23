@@ -88,7 +88,7 @@ public class WorkspaceBuildTestImpl
             if (verify != BuildVerifyLevel.noBuild)
             {
                 var (rawBuild, notRunFinding) = await RunVerificationBuildAsync(() => verify is BuildVerifyLevel.fullBuild or BuildVerifyLevel.fullBuildThrowaway
-                    ? _buildEngine.RunFullBuildAsync(cancellationToken, level: verify, isCallable: CallableCheck)
+                    ? _buildEngine.RunFullBuildAsync(cancellationToken, level: VerificationBuildLevel(verify), isCallable: CallableCheck)
                     : _buildEngine.RunQuickBuildAsync(scope, scopeName, maxDetails, cancellationToken, isCallable: CallableCheck));
                 if (notRunFinding is not null)
                 {
@@ -343,6 +343,9 @@ public class WorkspaceBuildTestImpl
                 FindingSeverity.Caution));
         }
     }
+
+    // Read-only tools must not write the solution's own bin/obj; the Build tool is the way to write them.
+    internal static BuildVerifyLevel VerificationBuildLevel(BuildVerifyLevel verify) => verify == BuildVerifyLevel.fullBuild ? BuildVerifyLevel.fullBuildThrowaway : verify;
 
     // Loads the solution only when a CS0246/CS0234 error exists; maps an error to its .csproj by project name, then by
     // the file's owning project (quick builds and multi-targeted names carry no usable Project name).
