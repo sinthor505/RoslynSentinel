@@ -487,12 +487,7 @@ public class WorkspaceBuildTestImpl
                 return repoPathError;
             }
 
-            var result = await _testRunEngine.RunAsync(scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, summary, environment: environment, suite: suite, repoRoot: worktreeRoot, cancellationToken: cancellationToken);
-
-            if (!result.TryGetData(out var testRunResult))
-            {
-                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, result.Error?.Message ?? ("Test run failed unexpectedly. " + ToolCallHint.Next("Build", "to rule out compile errors, then retry the test run.", ("level", "quickBuild")))), Findings = result.Findings };
-            }
+            var testRunResult = await _testRunEngine.RunAsync(scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, summary, environment: environment, suite: suite, repoRoot: worktreeRoot, cancellationToken: cancellationToken);
 
             // Marker bookkeeping (completed runs only): a full solution run resets it, a fast run increments it. Never throws.
             var solutionRoot = _workspaceManager.GetSolutionRoot();
@@ -516,7 +511,7 @@ public class WorkspaceBuildTestImpl
             if (!testRunResult.RunCompleted)
             {
                 var incompleteMessage = (testRunResult.Detail ?? "Test run did not complete.") + " " + ToolCallHint.Next("Build", "to rule out compile errors, then retry the test run.", ("level", "quickBuild"));
-                return new SentinelCallToolResult<object>() { IsError = true, SuccessData = projected, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, incompleteMessage), StatusMessage = incompleteMessage, WorkspaceVersion = _workspaceManager.WorkspaceVersion, Findings = result.Findings };
+                return new SentinelCallToolResult<object>() { IsError = true, SuccessData = projected, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, incompleteMessage), StatusMessage = incompleteMessage, WorkspaceVersion = _workspaceManager.WorkspaceVersion };
             }
 
             var failedRows = testRunResult.Results.Where(r => r.Outcome == TestOutcome.Failed).ToList();
@@ -532,7 +527,7 @@ public class WorkspaceBuildTestImpl
             }
 
             var toolResult = new SentinelCallToolResult<object> { IsError = false, SuccessData = WithoutTailsWhenClean(projected), TotalRecords = testRunResult.FailedCount, WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = statusMessage, ListSummary = SummarizeListResult.Build(failedRows, TestClassOf) };
-            var finalResult = toolResult with { Findings = result.Findings, StatusMessage = statusMessage };
+            var finalResult = toolResult with { StatusMessage = statusMessage };
 
             // The unprojected rows (full messages, stack traces, Output) are stored by the marshaller under
             // successData.fullResults, not inline; the response's largeResult.resultId + that path reach them via
@@ -543,6 +538,11 @@ public class WorkspaceBuildTestImpl
             }
 
             return finalResult;
+        }
+        // Transitional (plan_remove_engine_result_wrapper.md): fixed TestRunFailed keeps the wire unchanged; Step 13 emits the exception's own code.
+        catch (TestRunNotRunException ex)
+        {
+            return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, ex.Message) };
         }
         catch (Exception ex)
         {

@@ -101,7 +101,7 @@ public class TestRunEngine
     /// <see cref="BuildGate"/> for the whole run. <paramref name="useScratchDir"/> is obsolete and ignored; it stays
     /// so existing callers compile. (No [Obsolete] attribute: it would raise CS0618 at every caller for a no-op.)</summary>
     /// <param name="repoRoot">A validated git worktree root (see <see cref="RepoWorktrees.TryResolve"/>) of the loaded solution's repository, or null for the loaded tree. When set, each test project runs from the worktree's copy of its project file (same repository-relative path) and the artifacts directory is the worktree's own .roslynsentinel/build/&lt;instance&gt;/, so the loaded tree's bin/obj and output are untouched. scopeName still names a loaded-solution project.</param>
-    public async Task<EngineResultWrapper<TestRunResult>> RunAsync(
+    public async Task<TestRunResult> RunAsync(
         ToolScope scope,
         string? scopeName,
         string? filter,
@@ -119,8 +119,7 @@ public class TestRunEngine
 
         if (scope == ToolScope.file)
         {
-            return new EngineResultWrapper<TestRunResult>(EngineOutcome.InvalidInput,
-                error: new EngineError("scope=file is not supported by RunTest - there is no per-file test-execution unit in `dotnet test`. Use scope=project or scope=solution, optionally narrowed with filter."));
+            throw new TestRunNotRunException("scope=file is not supported by RunTest - there is no per-file test-execution unit in `dotnet test`. Use scope=project or scope=solution, optionally narrowed with filter.");
         }
 
         List<(string Name, string Path)> targets;
@@ -128,22 +127,19 @@ public class TestRunEngine
         {
             if (string.IsNullOrEmpty(scopeName))
             {
-                return new EngineResultWrapper<TestRunResult>(EngineOutcome.InvalidInput,
-                    error: new EngineError("scopeName (projectName) is required when scope=project."));
+                throw new TestRunNotRunException("scopeName (projectName) is required when scope=project.");
             }
 
             var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
             var project = ProjectLookup.FindProject(solution, scopeName);
             if (project is null)
             {
-                return new EngineResultWrapper<TestRunResult>(EngineOutcome.InvalidInput,
-                    error: new EngineError(ProjectNotFoundDetail.Build(scopeName, solution.Projects.Select(p => p.Name).ToList(), "scopeName")));
+                throw new TestRunNotRunException(ProjectNotFoundDetail.Build(scopeName, solution.Projects.Select(p => p.Name).ToList(), "scopeName"));
             }
 
             if (project.FilePath is null)
             {
-                return new EngineResultWrapper<TestRunResult>(EngineOutcome.InvalidInput,
-                    error: new EngineError($"Project '{project.Name}' is loaded but has no project file path (it is an in-memory project), so `dotnet test` has no project file to run."));
+                throw new TestRunNotRunException($"Project '{project.Name}' is loaded but has no project file path (it is an in-memory project), so `dotnet test` has no project file to run.");
             }
 
             targets = [(project.Name, project.FilePath)];
@@ -157,8 +153,7 @@ public class TestRunEngine
             }
             catch (SolutionNotLoadedException ex)
             {
-                return new EngineResultWrapper<TestRunResult>(EngineOutcome.InvalidInput,
-                    error: new EngineError($"{ex.Message} RunTest needs a loaded solution."));
+                throw new TestRunNotRunException($"{ex.Message} RunTest needs a loaded solution.");
             }
 
             targets = solution.Projects
@@ -169,7 +164,7 @@ public class TestRunEngine
 
             if (targets.Count == 0)
             {
-                return new EngineResultWrapper<TestRunResult>(EngineOutcome.Success, new TestRunResult(
+                return new TestRunResult(
                     RunSucceeded: false,
                     ExitCode: -1,
                     TotalCount: 0,
@@ -183,7 +178,7 @@ public class TestRunEngine
                     Duration: DateTime.UtcNow - start,
                     Detail: "No test projects (referencing Microsoft.NET.Test.Sdk) were found in the loaded solution.",
                     RunCompleted: false
-                ));
+                );
             }
         }
 
@@ -204,8 +199,7 @@ public class TestRunEngine
             {
                 if (!RepoWorktrees.TryMapExisting(path, repoRoot, out var worktreeProjectPath, out var mapError))
                 {
-                    return new EngineResultWrapper<TestRunResult>(EngineOutcome.InvalidInput,
-                        error: new EngineError($"Test project '{name}': {mapError}"));
+                    throw new TestRunNotRunException($"Test project '{name}': {mapError}");
                 }
 
                 worktreeTargets.Add((name, worktreeProjectPath));
@@ -228,7 +222,7 @@ public class TestRunEngine
         }
         catch (BuildGateBusyException busy)
         {
-            return new EngineResultWrapper<TestRunResult>(EngineOutcome.Success, new TestRunResult(
+            return new TestRunResult(
                 RunSucceeded: false,
                 ExitCode: -1,
                 TotalCount: 0,
@@ -242,7 +236,7 @@ public class TestRunEngine
                 Duration: DateTime.UtcNow - start,
                 Detail: busy.Message,
                 RunCompleted: false
-            ));
+            );
         }
 
         var projectResults = new List<(TestRunResult Result, string ProjectName)>();
@@ -324,7 +318,7 @@ public class TestRunEngine
                 : "No test projects found under the resolved scope.";
         }
 
-        return new EngineResultWrapper<TestRunResult>(EngineOutcome.Success, new TestRunResult(
+        return new TestRunResult(
             RunSucceeded: allRunCompleted && allExitZero && failedCount == 0,
             ExitCode: allExitZero ? 0 : 1,
             TotalCount: totalCount,
@@ -339,7 +333,7 @@ public class TestRunEngine
             Detail: overallDetail,
             RunCompleted: allRunCompleted,
             ProjectSummaries: projectSummaries
-        ));
+        );
     }
 
     /// <summary>Detects a build-output file lock (MSB3021/MSB3026/MSB3027) in `dotnet test` output.
