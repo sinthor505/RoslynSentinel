@@ -173,8 +173,22 @@ public static class CopyAndObsoleteEdits
         var partial = new SortedSet<string>(StringComparer.Ordinal);
         var selfQualified = new SortedSet<string>(StringComparer.Ordinal);
 
-        // TODO extension methods reached without a name node (foreach GetEnumerator, collection-initializer Add, await GetAwaiter) and names in doc-comment crefs add no using
-        foreach (var name in root.DescendantNodes().OfType<SimpleNameSyntax>())
+        // A top-level type outside this file adds a using when the old namespace sees it and the new one does not.
+        void AddNeeded(INamedTypeSymbol? target)
+        {
+            if (target?.OriginalDefinition is { ContainingType: null } top && !top.ContainingNamespace.IsGlobalNamespace && !IsDeclaredIn(top, root.SyntaxTree))
+            {
+                var ns = top.ContainingNamespace.ToDisplayString();
+                if (visibleFromOld.Contains(ns) && !visibleFromNew.Contains(ns) && !existing.Contains(ns))
+                {
+                    needed.Add(ns);
+                }
+            }
+        }
+
+        // Names inside doc-comment crefs count like any other name (descendIntoTrivia). They bind only when the tree is parsed with DocumentationMode.Parse or
+        // Diagnose; the loaded workspace's documents are parsed with Parse (CrefSpikeTests), and with None there are simply no cref names to see.
+        foreach (var name in root.DescendantNodes(descendIntoTrivia: true).OfType<SimpleNameSyntax>())
         {
             if (name is IdentifierNameSyntax { IsVar: true }
                 || name.Ancestors().Any(ancestor => ancestor is UsingDirectiveSyntax)
@@ -211,14 +225,13 @@ public static class CopyAndObsoleteEdits
                     break;
             }
 
-            if (target?.OriginalDefinition is { ContainingType: null } top && !top.ContainingNamespace.IsGlobalNamespace && !IsDeclaredIn(top, root.SyntaxTree))
-            {
-                var ns = top.ContainingNamespace.ToDisplayString();
-                if (visibleFromOld.Contains(ns) && !visibleFromNew.Contains(ns) && !existing.Contains(ns))
-                {
-                    needed.Add(ns);
-                }
-            }
+            AddNeeded(target);
+        }
+
+        // Extension methods reached without a name node (foreach GetEnumerator, await GetAwaiter, collection-initializer Add, Deconstruct).
+        foreach (var extensionClass in ImplicitExtensionUses.Collect(root, model, cancellationToken))
+        {
+            AddNeeded(extensionClass);
         }
 
         if (partial.Count > 0)
@@ -385,6 +398,7 @@ public static class CopyAndObsoleteEdits
         QualifiedNameSyntax qualified => qualified.Right == name,
         MemberAccessExpressionSyntax access => access.Name == name,
         AliasQualifiedNameSyntax alias => alias.Name == name,
+        NameMemberCrefSyntax { Parent: QualifiedCrefSyntax qualifiedCref } member => qualifiedCref.Member == member,
         MemberBindingExpressionSyntax => true,
         _ => false,
     };

@@ -433,7 +433,6 @@ public static class CopyAndObsoleteCallerRewrite
         var result = new List<INamedTypeSymbol>();
         var seen = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
 
-        // TODO extension methods reached without a name node (foreach GetEnumerator, collection-initializer Add, await GetAwaiter) are not seen, so a file that relies on 'using <OldNs>;' only for those loses it in Using mode; the compile check of the caller loop (slice 14-4) forces Qualify for it
         foreach (var name in root.DescendantNodes(descendIntoTrivia: true).OfType<SimpleNameSyntax>())
         {
             if (referenceStarts.Contains(name.SpanStart)
@@ -454,6 +453,16 @@ public static class CopyAndObsoleteCallerRewrite
             var info = model.GetSymbolInfo(name, cancellationToken);
             var symbol = info.Symbol ?? info.CandidateSymbols.FirstOrDefault();
             if (OwnerType(symbol) is { } type && seen.Add(type))
+            {
+                result.Add(type);
+            }
+        }
+
+        // Extension methods reached without a name node (foreach GetEnumerator, await GetAwaiter, collection-initializer Add, Deconstruct): a file that
+        // relies on 'using <OldNs>;' only for those keeps it, so Using mode does not drop it.
+        foreach (var extensionClass in ImplicitExtensionUses.Collect(root, model, cancellationToken))
+        {
+            if (OwnerType(extensionClass) is { } type && seen.Add(type))
             {
                 result.Add(type);
             }

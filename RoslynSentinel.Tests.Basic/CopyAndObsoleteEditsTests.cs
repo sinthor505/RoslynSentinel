@@ -179,6 +179,62 @@ public class CopyAndObsoleteEditsTests
         Assert.That(result.NewText, Is.EqualTo(Lf("using Demo.Models;", "", "namespace Demo.Other;", "", "public class User", "{", "    public int Run() => 3.Twice();", "}")));
     }
 
+    private static readonly (string Relative, string Content) EnumeratorExtensionFile = ("Models/CountExt.cs", Lf(
+        "namespace Demo.Models;",
+        "public static class CountExt",
+        "{",
+        "    public static System.Collections.Generic.IEnumerator<int> GetEnumerator(this int count) { for (var i = 0; i < count; i++) { yield return i; } }",
+        "}"));
+
+    [Test]
+    public async Task ForeachOverAnExtensionGetEnumerator_GetsAUsing()
+    {
+        var source = Lf("namespace Demo.Models;", "", "public class User", "{", "    public int Run() { var sum = 0; foreach (var i in 3) { sum += i; } return sum; }", "}");
+
+        var result = await BuildAsync("Models/User.cs", source, "Other/User.cs", [EnumeratorExtensionFile]);
+
+        Assert.That(result.IsRefusal, Is.False, result.Refusal?.Message);
+        Assert.That(result.AddedUsings, Is.EqualTo(new[] { "Demo.Models" }), "The foreach names no type, but its GetEnumerator is an extension method of Demo.Models.CountExt.");
+        Assert.That(result.NewText, Does.StartWith(Lf("using Demo.Models;", "", "namespace Demo.Other;")));
+    }
+
+    [Test]
+    public async Task CollectionInitializerWithAnExtensionAdd_GetsAUsing()
+    {
+        var bag = ("Bag.cs", Lf("namespace Demo;", "public class Bag : System.Collections.IEnumerable { public System.Collections.IEnumerator GetEnumerator() => throw new System.NotSupportedException(); }"));
+        var bagExtension = ("Models/BagExt.cs", Lf("namespace Demo.Models;", "public static class BagExt { public static void Add(this Bag bag, int value) { } }"));
+        var source = Lf("namespace Demo.Models;", "", "public class User", "{", "    public object Run() => new Bag { 1, 2 };", "}");
+
+        var result = await BuildAsync("Models/User.cs", source, "Other/User.cs", [bag, bagExtension]);
+
+        Assert.That(result.IsRefusal, Is.False, result.Refusal?.Message);
+        Assert.That(result.AddedUsings, Is.EqualTo(new[] { "Demo.Models" }), "Bag sits in Demo, which Demo.Other also sees; only the extension Add needs the old namespace.");
+    }
+
+    [Test]
+    public async Task DeconstructionWithAnExtensionDeconstruct_GetsAUsing()
+    {
+        var pair = ("Pair.cs", Lf("namespace Demo;", "public class Pair { }"));
+        var pairExtension = ("Models/PairExt.cs", Lf("namespace Demo.Models;", "public static class PairExt { public static void Deconstruct(this Pair pair, out int a, out int b) { a = 1; b = 2; } }"));
+        var source = Lf("namespace Demo.Models;", "", "public class User", "{", "    public int Run() { var (a, b) = new Pair(); return a + b; }", "}");
+
+        var result = await BuildAsync("Models/User.cs", source, "Other/User.cs", [pair, pairExtension]);
+
+        Assert.That(result.IsRefusal, Is.False, result.Refusal?.Message);
+        Assert.That(result.AddedUsings, Is.EqualTo(new[] { "Demo.Models" }));
+    }
+
+    [Test]
+    public async Task TypeNamedOnlyInADocCommentCref_GetsAUsing()
+    {
+        var source = Lf("namespace Demo.Models;", "", "/// <summary>Works with <see cref=\"Helper\"/>.</summary>", "public class User { }");
+
+        var result = await BuildAsync("Models/User.cs", source, "Other/User.cs", [HelperFile]);
+
+        Assert.That(result.IsRefusal, Is.False, result.Refusal?.Message);
+        Assert.That(result.AddedUsings, Is.EqualTo(new[] { "Demo.Models" }), "The workspace parses documents with DocumentationMode.Parse, so the cref name binds like any other name.");
+    }
+
     [Test]
     public async Task AttributeFromTheOldNamespace_GetsAUsing_AndTheMarkGoesAboveIt()
     {

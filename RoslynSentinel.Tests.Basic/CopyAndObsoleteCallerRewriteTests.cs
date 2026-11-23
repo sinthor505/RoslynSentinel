@@ -139,6 +139,49 @@ public class CopyAndObsoleteCallerRewriteTests
         Assert.That(errors, Is.Empty, "No CS0104: the old using stays and no using for the new namespace is added.");
     }
 
+    private static readonly (string Relative, string Content) EnumeratorExtensionFile = ("Models/CountExt.cs", Lf(
+        "namespace Demo.Models;",
+        "public static class CountExt",
+        "{",
+        "    public static System.Collections.Generic.IEnumerator<int> GetEnumerator(this int count) { for (var i = 0; i < count; i++) { yield return i; } }",
+        "}"));
+
+    [Test]
+    public async Task QualifyMode_IsUsed_WhenTheFileReliesOnTheOldUsingForAnExtensionGetEnumeratorOfAForeach()
+    {
+        var consumer = ("Consumers/User.cs", Lf(
+            "using Demo.Models;",
+            "",
+            "namespace Demo.Consumers;",
+            "",
+            "public class User { public Foo F = new Foo(); public int Sum() { var sum = 0; foreach (var i in 3) { sum += i; } return sum; } }"));
+
+        var (rewrite, errors) = await MoveAsync(FooSource, [EnumeratorExtensionFile, consumer]);
+
+        var file = FileOf(rewrite, "Consumers/User.cs");
+        Assert.That(file.Mode, Is.EqualTo(CallerRewriteMode.Qualify), "The foreach names no type, but the using of Demo.Models is what makes its GetEnumerator extension resolve.");
+        Assert.That(file.NewText, Does.Contain("using Demo.Models;").And.Contain("public Demo.Other.Foo F = new Demo.Other.Foo();"));
+        Assert.That(errors, Is.Empty, "The old using is kept, so the foreach still compiles.");
+    }
+
+    [Test]
+    public async Task QualifyMode_IsUsed_WhenTheFileReliesOnTheOldUsingForAnExtensionAddOfACollectionInitializer()
+    {
+        var bag = ("Bag.cs", Lf("namespace Demo;", "public class Bag : System.Collections.IEnumerable { public System.Collections.IEnumerator GetEnumerator() => throw new System.NotSupportedException(); }"));
+        var bagExtension = ("Models/BagExt.cs", Lf("namespace Demo.Models;", "public static class BagExt { public static void Add(this Bag bag, int value) { } }"));
+        var consumer = ("Consumers/User.cs", Lf(
+            "using Demo.Models;",
+            "",
+            "namespace Demo.Consumers;",
+            "",
+            "public class User { public Foo F = new Foo(); public Demo.Bag B = new Demo.Bag { 1, 2 }; }"));
+
+        var (rewrite, errors) = await MoveAsync(FooSource, [bag, bagExtension, consumer]);
+
+        Assert.That(FileOf(rewrite, "Consumers/User.cs").Mode, Is.EqualTo(CallerRewriteMode.Qualify));
+        Assert.That(errors, Is.Empty);
+    }
+
     [Test]
     public async Task QualifyMode_IsUsed_ForFilesInsideTheOldNamespaceOrNestedInIt()
     {
