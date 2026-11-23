@@ -25,7 +25,7 @@ request
   -> MarshalResult hook: SentinelToolFactory.MarshalResultAsync -> ToolResultMarshaller.MarshalAsync
   -> a string, which the SDK emits verbatim as the text content
   -> filters unwind, innermost first: WirePathRelativize, LargeResultOffload (backstop), Drift, exception
-     catch-all, ToolError, WorkspaceStaleStamp, HaltStamp, ToolTelemetry, ToolCallEcho
+     catch-all, ToolError, WorkspaceStaleStamp, HaltStamp, ToolTelemetry, ToolCallTranscript (logs only), ToolCallEcho
 response
 ```
 
@@ -96,7 +96,7 @@ fills the budget; a given `limit` is an upper bound.
 ### Call-tool filters
 
 First added is outermost (csharp-sdk `McpServerImpl.BuildFilterPipeline` folds from the last filter inward). The order is
-the `CallToolFilterRegistrations` table in `Server.Advanced/ServiceRegistrationExtensionsBasic.cs` (14 filters, 15 when the error policy is on; the loop latch and the error policy are listed as 3a and 7a to keep the older item numbers), pinned by
+the `CallToolFilterRegistrations` table in `Server.Advanced/ServiceRegistrationExtensionsBasic.cs` (15 filters, 16 when the error policy is on; the call transcript, the loop latch and the error policy are listed as 2a, 3a and 7a to keep the older item numbers), pinned by
 `ToolTelemetryFilterOrderTests` via `CallToolFilterNames`. In registration order:
 
 1. `AddAgentIdentityFilter` (`Server.Advanced/AgentIdentityCapture.cs`): strips `_agentId`/`_agentType`/`_sessionId` from the
@@ -106,8 +106,14 @@ the `CallToolFilterRegistrations` table in `Server.Advanced/ServiceRegistrationE
 2. `AddToolCallEchoFilter`: always assigns the call id to `ToolCallContext` (commit trailer, edit effects); stamps call id/tool/args
    onto the first text block (sees final content) only when `ToolCallEchoOptions.Enabled` (off by default; `--echo-tool-args=true`
    or `ROSLYNSENTINEL_ECHO_TOOL_ARGS=true`).
+2a. `AddToolCallTranscriptFilter` (`Server.Advanced/ToolCallTranscriptRecorder.cs`, `Common/ToolCallTranscript.cs`; always on, one DI
+   singleton per host): appends one JSONL line per call (`utc`, `tool`, `callId`, `agentId`, `arguments` as received, `isError`,
+   `response` text as sent, `durationMs`; nulls omitted) to `<scratch root>/call-transcripts/calls-<yyyyMMdd-HHmmss>-<pid>-<guid8>.jsonl`,
+   created on the first call; older files are swept by age and count when the host starts (`RuntimeStateRetention.SweepLogs`). Third
+   so it wraps argument validation, the breakers and ToolError (sees the corrected `IsError`) with the call id already assigned.
+   Reads the response only to log it and returns the same result object; a write failure is swallowed (reported once via Debug).
 3. `AddToolTelemetryFilter` (`Server.Advanced/ToolTelemetryRecorder.cs`, `Common/ToolTelemetry.cs`): counts every call per
-   tool (success / error / error code / duration) for `McpServerStatus.toolTelemetry`. Third on purpose, so it wraps the
+   tool (success / error / error code / duration) for `McpServerStatus.toolTelemetry`. Fourth on purpose, so it wraps the
    argument-validation and breaker refusals and sees the `IsError` that the ToolError filter (item 7) copied from the body.
    Records after `next` returns, so a status call is counted only from the following call on.
 3a. `AddLoopLatchFilter` (`Server.Advanced/LoopLatchFilter.cs`, state `Common/ToolLoopLatch.cs`, flag `--loop-latch`, off by
@@ -206,7 +212,7 @@ Tests, one `RunTest` at a time:
 | Marshaller | `ToolResultMarshallerOnModeTests`, `ToolResultMarshallerPassthroughTests`, `ToolResultMarshallerDetachedTests` (`Tests.Server`) |
 | Factory | `SentinelToolFactoryParityTests` (`Tests.Server`) |
 | Pagers | `SequencePagerTests`, `ResultPagerTests` (`Tests.Server`) |
-| Filters | `LargeResultOffloadFilterTests`, `ToolTelemetryFilterOrderTests` (`Tests.Server`) |
+| Filters | `LargeResultOffloadFilterTests`, `ToolTelemetryFilterOrderTests`, `ToolCallTranscriptTests` (`Tests.Server`) |
 | `GetLargeResult` | `SequenceLargeResultPagingTests`, `EnvelopeLargeResultPagingTests`, `GetLargeResultTests`, `LargeResultHintsTests` (`Tests.Tools.Basic`) |
 | Readers of stored results | `SubAgentOffloadedResultTests` (`Tests.SubAgent`) |
 | A model following the pointer | `LargeResultPagingAgentTests` (`Tests.ModelEval`; run with `modeleval-runner`) |

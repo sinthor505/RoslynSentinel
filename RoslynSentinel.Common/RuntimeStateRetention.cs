@@ -141,13 +141,13 @@ public static class RuntimeStateRetention
     }
 
     /// <summary>
-    /// Sweeps {fileStem}*.log files directly inside logDirectory. Never touches currentLogPath (null or empty means
+    /// Sweeps {fileStem}*{fileExtension} files (default .log) directly inside logDirectory. Never touches currentLogPath (null or empty means
     /// no current file), a file named crash.log, or a file whose name does not start with fileStem. Files older than
     /// maxAge are deleted; then, if the remaining files plus the current log exceed maxFiles (values of 0 or less
     /// count as 1), the oldest remaining files are deleted until they no longer do. Never throws; a file held by
     /// another process is skipped and not counted. Returns the number of files deleted.
     /// </summary>
-    public static int SweepLogs(string logDirectory, string fileStem, string? currentLogPath, int maxFiles, TimeSpan maxAge, DateTime? utcNow = null)
+    public static int SweepLogs(string logDirectory, string fileStem, string? currentLogPath, int maxFiles, TimeSpan maxAge, DateTime? utcNow = null, string fileExtension = ".log")
     {
         var count = 0;
         try
@@ -157,7 +157,7 @@ public static class RuntimeStateRetention
             var currentFullPath = string.IsNullOrEmpty(currentLogPath) ? null : Path.GetFullPath(currentLogPath);
 
             var others = new List<(string Path, DateTime WrittenUtc)>();
-            foreach (var log in ListFilesWithExtension(logDirectory, fileStem + "*.log", ".log"))
+            foreach (var log in ListFilesWithExtension(logDirectory, fileStem + "*" + fileExtension, fileExtension))
             {
                 var name = Path.GetFileName(log.Path);
                 if (!name.StartsWith(fileStem, StringComparison.OrdinalIgnoreCase)) { continue; }

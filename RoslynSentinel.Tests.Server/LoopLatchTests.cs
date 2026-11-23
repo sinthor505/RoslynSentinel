@@ -346,11 +346,11 @@ public class LoopLatchTests
     }
 
     [Test]
-    public void FilterRegistration_LoopLatchSitsFourth_OutsideArgumentValidation()
+    public void FilterRegistration_LoopLatchSitsFifth_OutsideArgumentValidation()
     {
         var names = RoslynSentinelServiceExtensionsBasic.CallToolFilterNames;
 
-        Assert.That(names[3], Is.EqualTo("LoopLatch"));
+        Assert.That(names[4], Is.EqualTo("LoopLatch"));
         Assert.That(names.ToList().IndexOf("LoopLatch"), Is.LessThan(names.ToList().IndexOf("ArgumentValidation")));
     }
 

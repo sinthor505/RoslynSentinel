@@ -60,6 +60,10 @@ public static class RoslynSentinelServiceExtensionsBasic
         // first use) so ServerStartedUtc is the server's start. Shared by both flavors: Advanced calls this method.
         services.TryAddSingleton(new ToolTelemetry());
 
+        // Always-on per-session call transcript (one JSONL line per tools/call under the scratch root), written by the transcript filter below.
+        // A factory, so each host's container builds its own file; TryAdd, so a test can pre-register one pointed at a temp folder.
+        services.TryAddSingleton(_ => new ToolCallTranscript());
+
         // Per-agent loop latch state (proposal_loop_latch.md). Always registered; the filter is a pass-through unless --loop-latch is on.
         services.TryAddSingleton(sp => new ToolLoopLatch(LoopLatchOptions.TripThreshold, sp.GetService<ILoggerFactory>()?.CreateLogger<ToolLoopLatch>()));
 
@@ -153,7 +157,9 @@ public static class RoslynSentinelServiceExtensionsBasic
     /// (csharp-sdk McpServerImpl.BuildFilterPipeline folds from the last filter inward). Single source for both
     /// the registration and <see cref="CallToolFilterNames"/>, so a test can pin the order. AgentIdentity sits first so its
     /// keys never reach the echo or the argument validator and every other filter can read the context; it never refuses.
-    /// ToolTelemetry sits third, right inside the echo filter, so it wraps every filter that can refuse: argument validation
+    /// ToolCallTranscript sits third, right inside the echo filter and outside telemetry, so it sees the final response and the
+    /// corrected IsError of every path (it wraps argument validation, the breakers and ToolError) with the call id already assigned.
+    /// ToolTelemetry sits fourth, right inside the transcript filter, so it wraps every filter that can refuse: argument validation
     /// and the breakers (which refuse without calling next), and ToolError, which copies the body's isError onto
     /// CallToolResult.IsError before the telemetry filter reads it. What each filter does, and how they fit with the result
     /// marshaller: docs/current/references/reference_tool_response_pipeline.md.
@@ -166,8 +172,9 @@ public static class RoslynSentinelServiceExtensionsBasic
         {
         ("AgentIdentity", AddAgentIdentityFilter),
         ("ToolCallEcho", AddToolCallEchoFilter),
+        ("ToolCallTranscript", AddToolCallTranscriptFilter),
         ("ToolTelemetry", AddToolTelemetryFilter),
-        // Fourth, outside argument validation, so it sees (and can refuse before) the plain-text validation rejections that
+        // Fifth, outside argument validation, so it sees (and can refuse before) the plain-text validation rejections that
         // make up the alternating-argument-error loops, and inside telemetry, so a refusal is counted like any error.
         ("LoopLatch", AddLoopLatchFilter),
         ("ArgumentValidation", AddArgumentValidationFilter),
@@ -183,7 +190,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         };
         if (NearMissRecorder.IsActive)
         {
-            // Directly inside ToolTelemetry (third), so AgentIdentity, ToolCallEcho and ToolTelemetry keep positions 0-2 and every filter that can
+            // Directly inside ToolTelemetry (fourth), so AgentIdentity, ToolCallEcho, ToolCallTranscript and ToolTelemetry keep positions 0-3 and every filter that can
             // rebuild a result (LoopLatch refusal, WorkspaceNotLoaded's failure handler) is inside it. Absent when both near-miss options are at their
             // defaults, so the default build is byte-identical to one without this filter.
             registrations.Insert(registrations.FindIndex(r => r.Name == "ToolTelemetry") + 1, ("NearMissRecord", AddNearMissRecordFilter));
@@ -1291,6 +1298,41 @@ public static class RoslynSentinelServiceExtensionsBasic
     }
 
     /// <summary>
+    /// Registers the call-transcript filter: appends one JSONL line per tool call (arguments as received, <c>isError</c>, the
+    /// response text as sent, duration) to the host's <see cref="ToolCallTranscript"/>. The logic is
+    /// <see cref="ToolCallTranscriptRecorder.RecordAsync"/>; the filter returns the very same result untouched.
+    /// <para>
+    /// Must be registered third - directly inside the echo filter and outside <see cref="AddToolTelemetryFilter"/> - so it
+    /// wraps argument validation, the breakers and the ToolError filter (it reads the corrected <c>IsError</c> and the final
+    /// text), while the identity and echo filters have already set the <see cref="ToolCallContext"/> call id and agent id (see
+    /// <see cref="BuildCallToolFilterRegistrations"/>). The arguments are copied before <c>next</c> runs because the
+    /// validation filter repairs parameter-name case in place. With no <see cref="ToolCallTranscript"/> in the container it
+    /// passes straight through; writing never fails or blocks a call.
+    /// </para>
+    /// </summary>
+    private static void AddToolCallTranscriptFilter(IMcpRequestFilterBuilder filters)
+    {
+        filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
+            ModelContextProtocol.Protocol.CallToolRequestParams,
+            ModelContextProtocol.Protocol.CallToolResult>(
+            async (context, cancellationToken) =>
+            {
+                ToolCallTranscript? transcript = null;
+                try
+                {
+                    transcript = context.Server.Services?.GetService<ToolCallTranscript>();
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Tool call transcript lookup failed: {ex}");
+                }
+
+                return await ToolCallTranscriptRecorder.RecordAsync(
+                    transcript, context.Params?.Name, context.Params?.Arguments, () => next(context, cancellationToken));
+            }));
+    }
+
+    /// <summary>
     /// Registers the loop-latch filter: with <c>--loop-latch</c> on, a tool that failed the same way twice with no other tool
     /// succeeding in between is refused (not executed) until another tool succeeds, per caller agent id. Logic and semantics:
     /// <see cref="LoopLatchFilter"/>, <see cref="ToolLoopLatch"/>. The refusal names only callable tools, resolved from
@@ -1330,7 +1372,7 @@ public static class RoslynSentinelServiceExtensionsBasic
     /// Registers the tool-telemetry filter: counts every tool call (and its outcome and duration) on
     /// <see cref="ToolTelemetry"/>. The logic is <see cref="ToolTelemetryRecorder.RecordAsync"/>.
     /// <para>
-    /// Must be registered third - immediately inside the echo filter and before everything else - so it wraps
+    /// Must be registered fourth - immediately inside the transcript filter and before everything else - so it wraps
     /// argument validation and the breakers (which refuse without calling next) and the ToolError filter, whose
     /// body-isError sync means it reads the corrected <c>CallToolResult.IsError</c> (see
     /// <see cref="BuildCallToolFilterRegistrations"/>). Because it records only after <c>next</c> returns, a McpServerStatus

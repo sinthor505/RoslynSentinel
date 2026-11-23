@@ -75,7 +75,7 @@ Ground truth for "does this tool exist / is it gated": `McpServerStatus(toolList
 
 ### Request pipeline (`WithRequestFilters` in `AddRoslynSentinelToolsBasic`)
 
-Every tool call runs through 14 call-tool filters (one is the opt-in `--loop-latch`, `Common/ToolLoopLatch.cs`) (`CallToolFilterRegistrations` in
+Every tool call runs through 15 call-tool filters (one is the opt-in `--loop-latch`, `Common/ToolLoopLatch.cs`; one is the always-on call transcript, `Common/ToolCallTranscript.cs`) (`CallToolFilterRegistrations` in
 `Server.Advanced/ServiceRegistrationExtensionsBasic.cs`, first registered is outermost), which see only the request and
 serialized text. Inside them, `ToolResultMarshaller` turns the typed result into the response text at the SDK's
 `MarshalResult` hook, and owns the size budget, offload and paging. The filter list, the marshaller's decisions and
