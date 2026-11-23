@@ -237,7 +237,7 @@ public class BuildEngine
     /// true is the same as level = fullBuildThrowaway (and upgrades fullBuild to it). Both levels hold the server-wide <see cref="BuildGate"/>.</summary>
     /// <param name="isCallable">Tool-callability predicate for the active surface; null means every tool is callable (full surface). Selects the listing tool and LoadSolution named in zero-project messages.</param>
     /// <param name="repoRoot">A validated git worktree root (see <see cref="RepoWorktrees.TryResolve"/>) of the loaded solution's repository, or null for the loaded tree. When set, `dotnet build` runs in that worktree against its own copy of the solution/project (same repository-relative path), so fullBuild writes the worktree's bin/obj and a throwaway build writes the worktree's .roslynsentinel/build/&lt;instance&gt;/; the loaded tree's output is untouched. Project and file scope still name the loaded solution's project/file.</param>
-    public async Task<EngineResultWrapper<BuildResult>> RunFullBuildAsync(CancellationToken cancellationToken = default, int maxDetails = 50, bool useScratchDir = false,
+    public async Task<BuildResult> RunFullBuildCoreAsync(CancellationToken cancellationToken = default, int maxDetails = 50, bool useScratchDir = false,
         BuildVerifyLevel level = BuildVerifyLevel.fullBuild, ToolScope scope = ToolScope.solution, string? scopeName = null, Func<string, bool>? isCallable = null,
         string? repoRoot = null)
     {
@@ -248,18 +248,13 @@ public class BuildEngine
         var solutionPath = currentSolution?.FilePath ?? _workspaceManager.SolutionPath;
         if (string.IsNullOrEmpty(solutionPath))
         {
-            return new EngineResultWrapper<BuildResult>(EngineOutcome.InvalidInput,
-                error: new EngineError(SolutionNotLoadedMessage.Build(_workspaceManager.LoadState) + " A full build needs a loaded solution."));
+            throw new BuildNotRunException(SolutionNotLoadedMessage.Build(_workspaceManager.LoadState) + " A full build needs a loaded solution.");
         }
 
         var projectNames = currentSolution?.Projects.Select(p => p.Name).ToList() ?? [];
         if (projectNames.Count == 0)
         {
-            return EngineResultWrapper<BuildResult>.Failure(
-                EngineOutcome.InvalidInput,
-                new EngineError(
-                    EngineErrorCode.BuildNotRun,
-                    NoProjectsMessage(isCallable)));
+            throw new BuildNotRunException(NoProjectsMessage(isCallable));
         }
 
         // A worktree build targets the worktree's copy of the solution; everything below (target, working directory,
@@ -268,8 +263,7 @@ public class BuildEngine
         {
             if (!RepoWorktrees.TryMapExisting(solutionPath, repoRoot, out var worktreeSolutionPath, out var mapError))
             {
-                return EngineResultWrapper<BuildResult>.Failure(
-                    EngineOutcome.InvalidInput, new EngineError(EngineErrorCode.BuildNotRun, mapError));
+                throw new BuildNotRunException(mapError);
             }
 
             solutionPath = worktreeSolutionPath;
@@ -282,10 +276,9 @@ public class BuildEngine
         {
             if (string.IsNullOrEmpty(scopeName))
             {
-                return new EngineResultWrapper<BuildResult>(EngineOutcome.InvalidInput,
-                    error: new EngineError(scope == ToolScope.project
-                        ? "scopeName (projectName) is required when scope=project."
-                        : "scopeName (filePath) is required when scope=file."));
+                throw new BuildNotRunException(scope == ToolScope.project
+                    ? "scopeName (projectName) is required when scope=project."
+                    : "scopeName (filePath) is required when scope=file.");
             }
 
             Microsoft.CodeAnalysis.Project? scopedProject;
@@ -301,11 +294,7 @@ public class BuildEngine
 
             if (scopedProject is null || string.IsNullOrEmpty(scopedProject.FilePath))
             {
-                return EngineResultWrapper<BuildResult>.Failure(
-                    EngineOutcome.InvalidInput,
-                    new EngineError(
-                        EngineErrorCode.BuildNotRun,
-                        $"Full build compiled zero projects. Scope '{scope}' with scopeName '{scopeName}' resolved to no project in the loaded solution -- no compile verdict is available.{ListingSentence(ListingCall(isCallable), "to see valid project/file names.")}"));
+                throw new BuildNotRunException($"Full build compiled zero projects. Scope '{scope}' with scopeName '{scopeName}' resolved to no project in the loaded solution -- no compile verdict is available.{ListingSentence(ListingCall(isCallable), "to see valid project/file names.")}");
             }
 
             // Scoped build: the project plus every project it transitively references.
@@ -314,8 +303,7 @@ public class BuildEngine
             {
                 if (!RepoWorktrees.TryMapExisting(buildTargetPath, repoRoot, out var worktreeProjectPath, out var mapError))
                 {
-                    return EngineResultWrapper<BuildResult>.Failure(
-                        EngineOutcome.InvalidInput, new EngineError(EngineErrorCode.BuildNotRun, mapError));
+                    throw new BuildNotRunException(mapError);
                 }
 
                 buildTargetPath = worktreeProjectPath;
@@ -342,8 +330,7 @@ public class BuildEngine
         }
         catch (BuildGateBusyException busy)
         {
-            return EngineResultWrapper<BuildResult>.Failure(
-                EngineOutcome.Failure, new EngineError(EngineErrorCode.BuildNotRun, busy.Message));
+            throw new BuildNotRunException(busy.Message);
         }
 
         // Held until the method returns (every path below, including cancellation and the timeout kill).
@@ -361,9 +348,7 @@ public class BuildEngine
             var competing = await BuildIsolation.WaitForNoCompetingBuildAsync(targetPaths, BuildIsolation.DefaultMaxWait, cancellationToken);
             if (competing.Count > 0)
             {
-                return EngineResultWrapper<BuildResult>.Failure(
-                    EngineOutcome.Failure,
-                    new EngineError(EngineErrorCode.BuildNotRun, BuildIsolation.DescribeCompetingBuilds(competing, DateTime.UtcNow - waitStart)));
+                throw new BuildNotRunException(BuildIsolation.DescribeCompetingBuilds(competing, DateTime.UtcNow - waitStart));
             }
         }
 
@@ -418,8 +403,7 @@ public class BuildEngine
             var exitState = capture.RootExited
                 ? $"the build process had exited, exit code {capture.ExitCode}"
                 : "the build process had not exited";
-            return new EngineResultWrapper<BuildResult>(EngineOutcome.Failure,
-                error: new EngineError($"The full build timed out after 5 minutes ({exitState}) and the process tree was terminated."));
+            throw new BuildNotRunException($"The full build timed out after 5 minutes ({exitState}) and the process tree was terminated.");
         }
 
         var stdoutText = capture.StdOut;
@@ -452,7 +436,7 @@ public class BuildEngine
         static string Tail(string text) => string.Join(Environment.NewLine, text.Split(Environment.NewLine).TakeLast(TailLines));
 
         const int SummaryTopN = 50;
-        return new EngineResultWrapper<BuildResult>(EngineOutcome.Success, new BuildResult(
+        return new BuildResult(
             Outcome: capture.ExitCode == 0 ? BuildOutcome.Succeeded : BuildOutcome.Failed,
             Level: usedLevel,
             ProjectsCompiled: builtProjectNames,
@@ -471,6 +455,17 @@ public class BuildEngine
             StderrTail: string.IsNullOrWhiteSpace(stderrText) ? null : Tail(stderrText),
             Duration: DateTime.UtcNow - start,
             Detail: detail
-        ));
+        );
+    }
+
+    // Transitional shim (plan_remove_engine_result_wrapper.md); every not-run cause maps to InvalidInput/BuildNotRun.
+    /// <summary>Transitional wrapper over RunFullBuildCoreAsync.</summary>
+    [Obsolete("Use RunFullBuildCoreAsync")]
+    public async Task<EngineResultWrapper<BuildResult>> RunFullBuildAsync(CancellationToken cancellationToken = default, int maxDetails = 50, bool useScratchDir = false,
+        BuildVerifyLevel level = BuildVerifyLevel.fullBuild, ToolScope scope = ToolScope.solution, string? scopeName = null, Func<string, bool>? isCallable = null,
+        string? repoRoot = null)
+    {
+        try { return new EngineResultWrapper<BuildResult>(EngineOutcome.Success, await RunFullBuildCoreAsync(cancellationToken, maxDetails, useScratchDir, level, scope, scopeName, isCallable, repoRoot)); }
+        catch (BuildNotRunException ex) { return EngineResultWrapper<BuildResult>.Failure(EngineOutcome.InvalidInput, new EngineError(EngineErrorCode.BuildNotRun, ex.Message)); }
     }
 }
