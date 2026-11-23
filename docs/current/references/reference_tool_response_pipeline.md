@@ -214,7 +214,7 @@ Tests, one `RunTest` at a time:
 | Pagers | `SequencePagerTests`, `ResultPagerTests` (`Tests.Server`) |
 | Filters | `LargeResultOffloadFilterTests`, `ToolTelemetryFilterOrderTests`, `ToolCallTranscriptTests` (`Tests.Server`) |
 | `GetLargeResult` | `SequenceLargeResultPagingTests`, `EnvelopeLargeResultPagingTests`, `GetLargeResultTests`, `LargeResultHintsTests` (`Tests.Tools.Basic`) |
-| Readers of stored results | `SubAgentOffloadedResultTests` (`Tests.SubAgent`) |
+| Readers of stored results | `SubAgentOffloadedResultTests` (`Tests.Harness`) |
 | A model following the pointer | `LargeResultPagingAgentTests` (`Tests.ModelEval`; run with `modeleval-runner`) |
 
 ## Gotchas

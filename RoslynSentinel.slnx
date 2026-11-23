@@ -20,11 +20,9 @@
   <Project Path="RoslynSentinel.Tests.ErrorVariants/RoslynSentinel.Tests.ErrorVariants.csproj" />
   <Project Path="RoslynSentinel.Tests.Harness/RoslynSentinel.Tests.Harness.csproj" />
   <Project Path="RoslynSentinel.Tests.ModelEval/RoslynSentinel.Tests.ModelEval.csproj" />
-  <Project Path="RoslynSentinel.Tests.PlanStepRunner/RoslynSentinel.Tests.PlanStepRunner.csproj" />
   <Project Path="RoslynSentinel.Tests.Server/RoslynSentinel.Tests.Server.csproj" Id="c72a8f98-61bc-493f-9bd9-7ab06fe1ff20">
     <BuildType Solution="DebugVisualStudio|*" Project="Debug" />
   </Project>
-  <Project Path="RoslynSentinel.Tests.SubAgent/RoslynSentinel.Tests.SubAgent.csproj" />
   <Project Path="RoslynSentinel.Tests.Support.Advanced/RoslynSentinel.Tests.Support.Advanced.csproj">
     <BuildType Solution="DebugVisualStudio|*" Project="Debug" />
   </Project>
