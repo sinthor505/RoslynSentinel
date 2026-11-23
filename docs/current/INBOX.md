@@ -10,6 +10,9 @@ close it with a reason in [CLOSED.md](./CLOSED.md), then delete the line here. C
 [todo_markers.md](../generated/todo_markers.md) (regenerate with `pwsh -NoProfile -File scripts/Get-TodoMarkers.ps1`).
 
 ## Untriaged
+- 2026-11-22 21:00 FilteringToolHostTests asserts the eval Lean list has 18 entries but it has 19 since ReplaceRange joined, likely red (project excluded from full runs) - `RoslynSentinel.Tests.PlanStepRunner/FilteringToolHostTests.cs:95` vs `RoslynSentinel.AgentLoop/AgentToolAllowLists.cs:12-17` (todo review investigation, not run) - no code TODO yet
+- 2026-11-22 21:00 replaceConstruction drops a nested inner edit but still reports the inner site as rewritten - `RoslynSentinel.Engines.Basic/ConstructionReplacer.cs:233-237` - code TODO at `ConstructionReplacer.cs:237`
+- 2026-11-22 21:00 GetComprehensiveHealthReport's AsyncVoidUsage branch is empty, so that toggle reports nothing - `RoslynSentinel.Engines.Advanced/HealthOrchestrationEngine.cs` (todo review investigation) - no code TODO yet
 - 2026-11-22 23:00 bridge/uplift-phase Succeeded blob items never receive BeforeSource although BridgeAppliedInfo/UpliftCallerInfo carry it (no consumer of .BeforeSource found), so UndoChange cannot revert them - Search "\.BeforeSource" shows no a.BeforeSource/u.BeforeSource read - RoslynSentinel.Tools.Advanced/AsyncifyTools.cs RunBridgePhaseAsync (// TODO)
 - 2026-11-22 23:30 SubAgentChildServerLauncher.RestoreSolutionAsync duplicates the new shared SolutionRestore.RestoreAsync (Engines.Basic) - left unswitched (no worktree launch test run in this slice) - RoslynSentinel.Tools.Advanced/SubAgentChildServerLauncher.cs RestoreSolutionAsync (// TODO)
 - 2026-11-23 05:50 a .cs/.csx file that no loaded project contains is still refused by ReplaceSnippet/ReplaceRange (NonProjectFile classifies it CodeFileOutsideProjects: text edit would need a syntax tree and compile gate) - RoslynSentinel.Common/NonProjectFile.cs Classify (// TODO)

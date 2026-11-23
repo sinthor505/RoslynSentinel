@@ -153,6 +153,23 @@ should confirm that mapping. The new tests additionally need: a stale-read refus
 `StaleReadPolicyRatchetTests.cs`, keys by method name, so the new method needs an entry or a policy), an
 inverted range (last anchor above the first) and a one-line range (both anchors equal, one match).
 
+### Decisions (todo review 2026-11-22)
+
+- Scope of the edit-tool comparison: a narrow 3-arm run, not the full multi-tool comparison. Arms:
+  ReplaceSnippet only, ReplaceRange only, EditSnippets (mode `EditSnippetsExperiment`), each selected through
+  `configureToolSurface` / `ChainEvalToolSurface`, on the two existing chained tests plus one new large-block
+  delete/replace fixture, at least 10 samples per arm per test through evalqueue; the arm is confirmed from the
+  "Exposing N tool(s)" line. Why: ReplaceRange is built (the trigger fired) and the infrastructure exists; the
+  2026-11-09 two-arm A/B (22 runs) was too small to conclude.
+- EditSnippets stays opt-in as the third arm; after the run it is retired (tool class, mode, registry rows,
+  `McpToolSchemaPatcher`/`ErrorPolicyIntentTable` names, four test call sites) unless it wins. Why: its only cost
+  is maintenance and the arm already exists.
+- Acceptance: a per-arm table of pass rate, callsToRecover and summed input tokens (results.csv plus
+  transcript.json; tokens sent are not in results.csv), and the ReplaceRange arm passes the large-block task
+  without re-sending the block.
+- Stale since: the budget numbers above (now 48400, `ClaudeLeanSchemaBudgetTests.cs:42,45`) and open questions
+  1-5 below (answered in code: anchors trimmed `WorkspaceFileEditImpl.cs:1931-1934`, no reindent, no dry run).
+
 ## Open questions
 
 1. **Which tail steps does ReplaceRange take?** Near-miss auto-correction, rename lifting and the

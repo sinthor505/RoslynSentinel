@@ -301,3 +301,20 @@ public report of this exact failure. Nearest items:
 - A broad ban on `.X` tokens: breaks names whose canonical split starts with one (above).
 - Reasoning-channel logprobs: LM Studio returns logprobs for output text only and renders a prefill after
   an empty closed think block, so the reasoning decision can only be approximated.
+
+## Decisions
+
+### Open item 7, sampler enforcement (todo review 2026-11-22)
+
+- Route: verify and record, not per-request enforcement. The transcript Settings block (`RunSettings.cs:26`,
+  built at `:265-311`) gets a per-field status (sent / echoed / declared / unverifiable); a temperature or top_p
+  echo mismatch refuses the run (today only a log warning, `LmStudioAgentClient.cs:387-407`); the batch script
+  refuses to run with unverifiable fields unless the operator passes an explicit accept flag, which is recorded
+  in the transcript. Why: the eval client posts to `/v1/responses` with only temperature/top_p
+  (`LmStudioAgentClient.cs:236-246`) and no tool-calling chat/completions client exists (the SSE reader is
+  responses-specific, `:649`), so per-request penalties are Large; they are deferred until a slip-rate comparison
+  needs enforced penalties.
+- Note: presence/frequency are marked Verified when the host echoes them although the harness never sent them
+  (the echo may be the host default); the per-field status should call these "echoed", not "sent".
+- Acceptance: a transcript Settings block shows the per-field status, and a
+  `LmStudioAgentClientSettingsTests` case with a mismatched echoed temperature is refused.

@@ -138,3 +138,22 @@ skipped with the same semantics. Suggested slices:
 - The 15 `new PersistentWorkspaceManager(...)` test sites are swept by implementer hand edits (READY), not by `SemanticFindReplace`. Why: owner choice; the tool is gated behind `moveExtract` and the client tool list goes stale after a toggle (TODO.md first P1 entry). Check: Build green, no `new PersistentWorkspaceManager(` outside Common and the factory.
 - Storing the full skipped-site list and option 1b (`Action<T>` configure): PARKED. Why: no concrete usage needs them. Unpark: a sweep that skips more than the echo shows, or an initializer no factory parameter takes.
 - The full-build timeout flake (`-nodeReuse:false` trade-off) stays OPEN as its own TODO line.
+
+## Decisions (todo review 2026-11-22)
+
+- Cause correction: plan_document_changeset_type Step 7 (~140 hand-batched ReplaceSnippet sites) was not a
+  skipped-site sweep. `ConstructionReplacer.cs:72` refuses any generic constructed type up front
+  (TargetIneligible, "supports only non-generic types") before a site is examined, so the parked stored-list
+  option would not have helped. Collection initializers are a separate per-site skip (`:292`); the 3-per-reason
+  echo cap is built (`SemanticFindReplaceTools.cs:248-277`).
+- The generic gate is lifted now (READY, Medium): allow a generic constructed type when the factory's return type
+  is assignable to the closed constructed type, checked per site (today `IsAssignable` tests the open definition;
+  `Matches` at `:395-403` uses `OriginalDefinition`). Declared local types stay as they are (they still compile);
+  retyping declarations remains a separate step. Why: owner choice; the next generic-to-subtype migration hits the
+  same wall. Acceptance: a preview of `new Dictionary<FilePathWrapper, string>()` -> a `DocumentChangeSet` factory
+  rewrites the sites with no TargetIneligible; a factory whose return type is not assignable is still refused.
+- The two TODO lines merge: the gate lift is one READY line; collection initializers, the stored full skip list
+  and option 1b stay one PARKED line (unpark: a sweep that skips more than the echo shows, or a collection
+  initializer a real migration needs rewritten).
+- Side note: `ConstructionReplacer.cs:233-237` drops a nested inner edit but reports the inner site as
+  rewritten (inline TODO at `:237`).
