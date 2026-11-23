@@ -183,21 +183,8 @@ public class OrderPricingRefactorAgentTests
 
     private static void ConfigureToolSurface(IMcpServerBuilder mcpBuilder, IServiceCollection services)
     {
-        // A/B arm switch for proposal_edit_snippets_batch_only_ab_test; unset = arm A (ReplaceSnippet).
-        var editArm = Environment.GetEnvironmentVariable("ROSLYNSENTINEL_MODELEVAL_EDIT_ARM");
-        var editSnippetsArm = string.Equals(editArm, "EditSnippets", StringComparison.OrdinalIgnoreCase);
-        TestContext.Out.WriteLine(editSnippetsArm ? "Edit arm: EditSnippets" : "Edit arm: ReplaceSnippet (default)");
-        if (editSnippetsArm)
-        {
-            mcpBuilder.AddRoslynSentinelToolsBasic(
-                services,
-                new HashSet<string>(ActiveModes, StringComparer.OrdinalIgnoreCase) { "EditSnippetsExperiment" },
-                hideTools: new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "ReplaceSnippet" });
-        }
-        else
-        {
-            ModelEvalToolSurfaces.Basic(mcpBuilder, services);
-        }
+        // The edit arm (ROSLYNSENTINEL_MODELEVAL_EDIT_ARM) is handled by EditArmToolSurface; unset leaves the surface unchanged.
+        EditArmToolSurface.RegisterBasic(mcpBuilder, services);
 
         if (BlockWriteFile)
         {

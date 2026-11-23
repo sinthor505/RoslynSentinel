@@ -108,7 +108,9 @@ public class ImplementationScenarioAgentTests
                 return Task.CompletedTask;
             },
             afterLoad: null,
-            cancellationToken);
+            cancellationToken,
+            // The edit arm (ROSLYNSENTINEL_MODELEVAL_EDIT_ARM, see EditArmToolSurface); unset keeps the default surface.
+            configureToolSurface: EditArmToolSurface.RegisterAdvanced);
 
         // ROSLYNSENTINEL_MODELEVAL_STEP_WALL_CLOCK_MINUTES (modeleval -StepWallClockMinutes) raises the 15-minute cap for slow models;
         // the cap is printed in step-<k>.outcome.txt.

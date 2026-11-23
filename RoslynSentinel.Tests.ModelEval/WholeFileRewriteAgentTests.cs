@@ -343,6 +343,7 @@ public class WholeFileRewriteAgentTests
 
     private static void ConfigureToolSurface(IMcpServerBuilder mcpBuilder, IServiceCollection services)
     {
+        // TODO ReplaceRange arm not wired here (#12 covers the chain and scenario tests only); see EditArmToolSurface.
         // A/B arm switch for proposal_edit_snippets_batch_only_ab_test; unset = arm A (ReplaceSnippet).
         var editArm = Environment.GetEnvironmentVariable("ROSLYNSENTINEL_MODELEVAL_EDIT_ARM");
         var editSnippetsArm = string.Equals(editArm, "EditSnippets", StringComparison.OrdinalIgnoreCase);

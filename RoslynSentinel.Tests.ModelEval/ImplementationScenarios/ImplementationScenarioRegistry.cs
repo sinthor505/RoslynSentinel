@@ -2,7 +2,7 @@ using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Scenarios;
 
 namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios;
 
-/// <summary>The 14 implementation scenarios in the order of the plan's scenario table.</summary>
+/// <summary>The 15 implementation scenarios: the 14 of the plan's scenario table in its order, then LargeBlockRewrite (edit-tool comparison).</summary>
 internal static class ImplementationScenarioRegistry
 {
     private const string ScenarioNamespace = "RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Scenarios";
@@ -23,6 +23,7 @@ internal static class ImplementationScenarioRegistry
         ShareHelperDifferingRulesScenario.Definition,
         ObsoleteNamespaceCopyScenario.Definition,
         MigrateOntoEnvironmentHelperScenario.Definition,
+        LargeBlockRewriteScenario.Definition,
     ];
 
     /// <summary>Case-insensitive lookup; throws listing the known ids when nothing matches.</summary>

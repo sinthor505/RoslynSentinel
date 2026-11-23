@@ -100,7 +100,7 @@ public class ImplementationScenarioGoldenTests
     public void Registry_IdsUniqueAndMatchClassNames()
     {
         var all = ImplementationScenarioRegistry.All;
-        Assert.That(all, Has.Count.EqualTo(14));
+        Assert.That(all, Has.Count.EqualTo(15));
         Assert.That(all.Select(scenario => scenario.Id), Is.Unique.IgnoreCase);
 
         foreach (var scenario in all)

@@ -115,23 +115,9 @@ public class OrderPricingRefactorChainAgentTests
     // A/B arm and BlockWriteFile.
     private static void ConfigureToolSurface(IMcpServerBuilder mcpBuilder, IServiceCollection services)
     {
-        // A/B arm switch for proposal_edit_snippets_batch_only_ab_test; unset = arm A (ReplaceSnippet).
-        var editArm = Environment.GetEnvironmentVariable("ROSLYNSENTINEL_MODELEVAL_EDIT_ARM");
-        var editSnippetsArm = string.Equals(editArm, "EditSnippets", StringComparison.OrdinalIgnoreCase);
-        TestContext.Out.WriteLine(editSnippetsArm ? "Edit arm: EditSnippets" : "Edit arm: ReplaceSnippet (default)");
+        // The edit arm (ROSLYNSENTINEL_MODELEVAL_EDIT_ARM) is handled by EditArmToolSurface; unset leaves the surface unchanged.
         // A 2026-11-10 run spent turns calling McpServerStatus/Features believing they restart the server; neither has a role in a refactor task.
-        if (editSnippetsArm)
-        {
-            mcpBuilder.AddRoslynSentinelToolsAdvanced(
-                services,
-                new HashSet<string>(ChainEvalToolSurface.NewModes(), StringComparer.OrdinalIgnoreCase) { "EditSnippetsExperiment" },
-                // Under lean, EditSnippets is not on LeanAllowList, so it is passed as extraAllowed; ReplaceSnippet stays hidden. On the full surface extraAllowed has no effect.
-                hideTools: new HashSet<string>(ChainEvalToolSurface.NewHiddenTools(extraAllowed: new[] { "EditSnippets" }), StringComparer.OrdinalIgnoreCase) { "ReplaceSnippet" });
-        }
-        else
-        {
-            mcpBuilder.AddRoslynSentinelToolsAdvanced(services, ChainEvalToolSurface.NewModes(), hideTools: ChainEvalToolSurface.NewHiddenTools());
-        }
+        EditArmToolSurface.RegisterAdvanced(mcpBuilder, services);
 
         if (BlockWriteFile)
         {
