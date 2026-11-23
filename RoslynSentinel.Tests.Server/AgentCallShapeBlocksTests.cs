@@ -111,17 +111,11 @@ public class AgentCallShapeBlocksTests
         await host.StopAsync();
     }
 
-    // TODO walk-up copy of RepoRootLocator.Find(AppContext.BaseDirectory); delegate once its miss behaviour (Assert.That failure when RoslynSentinel.slnx is absent) is kept by the caller (plan_test_placement, punchlist 29)
     private static string ReadAgentFile(string agentFile)
     {
-        var directory = new DirectoryInfo(TestContext.CurrentContext.TestDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "RoslynSentinel.slnx")))
-        {
-            directory = directory.Parent;
-        }
-
-        Assert.That(directory, Is.Not.Null, "Could not find the repo root (the directory holding RoslynSentinel.slnx) above the test directory.");
-        return File.ReadAllText(Path.Combine(directory!.FullName, ".claude", "agents", agentFile));
+        string? repoRoot = RepoRootLocator.TryFind(AppContext.BaseDirectory);
+        Assert.That(repoRoot, Is.Not.Null, "Could not find the repo root (the directory holding RoslynSentinel.slnx) above the test directory.");
+        return File.ReadAllText(Path.Combine(repoRoot!, ".claude", "agents", agentFile));
     }
 
     private static int CountOccurrences(string text, string marker) =>
