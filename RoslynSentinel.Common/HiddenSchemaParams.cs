@@ -3,8 +3,8 @@ using System.Collections.Concurrent;
 namespace RoslynSentinel.Common;
 
 /// <summary>
-/// Registry of tool parameters that the Lean schema profile stripped from a tool's emitted input
-/// schema (McpToolSchemaPatcher.ApplyLeanProfile) but that the C# method still binds. The argument
+/// Registry of tool parameters that the Lean schema profile or --hide-params stripped from a tool's emitted input
+/// schema (McpToolSchemaPatcher.ApplyHiddenParameters) but that the C# method still binds. The argument
 /// validator reads the emitted schema as its allow-list, so without this registry it would reject a
 /// call passing a hidden parameter as "Unknown parameter". Tool names are matched
 /// case-insensitively against the registered names; parameter names are matched ordinally.

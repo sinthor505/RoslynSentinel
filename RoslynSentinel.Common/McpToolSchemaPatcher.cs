@@ -211,7 +211,7 @@ public static class McpToolSchemaPatcher
         ApplyConsumesTags(tool, toolMethod);
         ApplyBatchItemFields(tool, toolMethod);
         ApplyReplaceSnippetLimits(tool, toolMethod);
-        ApplyLeanProfile(tool, toolMethod);
+        ApplyHiddenParameters(tool, toolMethod);
         return tool;
     }
 
@@ -610,10 +610,10 @@ public static class McpToolSchemaPatcher
     }
 
     /// <summary>
-    /// When <see cref="SchemaOptions.Profile"/> is <see cref="SchemaProfile.Lean"/>, removes the
-    /// boilerplate parameters <c>autoStage</c>, <c>returnDiff</c>, <c>validateOnApply</c>,
-    /// <c>lineBefore</c> and <c>lineAfter</c> from <paramref name="tool"/>'s already-built
-    /// top-level <see cref="Tool.InputSchema"/> (and from its <c>required</c> array).
+    /// Removes the hidden parameters from <paramref name="tool"/>'s already-built top-level
+    /// <see cref="Tool.InputSchema"/> (and from its <c>required</c> array). The names come from
+    /// <see cref="SchemaOptions.EffectiveHiddenParameters"/>: the Lean profile list (<c>--schema-profile=lean</c>)
+    /// plus any explicit names from <c>--hide-params</c>. Nothing is hidden when both are empty.
     /// </summary>
     /// <remarks>
     /// Only the top-level <c>properties</c> object is touched: nested item schemas (e.g.
@@ -622,14 +622,13 @@ public static class McpToolSchemaPatcher
     /// actually stripped are registered in <see cref="HiddenSchemaParams"/> so the argument validator,
     /// which treats the emitted schema as its allow-list, still accepts them at call time.
     /// </remarks>
-    private static void ApplyLeanProfile(McpServerTool tool, MethodInfo toolMethod)
+    private static void ApplyHiddenParameters(McpServerTool tool, MethodInfo toolMethod)
     {
-        if (SchemaOptions.Profile != SchemaProfile.Lean)
+        var hidden = SchemaOptions.EffectiveHiddenParameters();
+        if (hidden.Count == 0)
         {
             return;
         }
-
-        string[] leanHiddenParameters = ["autoStage", "returnDiff", "validateOnApply", "lineBefore", "lineAfter"];
 
         JsonNode? schemaNode = JsonNode.Parse(tool.ProtocolTool.InputSchema.GetRawText());
         if (schemaNode is not JsonObject schemaObj ||
@@ -640,7 +639,7 @@ public static class McpToolSchemaPatcher
         }
 
         var removed = new List<string>();
-        foreach (string name in leanHiddenParameters)
+        foreach (string name in hidden)
         {
             if (propertiesObj.Remove(name))
             {
