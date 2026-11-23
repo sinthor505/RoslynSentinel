@@ -1,4 +1,7 @@
+using System.Collections.Immutable;
 using System.Text.Json;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Diagnostics;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tests.Fakes;
 
@@ -136,5 +139,94 @@ public class DiagnosticEngineTests
         Assert.That(result.Errors, Is.Zero);
         Assert.That(result.ErrorFilePaths, Is.Not.Null);
         Assert.That(result.ErrorFilePaths!, Is.Empty);
+    }
+
+    [Test]
+    public async Task GetFileDiagnostics_WarningWithoutSuppressor_ReportsCS0168()
+    {
+        var solution = TestSolutionBuilder.CreateSolutionWithProject(
+            "TestProj",
+            [("Test.cs", "public class Foo { void Bar() { int unused; } }")]);
+
+        var fake = FakeWorkspaceManager.ReadOnly();
+        fake.SetTestSolution(solution);
+        var engine = Battery.Basic.TestEngines.DiagnosticEngine(fake);
+
+        var result = await engine.GetFileDiagnosticsAsync(new FilePathWrapper("Test.cs"));
+
+        var cs0168 = result.Details.Single(d => d.Id == "CS0168");
+        Assert.That(cs0168.Severity, Is.EqualTo("Warning"));
+    }
+
+    [Test]
+    public async Task GetFileDiagnostics_WarningSuppressedByAnalyzer_IsOmitted()
+    {
+        var solution = WithWarningSuppressor(TestSolutionBuilder.CreateSolutionWithProject(
+            "TestProj",
+            [("Test.cs", "public class Foo { void Bar() { int unused; } }")]));
+
+        var fake = FakeWorkspaceManager.ReadOnly();
+        fake.SetTestSolution(solution);
+        var engine = Battery.Basic.TestEngines.DiagnosticEngine(fake);
+
+        var result = await engine.GetFileDiagnosticsAsync(new FilePathWrapper("Test.cs"));
+
+        Assert.That(result.Details.Any(d => d.Id == "CS0168"), Is.False);
+    }
+
+    [Test]
+    public async Task GetProjectDiagnostics_WarningSuppressedByAnalyzer_IsOmitted()
+    {
+        var solution = WithWarningSuppressor(TestSolutionBuilder.CreateSolutionWithProject(
+            "TestProj",
+            [("Test.cs", "public class Foo { void Bar() { int unused; } }")]));
+
+        var fake = FakeWorkspaceManager.ReadOnly();
+        fake.SetTestSolution(solution);
+        var engine = Battery.Basic.TestEngines.DiagnosticEngine(fake);
+
+        var result = await engine.GetProjectDiagnosticsAsync("TestProj");
+
+        Assert.That(result.Details.Any(d => d.Id == "CS0168"), Is.False);
+    }
+
+    [Test]
+    public async Task GetSolutionDiagnostics_WarningSuppressedByAnalyzer_IsOmitted()
+    {
+        var solution = WithWarningSuppressor(TestSolutionBuilder.CreateSolutionWithProject(
+            "TestProj",
+            [("Test.cs", "public class Foo { void Bar() { int unused; } }")]));
+
+        var fake = FakeWorkspaceManager.ReadOnly();
+        fake.SetTestSolution(solution);
+        var engine = Battery.Basic.TestEngines.DiagnosticEngine(fake);
+
+        var result = await engine.GetSolutionDiagnosticsAsync();
+
+        Assert.That(result.Details.Any(d => d.Id == "CS0168"), Is.False);
+    }
+
+    private static Solution WithWarningSuppressor(Solution solution)
+    {
+        var projectId = solution.Projects.Single().Id;
+        return solution.AddAnalyzerReference(projectId,
+            new AnalyzerImageReference(ImmutableArray.Create<DiagnosticAnalyzer>(new TestWarningSuppressor())));
+    }
+
+    [DiagnosticAnalyzer(LanguageNames.CSharp)]
+    private sealed class TestWarningSuppressor : DiagnosticSuppressor
+    {
+        private static readonly SuppressionDescriptor Descriptor =
+            new("TEST0001", "CS0168", "suppressed by test");
+
+        public override ImmutableArray<SuppressionDescriptor> SupportedSuppressions => ImmutableArray.Create(Descriptor);
+
+        public override void ReportSuppressions(SuppressionAnalysisContext context)
+        {
+            foreach (var diagnostic in context.ReportedDiagnostics)
+            {
+                context.ReportSuppression(Suppression.Create(Descriptor, diagnostic));
+            }
+        }
     }
 }

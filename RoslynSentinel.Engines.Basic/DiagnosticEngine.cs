@@ -1,5 +1,7 @@
+using System.Collections.Immutable;
 using System.Text.Json.Serialization;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using RoslynSentinel.Common;
@@ -39,8 +41,11 @@ public class DiagnosticEngine
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = DocumentLookup.RequireDocument(solution, filePath);
-        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        var diagnostics = semanticModel?.GetDiagnostics(null, cancellationToken) ?? Enumerable.Empty<Diagnostic>();
+        var compilation = await document.Project.GetCompilationAsync(cancellationToken);
+        var tree = await document.GetSyntaxTreeAsync(cancellationToken);
+        IEnumerable<Diagnostic> diagnostics = compilation is null || tree is null
+            ? Enumerable.Empty<Diagnostic>()
+            : await GetCompilerDiagnosticsAsync(document.Project, compilation, tree, cancellationToken);
 
         var list = diagnostics.Select(d => d.ToInfo() with { Project = document.Project.Name }).ToList();
         return new DiagnosticSummary(
@@ -55,7 +60,9 @@ public class DiagnosticEngine
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var project = ProjectLookup.FindProject(solution, projectName) ?? throw SolutionStructureEngine.ProjectNotFound(projectName, solution);
         var compilation = await project.GetCompilationAsync(cancellationToken);
-        var diagnostics = compilation?.GetDiagnostics(cancellationToken) ?? Enumerable.Empty<Diagnostic>();
+        IEnumerable<Diagnostic> diagnostics = compilation is null
+            ? Enumerable.Empty<Diagnostic>()
+            : await GetCompilerDiagnosticsAsync(project, compilation, null, cancellationToken);
 
         var list = diagnostics.Select(d => d.ToInfo() with { Project = project.Name }).ToList();
         return new DiagnosticSummary(
@@ -64,6 +71,51 @@ public class DiagnosticEngine
             list
         );
     }
+
+    // DiagnosticSuppressor analyzers (e.g. NUnit3001) run only in the analyzer driver, which
+    // compilation.GetDiagnostics never invokes. With suppressors present, run the driver and drop
+    // suppressed diagnostics so the list matches the real build. Falls back to raw diagnostics on failure.
+    private async Task<IReadOnlyList<Diagnostic>> GetCompilerDiagnosticsAsync(
+        Project project, Compilation compilation, SyntaxTree? onlyTree, CancellationToken cancellationToken)
+    {
+        var suppressors = project.AnalyzerReferences
+            .SelectMany(r => r.GetAnalyzers(LanguageNames.CSharp))
+            .OfType<DiagnosticSuppressor>()
+            .ToImmutableArray<DiagnosticAnalyzer>();
+
+        if (suppressors.IsEmpty)
+        {
+            return RawCompilerDiagnostics(compilation, onlyTree, cancellationToken);
+        }
+
+        try
+        {
+            var withAnalyzers = compilation.WithAnalyzers(suppressors, new CompilationWithAnalyzersOptions(
+                project.AnalyzerOptions,
+                onAnalyzerException: null,
+                concurrentAnalysis: true,
+                logAnalyzerExecutionTime: false,
+                reportSuppressedDiagnostics: false));
+            var all = await withAnalyzers.GetAllDiagnosticsAsync(cancellationToken);
+            return all
+                .Where(d => !d.IsSuppressed && (onlyTree is null || d.Location.SourceTree == onlyTree))
+                .ToList();
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "DiagnosticSuppressor analysis failed for project {Project}; using unsuppressed diagnostics", project.Name);
+            return RawCompilerDiagnostics(compilation, onlyTree, cancellationToken);
+        }
+    }
+
+    private static IReadOnlyList<Diagnostic> RawCompilerDiagnostics(Compilation compilation, SyntaxTree? onlyTree, CancellationToken cancellationToken) =>
+        onlyTree is null
+            ? compilation.GetDiagnostics(cancellationToken)
+            : compilation.GetSemanticModel(onlyTree).GetDiagnostics(null, cancellationToken);
 
     // Diagnostic IDs that are false positives in Blazor/Razor projects because Roslyn's
     // static workspace doesn't run the Razor source generator (which produces App, Routes, etc.)
@@ -108,7 +160,7 @@ public class DiagnosticEngine
             }
 
             bool isBlazor = IsBlazorProject(project);
-            var diagnostics = compilation.GetDiagnostics(cancellationToken)
+            var diagnostics = (await GetCompilerDiagnosticsAsync(project, compilation, null, cancellationToken))
                 .Where(d => d.Severity != DiagnosticSeverity.Hidden)
                 .Where(d => !(isBlazor && _blazorGeneratorFalsePositiveIds.Contains(d.Id)))
                 .ToList();
