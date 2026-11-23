@@ -14,6 +14,12 @@ Plan: Persist enabled toolsets per Claude Code tab across server restarts, with 
 
 Evidence: IMPLEMENTED 2026-11-23. Steps 1-8 (7b2b901f, 2df3e449, 3398ae4e, 9a247fb0, 0de85bbe, 62edb05f, 0531ece8, 934f415c); Step 9 live: A kept, B kept, C visible-without-reconnect, D config-only (limit: no list_changed on a shrunken start; TODO in AddRestoredToolsetListChangedMessageFilter + INBOX), E seeded, F isolated (file-level), G not observed; Step 10 status text and docs in the closing commit. Supersedes D12 of plan_tool_experience_journal_fixes.md.
 
+## DeleteFile refuses an existing file outside the solution root - resolved (2026-11-22)
+
+DeleteFile agrees with the text edit tools about files outside the solution root (owner ruling 2026-11-22, follow-up E1 of punchlist #22; no TODO entry existed): an existing file that no project owns and that lies outside the root is refused with NotFound and the shared "exists on disk but is outside the loaded solution" facts-and-options text (`WholeFileWriteTools.DeleteFileTool` now uses `NonProjectFile.Classify`, the rule the edit tools use).
+
+Evidence: 8c0e2c1e; `ReplaceSnippetNonProjectFileTests.ReplaceSnippetAndDeleteFile_ExistingFileOutsideSolutionRoot_BothRefuseAsync` replaced the test that pinned the old asymmetry; filtered run of the six DeleteFile test classes 95/95 passed
+
 ## evalqueue SetupStalled watches a SetUp-complete marker - resolved (2026-11-22)
 
 evalqueue SetupStalled watches a SetUp-complete marker instead of the run folder (2026-11-22) - run folders appear only after the test ends, so tests longer than `-NoRunFolderMinutes` (20) are killed (job 20261122-101641-001 at 1202 s; workaround `-NoRunFolderMinutes 0`); decided 2026-11-22: the ModelEval fixture SetUp writes a "setup complete" marker the queue watches (`scripts/roslynsentinel-evalqueue.ps1:1065-1070`, `# TODO` in the Invoke-JobRun wait loop); fix the help text; acceptance: a 45-min ImplementationScenario job is not killed, a test stuck before SetUp ends is still flagged SetupStalled; Medium
