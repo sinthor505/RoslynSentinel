@@ -8,6 +8,18 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## CreateFile: no compile gate for non-.cs files - resolved (2026-11-22)
+
+CreateFile: no compile gate for non-.cs files (2026-11-22) - `Probe.txt` was rejected CS1525 (ImplScenario_ObsoleteNamespaceCopy on 113 turns 3-10); decided 2026-11-22: trace why a .txt reached the compiler (`isCSharpFile` at `WorkspaceFileEditImpl.cs:2419` is suffix-based) and gate the check on .cs project membership; no BOM option (owner: the file tools were not meant for non-.cs files, likely the root cause); acceptance: CreateFile of a .txt succeeds with no compile diagnostics; Small
+
+Evidence: 4d494f31 (punchlist #11); root cause: ValidationEngine.ValidateChangesWithCandidateAsync added any new path under a project folder as a C# document; now skips non-.cs; CreateFile_TxtInsideProjectFolder_IsNotCompileValidatedAsync (run pending at close time)
+
+## CS0103 typo hint on the whole-file writers - resolved (2026-11-22)
+
+CS0103 typo hint on the whole-file writers (2026-11-21) - `EditImpactGate.RejectionAsync` (`EditImpactGate.cs:102`) builds the hint before the impact analysis, so WholeFileWriteTools (x4) and CreateFile still print "likely a typo" for a renamed-away name; decided 2026-11-22: drop the typo text for renamed-away names there (as `WorkspaceFileEditImpl.cs:1403` does); the apply-wrapper half is plan_shared_tool_execution_pipeline Step 4b; acceptance: a rename then a CreateFile/WriteFile hitting CS0103 on the old name shows no typo text; Small
+
+Evidence: 655bda4e + 28daaf21 (punchlist #10); WriteFile_RenamedFieldStillUsedByOldName_RejectionOmitsTypoHintAsync and its control green. Apply-wrapper half stays plan_shared_tool_execution_pipeline Step 4b; CreateFile site converted but a new file has no baseline so no renamed-away name can arise there (untestable)
+
 ## Undo refusal for a deleted created file gets edit-impact attribution - resolved (2026-11-22)
 
 Undo refusal for a deleted created file gets edit-impact attribution (2026-11-22) - add an optional deletePaths parameter to `EditImpactGate.RejectionAsync` (`EditImpactGate.cs:102`), forward it to AnalyzeAsync, pass it from `WorkspaceFileEditImpl.ComposeUndoValidationRefusalAsync` (code TODO there); other 5 callers unchanged; acceptance: undo of a created file still referenced elsewhere names the removed type; Small
