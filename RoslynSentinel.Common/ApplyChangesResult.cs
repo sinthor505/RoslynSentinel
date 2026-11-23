@@ -55,4 +55,16 @@ public record ApplyChangesResult(
 
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Message => IsError ? Summary : null;
+
+    /// <summary>
+    /// The exact text the chokepoint wrote for <paramref name="filePath"/> (<see cref="PostImages"/>); null when nothing was
+    /// written for it (refusal, no-op write, delete, rollback). Self-building blob sites use it for
+    /// <see cref="OperationItemRecord.AfterSource"/>, never the proposed or attempted text.
+    /// </summary>
+    public string? WrittenTextFor(string filePath)
+    {
+        string? written = null;
+        PostImages?.TryGetValue(filePath, out written);
+        return written;
+    }
 }

@@ -1234,4 +1234,112 @@ public static class DataHelper
         Assert.That(actual, Is.EqualTo(expected).NoClip);
         Assert.That(File.ReadAllText(PathOf("UpliftPin.cs")), Is.EqualTo(expected).NoClip, "disk and workspace must agree");
     }
+
+    // Items read back the way UndoChange / GetOperationDetail do: each element deserialised to OperationItemRecord.
+    private List<OperationItemRecord> ReadBlobItems(string changeId)
+    {
+        var blobPath = OperationBlobWriter.FindBlobPath(changeId, _tempDir);
+        Assert.That(blobPath, Is.Not.Null.And.Not.Empty, "The operation blob must be written under the temp solution root.");
+        using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(blobPath!));
+        return doc.RootElement.GetProperty("items").EnumerateArray()
+            .Select(e => System.Text.Json.JsonSerializer.Deserialize<OperationItemRecord>(e.GetRawText())!)
+            .ToList();
+    }
+
+    // Punchlist #21: the self-building blob items take AfterSource from the text the write chokepoint wrote (after its EOL
+    // pre-pass), not from the proposed text. "mixed" makes the pre-pass observable: the proposed text is not what lands on disk.
+    // Both callers are in one file, so the last uplifted item's AfterSource is the final disk text.
+    [TestCase("\n", TestName = "T31_UpliftCallers_BlobAfterSourceEqualsDiskText_LF")]
+    [TestCase("\r\n", TestName = "T31_UpliftCallers_BlobAfterSourceEqualsDiskText_CRLF")]
+    [TestCase("mixed", TestName = "T31_UpliftCallers_BlobAfterSourceEqualsDiskText_Mixed")]
+    [CancelAfter(30000)]
+    public async Task T31_UpliftCallers_BlobAfterSourceEqualsDiskText(string style)
+    {
+        SetSource(WithLineEndings(UpliftPinSource, style), "UpliftPin.cs");
+
+        var result = await _asyncifyTools.UpliftCallersTool(
+            reason: "test message",
+            targets: [new UpliftTarget { BridgedMethodName = "GetData" }],
+            maxCallersPerMethod: 5,
+            dryRun: false,
+            propagateCancellationTokens: true);
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.ToString());
+        var items = ReadBlobItems(result.SuccessData!.Summary.ChangeId).Where(i => i.Outcome == ItemRecordOutcome.Succeeded).ToList();
+        Assert.That(items, Is.Not.Empty, "At least one caller must have been uplifted.");
+        Assert.That(items.Select(i => i.AfterSource), Has.All.Not.Null, "Every written item records the chokepoint's written text.");
+        Assert.That(items.Last().AfterSource, Is.EqualTo(File.ReadAllText(PathOf("UpliftPin.cs"))).NoClip,
+            "The last write's AfterSource must equal the text now on disk.");
+    }
+
+    // Standalone FlagAsyncMigrationCandidates, scope=project (applyResult1126 site).
+    [Test, CancelAfter(60000)]
+    public async Task T32_FlagAsyncMigrationCandidates_ProjectScope_BlobAfterSourceEqualsDiskText()
+    {
+        SetSource(FlagPhaseSource, "OrderService.cs");
+        var before = File.ReadAllText(PathOf("OrderService.cs"));
+
+        var result = await _asyncifyTools.FlagAsyncMigrationCandidates(scope: "project", projectName: "TestProj");
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.ToString());
+        Assert.That(result.SuccessData!.Succeeded, Is.EqualTo(2));
+        var items = ReadBlobItems(result.SuccessData.ChangeId).Where(i => i.Outcome == ItemRecordOutcome.Succeeded).ToList();
+        var disk = File.ReadAllText(PathOf("OrderService.cs"));
+        Assert.That(disk, Is.Not.EqualTo(before), "The flag write must have changed the file.");
+        Assert.That(items, Has.Count.EqualTo(2));
+        Assert.That(items.Select(i => i.AfterSource), Has.All.EqualTo(disk).NoClip);
+        Assert.That(items.Select(i => i.BeforeSource), Has.All.EqualTo(before).NoClip);
+    }
+
+    // Standalone FlagAsyncMigrationCandidates, scope=targets (applyResult1223 backfill loop).
+    [Test, CancelAfter(60000)]
+    public async Task T33_FlagAsyncMigrationCandidates_TargetsScope_BlobAfterSourceEqualsDiskText()
+    {
+        SetSource(FlagPhaseSource, "OrderService.cs");
+
+        var result = await _asyncifyTools.FlagAsyncMigrationCandidates(
+            scope: "targets",
+            flagTargets: [LoadOneTarget(PathOf("OrderService.cs"))]);
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.ToString());
+        Assert.That(result.SuccessData!.Succeeded, Is.EqualTo(1));
+        var item = ReadBlobItems(result.SuccessData.ChangeId).Single(i => i.Outcome == ItemRecordOutcome.Succeeded);
+        Assert.That(item.AfterSource, Is.EqualTo(File.ReadAllText(PathOf("OrderService.cs"))).NoClip);
+    }
+
+    // A refused write wrote nothing: its blob items are Failed and carry no AfterSource.
+    [Test, CancelAfter(60000)]
+    public async Task T34_FlagAsyncMigrationCandidates_WriteRefused_BlobItemsHaveNoAfterSource()
+    {
+        SetSource(FlagPhaseSource, "OrderService.cs");
+        OpenLedgerThatRefusesFixtureWrites();
+
+        var result = await _asyncifyTools.FlagAsyncMigrationCandidates(scope: "project", projectName: "TestProj");
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.ToString());
+        var items = ReadBlobItems(result.SuccessData!.ChangeId);
+        Assert.That(items, Is.Not.Empty);
+        Assert.That(items.Select(i => i.Outcome), Has.All.EqualTo(ItemRecordOutcome.Failed));
+        Assert.That(items.Select(i => i.AfterSource), Has.All.Null);
+    }
+
+    // Asyncify macro (bridge + uplift phases, engine-built Applied/Uplifted infos): the bridge and the uplift both rewrite
+    // RegionForm.cs, so the last written item's AfterSource is the final disk text and every written item has one.
+    [Test, CancelAfter(60000)]
+    public async Task T35_Asyncify_BridgeAndUpliftPhases_BlobAfterSourceEqualsDiskText()
+    {
+        SetSource(LoadListHighScoreWithCallerSource);
+
+        var result = await _asyncifyTools.AsyncifyTool(reason: "test message");
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.ToString());
+        var written = ReadBlobItems(result.SuccessData!.ChangeId)
+            .Where(i => i.Outcome == ItemRecordOutcome.Succeeded
+                && ((i.Reason ?? "").StartsWith("phase:bridge", StringComparison.Ordinal)
+                    || (i.Reason ?? "").StartsWith("phase:uplift", StringComparison.Ordinal)))
+            .ToList();
+        Assert.That(written, Has.Count.GreaterThanOrEqualTo(2), "Bridge (loadList) and uplift (DoWork) must both be recorded.");
+        Assert.That(written.Select(i => i.AfterSource), Has.All.Not.Null);
+        Assert.That(written.Last().AfterSource, Is.EqualTo(File.ReadAllText(PathOf("RegionForm.cs"))).NoClip);
+    }
 }

@@ -1496,7 +1496,6 @@ public class AsyncifyTools
 
                     string? beforeSource782 = null;
                     applyResult.PreImages?.TryGetValue(target.FilePath, out beforeSource782);
-                    // TODO AfterSource not set here (punchlist #14 slice 3 decision)
 
                     items.Add(new OperationItemRecord
                     {
@@ -1504,6 +1503,7 @@ public class AsyncifyTools
                         MethodName = methodName,
                         Outcome = ItemRecordOutcome.Succeeded,
                         BeforeSource = beforeSource782,
+                        AfterSource = applyResult.WrittenTextFor(target.FilePath),
                     });
                     succeeded++;
                 }
@@ -1536,6 +1536,7 @@ public class AsyncifyTools
                                         Outcome = ItemRecordOutcome.Succeeded,
                                         Reason = $"CT added to existing async overload '{asyncMethodName}'",
                                         BeforeSource = beforeSrc,
+                                        AfterSource = ctApplyResult.WrittenTextFor(target.FilePath),
                                     });
                                     succeeded++;
                                     handled = true;
@@ -1770,6 +1771,10 @@ public class AsyncifyTools
                         applyResult941.PreImages.TryGetValue(item.FilePath, out var pre);
                         item.BeforeSource = pre;
                     }
+                    if (item.Outcome == ItemRecordOutcome.Succeeded && item.AfterSource == null)
+                    {
+                        item.AfterSource = applyResult941.WrittenTextFor(item.FilePath);
+                    }
                 }
             }
         }
@@ -1870,6 +1875,7 @@ public class AsyncifyTools
                     FilePath = u.FilePath,
                     MethodName = u.CallerMethod,
                     Outcome = ItemRecordOutcome.Succeeded,
+                    AfterSource = u.AfterSource,
                 });
                 succeeded++;
             }
@@ -1889,7 +1895,7 @@ public class AsyncifyTools
                     Outcome = blobOutcome,
                     Reason = s.Reason,
                     CompilerDiagnostics = s.Diagnostics.Count > 0 ? s.Diagnostics : null,
-                    AfterSource = s.AttemptedSource,
+                    // AfterSource stays null: a skipped caller wrote nothing (AttemptedSource is text that never reached disk).
                 });
 
                 if (itemOutcome == ItemOutcome.AlreadySatisfied)
@@ -2196,7 +2202,6 @@ public class AsyncifyTools
 
                         string? beforeSource1135 = null;
                         applyResult1126.PreImages?.TryGetValue(f.FilePath, out beforeSource1135);
-                        // TODO AfterSource not set here (punchlist #14 slice 3 decision)
                         items.Add(new OperationItemRecord
                         {
                             FilePath = f.FilePath,
@@ -2204,6 +2209,7 @@ public class AsyncifyTools
                             Outcome = ItemRecordOutcome.Succeeded,
                             Reason = null,
                             BeforeSource = beforeSource1135,
+                            AfterSource = applyResult1126.WrittenTextFor(f.FilePath),
                         });
                         succeeded++;
                     }
@@ -2347,6 +2353,10 @@ public class AsyncifyTools
                             {
                                 applyResult1223.PreImages.TryGetValue(item.FilePath, out var pre);
                                 item.BeforeSource = pre;
+                            }
+                            if (item.Outcome == ItemRecordOutcome.Succeeded && item.AfterSource == null)
+                            {
+                                item.AfterSource = applyResult1223.WrittenTextFor(item.FilePath);
                             }
                         }
                     }
@@ -2715,7 +2725,6 @@ public class AsyncifyTools
 
                     string? beforeSource1339 = null;
                     applyResult1317.PreImages?.TryGetValue(f.FilePath, out beforeSource1339);
-                    // TODO AfterSource not set here (punchlist #14 slice 3 decision)
                     items.Add(new OperationItemRecord
                     {
                         FilePath = f.FilePath,
@@ -2723,6 +2732,7 @@ public class AsyncifyTools
                         Outcome = ItemRecordOutcome.Succeeded,
                         Reason = "phase:flag",
                         BeforeSource = beforeSource1339,
+                        AfterSource = applyResult1317.WrittenTextFor(f.FilePath),
                     });
                     state.P1Succeeded++;
                 }
@@ -2872,6 +2882,10 @@ public class AsyncifyTools
                                 applyResult1421.PreImages.TryGetValue(item.FilePath, out var pre);
                                 item.BeforeSource = pre;
                             }
+                            if (item.Outcome == ItemRecordOutcome.Succeeded && item.AfterSource == null)
+                            {
+                                item.AfterSource = applyResult1421.WrittenTextFor(item.FilePath);
+                            }
                         }
                     }
                 }
@@ -2915,6 +2929,8 @@ public class AsyncifyTools
                 MethodName = a.MethodName,
                 Outcome = ItemRecordOutcome.Succeeded,
                 Reason = "phase:bridge",
+                // TODO BridgeAppliedInfo.BeforeSource / UpliftCallerInfo.BeforeSource are never copied into these items (only AfterSource is), so UndoChange cannot revert bridge/uplift-phase items
+                AfterSource = a.AfterSource,
             });
             state.P2Succeeded++; state.Succeeded++;
         }
@@ -2933,7 +2949,7 @@ public class AsyncifyTools
                         : ItemRecordOutcome.Failed,
                 Reason = $"phase:bridge - {s.Reason}",
                 CompilerDiagnostics = bridgeDiags,
-                AfterSource = s.AttemptedSource,
+                // AfterSource stays null: a skipped method wrote nothing (AttemptedSource is text that never reached disk).
             });
             if (alreadyDone || requiresManualReview)
             {
@@ -3038,6 +3054,7 @@ public class AsyncifyTools
                         MethodName = u.CallerMethod,
                         Outcome = ItemRecordOutcome.Succeeded,
                         Reason = "phase:uplift",
+                        AfterSource = u.AfterSource,
                     });
                     state.P3Succeeded++; state.Succeeded++;
                 }
@@ -3056,7 +3073,7 @@ public class AsyncifyTools
                         Outcome = upliftOutcome,
                         Reason = $"phase:uplift - {s.Reason}",
                         CompilerDiagnostics = upliftDiags,
-                        AfterSource = s.AttemptedSource,
+                        // AfterSource stays null: a skipped caller wrote nothing (AttemptedSource is text that never reached disk).
                     });
                     if (upliftOutcome == ItemRecordOutcome.Failed)
                     {
@@ -3690,6 +3707,7 @@ public class AsyncifyTools
                     MethodName = methodName,
                     Outcome = ItemRecordOutcome.Succeeded,
                     BeforeSource = beforeSource,
+                    AfterSource = applyResult.WrittenTextFor(filePath),
                 });
                 succeeded++;
             }
@@ -3918,6 +3936,7 @@ public class AsyncifyTools
                     MethodName = target.NewMethodName,
                     Outcome = ItemRecordOutcome.Succeeded,
                     BeforeSource = beforeSource,
+                    AfterSource = applyResult.WrittenTextFor(target.FilePath),
                 });
                 succeeded++;
             }

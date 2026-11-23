@@ -36,6 +36,15 @@ public record UpliftCallerInfo(
     }
 
     /// <summary>
+    /// Exact text the write chokepoint wrote for the file (<c>ApplyChangesResult.PostImages</c>, after the EOL pre-pass);
+    /// copied to <c>OperationItemRecord.AfterSource</c>. Null when the chokepoint recorded no written text (no-op write).
+    /// </summary>
+    public string? AfterSource
+    {
+        get; init;
+    }
+
+    /// <summary>
     /// Display text of the type that declares the caller (<c>ObsoleteCallerFinding.CallerType</c>); tells apart
     /// same-named callers in different classes. Null when the finder could not bind the containing type.
     /// </summary>
@@ -607,6 +616,7 @@ public class AsyncBatchEngine
                             applied.Add(new BridgeAppliedInfo(candidate.FilePath, candidate.MethodName, asyncMethodName)
                             {
                                 BeforeSource = beforeSource,
+                                AfterSource = ctApply.WrittenTextFor(candidate.FilePath),
                             });
                             progress?.Report(new EngineProgress(i / budget, $"Added CT to existing async overload '{asyncMethodName}' in {candidate.FilePath}"));
                             fallbackHandled = true;
@@ -663,6 +673,7 @@ public class AsyncBatchEngine
                                 applied.Add(new BridgeAppliedInfo(candidate.FilePath, candidate.MethodName, asyncMethodName)
                                 {
                                     BeforeSource = beforeSource,
+                                    AfterSource = bodyApply.WrittenTextFor(candidate.FilePath),
                                 });
                                 progress?.Report(new EngineProgress(i / budget, $"Rewrote bridge calls in '{asyncMethodName}' body in {candidate.FilePath}"));
                                 fallbackHandled = true;
@@ -944,6 +955,7 @@ public class AsyncBatchEngine
                 candidate.FilePath, candidate.MethodName, candidate.MethodName + "Async")
             {
                 BeforeSource = bridgeBeforeSource,
+                AfterSource = bridgeApply.WrittenTextFor(candidate.FilePath),
             });
 
             _ledger.Record(candidate.FilePath, candidate.MethodName, "Bridge");
@@ -1318,6 +1330,7 @@ public class AsyncBatchEngine
                 uplifted.Add(new UpliftCallerInfo(callerFilePath, callerMethodName, asyncName!)
                 {
                     BeforeSource = beforeSource,
+                    AfterSource = upliftApply.WrittenTextFor(callerFilePath),
                     CallerType = callerType
                 });
                 _ledger.Record(callerFilePath, callerMethodName, "Uplift");

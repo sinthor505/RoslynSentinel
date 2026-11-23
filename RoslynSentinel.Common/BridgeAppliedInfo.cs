@@ -26,5 +26,14 @@ public record BridgeAppliedInfo(
     {
         get; init;
     }
+
+    /// <summary>
+    /// Exact text the write chokepoint wrote for the file (<c>ApplyChangesResult.PostImages</c>, after the EOL pre-pass);
+    /// copied to <c>OperationItemRecord.AfterSource</c>. Null when the chokepoint recorded no written text (no-op write).
+    /// </summary>
+    public string? AfterSource
+    {
+        get; init;
+    }
 }
 

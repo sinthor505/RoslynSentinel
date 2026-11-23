@@ -10,3 +10,4 @@ close it with a reason in [CLOSED.md](./CLOSED.md), then delete the line here. C
 [todo_markers.md](../generated/todo_markers.md) (regenerate with `pwsh -NoProfile -File scripts/Get-TodoMarkers.ps1`).
 
 ## Untriaged
+- 2026-11-22 23:00 bridge/uplift-phase Succeeded blob items never receive BeforeSource although BridgeAppliedInfo/UpliftCallerInfo carry it (no consumer of .BeforeSource found), so UndoChange cannot revert them - Search "\.BeforeSource" shows no a.BeforeSource/u.BeforeSource read - RoslynSentinel.Tools.Advanced/AsyncifyTools.cs RunBridgePhaseAsync (// TODO)
