@@ -138,7 +138,7 @@ public class PlanStepRunnerSurfaceTests
         Assert.That(offenders, Is.Empty, "Prompts name tools outside PlanStepRunnerSurface: " + string.Join(", ", offenders));
     }
 
-    /// <summary>Walks up from the test directory to the folder holding RoslynSentinel.slnx; null when absent.</summary>
+    /// <summary>Walks up from AppContext.BaseDirectory to the folder holding RoslynSentinel.slnx; null when absent.</summary>
     private static string? FindRepoRoot() => RepoRootLocator.TryFind(AppContext.BaseDirectory);
 
     /// <summary>Full path of a repo-relative file; Assert.Ignore when the repo or the file is not present.</summary>

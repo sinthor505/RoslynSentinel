@@ -9,6 +9,7 @@ public class ArchitectureDocFreshnessTests
         "Regenerate with: $env:ROSLYNSENTINEL_UPDATE_GENERATED_DOCS=1; dotnet test RoslynSentinel.Tests.Server --filter ArchitectureDocFreshness\n" +
         "Or run: scripts/Generate-ArchitectureMap.ps1";
 
+    // TODO walk-up copy of RepoRootLocator.Find(AppContext.BaseDirectory); delegate once its miss behaviour (throws InvalidOperationException when RoslynSentinel.slnx is absent) is kept by the caller (plan_test_placement, punchlist 29)
     private static string GetRepoRoot()
     {
         var current = AppContext.BaseDirectory;

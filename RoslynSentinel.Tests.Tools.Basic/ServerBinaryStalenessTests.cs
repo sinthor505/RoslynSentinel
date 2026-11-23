@@ -212,6 +212,7 @@ public class ServerBinaryStalenessTests
     [Test]
     public void SourcePathPrefixes_MatchScriptsServerSourcePathsFile()
     {
+        // TODO walk-up copy of RepoRootLocator.Find(AppContext.BaseDirectory); delegate once its miss behaviour (Assert.Fail when RoslynSentinel.slnx is absent) is kept by the caller (plan_test_placement, punchlist 29)
         var dir = new DirectoryInfo(TestContext.CurrentContext.TestDirectory);
         while (dir != null && !File.Exists(Path.Combine(dir.FullName, "RoslynSentinel.slnx")))
         {

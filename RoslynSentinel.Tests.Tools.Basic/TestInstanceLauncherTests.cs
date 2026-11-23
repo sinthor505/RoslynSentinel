@@ -546,6 +546,7 @@ public class TestInstanceLauncherTests
         return null;
     }
 
+    // TODO walk-up copy of RepoRootLocator.Find(AppContext.BaseDirectory); delegate once its miss behaviour (Assert.Ignore when RoslynSentinel.slnx is absent) is kept by the caller (plan_test_placement, punchlist 29)
     private static string FindRepoRoot()
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
