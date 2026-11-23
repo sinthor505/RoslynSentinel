@@ -19,8 +19,8 @@ public static class SyntaxTargetResolver
     /// <remarks>
     /// Needed because <c>Identifier.Text</c> is already arity-stripped, so comparing it against a
     /// caller's raw string rejected the type's own declared spelling: run 20260910-013550-398 had
-    /// <c>containerName: "EngineResultWrapper<T>"</c> fail and the bare
-    /// <c>"EngineResultWrapper"</c> succeed on the next turn. Third recorded instance
+    /// <c>containerName: "Wrapper<T>"</c> fail and the bare
+    /// <c>"Wrapper"</c> succeed on the next turn. Third recorded instance
     /// (cf. project_qwen36_35b_smoketest_and_member_containername_gap). Applied to both sides of
     /// the comparison so all three spellings resolve identically.
     /// </remarks>

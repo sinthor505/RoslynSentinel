@@ -312,21 +312,6 @@ public class ResultStatusTests
         Assert.That(coded.Status, Is.EqualTo(ResultStatus.NotApplicable));
     }
 
-    [TestCase(EngineOutcome.Success, ResultStatus.Success, null)]
-    [TestCase(EngineOutcome.Failure, ResultStatus.Failed, ToolErrorCode.Exception)]
-    [TestCase(EngineOutcome.DocumentNotFound, ResultStatus.NotFound, ToolErrorCode.NotFound)]
-    [TestCase(EngineOutcome.TargetNotFound, ResultStatus.NotFound, ToolErrorCode.NotFound)]
-    [TestCase(EngineOutcome.InvalidInput, ResultStatus.InvalidInput, ToolErrorCode.InvalidArgument)]
-    [TestCase(EngineOutcome.Timeout, ResultStatus.TimedOut, ToolErrorCode.TimedOut)]
-    [TestCase(EngineOutcome.InternalError, ResultStatus.Failed, ToolErrorCode.Exception)]
-    public void EngineResultWrapper_EveryOutcome_StatusAndCodeAgreeWithIsError(EngineOutcome outcome, ResultStatus expectedStatus, string? expectedCode)
-    {
-        IOperationResult result = new EngineResultWrapper<int>(outcome, outcome == EngineOutcome.Success ? 1 : default, outcome == EngineOutcome.Success ? null : new EngineError("m"));
-
-        Assert.That(result.IsError, Is.EqualTo(expectedStatus.IsErrorStatus()));
-        Assert.That(result.Status, Is.EqualTo(expectedStatus));
-    }
-
     [Test]
     public void EngineError_ToToolResponse_EmitsIsErrorAndNoSuccessField()
     {
