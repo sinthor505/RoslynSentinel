@@ -247,6 +247,7 @@ Wire impact: none (authoring input to a renderer, never serialized or returned b
 - Lane: implementer (1 file, 2 edits). Pairs with: Step 10.
 
 ### Step 12 - Harness: hide `validateOnApply` per world, opt-in property (test harness)
+- Done: 4e7cb804
 - Files: RoslynSentinel.Tests.ModelEval/ModelEvalMcpEnvironment.cs, RoslynSentinel.Tests.Harness/ScenarioDefinition.cs, RoslynSentinel.Tests.ModelEval/ImplementationScenarios/ImplementationScenario.cs
 - Depends on: 10, 11
 - Effect: behaviour-changing: from here every eval world built by `ModelEvalMcpEnvironment.CreateAsync` lists tools without `validateOnApply` and refuses `validateOnApply:false`. No scenario opts in; no prompt or grader changes.
@@ -258,6 +259,7 @@ Wire impact: none (authoring input to a renderer, never serialized or returned b
 - Lane: implementer (3 files, ~5 edits). Pairs with: Step 19.
 
 ### Step 13 - Harness: pass the per-scenario switch at the two scenario call sites
+- Done: 9b9a530f
 - Files: RoslynSentinel.Tests.ModelEval/ImplementationScenarioAgentTests.cs, RoslynSentinel.Tests.ModelEval/ScenarioAgentTests.cs
 - Depends on: 8 (same files), 12
 - Effect: text-neutral (every property is false, so the default applies).
@@ -266,6 +268,7 @@ Wire impact: none (authoring input to a renderer, never serialized or returned b
 - Lane: implementer (2 files, 2 edits). Pairs with: Step 20.
 
 ### Step 14 - Document the options and the stamp
+- Done: 766371b5
 - Files: docs/current/references/reference_model_eval_procedure.md
 - Depends on: 5, 6, 10, 12
 - Effect: text-neutral (docs).
@@ -333,6 +336,7 @@ Wire impact: none (authoring input to a renderer, never serialized or returned b
 - Lane: test-writer (1 new file). Pairs with: Step 12.
 
 ### Step 20 - Tests: the harness default is hidden, the opt-in is full
+- Done: 9cec311d
 - Files: RoslynSentinel.Tests.ModelEval/EvalToolSchemaVisibilityTests.cs (new)
 - Depends on: 12, 13
 - Effect: text-neutral (tests).
