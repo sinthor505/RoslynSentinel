@@ -143,6 +143,39 @@ public class LmStudioAgentClientSettingsTests
         });
     }
 
+    [Test]
+    public async Task LoadedModelStatusCheck_TargetsTheHttpClientsHost_NotTheGlobalLlmOptionsBaseUrl()
+    {
+        LlmOptions.Configure(["--llm-model", "settings-test-model"]);
+        var firstGet = new TaskCompletionSource<Uri>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var httpClient = new HttpClient(new RecordingModelsHandler(firstGet))
+        {
+            BaseAddress = new Uri("http://other-host.invalid:1234/v1/"),
+        };
+        _ = new LmStudioAgentClient(httpClient, "settings-test-model", NullLogger<LmStudioAgentClient>.Instance);
+
+        var completed = await Task.WhenAny(firstGet.Task, Task.Delay(TimeSpan.FromSeconds(10)));
+
+        Assert.That(completed, Is.SameAs(firstGet.Task), "The loaded-model check never issued a GET.");
+        Assert.That(firstGet.Task.Result.ToString(), Is.EqualTo("http://other-host.invalid:1234/api/v1/models"));
+    }
+
+    private sealed class RecordingModelsHandler(TaskCompletionSource<Uri> firstGet) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.Method == HttpMethod.Get)
+            {
+                firstGet.TrySetResult(request.RequestUri!);
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"models\":[]}"),
+            });
+        }
+    }
+
     private static LmStudioAgentClient NewClient(ScriptedModelHandler handler)
     {
         LlmOptions.Configure(["--llm-model", "settings-test-model"]);

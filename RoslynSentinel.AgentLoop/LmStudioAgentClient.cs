@@ -152,17 +152,13 @@ public sealed class LmStudioAgentClient
                 return;
             }
 
-            // TODO the LM Studio branch reads the process-wide LlmOptions.BaseUrl, not _httpClient.BaseAddress, so a SubAgent/SubAgentEval call with hostAlias on an lmstudio host logs its loaded-model status for the wrong host (diagnostic only)
-            var baseUrl = LlmOptions.BaseUrl.EndsWith("/v1", StringComparison.OrdinalIgnoreCase)
-                ? LlmOptions.BaseUrl[..^"/v1".Length]
-                : LlmOptions.BaseUrl;
-
-            using var response = await _httpClient.GetAsync($"{baseUrl}/api/v1/models");
+            var modelsUrl = new Uri(_httpClient.BaseAddress!, "../api/v1/models");
+            using var response = await _httpClient.GetAsync(modelsUrl);
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning(
                     "Could not verify loaded model via {Url} ({StatusCode}); proceeding without confirmation.",
-                    $"{baseUrl}/api/v1/models", response.StatusCode);
+                    modelsUrl, response.StatusCode);
                 return;
             }
 
