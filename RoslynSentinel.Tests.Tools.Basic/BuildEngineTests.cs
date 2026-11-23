@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tests.Battery.Basic;
@@ -14,23 +15,19 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 public class BuildEngineTests
 {
     [Test]
-    public async Task RunQuickBuildAsync_ZeroProjectScope_ReturnsInvalidInputWithBuildNotRunAsync()
+    public async Task RunQuickBuildAsync_ZeroProjectScope_ThrowsBuildNotRunAsync()
     {
         var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         workspaceManager.SetTestSolution(TestSolutionBuilder.CreateEmptySolution());
         var diagnosticEngine = TestEngines.DiagnosticEngine(workspaceManager);
         var buildEngine = TestEngines.BuildEngine(workspaceManager, diagnosticEngine);
 
-        var result = await buildEngine.RunQuickBuildAsync(ToolScope.solution, null, maxDetails: 50, CancellationToken.None);
-
-        Assert.That(result.Outcome, Is.EqualTo(EngineOutcome.InvalidInput));
-        Assert.That(result.Error, Is.Not.Null);
-        Assert.That(result.Error!.Code, Is.EqualTo(EngineErrorCode.BuildNotRun));
+        await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunQuickBuildCoreAsync(ToolScope.solution, null, maxDetails: 50, CancellationToken.None));
 
         workspaceManager.Dispose();
     }
     [Test]
-    public async Task RunFullBuildAsync_ZeroProjectSolution_ReturnsInvalidInputWithBuildNotRunAsync()
+    public async Task RunFullBuildAsync_ZeroProjectSolution_ThrowsBuildNotRunAsync()
     {
         var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         workspaceManager.SetTestSolution(TestSolutionBuilder.CreateEmptySolution());
@@ -38,11 +35,7 @@ public class BuildEngineTests
         var diagnosticEngine = TestEngines.DiagnosticEngine(workspaceManager);
         var buildEngine = TestEngines.BuildEngine(workspaceManager, diagnosticEngine);
 
-        var result = await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50);
-
-        Assert.That(result.Outcome, Is.EqualTo(EngineOutcome.InvalidInput));
-        Assert.That(result.Error, Is.Not.Null);
-        Assert.That(result.Error!.Code, Is.EqualTo(EngineErrorCode.BuildNotRun));
+        await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50));
 
         workspaceManager.Dispose();
     }
@@ -83,18 +76,16 @@ public class BuildEngineTests
         var diagnosticEngine = TestEngines.DiagnosticEngine(workspaceManager);
         var buildEngine = TestEngines.BuildEngine(workspaceManager, diagnosticEngine);
 
-        var firstResult = await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50);
-        Assert.That(firstResult.Outcome, Is.EqualTo(EngineOutcome.Success), firstResult.Error?.Message);
-        var firstData = firstResult.Data!;
-        Assert.That(firstData.ErrorCount, Is.Zero, firstData.StdoutTail);
-        Assert.That(firstData.Warnings, Has.Some.Matches<DiagnosticInfo>(w => w.Id == "CS0618"),
-            "first RunFullBuildAsync call must report the Obsolete-sourced CS0618 warning.");
+        var firstResult = await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50);
+        Assert.That(firstResult, Is.Not.Null);
+        Assert.That(firstResult.ErrorCount, Is.Zero, firstResult.StdoutTail);
+        Assert.That(firstResult.Warnings, Has.Some.Matches<DiagnosticInfo>(w => w.Id == "CS0618"),
+            "first RunFullBuildCoreAsync call must report the Obsolete-sourced CS0618 warning.");
 
-        var secondResult = await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50);
-        Assert.That(secondResult.Outcome, Is.EqualTo(EngineOutcome.Success), secondResult.Error?.Message);
-        var secondData = secondResult.Data!;
-        Assert.That(secondData.ErrorCount, Is.Zero, secondData.StdoutTail);
-        Assert.That(secondData.Warnings, Has.Some.Matches<DiagnosticInfo>(w => w.Id == "CS0618"),
-            "second RunFullBuildAsync call (previously an MSBuild incremental-cache no-op) must still report the CS0618 warning, not silently drop it.");
+        var secondResult = await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50);
+        Assert.That(secondResult, Is.Not.Null);
+        Assert.That(secondResult.ErrorCount, Is.Zero, secondResult.StdoutTail);
+        Assert.That(secondResult.Warnings, Has.Some.Matches<DiagnosticInfo>(w => w.Id == "CS0618"),
+            "second RunFullBuildCoreAsync call (previously an MSBuild incremental-cache no-op) must still report the CS0618 warning, not silently drop it.");
     }
 }

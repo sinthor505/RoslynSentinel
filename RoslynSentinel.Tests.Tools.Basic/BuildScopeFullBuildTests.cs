@@ -75,13 +75,12 @@ public class BuildScopeFullBuildTests
             await workspaceManager.LoadSolutionAsync(Path.Combine(root, "ScopeFixture.slnx"));
             var buildEngine = TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager));
 
-            var result = await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50,
+            var result = await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50,
                 level: BuildVerifyLevel.fullBuildThrowaway, scope: ToolScope.project, scopeName: "Good");
 
-            Assert.That(result.Outcome, Is.EqualTo(EngineOutcome.Success), result.Error?.Message);
-            Assert.That(result.Data, Is.Not.Null, result.Error?.Message);
-            Assert.That(result.Data!.Outcome, Is.EqualTo(BuildOutcome.Succeeded), result.Data.StdoutTail);
-            Assert.That(result.Data.ProjectsCompiled, Is.EqualTo(new[] { "Good" }));
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result.Outcome, Is.EqualTo(BuildOutcome.Succeeded), result.StdoutTail);
+            Assert.That(result.ProjectsCompiled, Is.EqualTo(new[] { "Good" }));
         }
         finally
         {
@@ -113,12 +112,11 @@ public class BuildScopeFullBuildTests
             await workspaceManager.LoadSolutionAsync(Path.Combine(root, "ScopeFixture.slnx"));
             var buildEngine = TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager));
 
-            var result = await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50,
+            var result = await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50,
                 level: BuildVerifyLevel.fullBuildThrowaway);
 
-            Assert.That(result.Outcome, Is.EqualTo(EngineOutcome.Success), result.Error?.Message);
-            Assert.That(result.Data, Is.Not.Null, result.Error?.Message);
-            Assert.That(result.Data!.Outcome, Is.EqualTo(BuildOutcome.Failed), result.Data.StdoutTail);
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result.Outcome, Is.EqualTo(BuildOutcome.Failed), result.StdoutTail);
         }
         finally
         {
@@ -150,12 +148,11 @@ public class BuildScopeFullBuildTests
             await workspaceManager.LoadSolutionAsync(Path.Combine(root, "ScopeFixture.slnx"));
             var buildEngine = TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager));
 
-            var result = await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50,
+            var result = await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50,
                 level: BuildVerifyLevel.fullBuildThrowaway, scope: ToolScope.project, scopeName: "Bad");
 
-            Assert.That(result.Outcome, Is.EqualTo(EngineOutcome.Success), result.Error?.Message);
-            Assert.That(result.Data, Is.Not.Null, result.Error?.Message);
-            Assert.That(result.Data!.Outcome, Is.EqualTo(BuildOutcome.Failed), result.Data.StdoutTail);
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result.Outcome, Is.EqualTo(BuildOutcome.Failed), result.StdoutTail);
         }
         finally
         {
@@ -188,13 +185,12 @@ public class BuildScopeFullBuildTests
             var buildEngine = TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager));
             var goodFile = Path.Combine(root, "Good", "GoodValue.cs");
 
-            var result = await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50,
+            var result = await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50,
                 level: BuildVerifyLevel.fullBuildThrowaway, scope: ToolScope.file, scopeName: goodFile);
 
-            Assert.That(result.Outcome, Is.EqualTo(EngineOutcome.Success), result.Error?.Message);
-            Assert.That(result.Data, Is.Not.Null, result.Error?.Message);
-            Assert.That(result.Data!.Outcome, Is.EqualTo(BuildOutcome.Succeeded), result.Data.StdoutTail);
-            Assert.That(result.Data.ProjectsCompiled, Is.EqualTo(new[] { "Good" }));
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result.Outcome, Is.EqualTo(BuildOutcome.Succeeded), result.StdoutTail);
+            Assert.That(result.ProjectsCompiled, Is.EqualTo(new[] { "Good" }));
         }
         finally
         {
@@ -215,7 +211,7 @@ public class BuildScopeFullBuildTests
 
     [Test]
     [NonParallelizable]
-    public async Task FullBuild_UnknownProject_ReturnsBuildNotRunWithListAllHint()
+    public async Task FullBuild_UnknownProject_ThrowsBuildNotRunWithListAllHint()
     {
         var root = Path.Combine(Path.GetTempPath(), "RoslynSentinelScope_" + Guid.NewGuid().ToString("n"));
         Directory.CreateDirectory(root);
@@ -226,13 +222,10 @@ public class BuildScopeFullBuildTests
             await workspaceManager.LoadSolutionAsync(Path.Combine(root, "ScopeFixture.slnx"));
             var buildEngine = TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager));
 
-            var result = await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50,
-                level: BuildVerifyLevel.fullBuildThrowaway, scope: ToolScope.project, scopeName: "Nope");
+            var ex = await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50,
+                level: BuildVerifyLevel.fullBuildThrowaway, scope: ToolScope.project, scopeName: "Nope"));
 
-            Assert.That(result.Outcome, Is.EqualTo(EngineOutcome.InvalidInput));
-            Assert.That(result.Error, Is.Not.Null);
-            Assert.That(result.Error!.Code, Is.EqualTo(EngineErrorCode.BuildNotRun));
-            Assert.That(result.Error.Message, Does.Contain("ListAll"));
+            Assert.That(ex.Message, Does.Contain("ListAll"));
         }
         finally
         {
@@ -253,7 +246,7 @@ public class BuildScopeFullBuildTests
 
     [Test]
     [NonParallelizable]
-    public async Task FullBuild_ProjectScopeWithoutScopeName_ReturnsInvalidInput()
+    public async Task FullBuild_ProjectScopeWithoutScopeName_ThrowsBuildNotRun()
     {
         var root = Path.Combine(Path.GetTempPath(), "RoslynSentinelScope_" + Guid.NewGuid().ToString("n"));
         Directory.CreateDirectory(root);
@@ -264,11 +257,8 @@ public class BuildScopeFullBuildTests
             await workspaceManager.LoadSolutionAsync(Path.Combine(root, "ScopeFixture.slnx"));
             var buildEngine = TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager));
 
-            var result = await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50,
-                level: BuildVerifyLevel.fullBuildThrowaway, scope: ToolScope.project, scopeName: null);
-
-            Assert.That(result.Outcome, Is.EqualTo(EngineOutcome.InvalidInput));
-            Assert.That(result.Error, Is.Not.Null);
+            await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunFullBuildCoreAsync(CancellationToken.None, maxDetails: 50,
+                level: BuildVerifyLevel.fullBuildThrowaway, scope: ToolScope.project, scopeName: null));
         }
         finally
         {
