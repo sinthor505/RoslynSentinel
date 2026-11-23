@@ -124,10 +124,9 @@ internal static class GitHunkParser
     /// <summary>
     /// Splits the new-file line range [from, to] into whole hunks, sub-hunks and unsupported hunks. A hunk wholly inside
     /// the range is whole (same rule as <see cref="SelectByNewLineRange"/>). A hunk that only overlaps the range is cut
-    /// to its in-range lines when it is a pure insertion (OldCount == 0), the one shape whose lines are independent: a
-    /// kept run needs only the old position it was inserted after. Hunks with '-' lines (mixed or pure deletions) that
-    /// overlap partly are deliberately NOT split - which old line pairs with which new line is a judgement call - and are
-    /// returned in <see cref="GitLineSelectionResult.Unsupported"/>.
+    /// to its in-range '+' lines: a pure insertion keeps just the run; a mixed hunk ('-' lines then '+' lines) takes its
+    /// '-' lines only when the range covers its first '+' line (see SliceHunk). Hunks whose body is not exactly that
+    /// shape, or that cannot be cut safely, are returned in <see cref="GitLineSelectionResult.Unsupported"/>.
     /// </summary>
     public static GitLineSelectionResult SelectLines(GitFileDiff diff, int from, int to)
     {
@@ -136,7 +135,7 @@ internal static class GitHunkParser
         var unsupported = new List<GitHunk>();
         foreach (var hunk in straddling)
         {
-            var sub = hunk.OldCount == 0 ? SliceInsertion(hunk, from, to) : null;
+            var sub = SliceHunk(hunk, from, to);
             if (sub != null)
                 subs.Add(sub);
             else
@@ -145,10 +144,17 @@ internal static class GitHunkParser
         return new GitLineSelectionResult(whole, subs, unsupported);
     }
 
-    // Cuts a pure-insertion hunk to the '+' lines whose new line number lies in [from, to]. Lines are copied byte-verbatim
-    // (their own line endings). The "\ No newline at end of file" marker belongs after the hunk's LAST line only, so it
-    // is kept only when that last line is kept. Returns null if the hunk is not a plain run of '+' lines.
-    private static GitHunk? SliceInsertion(GitHunk hunk, int from, int to)
+    // Cuts a hunk shaped '-'* [marker] '+'* [marker] to the '+' lines whose new line number lies in [from, to]. Lines are copied
+    // byte-verbatim (their own line endings). A "\ No newline at end of file" marker belongs to the side of the line it follows, so
+    // the new-side marker is kept only when the hunk's LAST '+' line is kept. Returns null (the hunk is refused) when the body is
+    // not that shape, its line counts disagree with the header, or the cut cannot be expressed safely.
+    //
+    // '-' lines have no new-file line number, so the range selects '-' lines by one deterministic rule: the '-' block is taken (deleted
+    // in the staged patch) if and only if the range includes the hunk's FIRST '+' line (new line NewStart). That gives two shapes:
+    //  (a) '-' block taken: the sub-hunk keeps all '-' lines and a PREFIX of the '+' lines (a longer cut would be a whole hunk).
+    //  (b) '-' block not taken: the '-' lines stay unstaged (they become context) and the kept '+' run becomes a PURE INSERTION placed
+    //      after the last old line of the unselected block. Like `git add -p` splitting a hunk: an unselected '-' turns into context.
+    private static GitHunk? SliceHunk(GitHunk hunk, int from, int to)
     {
         var text = hunk.RawText;
         var lines = EnumerateLines(text).ToList();
@@ -158,36 +164,57 @@ internal static class GitHunkParser
         if (!m.Success)
             return null;
 
-        var body = new List<(int Start, int Length)>();
-        (int Start, int Length)? marker = null;
+        var minus = new List<(int Start, int Length)>();
+        var plus = new List<(int Start, int Length)>();
+        (int Start, int Length)? oldMarker = null;
+        (int Start, int Length)? newMarker = null;
         for (var i = 1; i < lines.Count; i++)
         {
             var firstChar = text[lines[i].Start];
-            if (firstChar == '+' && marker == null)
-                body.Add(lines[i]);
-            else if (firstChar == '\\' && body.Count > 0 && marker == null && i == lines.Count - 1)
-                marker = lines[i];
+            if (firstChar == '-' && plus.Count == 0 && oldMarker == null)
+                minus.Add(lines[i]);
+            else if (firstChar == '+' && newMarker == null)
+                plus.Add(lines[i]);
+            else if (firstChar == '\\' && plus.Count == 0 && minus.Count > 0 && oldMarker == null)
+                oldMarker = lines[i];
+            else if (firstChar == '\\' && plus.Count > 0 && i == lines.Count - 1)
+                newMarker = lines[i];
             else
                 return null;
         }
-        if (body.Count != hunk.NewCount)
+        if (minus.Count != hunk.OldCount || plus.Count != hunk.NewCount)
             return null;
 
         var firstKept = Math.Max(from - hunk.NewStart, 0);
-        var lastKept = Math.Min(to - hunk.NewStart, body.Count - 1);
+        var lastKept = Math.Min(to - hunk.NewStart, plus.Count - 1);
         if (firstKept > lastKept)
             return null;
 
         var keptCount = lastKept - firstKept + 1;
         var newStart = hunk.NewStart + firstKept;
-        var sb = new StringBuilder();
-        sb.Append(CultureInfo.InvariantCulture, $"@@ -{hunk.OldStart},0 +{newStart},{keptCount} @@{m.Groups["h"].Value}\n");
-        for (var i = firstKept; i <= lastKept; i++)
-            sb.Append(text, body[i].Start, body[i].Length);
-        if (lastKept == body.Count - 1 && marker is { } mk)
-            sb.Append(text, mk.Start, mk.Length);
+        var takeMinus = minus.Count > 0 && firstKept == 0;
+        // Shape (b) inserts after an old line; if that line has no trailing newline (old-side marker), the inserted text would be glued
+        // onto it, so that cut is refused rather than staged corrupt.
+        if (minus.Count > 0 && !takeMinus && oldMarker != null)
+            return null;
 
-        return new GitHunk(hunk.Index, hunk.OldStart, 0, newStart, keptCount, hunk.Header, sb.ToString());
+        var oldStart = minus.Count == 0 || takeMinus ? hunk.OldStart : hunk.OldStart + minus.Count - 1;
+        var oldCount = takeMinus ? minus.Count : 0;
+        var sb = new StringBuilder();
+        sb.Append(CultureInfo.InvariantCulture, $"@@ -{oldStart},{oldCount} +{newStart},{keptCount} @@{m.Groups["h"].Value}\n");
+        if (takeMinus)
+        {
+            foreach (var (start, length) in minus)
+                sb.Append(text, start, length);
+            if (oldMarker is { } om)
+                sb.Append(text, om.Start, om.Length);
+        }
+        for (var i = firstKept; i <= lastKept; i++)
+            sb.Append(text, plus[i].Start, plus[i].Length);
+        if (lastKept == plus.Count - 1 && newMarker is { } nm)
+            sb.Append(text, nm.Start, nm.Length);
+
+        return new GitHunk(hunk.Index, oldStart, oldCount, newStart, keptCount, hunk.Header, sb.ToString());
     }
 
     // Rewrites only the new-start number of a hunk's first line, so the body stays byte-exact.

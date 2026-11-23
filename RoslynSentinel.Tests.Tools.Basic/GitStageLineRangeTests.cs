@@ -9,8 +9,9 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 
 /// <summary>
 /// <c>GitImpl.StageHunksAsync</c> with a lineRange against a real temporary repository: a range may cut a hunk made purely of added
-/// lines (two sessions appending to one file form ONE zero-context hunk), the staged bytes stay byte-exact (CRLF), a range that
-/// partly covers a hunk with removed lines is refused with facts and options, and a change to the file's index entry between reading
+/// lines (two sessions appending to one file form ONE zero-context hunk) or a mixed hunk of removed then added lines (the removed
+/// lines go in only when the range covers the first added line), the staged bytes stay byte-exact (CRLF), a cut that cannot be made
+/// safely is refused with facts and options, and a change to the file's index entry between reading
 /// the diff and applying the patch is refused as GitHunkStale. The race is made deterministic with the internal
 /// <c>afterHunkDiffLoaded</c> constructor argument of <see cref="GitImpl"/>.
 /// </summary>
@@ -139,25 +140,150 @@ public class GitStageLineRangeTests
         Assert.That(File.ReadAllText(FilePath), Is.EqualTo(working));
     }
 
-    [Test]
-    public async Task LineRange_PartOfAMixedHunk_IsRefusedWithFactsAndOptions_AndStagesNothingAsync()
+    // ---- mixed hunks (removed lines followed by added lines) ----
+
+    private static string Text(string eol, IEnumerable<string> lines) => string.Concat(lines.Select(l => l + eol));
+
+    private static IEnumerable<string> Numbered(int from, int to) => Enumerable.Range(from, to - from + 1).Select(n => "line " + n);
+
+    // Commits `baseText`, then leaves `workingText` in the working tree.
+    private void ArrangeBaseAndWorking(string baseText, string workingText)
     {
-        var baseText = Lines("line ", 1, 10, "\n");
         File.WriteAllText(FilePath, baseText);
         CommitAll(_dir, "base");
-        var lines = Enumerable.Range(1, 10).Select(n => "line " + n).ToList();
-        lines.RemoveRange(3, 2); // replace lines 4-5 with three new lines: one hunk "-4,2 +4,3"
-        lines.InsertRange(3, ["new 4", "new 5", "new 6"]);
-        File.WriteAllText(FilePath, string.Join('\n', lines) + "\n");
+        File.WriteAllText(FilePath, workingText);
+    }
+
+    // Ten base lines; lines 4-5 are replaced by "new 4", "new 5", "new 6": one zero-context hunk "-4,2 +4,3" (new-file lines 4-6).
+    private (string Working, string Base) ArrangeReplacedLines(string eol)
+    {
+        var baseText = Text(eol, Numbered(1, 10));
+        var working = Text(eol, Numbered(1, 3).Concat(["new 4", "new 5", "new 6"]).Concat(Numbered(6, 10)));
+        ArrangeBaseAndWorking(baseText, working);
+        return (working, baseText);
+    }
+
+    [TestCase("\n")]
+    [TestCase("\r\n")]
+    public async Task LineRange_MixedHunk_RangeCoveringFirstAddedLine_StagesRemovedLinesWithThePrefix_ThenTheRestCompletesTheFileAsync(string eol)
+    {
+        var (working, _) = ArrangeReplacedLines(eol);
+        var impl = NewImpl();
+
+        var result = await StageRangeAsync(impl, "4-5");
+
+        Assert.That(result.IsError, Is.False, result.Error);
+        var expectedIndex = Text(eol, Numbered(1, 3).Concat(["new 4", "new 5"]).Concat(Numbered(6, 10)));
+        Assert.That(IndexText(), Is.EqualTo(expectedIndex), "lines 4-5 are removed and the first two added lines staged; the third added line is not.");
+        Assert.That(File.ReadAllText(FilePath), Is.EqualTo(working), "the working tree is never touched.");
+        Assert.That(result.StagedHunks, Has.Count.EqualTo(1));
+        Assert.That((result.StagedHunks[0].Index, result.StagedHunks[0].NewStart, result.StagedHunks[0].NewCount), Is.EqualTo((1, 4, 2)));
+        Assert.That(result.RemainingUnstagedHunks, Is.EqualTo(1));
+        Assert.That(result.Note, Does.Contain("only in part").And.Contain("lines 4-5").And.Contain("plus its 2 removed lines").And.Contain("stay unstaged"));
+        Assert.That(result.Warning, Is.Null.Or.Empty, "a partial stage is a note, not a degradation.");
+        Assert.That(UnstagedDiff(), Does.Contain("@@ -5,0 +6 @@").And.Contain("+new 6"));
+
+        var second = await StageRangeAsync(impl, "6");
+
+        Assert.That(second.IsError, Is.False, second.Error);
+        Assert.That(IndexText(), Is.EqualTo(working), "staging the remaining added line completes the file.");
+        Assert.That(second.RemainingUnstagedHunks, Is.EqualTo(0));
+        Assert.That(second.Warning, Is.Null.Or.Empty);
+        Assert.That(UnstagedDiff(), Is.Empty);
+    }
+
+    [TestCase("\n")]
+    [TestCase("\r\n")]
+    public async Task LineRange_MixedHunk_RangeMissingFirstAddedLine_KeepsRemovedLinesUnstaged_ThenTheHeadCompletesTheFileAsync(string eol)
+    {
+        var (working, _) = ArrangeReplacedLines(eol);
         var impl = NewImpl();
 
         var result = await StageRangeAsync(impl, "5-6");
 
+        Assert.That(result.IsError, Is.False, result.Error);
+        var expectedIndex = Text(eol, Numbered(1, 5).Concat(["new 5", "new 6"]).Concat(Numbered(6, 10)));
+        Assert.That(IndexText(), Is.EqualTo(expectedIndex), "the removed lines stay in the index; the two added lines are inserted after old line 5.");
+        Assert.That(File.ReadAllText(FilePath), Is.EqualTo(working), "the working tree is never touched.");
+        Assert.That((result.StagedHunks[0].Index, result.StagedHunks[0].NewStart, result.StagedHunks[0].NewCount), Is.EqualTo((1, 5, 2)));
+        Assert.That(result.RemainingUnstagedHunks, Is.EqualTo(1));
+        Assert.That(result.Note, Does.Contain("only in part").And.Contain("lines 5-6").And.Contain("stay unstaged").And.Contain("including its 2 removed lines"));
+        Assert.That(result.Warning, Is.Null.Or.Empty, "a partial stage is a note, not a degradation.");
+        Assert.That(UnstagedDiff(), Does.Contain("@@ -4,2 +4 @@").And.Contain("-line 4").And.Contain("+new 4"));
+
+        var second = await StageRangeAsync(impl, "4");
+
+        Assert.That(second.IsError, Is.False, second.Error);
+        Assert.That(IndexText(), Is.EqualTo(working), "staging the remaining head hunk completes the file.");
+        Assert.That(second.RemainingUnstagedHunks, Is.EqualTo(0));
+        Assert.That(second.Warning, Is.Null.Or.Empty);
+        Assert.That(UnstagedDiff(), Is.Empty);
+    }
+
+    [Test]
+    public async Task LineRange_MixedHunk_OldSideLastLineWithoutNewline_RemovedLinesGoWithThePrefix_ThenTheRestCompletesTheFileAsync()
+    {
+        // The base file's last line has no newline; lines 9-10 are replaced by three lines and a final newline.
+        var baseText = Text("\n", Numbered(1, 9)) + "line 10";
+        var working = Text("\n", Numbered(1, 8).Concat(["new 9", "new 10", "new 11"]));
+        ArrangeBaseAndWorking(baseText, working);
+        var impl = NewImpl();
+
+        var result = await StageRangeAsync(impl, "9-10");
+
+        Assert.That(result.IsError, Is.False, result.Error);
+        Assert.That(IndexText(), Is.EqualTo(Text("\n", Numbered(1, 8).Concat(["new 9", "new 10"]))));
+        Assert.That(result.RemainingUnstagedHunks, Is.EqualTo(1));
+        Assert.That(result.Warning, Is.Null.Or.Empty);
+
+        var second = await StageRangeAsync(impl, "11");
+
+        Assert.That(second.IsError, Is.False, second.Error);
+        Assert.That(IndexText(), Is.EqualTo(working));
+        Assert.That(second.RemainingUnstagedHunks, Is.EqualTo(0));
+        Assert.That(UnstagedDiff(), Is.Empty);
+    }
+
+    [Test]
+    public async Task LineRange_MixedHunk_NewSideLastLineWithoutNewline_MarkerGoesWithTheLastLine_ThenTheHeadCompletesTheFileAsync()
+    {
+        // The working file's last line has no newline; lines 9-10 are replaced by three lines.
+        var baseText = Text("\n", Numbered(1, 10));
+        var working = Text("\n", Numbered(1, 8).Concat(["new 9", "new 10"])) + "new 11";
+        ArrangeBaseAndWorking(baseText, working);
+        var impl = NewImpl();
+
+        var result = await StageRangeAsync(impl, "10-11");
+
+        Assert.That(result.IsError, Is.False, result.Error);
+        Assert.That(IndexText(), Is.EqualTo(baseText + "new 10\nnew 11"), "the inserted run ends the file without a newline, like the working tree.");
+        Assert.That(result.RemainingUnstagedHunks, Is.EqualTo(1));
+        Assert.That(result.Warning, Is.Null.Or.Empty);
+
+        var second = await StageRangeAsync(impl, "9");
+
+        Assert.That(second.IsError, Is.False, second.Error);
+        Assert.That(IndexText(), Is.EqualTo(working));
+        Assert.That(second.RemainingUnstagedHunks, Is.EqualTo(0));
+        Assert.That(UnstagedDiff(), Is.Empty);
+    }
+
+    [Test]
+    public async Task LineRange_MixedHunk_CutThatWouldGlueTextOntoAnUnterminatedOldLine_IsRefusedWithFactsAndOptions_AndStagesNothingAsync()
+    {
+        var baseText = Text("\n", Numbered(1, 9)) + "line 10";
+        var working = Text("\n", Numbered(1, 8).Concat(["new 9", "new 10", "new 11"]));
+        ArrangeBaseAndWorking(baseText, working);
+        var impl = NewImpl();
+
+        // The range misses the first added line, so old line 10 (no newline) would stay and "new 10" would be appended to it.
+        var result = await StageRangeAsync(impl, "10-11");
+
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorKind, Is.EqualTo("GitHunkSelection"));
-        Assert.That(result.Error, Does.Contain("Hunk 1 spans lines 4-6 but only partly lies in 5-6"));
-        Assert.That(result.Error, Does.Contain("purely of added lines"));
-        Assert.That(result.Error, Does.Contain("Widen the range to 4-6"));
+        Assert.That(result.Error, Does.Contain("Hunk 1 spans lines 9-11 but only partly lies in 10-11"));
+        Assert.That(result.Error, Does.Contain("cannot be cut at that range"));
+        Assert.That(result.Error, Does.Contain("Widen the range to 9-11"));
         Assert.That(result.Error, Does.Contain("hunkIds").And.Contain("stage the whole file"));
         Assert.That(result.Error, Does.Not.Contain("must").And.Not.Contain("do not").IgnoreCase, "error text carries facts and options, not policy.");
         Assert.That(result.ErrorDetail, Is.Not.Empty);

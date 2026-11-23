@@ -468,14 +468,148 @@ public class GitHunkParserTests
         Assert.That(withLast, Is.EqualTo(FileHeader + "@@ -10,0 +11,2 @@\n+b\n+c\n\\ No newline at end of file\n"));
     }
 
+    // A mixed hunk: removes old lines 3-4 (a, b) and adds x, y, z at new lines 3-5.
+    private const string MixedTwoThree = "@@ -3,2 +3,3 @@\n-a\n-b\n+x\n+y\n+z\n";
+
     [Test]
-    public void SelectLines_MixedHunkPartlyInRange_IsUnsupportedNotSplit()
+    public void SelectLines_MixedHunkRangeCoversFirstAddedLine_TakesRemovedLinesAndAPrefix()
     {
-        var diff = GitHunkParser.Parse(FileHeader + "@@ -3,2 +3,3 @@\n-a\n-b\n+x\n+y\n+z\n");
+        var diff = GitHunkParser.Parse(FileHeader + MixedTwoThree);
+
+        var selection = GitHunkParser.SelectLines(diff, 3, 4);
+        var patch = GitHunkParser.BuildPatch(diff, selection);
+
+        Assert.That(selection.WholeHunks, Is.Empty);
+        Assert.That(selection.Unsupported, Is.Empty);
+        Assert.That(selection.SubHunks, Has.Count.EqualTo(1));
+        var sub = selection.SubHunks[0];
+        Assert.That((sub.Index, sub.OldStart, sub.OldCount, sub.NewStart, sub.NewCount), Is.EqualTo((1, 3, 2, 3, 2)));
+        Assert.That(patch, Is.EqualTo(FileHeader + "@@ -3,2 +3,2 @@\n-a\n-b\n+x\n+y\n"));
+    }
+
+    [Test]
+    public void SelectLines_MixedHunkRangeEndsOnFirstAddedLine_TakesRemovedLinesAndOneAddedLine()
+    {
+        var diff = GitHunkParser.Parse(FileHeader + MixedTwoThree);
+
+        var patch = GitHunkParser.BuildPatch(diff, GitHunkParser.SelectLines(diff, 1, 3));
+
+        Assert.That(patch, Is.EqualTo(FileHeader + "@@ -3,2 +3,1 @@\n-a\n-b\n+x\n"));
+    }
+
+    [Test]
+    public void SelectLines_MixedHunkRangeMissesFirstAddedLine_KeepsRemovedLinesUnstagedAndInsertsTheRun()
+    {
+        var diff = GitHunkParser.Parse(FileHeader + MixedTwoThree);
+
+        var selection = GitHunkParser.SelectLines(diff, 4, 5);
+        var patch = GitHunkParser.BuildPatch(diff, selection);
+
+        Assert.That(selection.Unsupported, Is.Empty);
+        var sub = selection.SubHunks.Single();
+        Assert.That((sub.Index, sub.OldStart, sub.OldCount, sub.NewStart, sub.NewCount), Is.EqualTo((1, 4, 0, 4, 2)));
+        // Old lines 3-4 stay in the index, so y and z land right after old line 4: new line 5.
+        Assert.That(patch, Is.EqualTo(FileHeader + "@@ -4,0 +5,2 @@\n+y\n+z\n"));
+    }
+
+    [Test]
+    public void SelectLines_MixedHunkMiddleRun_IsAPureInsertionAfterTheLastRemovedLine()
+    {
+        var diff = GitHunkParser.Parse(FileHeader + "@@ -3,2 +3,4 @@\n-a\n-b\n+w\n+x\n+y\n+z\n");
+
+        var selection = GitHunkParser.SelectLines(diff, 4, 5);
+        var patch = GitHunkParser.BuildPatch(diff, selection);
+
+        Assert.That(selection.SubHunks.Single().OldCount, Is.EqualTo(0));
+        Assert.That(patch, Is.EqualTo(FileHeader + "@@ -4,0 +5,2 @@\n+x\n+y\n"));
+    }
+
+    [Test]
+    public void SelectLines_MixedHunkCrlfLines_AreKeptByteExact()
+    {
+        var diff = GitHunkParser.Parse(FileHeader + "@@ -3,2 +3,3 @@\n-a\r\n-b\r\n+x\r\n+y\r\n+z\r\n");
+
+        var taken = GitHunkParser.BuildPatch(diff, GitHunkParser.SelectLines(diff, 3, 4));
+        var left = GitHunkParser.BuildPatch(diff, GitHunkParser.SelectLines(diff, 4, 5));
+
+        Assert.That(taken, Is.EqualTo(FileHeader + "@@ -3,2 +3,2 @@\n-a\r\n-b\r\n+x\r\n+y\r\n"));
+        Assert.That(left, Is.EqualTo(FileHeader + "@@ -4,0 +5,2 @@\n+y\r\n+z\r\n"));
+    }
+
+    [Test]
+    public void SelectLines_MixedHunkOldSideNoNewlineMarker_FollowsTheRemovedLinesOrRefusesTheCut()
+    {
+        var diff = GitHunkParser.Parse(FileHeader + "@@ -3,2 +3,3 @@\n-a\n-b\n\\ No newline at end of file\n+x\n+y\n+z\n");
+
+        var taken = GitHunkParser.BuildPatch(diff, GitHunkParser.SelectLines(diff, 3, 4));
+        var left = GitHunkParser.SelectLines(diff, 4, 5);
+
+        Assert.That(taken, Is.EqualTo(FileHeader + "@@ -3,2 +3,2 @@\n-a\n-b\n\\ No newline at end of file\n+x\n+y\n"));
+        // Old line 4 has no newline, so text inserted after it would be glued onto it: the cut is refused, not staged corrupt.
+        Assert.That(left.SubHunks, Is.Empty);
+        Assert.That(left.Unsupported.Select(h => h.Index), Is.EqualTo(new[] { 1 }));
+    }
+
+    [Test]
+    public void SelectLines_MixedHunkNewSideNoNewlineMarker_KeptOnlyWhenLastAddedLineIsKept()
+    {
+        var diff = GitHunkParser.Parse(FileHeader + "@@ -3,2 +3,3 @@\n-a\n-b\n+x\n+y\n+z\n\\ No newline at end of file\n");
+
+        var withoutLast = GitHunkParser.BuildPatch(diff, GitHunkParser.SelectLines(diff, 3, 4));
+        var withLast = GitHunkParser.BuildPatch(diff, GitHunkParser.SelectLines(diff, 4, 5));
+
+        Assert.That(withoutLast, Is.EqualTo(FileHeader + "@@ -3,2 +3,2 @@\n-a\n-b\n+x\n+y\n"));
+        Assert.That(withLast, Is.EqualTo(FileHeader + "@@ -4,0 +5,2 @@\n+y\n+z\n\\ No newline at end of file\n"));
+    }
+
+    [Test]
+    public void SelectLines_MixedHunkTakenAfterWholeHunk_DeltaUsesPriorHunkCount()
+    {
+        // Hunk 1 inserts p,q at new lines 2-3 (delta +2); hunk 2 replaces old lines 5-6 with x,y,z at new lines 7-9.
+        var diff = GitHunkParser.Parse(FileHeader + "@@ -1,0 +2,2 @@\n+p\n+q\n" + "@@ -5,2 +7,3 @@\n-a\n-b\n+x\n+y\n+z\n");
+
+        var selection = GitHunkParser.SelectLines(diff, 2, 8);
+        var patch = GitHunkParser.BuildPatch(diff, selection);
+
+        Assert.That(selection.WholeHunks, Is.EqualTo(new[] { 1 }));
+        Assert.That(selection.SubHunks.Select(h => h.Index), Is.EqualTo(new[] { 2 }));
+        Assert.That(patch, Is.EqualTo(FileHeader + "@@ -1,0 +2,2 @@\n+p\n+q\n" + "@@ -5,2 +7,2 @@\n-a\n-b\n+x\n+y\n"));
+    }
+
+    [Test]
+    public void SelectLines_MixedHunkCutBeforeWholeHunk_DeltaUsesSubHunkCountNotOriginal()
+    {
+        // Hunk 1 replaces old 3-4 with x,y,z (new 3-5, net +1); hunk 2 inserts q after old line 10, new line 12.
+        var diff = GitHunkParser.Parse(FileHeader + MixedTwoThree + "@@ -10,0 +12 @@\n+q\n");
+
+        var selection = GitHunkParser.SelectLines(diff, 4, 12);
+        var patch = GitHunkParser.BuildPatch(diff, selection);
+
+        Assert.That(selection.WholeHunks, Is.EqualTo(new[] { 2 }));
+        // Only y,z are staged (the '-' lines stay), so the index grew by 2 and q lands at 10 + 1 + 2 = 13.
+        Assert.That(patch, Is.EqualTo(FileHeader + "@@ -4,0 +5,2 @@\n+y\n+z\n" + "@@ -10,0 +13 @@\n+q\n"));
+    }
+
+    [Test]
+    public void SelectLines_MixedHunkWithInterleavedBody_IsUnsupported()
+    {
+        var diff = GitHunkParser.Parse(FileHeader + "@@ -3,2 +3,3 @@\n-a\n+x\n-b\n+y\n+z\n");
 
         var selection = GitHunkParser.SelectLines(diff, 4, 5);
 
         Assert.That(selection.WholeHunks, Is.Empty);
+        Assert.That(selection.SubHunks, Is.Empty);
+        Assert.That(selection.Unsupported.Select(h => h.Index), Is.EqualTo(new[] { 1 }));
+    }
+
+    [Test]
+    public void SelectLines_MixedHunkWhoseLineCountsDisagreeWithTheHeader_IsUnsupported()
+    {
+        // The header promises three added lines; the body has two.
+        var diff = GitHunkParser.Parse(FileHeader + "@@ -3,2 +3,3 @@\n-a\n-b\n+x\n+y\n");
+
+        var selection = GitHunkParser.SelectLines(diff, 4, 5);
+
         Assert.That(selection.SubHunks, Is.Empty);
         Assert.That(selection.Unsupported.Select(h => h.Index), Is.EqualTo(new[] { 1 }));
     }

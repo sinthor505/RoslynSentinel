@@ -2226,7 +2226,7 @@ public class GitImpl : IGitOperations
 
     // Resolves hunkIds (guarded by the fingerprint) or lineRange to the selection to stage. Returns null on success with
     // the selection in `selection`; otherwise the classified refusal. Exactly one of the two is non-blank. A lineRange may cut
-    // a hunk made purely of added lines (a sub-hunk); a partly covered hunk that also removes lines is refused.
+    // a hunk (a sub-hunk) whose body is a run of removed lines followed by a run of added lines; a partly covered hunk of any other shape is refused.
     private static (string Kind, string Error, string Detail)? SelectHunks(
         GitFileDiff diff, string path, string? hunkIds, string? hunkFingerprint, string? lineRange, out GitLineSelectionResult selection)
     {
@@ -2267,7 +2267,7 @@ public class GitImpl : IGitOperations
             });
             var unsupportedIds = string.Join(", ", picked.Unsupported.Select(h => h.Index));
             return (GitErrorCodes.HunkSelection,
-                $"{string.Join(' ', parts)} A hunk can be staged in part only when it is made purely of added lines; hunk {unsupportedIds} also removes lines. " +
+                $"{string.Join(' ', parts)} The body of hunk {unsupportedIds} is not a run of removed lines followed by a run of added lines (or its cut would join text onto a final line without a newline), so it cannot be cut at that range. " +
                 $"Widen the range to {SpanText(lo, hi)} to take the whole hunk, pass hunkIds from {ToolCallHint.Call("Git", ("operation", "hunks"), ("paths", path))}, " +
                 $"or stage the whole file with {ToolCallHint.Call("Git", ("operation", "stage"), ("paths", path))}. {DescribeHunkSpans(diff)} Nothing was staged.",
                 GitErrorDetails.HunkSelection);
@@ -2283,7 +2283,8 @@ public class GitImpl : IGitOperations
     }
 
     // Hunks left in the file after staging `selection`: a whole hunk is gone; a sub-hunk leaves the lines of its hunk it did not take (a head
-    // before it and a tail after it are separate zero-context hunks); every other hunk stays.
+    // before it and a tail after it are separate zero-context hunks); every other hunk stays. For a mixed hunk cut with its removed lines left unstaged
+    // (sub.NewStart > original.NewStart), the head is the unstaged '-' lines plus the head '+' lines: one hunk, which the same test counts.
     private static int ExpectedRemainingHunks(GitFileDiff before, GitLineSelectionResult selection)
     {
         var remaining = before.Hunks.Count - selection.WholeHunks.Count - selection.SubHunks.Count;
@@ -2309,8 +2310,14 @@ public class GitImpl : IGitOperations
         foreach (var sub in selection.SubHunks)
         {
             var original = before.Hunks[sub.Index - 1];
+            var counts = $"{sub.NewCount} of {original.NewCount} added lines";
+            if (sub.OldCount > 0)
+                counts += $", plus its {sub.OldCount} removed lines";
+            var rest = original.OldCount > 0 && sub.OldCount == 0
+                ? $"The other lines of that hunk stay unstaged, including its {original.OldCount} removed lines."
+                : "The other lines of that hunk stay unstaged.";
             notes.Add($"Hunk {sub.Index} (new-file lines {SpanText(original.NewStart, original.NewStart + original.NewCount - 1)}) was staged only in part: " +
-                      $"lines {SpanText(sub.NewStart, sub.NewStart + sub.NewCount - 1)} ({sub.NewCount} of {original.NewCount} added lines). The other lines of that hunk stay unstaged.");
+                      $"lines {SpanText(sub.NewStart, sub.NewStart + sub.NewCount - 1)} ({counts}). {rest}");
         }
         return notes;
     }
