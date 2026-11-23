@@ -237,14 +237,14 @@ public class ConstructionSiteFindingsTests
     [Category("ConstructionSiteFindings")]
     public async Task SearchCallers_IncludeTestsFalse_DropsFindingsInTestProjects()
     {
-        var hidden = await _relationships.FindReferences("construction sites hidden by includeTests false", "Widget", FindReferencesKind.callers, filePath: null, contextSnippet: WidgetCtorSnippet, includeTests: false);
-        var shown = await _relationships.FindReferences("construction sites shown by includeTests true", "Widget", FindReferencesKind.callers, filePath: null, contextSnippet: WidgetCtorSnippet, includeTests: true);
+        var hidden = await _relationships.FindReferences("construction sites hidden by includeTests false", "Widget", FindReferencesKind.callers, filePath: null, includeTests: false);
+        var shown = await _relationships.FindReferences("construction sites shown by includeTests true", "Widget", FindReferencesKind.callers, filePath: null, includeTests: true);
 
         Assert.That(hidden.IsError, Is.False, hidden.ErrorData?.Message);
         Assert.That(shown.IsError, Is.False, shown.ErrorData?.Message);
         Assert.That(LinesOf(hidden.Findings, "Reflective construction"), Is.Empty, "SiteProj is a test project, so its reflective site is dropped when includeTests is false");
         Assert.That(LinesOf(hidden.Findings, "DI registration"), Is.Empty, "SiteProj is a test project, so its DI sites are dropped when includeTests is false");
-        Assert.That(LinesOf(shown.Findings, "Reflective construction"), Is.EqualTo(new[] { 7 }), "includeTests true keeps the reflective site, so the test is not vacuous");
-        Assert.That(LinesOf(shown.Findings, "DI registration"), Is.EqualTo(new[] { 8, 9, 10 }), "includeTests true keeps the DI sites, so the test is not vacuous");
+        Assert.That(LinesOf(shown.Findings, "Reflective construction"), Is.EqualTo(new[] { 7 }), "Same expectation as SearchReferences_OnType_ListsBothKindsAsFindings, so the test is not vacuous");
+        Assert.That(LinesOf(shown.Findings, "DI registration"), Is.EqualTo(new[] { 8, 9, 10 }), "Same expectation as SearchReferences_OnType_ListsBothKindsAsFindings, so the test is not vacuous");
     }
 }

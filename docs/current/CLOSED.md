@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Agent runner reports recorded and started turns separately - resolved (2026-11-22)
+
+Agent runner reports recorded and started turns separately (2026-11-22) - run 20261122-101614-163 printed turns=11 vs `Summary.TurnCount` 10: `ModelAgentRunner` increments turnNumber before the model call (:347), a wall-clock cancel mid-call (:379-386) drops the turn, and :768 still returns it; decided 2026-11-22: the result carries both (recorded = transcript count, started), the ImplementationScenario outcome line (`ImplementationScenarioAgentTests.cs:165`) and the runner log (:757) print `turns=<recorded> started=<started>`; acceptance: a unit test cancelling mid-call asserts recorded == Summary.TurnCount and started == recorded + 1; Small
+
+Evidence: punchlist #13 d571dae0: AgentRunResult.TurnCount = recorded, StartedTurnCount; RunnerToolHostTests.WallClockCancelMidCall_RecordedTurnsExcludeTheDroppedTurn; ErrorVariants 22/22, ModelEval runner classes 38/38, SubAgent 11/11 green
+
 ## Git(status) rename hint joins chained MoveFile blobs - resolved (2026-11-22)
 
 Git(status) rename hint joins chained MoveFile blobs (2026-11-22) - in `GitStatusRenameHints.ReadMovePairs` (:166, code TODO) follow Destination -> Source links (cycle-safe) so A->B plus B->C yields A->C; acceptance: a Tools.Basic test with two move blobs asserts the A -> C hint; Small
