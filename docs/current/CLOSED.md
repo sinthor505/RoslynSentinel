@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Stale eval Lean count in FilteringToolHostTests - resolved (2026-11-23)
+
+Fix the stale eval Lean count in `FilteringToolHostTests.cs:95` (2026-11-22) - asserts 18 entries but `AgentToolAllowLists.Lean` has 19 since ReplaceRange joined (`AgentToolAllowLists.cs:12-14`); red but unseen because Tests.PlanStepRunner is excluded from full runs; acceptance: `PlanStepRunnerSurface_IsLeanPlusGetDiagnostics` passes; Small
+
+Evidence: 8595456d; PlanStepRunnerSurface_IsLeanPlusGetDiagnostics passes (Tests.Harness 79/79 at 8595456d); surfaced by the #27 move, the test now runs in full runs
+
 ## Plan: Persist enabled toolsets per Claude Code tab across server restarts, with McpServerControl restart options - resolved (2026-11-23)
 
 Plan: Persist enabled toolsets per Claude Code tab across server restarts, with McpServerControl restart options - [doc](plans/closed/plan_tab_scoped_toolset_persistence.md)
