@@ -13,7 +13,10 @@ public record DiagnosticSummary(
     BuildResult? BuildVerification = null,
     // Absolute paths of every file with an error, uncapped, for last-writer findings. Not sent: Details is the wire list.
     [property: JsonIgnore] IReadOnlyList<string>? ErrorFilePaths = null
-);
+) : IOperationResult
+{
+    ResultStatus IOperationResult.Status => ResultStatus.Success;
+}
 
 public class DiagnosticEngine
 {
@@ -32,7 +35,7 @@ public class DiagnosticEngine
         _logger = logger;
     }
 
-    public async Task<EngineResultWrapper<DiagnosticSummary>> GetFileDiagnosticsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
+    public async Task<DiagnosticSummary> GetFileDiagnosticsCoreAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = DocumentLookup.RequireDocument(solution, filePath);
@@ -40,14 +43,18 @@ public class DiagnosticEngine
         var diagnostics = semanticModel?.GetDiagnostics(null, cancellationToken) ?? Enumerable.Empty<Diagnostic>();
 
         var list = diagnostics.Select(d => d.ToInfo() with { Project = document.Project.Name }).ToList();
-        return new EngineResultWrapper<DiagnosticSummary>(EngineOutcome.Success, new DiagnosticSummary(
+        return new DiagnosticSummary(
             list.Count(d => d.Severity == "Error"),
             list.Count(d => d.Severity == "Warning"),
             list
-        ));
+        );
     }
 
-    public async Task<EngineResultWrapper<DiagnosticSummary>> GetProjectDiagnosticsAsync(string projectName, CancellationToken cancellationToken = default)
+    // Transitional shims (plan_remove_engine_result_wrapper.md): removed in Step 11 once callers use the Core methods.
+    [Obsolete("Use GetFileDiagnosticsCoreAsync")]
+    public async Task<EngineResultWrapper<DiagnosticSummary>> GetFileDiagnosticsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default) => new EngineResultWrapper<DiagnosticSummary>(EngineOutcome.Success, await GetFileDiagnosticsCoreAsync(filePath, cancellationToken));
+
+    public async Task<DiagnosticSummary> GetProjectDiagnosticsCoreAsync(string projectName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var project = ProjectLookup.FindProject(solution, projectName) ?? throw SolutionStructureEngine.ProjectNotFound(projectName, solution);
@@ -55,12 +62,15 @@ public class DiagnosticEngine
         var diagnostics = compilation?.GetDiagnostics(cancellationToken) ?? Enumerable.Empty<Diagnostic>();
 
         var list = diagnostics.Select(d => d.ToInfo() with { Project = project.Name }).ToList();
-        return new EngineResultWrapper<DiagnosticSummary>(EngineOutcome.Success, new DiagnosticSummary(
+        return new DiagnosticSummary(
             list.Count(d => d.Severity == "Error"),
             list.Count(d => d.Severity == "Warning"),
             list
-        ));
+        );
     }
+
+    [Obsolete("Use GetProjectDiagnosticsCoreAsync")]
+    public async Task<EngineResultWrapper<DiagnosticSummary>> GetProjectDiagnosticsAsync(string projectName, CancellationToken cancellationToken = default) => new EngineResultWrapper<DiagnosticSummary>(EngineOutcome.Success, await GetProjectDiagnosticsCoreAsync(projectName, cancellationToken));
 
     // Diagnostic IDs that are false positives in Blazor/Razor projects because Roslyn's
     // static workspace doesn't run the Razor source generator (which produces App, Routes, etc.)
@@ -86,7 +96,7 @@ public class DiagnosticEngine
     /// the cap. File paths are made relative to the solution root for compact output.
     /// Filters Blazor source-generator false positives (CS0234/CS0246/CS0103).
     /// </summary>
-    public async Task<EngineResultWrapper<DiagnosticSummary>> GetSolutionDiagnosticsAsync(
+    public async Task<DiagnosticSummary> GetSolutionDiagnosticsCoreAsync(
         int maxDetails = 50,
         CancellationToken cancellationToken = default)
     {
@@ -141,6 +151,9 @@ public class DiagnosticEngine
                 "", 0, 0, 0, 0));
         }
 
-        return new EngineResultWrapper<DiagnosticSummary>(EngineOutcome.Success, new DiagnosticSummary(totalErrors, totalWarnings, details, ErrorFilePaths: errorFilePaths.ToList()));
+        return new DiagnosticSummary(totalErrors, totalWarnings, details, ErrorFilePaths: errorFilePaths.ToList());
     }
+
+    [Obsolete("Use GetSolutionDiagnosticsCoreAsync")]
+    public async Task<EngineResultWrapper<DiagnosticSummary>> GetSolutionDiagnosticsAsync(int maxDetails = 50, CancellationToken cancellationToken = default) => new EngineResultWrapper<DiagnosticSummary>(EngineOutcome.Success, await GetSolutionDiagnosticsCoreAsync(maxDetails, cancellationToken));
 }
