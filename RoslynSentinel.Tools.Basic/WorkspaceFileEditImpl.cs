@@ -763,6 +763,14 @@ public class WorkspaceFileEditImpl
             {
                 int from = Math.Max(1, startLine ?? 1);
                 int to = Math.Min(totalLines, endLine ?? totalLines);
+                if (from <= totalLines && from > to)
+                {
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsError = true,
+                        ErrorData = InvertedRangeError(from, to)
+                    };
+                }
                 if (from > totalLines || from > to)
                 {
                     return new SentinelCallToolResult<object>()
@@ -861,6 +869,11 @@ public class WorkspaceFileEditImpl
         }
     }
 
+    private static ResultError InvertedRangeError(int from, int to)
+    {
+        return new ResultError(ToolErrorCode.InvalidArgument, $"ReadFile: the range is inverted: startLine {from} is greater than endLine {to}. Options: startLine {to}, endLine {from} reads lines {to}-{from}.");
+    }
+
     private Task RecordWholeFileObservedAsync(FilePathWrapper path, CancellationToken cancellationToken) =>
         _workspaceManager.RecordWholeFileObservedAsync(path, cancellationToken);
 
@@ -957,7 +970,14 @@ public class WorkspaceFileEditImpl
             {
                 int from = Math.Max(1, startLine ?? 1);
                 int to = Math.Min(totalLines, endLine ?? totalLines);
-                // TODO an inverted range (from > to) is reported as "out of bounds"; say the range is inverted and give the swapped call (an Ornith run repeated startLine 409/endLine 215 verbatim after this text); same at ReadFileWithoutSolutionAsync
+                if (from <= totalLines && from > to)
+                {
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsError = true,
+                        ErrorData = InvertedRangeError(from, to)
+                    };
+                }
                 if (from > totalLines || from > to)
                 {
                     return new SentinelCallToolResult<object>()

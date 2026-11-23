@@ -168,6 +168,33 @@ public class ReadFileRecordsObservedTests
     }
 
     [Test]
+    public async Task InvertedRange_ReturnsSwappedCallHint_RecordsNothing()
+    {
+        var path = Path.Combine(_dir, "Foo.cs");
+        UseSolutionWithDocument(path, new string('\n', 60));
+
+        var result = await _tools.ReadFileTool(reason: "test observed inverted range", path, startLine: 40, endLine: 10);
+
+        Assert.That(result.IsError, Is.True);
+        var error = result.ErrorData as ResultError;
+        Assert.That(error?.Message, Does.Contain("the range is inverted").And.Contain("startLine 10, endLine 40 reads lines 10-40"));
+        Assert.That(TryObserved(path, out _), Is.False, "A refused range must not record an observed hash.");
+    }
+
+    [Test]
+    public async Task StartLinePastEof_KeepsOutOfBoundsText()
+    {
+        var path = Path.Combine(_dir, "Foo.cs");
+        UseSolutionWithDocument(path, Lines);
+
+        var result = await _tools.ReadFileTool(reason: "test observed start line past eof", path, startLine: 500, endLine: 510);
+
+        Assert.That(result.IsError, Is.True);
+        var error = result.ErrorData as ResultError;
+        Assert.That(error?.Message, Does.Contain("out of bounds"));
+    }
+
+    [Test]
     public async Task FileNotFound_InSolution_RecordsNothing()
     {
         var present = Path.Combine(_dir, "Foo.cs");
