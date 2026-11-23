@@ -95,6 +95,16 @@ public sealed class ModelAgentRunner
         get; set;
     }
 
+    /// <summary>
+    /// Process-wide workflow-contract stamp set once by the ModelEval assembly setup; RunCoreAsync copies it into each new transcript.
+    /// Null everywhere else (PlanStepRunner and sub-agent runs), so their transcripts omit the contract fields.
+    /// </summary>
+    // Intentional deviation: a mutable static. One stamp per test process, set before any run.
+    public static (string Hash, string Placement)? ContractStamp
+    {
+        get; set;
+    }
+
     private readonly LmStudioAgentClient _llm;
     private readonly IAgentToolHost _toolHost;
     private readonly int _turnCap;
@@ -270,6 +280,11 @@ public sealed class ModelAgentRunner
             transcript.WorkingTreeDirty = stamp.Dirty;
             transcript.ErrorPolicyMode = stamp.ErrorPolicyMode;
             transcript.ErrorPolicyHash = stamp.ErrorPolicyHash;
+        }
+        if (ContractStamp is { } contractStamp)
+        {
+            transcript.ContractHash = contractStamp.Hash;
+            transcript.ContractPlacement = contractStamp.Placement;
         }
         transcript.Tools.AddRange(toolDefinitions.Select(t => t.Name));
         transcript.ToolDescriptions = new Dictionary<string, string>(StringComparer.Ordinal);

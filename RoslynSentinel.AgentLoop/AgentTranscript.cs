@@ -79,6 +79,26 @@ public sealed class AgentTranscript
     }
 
     /// <summary>
+    /// Hash of the workflow-contract text the run used (first 12 hex of SHA-256).
+    /// Null means the run was not stamped, so the property is omitted from the JSON.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ContractHash
+    {
+        get; set;
+    }
+
+    /// <summary>
+    /// Where the workflow-contract Endings were placed: "system" or "system+user".
+    /// Null means the run was not stamped, so the property is omitted from the JSON.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ContractPlacement
+    {
+        get; set;
+    }
+
+    /// <summary>
     /// LM Studio model key the run used, stamped from the client by <see cref="ModelAgentRunner.RunAsync"/>.
     /// Null means the transcript predates this field, so the property is omitted from the JSON.
     /// </summary>
