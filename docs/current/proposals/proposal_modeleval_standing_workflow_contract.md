@@ -138,8 +138,9 @@ stop, make no further changes and list what you wrote.
 4. The server rejects an edit that adds a compiler error and lists the errors.
    - Error in code you may change: correct your edit, or reorder edits so each compiles.
    - Error that shows a Condition fails: that is the answer. Take the BLOCKED ending.
-5. Check each Done-when item once: quick build of the whole solution, then re-read the
-   changed code and confirm nothing unrelated changed.
+5. Check each Done-when item once: run the tests Done when names with RunTest, run a quick
+   build of the whole solution, then re-read the changed code and confirm nothing unrelated
+   changed.
 
 ## When a tool call fails
 Read the error and change something before retrying. A named file or symbol that does not
@@ -249,6 +250,15 @@ Rules for every new or migrated scenario:
 7. **Cold-read review before a scenario lands.** A fresh agent gets only the rendered prompt (never the
    grader or fixture answers) and lists its interpretations and the questions it would ask. Each question
    is answered in the prompt or accepted as a passing variant.
+8. **One declared axis per scenario** (proposal_modeleval_test_axes_and_aligned_grading.md section 1).
+   The scenario definition names its primary axis; the other axes are held near zero. A tool-specific
+   instruction ("Use the ReplaceSnippet tool") belongs only in a `ToolUse` scenario, where the prompt
+   states it as a requirement and the grader checks it; elsewhere the model picks its tools.
+9. **Every scenario runs tests.** Each `Done when` names at least one fixture test the model runs with
+   RunTest (older scenarios that told the model to run tests saw models do it).
+
+Audit of the first slice against these rules:
+[finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md](../findings/finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md).
 
 ### 4. Eval tool surface: `validateOnApply` hidden
 
