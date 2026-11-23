@@ -109,7 +109,12 @@ public static class ValidateAndApplyHelper
         // TODO no caller passes tryAutoCorrect yet: the helper-based tools (Member, MethodSignature, MoveMember, refactorings) call EditImpactGate.Describer only; wire them like ReplaceSnippet (NearMissAutoCorrector) if the eval arms need auto-correction there
         Func<DiagnosticReport, CancellationToken, Task<NearMissCorrection?>>? tryAutoCorrect = null,
         // Forwarded to the chokepoint: writes the given text byte-exact (skips only EOL/BOM normalization; every other guard still applies). For MoveFile.
-        bool verbatim = false)
+        bool verbatim = false,
+        // The committed solution the caller already compiled exactly `changes` (and removePaths/deletePaths) against, error-free. When the workspace's committed
+        // solution is still that same instance, this helper skips its own whole-set compile; otherwise (the workspace moved on) it compiles as usual. Everything
+        // else still runs: pre-images, expectedEdits tripwire, dry run, MarkGatePassed (so the chokepoint re-validates after a foreign write), and the chokepoint's own
+        // drift, stale-read, EOL and ledger checks. For MoveFile(copyAndObsolete), whose migration ends with a clean compile of the exact set. Null (default) = always compile.
+        Solution? preValidatedAgainst = null)
     {
         // The pre-images feed the per-file changed-line counts and the collateral-change tripwire below.
         // EOL conversion is done by the chokepoint (PersistentWorkspaceManager.ApplyProposedChangesAsync).
@@ -173,7 +178,11 @@ public static class ValidateAndApplyHelper
             allRemovePaths = deletePaths == null
                 ? removePaths
                 : (removePaths ?? []).Concat(deletePaths).ToList();
-            validation = await validationEngine.ValidateChangesAsync(changes, allRemovePaths, cancellationToken);
+            var skipCompile = preValidatedAgainst is not null
+                && ReferenceEquals(await workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken), preValidatedAgainst);
+            validation = skipCompile
+                ? new DiagnosticReport(false, [])
+                : await validationEngine.ValidateChangesAsync(changes, allRemovePaths, cancellationToken);
         }
         // TODO cancellation: ToolErrorMapper maps OCE to a Cancelled result; decide rethrow vs result; see docs/current/proposals/proposal_throw_typed_exceptions_not_failure_results.md S1a
         catch (Exception ex)

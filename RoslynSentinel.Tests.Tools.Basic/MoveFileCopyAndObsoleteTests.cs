@@ -321,4 +321,95 @@ public sealed class MoveFileCopyAndObsoleteTests
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         Assert.That(result.SuccessData!.Description, Does.Contain("own static state: Tally"));
     }
+
+    // Counts the instance-form compiles (the chokepoint wrapper's compile gate goes through ValidateChangesWithCandidateAsync). The migration compiles through the
+    // static ValidationEngine entry point, which this spy does not see: a count of 0 here means the wrapper added no compile on top of the migration's own.
+    private sealed class CountingValidationEngine : ValidationEngine
+    {
+        private int _compiles;
+
+        public CountingValidationEngine(ISolutionProvider workspaceManager)
+            : base(workspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance)
+        {
+        }
+
+        public int Compiles => Volatile.Read(ref _compiles);
+
+        public override Task<ValidationCandidateResult> ValidateChangesWithCandidateAsync(IReadOnlyDictionary<FilePathWrapper, string> fileChanges, IReadOnlyCollection<FilePathWrapper>? removePaths = null, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _compiles);
+            return base.ValidateChangesWithCandidateAsync(fileChanges, removePaths, cancellationToken);
+        }
+    }
+
+    private static WholeFileWriteTools BuildToolsWith(IWorkspaceManager manager, ValidationEngine validationEngine) =>
+        Battery.Basic.TestTools.WholeFileWriteTools(manager, Battery.Basic.TestTools.WorkspaceTools(manager), validationEngine, Battery.Basic.TestEngines.DiffEngine(), NullLogger<WholeFileWriteTools>.Instance, Battery.Basic.TestEngines.SymbolNavigationEngine(manager, NullLogger<SymbolNavigationEngine>.Instance));
+
+    [Test]
+    public async Task CopyAndObsolete_Success_AddsNoSecondCompileOnTopOfTheMigrationsAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var manager = await LoadAsync(fixture);
+        var spy = new CountingValidationEngine(manager);
+        var tools = BuildToolsWith(manager, spy);
+        await SeedAsync(fixture, manager,
+            (Path.Combine(CoreFolder, "Legacy", "Widget.cs"), WidgetText()),
+            (Path.Combine(CoreFolder, "Consumers", "Good.cs"), CallerText("Good")));
+
+        var result = await CopyAsync(tools, PathIn(fixture, CoreFolder, "Legacy", "Widget.cs"), PathIn(fixture, CoreFolder, "Modern", "Widget.cs"));
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(spy.Compiles, Is.EqualTo(0), "The migration already compiled this exact set; the chokepoint wrapper must not compile it again.");
+        Assert.That(File.ReadAllText(PathIn(fixture, CoreFolder, "Consumers", "Good.cs")), Does.Contain($"using {NewNamespace};"));
+        Assert.That(File.Exists(PathIn(fixture, CoreFolder, "Modern", "Widget.cs")), Is.True);
+    }
+
+    [Test]
+    public async Task ValidateAndApply_PreValidatedAgainstTheCommittedSolution_SkipsTheCompileAndAnotherSolutionStillCompilesAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var manager = await LoadAsync(fixture);
+        var spy = new CountingValidationEngine(manager);
+        var committed = await manager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
+        var broken = new DocumentChangeSet { [PathIn(fixture, CoreFolder, "Modern", "Broken.cs")] = Join("\r\n", $"namespace {NewNamespace};", "", "public class Broken", "{", "    public int Value = ;", "}") };
+
+        var skipped = await ValidateAndApplyHelper.ValidateAndApplyAsync(spy, manager, NullLogger.Instance, broken, "spy_test", dryRun: true, preValidatedAgainst: committed);
+
+        Assert.That(skipped.Error, Is.Null, "The caller vouched for the text, so the wrapper trusts it while the committed solution is unchanged.");
+        Assert.That(spy.Compiles, Is.EqualTo(0));
+
+        // The workspace moved on (a different Solution instance): the vouching is void and the wrapper compiles and refuses as before.
+        var moved = committed.Projects.First().AddDocument("Spacer.cs", "class Spacer { }").Project.Solution;
+        var refused = await ValidateAndApplyHelper.ValidateAndApplyAsync(spy, manager, NullLogger.Instance, broken, "spy_test", dryRun: true, preValidatedAgainst: moved);
+
+        Assert.That(refused.Error?.ErrorCode, Is.EqualTo(ToolErrorCode.ValidationFailed));
+        Assert.That(spy.Compiles, Is.EqualTo(1));
+
+        var unvouched = await ValidateAndApplyHelper.ValidateAndApplyAsync(spy, manager, NullLogger.Instance, broken, "spy_test", dryRun: true);
+
+        Assert.That(unvouched.Error?.ErrorCode, Is.EqualTo(ToolErrorCode.ValidationFailed), "Without the parameter every caller compiles as before.");
+        Assert.That(spy.Compiles, Is.EqualTo(2));
+    }
+
+    [Test]
+    public async Task CopyAndObsolete_CopyThatBreaksTheBuild_IsRefusedAsValidationFailedAndWritesNothingAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var manager = await LoadAsync(fixture);
+        var spy = new CountingValidationEngine(manager);
+        var tools = BuildToolsWith(manager, spy);
+        // Modern already declares Widget in another file, so the copy duplicates it (CS0101) in the base set.
+        await SeedAsync(fixture, manager,
+            (Path.Combine(CoreFolder, "Legacy", "Widget.cs"), WidgetText()),
+            (Path.Combine(CoreFolder, "Modern", "Existing.cs"), Join("\r\n", $"namespace {NewNamespace};", "", "public class Widget", "{", "}")));
+        var source = PathIn(fixture, CoreFolder, "Legacy", "Widget.cs");
+        var destination = PathIn(fixture, CoreFolder, "Modern", "Widget.cs");
+        var before = File.ReadAllText(source);
+
+        var result = await CopyAsync(tools, source, destination);
+
+        AssertRefused(result, ToolErrorCode.ValidationFailed);
+        Assert.That(File.ReadAllText(source), Is.EqualTo(before));
+        Assert.That(File.Exists(destination), Is.False);
+    }
 }

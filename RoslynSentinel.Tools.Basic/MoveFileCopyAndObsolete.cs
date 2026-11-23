@@ -64,11 +64,15 @@ internal static class MoveFileCopyAndObsolete
         // tell a later read of the source path that the file moved. FileMoveMemory is not recorded for the same reason (the old path still exists).
         // verbatim: the engine texts carry their BOM and line endings as they must be written (the changed callers' BOM is restored from disk above, because
         // a workspace document's text does not hold it), so the chokepoint must not normalize them.
-        // TODO the compile gate here compiles a change set that CopyAndObsoleteMigration already compiled error-free; a pre-validated apply path would save one whole-set compile
+        // preValidatedAgainst: a migration without a refusal always ends on a clean compile of exactly this set (the loop breaks only on a clean round or a clean
+        // final compile; the fall-back set is the base set, which was compiled first), against `solution`. The only difference is a BOM char put back in front of a
+        // caller's text above, which the compiler reads as whitespace. The helper skips its duplicate compile only while the committed solution is still that instance;
+        // the chokepoint's re-validation after a foreign write, drift and stale-read checks still run.
         var apply = await ValidateAndApplyHelper.ValidateAndApplyAsync(
             validationEngine, workspaceManager, logger, changes, OperationName,
             cancellationToken: cancellationToken,
             verbatim: true,
+            preValidatedAgainst: solution,
             describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, symbolNavigationEngine, ct, isToolActive: activeToolSurface is null ? null : activeToolSurface.IsCallable),
             describeEditImpact: EditImpactGate.Describer(workspaceManager, changes, activeToolSurface));
 

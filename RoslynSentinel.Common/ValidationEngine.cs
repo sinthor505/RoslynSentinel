@@ -96,7 +96,8 @@ public class ValidationEngine
     /// <see cref="ValidateChangesAsync(IReadOnlyDictionary{FilePathWrapper, string}, IReadOnlyCollection{FilePathWrapper}?, CancellationToken)"/>
     /// does, and also returns the candidate Solution that was compiled.
     /// </summary>
-    public async Task<ValidationCandidateResult> ValidateChangesWithCandidateAsync(IReadOnlyDictionary<FilePathWrapper, string> fileChanges,
+    // virtual: every instance-form compile funnels through here, so a test spy can count them (MoveFileCopyAndObsoleteTests).
+    public virtual async Task<ValidationCandidateResult> ValidateChangesWithCandidateAsync(IReadOnlyDictionary<FilePathWrapper, string> fileChanges,
         IReadOnlyCollection<FilePathWrapper>? removePaths = null, CancellationToken cancellationToken = default)
     {
         // READCHOKEPOINT-CAST: see ValidateDiffAsync above for rationale (55-site constructor cascade avoided).
