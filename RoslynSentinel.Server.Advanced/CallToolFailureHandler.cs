@@ -105,7 +105,7 @@ public static class CallToolFailureHandler
             {
                 return new ResultError(
                     ToolErrorCode.TargetIneligible,
-                    $"{tool} is not active on this server instance: on-demand toolsets reset when the server restarts. Call "
+                    $"{tool} is not active on this server instance: its on-demand toolset is not enabled here (the client's tool list can still show a tool from an earlier server). Call "
                     + ToolCallHint.Call("McpToolsetControl", ("toolSet", set.Value.ToString()), ("enabled", "true")) + " and retry.");
             }
 

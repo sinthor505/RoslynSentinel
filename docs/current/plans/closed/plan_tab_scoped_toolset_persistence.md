@@ -1,6 +1,6 @@
 # Plan: Persist enabled toolsets per Claude Code tab across server restarts, with McpServerControl restart options
 
-**Status:** IN PROGRESS 2026-11-15. Steps 1-8 done (7b2b901f, 2df3e449, 3398ae4e, 9a247fb0, 0de85bbe, 62edb05f, 0531ece8, 934f415c); left: Step 9 live checks (owner) and Step 10 docs. Supersedes D12 of `closed/plan_tool_experience_journal_fixes.md` ("persist toolset state across a restart").
+**Status:** IMPLEMENTED 2026-11-23. Steps 1-8 (7b2b901f, 2df3e449, 3398ae4e, 9a247fb0, 0de85bbe, 62edb05f, 0531ece8, 934f415c); Step 9 live: A kept, B kept, C visible-without-reconnect, D config-only (limit: no list_changed on a shrunken start; TODO in AddRestoredToolsetListChangedMessageFilter + INBOX), E seeded, F isolated (file-level), G not observed; Step 10 status text and docs in the closing commit. Supersedes D12 of plan_tool_experience_journal_fixes.md.
 
 ## Problem
 

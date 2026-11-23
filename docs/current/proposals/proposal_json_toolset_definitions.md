@@ -1,7 +1,7 @@
 # Named JSON toolset files replace mode + include + exclude + hide as the one way to choose a tool surface
 
-**Status:** PROPOSED 2026-11-22. Design decisions settled with the owner on 2026-11-22. Prerequisite: finish
-[plan_tab_scoped_toolset_persistence.md](../plans/plan_tab_scoped_toolset_persistence.md). Next step: a plan.
+**Status:** PROPOSED 2026-11-22. Design decisions settled with the owner on 2026-11-22. Prerequisite
+[plan_tab_scoped_toolset_persistence.md](../plans/closed/plan_tab_scoped_toolset_persistence.md) closed 2026-11-23. Next step: a plan.
 
 ## Motivation
 
@@ -288,7 +288,7 @@ migration can prove it changes nothing.
 
 ## Related
 
-- [plan_tab_scoped_toolset_persistence.md](../plans/plan_tab_scoped_toolset_persistence.md): prerequisite.
+- [plan_tab_scoped_toolset_persistence.md](../plans/closed/plan_tab_scoped_toolset_persistence.md): prerequisite.
 - [reference_changing_claude_lean_tools.md](../references/reference_changing_claude_lean_tools.md): replaced by editing `claude-lean.json` once built.
 - [plan_modeleval_lean_tool_surface.md](../plans/closed/plan_modeleval_lean_tool_surface.md) and
   [proposal_modeleval_lean_tool_surface.md](proposal_modeleval_lean_tool_surface.md): origin of the eval lean list.

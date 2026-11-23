@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Plan: Persist enabled toolsets per Claude Code tab across server restarts, with McpServerControl restart options - resolved (2026-11-23)
+
+Plan: Persist enabled toolsets per Claude Code tab across server restarts, with McpServerControl restart options - [doc](plans/closed/plan_tab_scoped_toolset_persistence.md)
+
+Evidence: IMPLEMENTED 2026-11-23. Steps 1-8 (7b2b901f, 2df3e449, 3398ae4e, 9a247fb0, 0de85bbe, 62edb05f, 0531ece8, 934f415c); Step 9 live: A kept, B kept, C visible-without-reconnect, D config-only (limit: no list_changed on a shrunken start; TODO in AddRestoredToolsetListChangedMessageFilter + INBOX), E seeded, F isolated (file-level), G not observed; Step 10 status text and docs in the closing commit. Supersedes D12 of plan_tool_experience_journal_fixes.md.
+
 ## evalqueue SetupStalled watches a SetUp-complete marker - resolved (2026-11-22)
 
 evalqueue SetupStalled watches a SetUp-complete marker instead of the run folder (2026-11-22) - run folders appear only after the test ends, so tests longer than `-NoRunFolderMinutes` (20) are killed (job 20261122-101641-001 at 1202 s; workaround `-NoRunFolderMinutes 0`); decided 2026-11-22: the ModelEval fixture SetUp writes a "setup complete" marker the queue watches (`scripts/roslynsentinel-evalqueue.ps1:1065-1070`, `# TODO` in the Invoke-JobRun wait loop); fix the help text; acceptance: a 45-min ImplementationScenario job is not killed, a test stuck before SetUp ends is still flagged SetupStalled; Medium

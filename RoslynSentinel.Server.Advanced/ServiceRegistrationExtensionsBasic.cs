@@ -131,6 +131,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         {
             await next(context, cancellationToken).ConfigureAwait(false);
 
+            // TODO Send after every launcher-started (tab state) start, not only a restored one: after StopServer(keepToolsets: false) the client keeps listing the dropped toolset tools until some later list_changed (Step 9 case D, 2026-11-23).
             if (context.JsonRpcMessage is not JsonRpcNotification notification
                 || notification.Method != NotificationMethods.InitializedNotification
                 || context.Services?.GetService<TabToolsetStateStore>()?.RestoredAtStartup != true

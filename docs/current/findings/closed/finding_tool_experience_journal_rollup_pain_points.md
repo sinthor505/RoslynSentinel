@@ -238,7 +238,7 @@ fast-forwarded`), which also explains many post-fix journal reports.
 | D9 | Member opt-out of the changedFiles detach pointer | No |
 | D10 | ExternalFileDrift `List` reports committed/dirty state | No; drift halts are gone |
 | D11 | Write results carry the resolved EOL | No; `eolMode` in McpServerStatus covers it |
-| D12 | Persist toolset state across restart (reverses the accepted tradeoff) | No |
+| D12 | Persist toolset state across restart (reverses the accepted tradeoff) | No; later built by [plan_tab_scoped_toolset_persistence.md](../../plans/closed/plan_tab_scoped_toolset_persistence.md) |
 
 ## Why it matters
 

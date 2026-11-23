@@ -1,6 +1,6 @@
 # Live MCP server freshness
 
-**Status:** CURRENT 2026-11-15. Detail moved out of CLAUDE.md "Verification"; the rule stays there. Instances layout needs no `fullBuild` before a restart.
+**Status:** CURRENT 2026-11-23 (toolset persistence per tab). Detail moved out of CLAUDE.md "Verification"; the rule stays there. Instances layout needs no `fullBuild` before a restart.
 
 Rebuilding RoslynSentinel does not change the running server: VS Code builds and spawns a server only
 when a session starts. After changing server source, the running server is **stale** until stopped and
@@ -11,7 +11,15 @@ respawned, so restart it before verifying fixes live.
 - Server instances are isolated per session, so you may restart your own at any time:
   `McpServerControl(operation: StopServer, confirmServerStop: ConfirmServerStop)`. Omitting the confirm
   param returns a refusal and stops nothing. Allow a few seconds; a clean `Connection closed` is
-  normal. VS Code relaunches it on a fresh build; reconnect and re-run `LoadSolution`.
+  normal. The next tool call relaunches it on a fresh build; re-run `LoadSolution` if the auto-load
+  has not.
+- Enabled toolsets survive the restart, a `/mcp` reconnect, an idle restart and a tab resume: a
+  launcher-started server saves them per Claude Code tab (`<instancesRoot>\tabstate\<repoHash>-claude-<pid>-<created>\toolsets.json`)
+  and sends `tools/list_changed` after a restored start, so restored tools appear without a reconnect.
+  `StopServer` options: `toolsets: "a,b"` adds sets to the next process; `keepToolsets: false` restarts
+  from the configured `--toolsets` and clears the saved state. Limit: after a restart with fewer sets
+  the client keeps listing the dropped tools until a later `tools/list_changed` (a call to one fails
+  `TargetIneligible`; enabling any set refreshes the list).
 - Before restarting, make sure no subagent is mid-operation against the same server.
 - A **new** `[McpServerToolType]` class additionally needs a fresh chat session: the session's tool
   list is fixed at start and does not refresh after a reconnect.

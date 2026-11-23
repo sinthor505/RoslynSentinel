@@ -64,7 +64,8 @@ Owner approved 2026-11-15:
   D5 Git `log` with `nameOnly` returns hash + subject. D6 McpServerStatus adds `clientProtocolVersion` and a
   `tools/list_changed` count. D7 `McpServerControl(LaunchTestInstance)` gets a `toolsets` param and validates
   `includeTools` names against `ToolClassRegistry`; an `environment` param is not approved.
-- Not approved, out of scope pending owner: D3, D8, D9, D10, D11, D12.
+- Not approved, out of scope pending owner: D3, D8, D9, D10, D11, D12. (D12 was later built by
+  [plan_tab_scoped_toolset_persistence.md](plan_tab_scoped_toolset_persistence.md), 2026-11-23.)
 
 Owner ruling 2026-11-15 (owner present during the run): do the slices that may need owner input FIRST. So
 Batch A holds D1, D2, D4, D5, D6, D7; Batch B-E follow with their own flagged steps early; Batch F (hooks,
@@ -671,7 +672,7 @@ work (`BareFileWrites_AreOnlyInTheAllowlist`, `TabToolsetState.cs`), reported to
 
 ## Out of scope
 
-- D3 (Member remove ignores doc-comment crefs; reverses `MemberRemoveTests` ~line 163), D8 (RunTest `includeOutput` keeps passing tests' output; RunTest reports HEAD sha and dirty count), D9 (Member opt-out of the changedFiles detach pointer), D10 (ExternalFileDrift `List` reports committed/dirty state), D11 (write results carry the resolved EOL), D12 (persist toolset state across a restart): not approved; pending owner.
+- D3 (Member remove ignores doc-comment crefs; reverses `MemberRemoveTests` ~line 163), D8 (RunTest `includeOutput` keeps passing tests' output; RunTest reports HEAD sha and dirty count), D9 (Member opt-out of the changedFiles detach pointer), D10 (ExternalFileDrift `List` reports committed/dirty state), D11 (write results carry the resolved EOL), D12 (persist toolset state across a restart): not approved; pending owner. D12 was later built by [plan_tab_scoped_toolset_persistence.md](plan_tab_scoped_toolset_persistence.md).
 - D7's `environment` param on `McpServerControl(LaunchTestInstance)`: not approved.
 - `GetMethodSource` auto-resolving a unique bare name (shares `BuildFileNotFoundError` with GetFileOutline; follow-up).
 - The severe one-offs S1-S4 and the line-ending loop: already fixed (finding); the dead `!autoStage` branches in `RefactoringStructuralImpl` need their own decision.
