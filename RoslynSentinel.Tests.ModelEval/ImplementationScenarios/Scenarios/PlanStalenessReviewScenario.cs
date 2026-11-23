@@ -361,11 +361,27 @@ review as your final message.
     // Evidence that a call-site shape breaks the widening; the bare words "error" and "fail" do not count (a green build says "0 errors").
     private const string BreakEvidencePattern = @"break|cannot|can't|not possible|impossible|not compile|does not compile|won't compile|fails? to compile|no (?:implicit )?conversion|not convert";
 
-    private static List<string> SplitIntoSegments(string message)
+    internal static List<string> SplitIntoSegments(string message)
     {
-        return Regex.Split(message, @"[\r\n]+|(?<=[.!?;])\s+")
-            .Where(segment => !string.IsNullOrWhiteSpace(segment))
-            .ToList();
+        var segments = new List<string>();
+        foreach (var line in Regex.Split(message, @"[\r\n]+"))
+        {
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            // A markdown table row stays whole so the anchor name and its new line number share one segment.
+            if (line.TrimStart().StartsWith('|'))
+            {
+                segments.Add(line);
+                continue;
+            }
+
+            segments.AddRange(Regex.Split(line, @"(?<=[.!?;])\s+").Where(piece => !string.IsNullOrWhiteSpace(piece)));
+        }
+
+        return segments;
     }
 
     /// <summary>
@@ -408,7 +424,7 @@ review as your final message.
     /// "now on line 6" fails; the anchor's own old "File.cs:N" token is outside the accepted range. A number in a sentence that does not
     /// name the anchor does not count.
     /// </summary>
-    private static bool MovedAnchorLineIsInContext(IReadOnlyList<string> segments, string anchorNamePattern, int fromLine, int toLine)
+    internal static bool MovedAnchorLineIsInContext(IReadOnlyList<string> segments, string anchorNamePattern, int fromLine, int toLine)
     {
         foreach (var segment in segments)
         {
