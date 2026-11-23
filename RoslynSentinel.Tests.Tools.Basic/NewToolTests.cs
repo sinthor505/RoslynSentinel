@@ -188,9 +188,9 @@ public class NewToolTests
             }
             """);
 
-        var summary = await _diagnosticEngine.GetFileDiagnosticsAsync("Test.cs");
+        var summary = await _diagnosticEngine.GetFileDiagnosticsCoreAsync("Test.cs");
 
-        Assert.That(summary.Data.Errors, Is.Zero, "Well-formed file should have no errors");
+        Assert.That(summary.Errors, Is.Zero, "Well-formed file should have no errors");
     }
 
     [Test]
@@ -210,10 +210,10 @@ public class NewToolTests
             }
             """);
 
-        var summary = await _diagnosticEngine.GetSolutionDiagnosticsAsync();
+        var summary = await _diagnosticEngine.GetSolutionDiagnosticsCoreAsync();
 
         // We just verify the summary struct is usable and has Data
-        Assert.That(summary.Data.Errors, Is.EqualTo(2));
-        Assert.That(summary.Data.Details.Select(d => d.Id), Is.EqualTo(new[] { "CS0103", "CS0103" }));
+        Assert.That(summary.Errors, Is.EqualTo(2));
+        Assert.That(summary.Details.Select(d => d.Id), Is.EqualTo(new[] { "CS0103", "CS0103" }));
     }
 }

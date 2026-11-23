@@ -495,15 +495,15 @@ public class RegressionTests
             }
             """);
 
-        var summary = await _diagnosticEngine.GetSolutionDiagnosticsAsync();
+        var summary = await _diagnosticEngine.GetSolutionDiagnosticsCoreAsync();
 
         Assert.That(summary, Is.Not.Null);
-        Assert.That(summary.Data.Details, Is.Not.Null);
+        Assert.That(summary.Details, Is.Not.Null);
 
         // CS0103 ("name does not exist in current context") should appear in Data
         // and its count should be >= 3 (one per undefined symbol), OR it should be
         // aggregated into a single entry with count 3.
-        var errorCount = summary.Data.Errors + summary.Data.Warnings;
+        var errorCount = summary.Errors + summary.Warnings;
         Assert.That(errorCount, Is.GreaterThanOrEqualTo(3),
             "Three undefined symbols should produce at least 3 diagnostics total");
     }
@@ -523,9 +523,9 @@ public class RegressionTests
             }
             """);
 
-        var summary = await _diagnosticEngine.GetFileDiagnosticsAsync("Test.cs");
+        var summary = await _diagnosticEngine.GetFileDiagnosticsCoreAsync("Test.cs");
 
-        Assert.That(summary.Data.Errors, Is.Zero,
+        Assert.That(summary.Errors, Is.Zero,
             "REGRESSION: Valid code must report zero errors");
     }
 
