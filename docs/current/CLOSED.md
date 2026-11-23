@@ -8,6 +8,24 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Fold the ReplaceSnippetBatch apply tail into ApplyEditTailAsync - resolved (2026-11-22)
+
+Fold the ReplaceSnippetBatch apply tail into `ApplyEditTailAsync`, text-neutral (2026-11-22) - parameterise the headline/next-step text and take a list of edit-memory keys; the batch keeps its exception boundary and validate-only branch (`WorkspaceFileEditImpl.cs:2281` vs `:1414-1527`, code TODO in ReplaceSnippetBatch); acceptance: batch tests pass unchanged and a rejected batch's text is byte-identical; Medium
+
+Evidence: 734c0c19: batch calls ApplyEditTailAsync (full headline parameter, one edit-memory key per edit); ReplaceSnippet*/ReplaceRange tests green unchanged
+
+## Text edit tools accept existing non-project files under the solution root - resolved (2026-11-22)
+
+Text edit tools accept existing non-project files under the solution root (2026-11-22) - ReplaceSnippet/ReplaceRange refused `Evals/RemovePinnedSentence/policy.md` while DeleteFile/CreateFile accepted it, so a model deleted and recreated it (run 20261122-101614-163 turns 5-9, 112); decided 2026-11-22: one shared Common helper beside `DocumentLookup` (text edits resolve via `FindFileCandidates`, `DocumentLookup.cs:272-274`) used by ReplaceSnippet/ReplaceRange and DeleteFile; no compile gate for non-project files; acceptance: ReplaceSnippet on a .md under the root outside every project succeeds and agrees with DeleteFile; Medium
+
+Evidence: 579ec30b: NonProjectFile helper; ReplaceSnippet (single, batch, validate) and ReplaceRange edit an existing non-project plain-text file, DeleteFile uses the same exists check; ReplaceSnippetNonProjectFileTests green; non-project .cs and the DeleteFile-outside-root asymmetry stay open (code TODO + INBOX)
+
+## MoveFile keep: store the unchanged content once - resolved (2026-11-22)
+
+MoveFile `keep`: store the unchanged content once in the operation blob (2026-11-22) - each keep move stored the file twice (before and AfterSource; 67 KB for the moved `ModelAgentRunner.cs`, #13 slice 5a, 24 moves; built at `WholeFileWriteTools.cs:355-392`); decided 2026-11-22: when after-text equals before-text store it once, after confirming the UndoChange read path; acceptance: a keep move's blob is about half its current size and UndoChange still restores the source; Small-Medium
+
+Evidence: 66821e8c, a8d1ca2d, 72b7a3d3, 50395307: the moved text is stored once (destination item AfterSourceFromFilePath names the source item; the literal after==before trigger cannot fire in a move, the destination has no pre-image); UndoChange, GetOperationDetail, NotFoundEvidence resolve it; old blobs read unchanged; OperationBlobWriterTests, MoveFileTests, NotFoundEvidenceTests green
+
 ## LoadSolution(forceReload) restores first - resolved (2026-11-22)
 
 `LoadSolution(forceReload)` runs `dotnet restore` first (2026-11-22) - after a project was added mid-session the workspace said "Unable to find project RoslynSentinel.AgentLoop.csproj" until a manual restore plus forceReload (Build restores into the throwaway artifacts path, `BuildEngine.cs:387-398`, and reloads nothing); decided 2026-11-22: forceReload restores before loading (latency accepted); acceptance: scratch solution, add a csproj, `LoadSolution(forceReload)` loads it with no "Unable to find project" diagnostic; Medium
