@@ -76,7 +76,7 @@
       Queued, Building (the worker is pre-building the checkout; cancellable), Running, Finished (the run
       completed; 'passed' says whether the tests passed), Cancelled, TimedOut (stopped at
       -TimeLimitMinutes), Crashed (ended without a run folder: build failure or testhost crash; or the
-      worker died; or no run folder after -NoRunFolderMinutes, a stuck SetUp), BuildFailed (the pre-build
+      worker died; or no SetUp-complete marker and no run folder after -NoRunFolderMinutes, a stuck SetUp), BuildFailed (the pre-build
       failed; the reason holds the end of its log), TreeChanged (an unpinned legacy job that reached the front of the queue; never run, resubmit it pinned), Refused (a job for a
       llama-server endpoint whose -Model is not the loaded model; never run; the reason lists the loaded ids).
 
@@ -123,9 +123,10 @@
     Stop the run after this long (default 40).
 
 .PARAMETER NoRunFolderMinutes
-    Stop the run, as Crashed, when it has written no run folder after this long (default 20; 0 = off). A
-    run folder appears when the test's SetUp has finished, so this catches a SetUp that is stuck before the
-    agent starts instead of waiting for the full time limit.
+    Minutes allowed for the test's SetUp to complete before the run is stopped as Crashed (SetupStalled)
+    (default 20; 0 = off). SetUp is complete when the run writes its SetUp-complete marker (when the first
+    agent turn starts) or a run folder appears. A long test is not stopped once SetUp is done; only a SetUp
+    stuck before the agent starts is.
 
 .PARAMETER NoStart
     submit only: queue without starting the worker (tests and maintenance).
@@ -1041,6 +1042,10 @@ function Invoke-Worker {
         $jobScratch = Get-JobScratchRoot $Job
         $startInfo.Environment['ROSLYNSENTINEL_SCRATCH_ROOT'] = $jobScratch
         $startInfo.Environment['ROSLYNSENTINEL_RESULTS_ROOT'] = Join-Path $jobScratch 'ModelTestingResults'
+        # SetUp-complete marker written by the run when its first agent turn starts. Delete a stale one first so
+        # an old job's marker cannot end SetUp early.
+        $setupMarker = Join-Path $jobScratch ("evalqueue-setup-complete-" + $Job.id + ".marker")
+        Remove-Item -LiteralPath $setupMarker -ErrorAction SilentlyContinue
 
         # durationSeconds (and so the ETA in Get-ExpectedSeconds) covers the run only: the clock starts here, after
         # the pre-build, so a cold build is not part of it.
@@ -1062,10 +1067,12 @@ function Invoke-Worker {
             $current = Read-Job (Get-JobPath $Job)
             if ($current -and $current.cancelRequested) { $stopAs = 'Cancelled'; break }
             if ([datetime]::UtcNow -gt $deadline) { $stopAs = 'TimedOut'; break }
-            # TODO SetupStalled misfires on any test longer than -NoRunFolderMinutes: run folders are copied to ModelTestingResults only after the test ends, not after SetUp (job 20261122-101641-001).
             if ($noRunFolderMinutes -gt 0 -and [datetime]::UtcNow -gt $nextFolderCheck) {
-                if (@(Get-RunFolders $Job | Where-Object { $_ -notin $before }).Count -eq 0) { $stopAs = 'SetupStalled'; break }
-                # A run folder exists, so the run is past SetUp: stop checking.
+                # Run folders are copied only after a test ends, so the marker is the signal during a run. Runs from
+                # older commits write no marker; for them a new run folder still means SetUp is done.
+                $setUpDone = (Test-Path -LiteralPath $setupMarker) -or (@(Get-RunFolders $Job | Where-Object { $_ -notin $before }).Count -gt 0)
+                if (-not $setUpDone) { $stopAs = 'SetupStalled'; break }
+                # SetUp is done, so the run is past it: stop checking.
                 $noRunFolderMinutes = 0
             }
         }
@@ -1087,7 +1094,7 @@ function Invoke-Worker {
             if ($stopAs -eq 'Cancelled') { $j.state = 'Cancelled' }
             elseif ($stopAs -eq 'SetupStalled') {
                 $j.state = 'Crashed'
-                $j.reason = "Stopped: no run folder after $($j.noRunFolderMinutes) minute(s), so the test was stuck in SetUp before the agent started (see the log's last line). Not a model result."
+                $j.reason = "Stopped: no SetUp-complete marker and no run folder after $($j.noRunFolderMinutes) minute(s), so the test was stuck in SetUp before the agent started (see the log's last line). Not a model result."
             }
             elseif ($stopAs -eq 'TimedOut') {
                 $j.state = 'TimedOut'

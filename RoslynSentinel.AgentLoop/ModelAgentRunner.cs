@@ -206,6 +206,8 @@ public sealed class ModelAgentRunner
         IReadOnlyList<AgentTranscriptTurn>? seedTurns = null,
         Func<CancellationToken, Task<bool>>? targetReached = null)
     {
+        // The first agent turn means fixture SetUp is done; deliberately at run start rather than in each fixture's [SetUp] so every fixture is covered by one edit.
+        EvalQueueSetupMarker.WriteIfQueued();
         var progress = new RunProgress();
         try
         {
