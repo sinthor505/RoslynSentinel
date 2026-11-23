@@ -251,7 +251,7 @@ public class SchemaLeanProfileTests
 
         var readOnlyByName = tools.ToDictionary(t => t.Name, t => t.ReadOnly);
 
-        foreach (var name in new[] { "ReadFile", "GetFileOutline", "Search" })
+        foreach (var name in new[] { "ReadFile", "GetFileOutline", "Search", "GetDiagnostics", "GetWorkspaceHealth" })
         {
             Assert.That(readOnlyByName, Does.ContainKey(name), $"{name} should be listed by tools/list.");
             Assert.That(readOnlyByName[name], Is.EqualTo(true), $"{name} should advertise annotations.readOnlyHint = true.");
@@ -262,6 +262,19 @@ public class SchemaLeanProfileTests
         foreach (var name in new[] { "Git", "Member" }.Where(readOnlyByName.ContainsKey))
         {
             Assert.That(readOnlyByName[name] == true, Is.False, $"{name} is multi-operation and must not advertise readOnlyHint = true.");
+        }
+
+        // Advanced-only tool: asserted only when it is listed in this harness.
+        foreach (var name in new[] { "GetComprehensiveHealthReport" }.Where(readOnlyByName.ContainsKey))
+        {
+            Assert.That(readOnlyByName[name], Is.EqualTo(true), $"{name} should advertise annotations.readOnlyHint = true.");
+        }
+
+        // Generate* tools return generated content, not solution information, so they must not claim read-only.
+        // When no Generate* tool is listed this loop passes vacuously.
+        foreach (var name in readOnlyByName.Keys.Where(k => k.StartsWith("Generate", StringComparison.Ordinal)))
+        {
+            Assert.That(readOnlyByName[name] == true, Is.False, $"{name} returns generated content, not solution information, so it must not advertise readOnlyHint = true.");
         }
     }
 
