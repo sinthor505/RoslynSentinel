@@ -100,7 +100,7 @@ public static class EditImpactGate
     /// Those sites add no untouched-file sentence, so nothing is duplicated.
     /// </summary>
     /// <param name="deletePaths">Files the edit deletes; their declarations count as removed.</param>
-    public static async Task<ResultError> RejectionAsync(
+    public static Task<ResultError> RejectionAsync(
         IWorkspaceManager workspaceManager,
         IReadOnlyDictionary<FilePathWrapper, string> changes,
         DiagnosticReport report,
@@ -109,8 +109,28 @@ public static class EditImpactGate
         string existingText,
         CancellationToken cancellationToken = default,
         IReadOnlyCollection<FilePathWrapper>? deletePaths = null)
+        => RejectionAsync(workspaceManager, changes, report, activeToolSurface, messagePrefix, _ => Task.FromResult(existingText), cancellationToken, deletePaths);
+
+    /// <summary>
+    /// Same as the <c>string existingText</c> overload, but the caller's text is produced by <paramref name="describeExistingText"/> after the analyzer runs.
+    /// The describer receives the names the edit renamed away (null when none), so the typo or closest-name text of a CS0103 can be dropped for them.
+    /// Facts only: the describer's argument is the rename set, nothing more.
+    /// </summary>
+    /// <param name="describeExistingText">Builds the caller's text from the names the edit renamed away (null when none).</param>
+    /// <param name="deletePaths">Files the edit deletes; their declarations count as removed.</param>
+    public static async Task<ResultError> RejectionAsync(
+        IWorkspaceManager workspaceManager,
+        IReadOnlyDictionary<FilePathWrapper, string> changes,
+        DiagnosticReport report,
+        ActiveToolSurface? activeToolSurface,
+        string messagePrefix,
+        Func<IReadOnlyCollection<string>?, Task<string>> describeExistingText,
+        CancellationToken cancellationToken = default,
+        IReadOnlyCollection<FilePathWrapper>? deletePaths = null)
     {
         var impact = await AnalyzeAsync(workspaceManager, changes, report, activeToolSurface, deletePaths: deletePaths, cancellationToken: cancellationToken);
+        var renamedAwayNames = impact?.Changes.Where(c => c.Kind == SymbolChangeKind.Renamed).Select(c => c.OldName).Distinct(StringComparer.Ordinal).ToList();
+        var existingText = await describeExistingText(renamedAwayNames);
         var text = impact is null ? existingText : impact.Text + "\n" + existingText;
         var nearMisses = await DetectNearMissesAsync(workspaceManager, changes, report.Diagnostics, cancellationToken);
         return new ResultError(ToolErrorCode.ValidationFailed, messagePrefix + text, StructuredDetail: BuildDetail(impact, report.Diagnostics, nearMisses: nearMisses));
