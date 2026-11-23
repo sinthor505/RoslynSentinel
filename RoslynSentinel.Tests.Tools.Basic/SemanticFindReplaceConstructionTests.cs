@@ -261,6 +261,23 @@ public class SemanticFindReplaceConstructionTests
     }
 
     [Test]
+    [Description("A creation nested inside a rewritten initializer site is reported as skipped, not rewritten, and the outer rewrite keeps the inner text")]
+    public async Task ReplaceConstruction_NestedInnerSiteInsideInitializerSite_IsReportedSkippedNotRewritten()
+    {
+        var consumers = GizmoConsumersFile("public Gizmo Nested() => new Gizmo(\"a\") { Size = new Gizmo(\"b\").Size };");
+        await SeedGizmoFixtureAsync(consumers);
+
+        var preview = Data(await RunAsync(SemanticReplaceMode.preview, GizmoType, GizmoCreate));
+        var inner = FindSite(preview, "GizmoConsumers.cs", "new Gizmo(\"b\")");
+        Assert.That(inner.GetProperty("UnsupportedReason").GetString(), Does.Contain("nested"));
+
+        var data = Data(await RunAsync(SemanticReplaceMode.apply, GizmoType, GizmoCreate));
+        Assert.That(data.GetProperty("rewritten").GetInt32(), Is.EqualTo(1));
+        Assert.That(ReadSeeded(GizmoConsumersPath), Is.EqualTo(
+            GizmoConsumersFile("public Gizmo Nested() => GizmoFactory.Create(\"a\", size: new Gizmo(\"b\").Size);")));
+    }
+
+    [Test]
     [Description("An object initializer without an argument list is rewritten to a factory call with only the named arguments")]
     public async Task ReplaceConstruction_InitializerWithoutArgumentList_IsRewritten()
     {

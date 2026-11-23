@@ -128,7 +128,7 @@ public static class ConstructionReplacer
         }
 
         var sites = new List<SemanticReplaceSite>();
-        var editsByFile = new Dictionary<string, List<(TextSpan Span, string NewText)>>(StringComparer.Ordinal);
+        var editsByFile = new Dictionary<string, List<(TextSpan Span, string NewText, int SiteIndex)>>(StringComparer.Ordinal);
         var textByFile = new Dictionary<string, SourceText>(StringComparer.Ordinal);
         var seen = new HashSet<(string Path, int Start)>();
 
@@ -223,7 +223,7 @@ public static class ConstructionReplacer
                         textByFile[document.FilePath] = text;
                     }
 
-                    fileEdits.Add((span, editText));
+                    fileEdits.Add((span, editText, sites.Count - 1));
                 }
             }
         }
@@ -233,14 +233,15 @@ public static class ConstructionReplacer
         {
             var result = textByFile[path].ToString();
             // A whole-node (initializer) edit can contain another matched creation. Keep the outer edit and drop any edit
-            // that lies inside an already kept one; applying both would corrupt the text.
-            // TODO the dropped inner site is still reported as rewritten; a rerun of the operation rewrites it.
-            var keptEdits = new List<(TextSpan Span, string NewText)>();
+            // that lies inside an already kept one; applying both would corrupt the text. Each dropped site is reported as skipped.
+            var keptEdits = new List<(TextSpan Span, string NewText, int SiteIndex)>();
             var keptEnd = -1;
             foreach (var edit in fileEdits.OrderBy(e => e.Span.Start).ThenByDescending(e => e.Span.Length))
             {
                 if (edit.Span.Start < keptEnd)
                 {
+                    var dropped = sites[edit.SiteIndex];
+                    sites[edit.SiteIndex] = new SemanticReplaceSite(dropped.FilePath, dropped.Line, SemanticReplaceRole.Unsupported, dropped.Before, dropped.Before, "site is nested inside another rewritten site (an initializer creation); rerun the operation to rewrite it");
                     continue;
                 }
 
