@@ -12,8 +12,8 @@ public class ScenarioRescoringTests
     private const string OldHeader =
         "scenarioId,scenarioType,faultKind,sampleIndex,commit,dirty,liftRenames,firstCallSucceeded,firstErrorCode,firstErrorClass,recovered,callsToRecover,recoveryUsedExpectedTool,markerPresent,turnCount,stopReason,failureClass,passed,callsAfterFirstError,turnsAfterFirstError,outputCharsAfterFirstError,maxIdenticalCallRepeat,identicalReasoningBlocks,retryPhraseCount,schemaDrift,resultDrift,inconclusiveReason,transcriptPath";
 
-    // 30-column layout: Header minus the six columns added after it (liveTurnsToTarget, errorPolicyMode, errorPolicyHash, modelKey, temperature, topP).
-    private static readonly string LegacyHeader = string.Join(',', ScenarioSampleCsv.Header.Split(',').SkipLast(6));
+    // 30-column layout: Header minus the eight columns added after it (liveTurnsToTarget, errorPolicyMode, errorPolicyHash, modelKey, temperature, topP, contractHash, contractPlacement).
+    private static readonly string LegacyHeader = string.Join(',', ScenarioSampleCsv.Header.Split(',').SkipLast(8));
 
     // Cold-start row by column name, for LegacyHeader and Header files; the transcript is written by WriteRun.
     private static readonly (string Name, string Value)[] ColdRowValues =

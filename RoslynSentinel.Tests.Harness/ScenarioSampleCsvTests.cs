@@ -99,7 +99,7 @@ public sealed class ScenarioSampleCsvTests
     [Test]
     public void HeaderColumnCountMatchesEveryRow()
     {
-        Assert.That(ScenarioSampleCsv.Header.Split(',').Length, Is.EqualTo(36));
+        Assert.That(ScenarioSampleCsv.Header.Split(',').Length, Is.EqualTo(38));
 
         // Parse rejects any row whose column count differs from Header, so a clean parse proves the count.
         Assert.That(() => ScenarioSampleCsv.Parse(ScenarioSampleCsv.ToCsvLine(FullSample)), Throws.Nothing);
@@ -111,7 +111,7 @@ public sealed class ScenarioSampleCsvTests
     {
         var columns = ScenarioSampleCsv.Header.Split(',');
 
-        Assert.That(columns, Has.Length.EqualTo(36));
+        Assert.That(columns, Has.Length.EqualTo(38));
         Assert.That(columns[17], Is.EqualTo("passed"));
         Assert.That(columns[18], Is.EqualTo("finalStateVerdict"));
         Assert.That(columns[19], Is.EqualTo("turnCapHit"));
@@ -155,12 +155,12 @@ public sealed class ScenarioSampleCsvTests
     }
 
     [Test]
-    public void Header_EndsWithSamplingColumnsAndHasThirtySixColumns()
+    public void Header_EndsWithSamplingColumnsAndHasThirtyEightColumns()
     {
         var columns = ScenarioSampleCsv.Header.Split(',');
 
-        Assert.That(ScenarioSampleCsv.Header, Does.EndWith(",liveTurnsToTarget,errorPolicyMode,errorPolicyHash,modelKey,temperature,topP"));
-        Assert.That(columns.Length, Is.EqualTo(36));
+        Assert.That(ScenarioSampleCsv.Header, Does.EndWith(",liveTurnsToTarget,errorPolicyMode,errorPolicyHash,modelKey,temperature,topP,contractHash,contractPlacement"));
+        Assert.That(columns.Length, Is.EqualTo(38));
         Assert.That(columns[30], Is.EqualTo("liveTurnsToTarget"));
         Assert.That(columns[33], Is.EqualTo("modelKey"));
         Assert.That(columns[34], Is.EqualTo("temperature"));
@@ -217,7 +217,7 @@ public sealed class ScenarioSampleCsvTests
         var line = ScenarioSampleCsv.ToCsvLine(sample);
         var parsed = ScenarioSampleCsv.Parse(line);
 
-        Assert.That(ScenarioSampleCsv.SplitFields(line), Has.Count.EqualTo(36));
+        Assert.That(ScenarioSampleCsv.SplitFields(line), Has.Count.EqualTo(38));
         Assert.That(parsed.ErrorPolicyMode, Is.EqualTo("inline"));
         Assert.That(parsed.ErrorPolicyHash, Is.EqualTo("0123456789ab"));
         Assert.That(parsed, Is.EqualTo(sample));
@@ -231,19 +231,19 @@ public sealed class ScenarioSampleCsvTests
         var line = ScenarioSampleCsv.ToCsvLine(sample);
         var parsed = ScenarioSampleCsv.Parse(line);
 
-        Assert.That(ScenarioSampleCsv.SplitFields(line), Has.Count.EqualTo(36));
+        Assert.That(ScenarioSampleCsv.SplitFields(line), Has.Count.EqualTo(38));
         Assert.That(parsed.ErrorPolicyMode, Is.EqualTo("pointer, \"x\""));
         Assert.That(parsed.ErrorPolicyHash, Is.EqualTo("a,b\"c"));
         Assert.That(parsed, Is.EqualTo(sample));
     }
 
     [Test]
-    public void PreviousThirtyOneColumnRow_ParsesWithEmptyErrorPolicyAndReserializesWithThirtySixColumns()
+    public void PreviousThirtyOneColumnRow_ParsesWithEmptyErrorPolicyAndReserializesWithThirtyEightColumns()
     {
-        // Drop the last five fields (errorPolicyMode, errorPolicyHash, modelKey, temperature, topP) to produce a row written before they existed.
+        // Drop the last seven fields (errorPolicyMode, errorPolicyHash, modelKey, temperature, topP, contractHash, contractPlacement) to produce a row written before they existed.
         var line = ScenarioSampleCsv.ToCsvLine(FullSample with { LiveTurnsToTarget = 4 });
         var previous = line;
-        for (var dropped = 0; dropped < 5; dropped++)
+        for (var dropped = 0; dropped < 7; dropped++)
         {
             previous = previous[..previous.LastIndexOf(',')];
         }
@@ -256,7 +256,7 @@ public sealed class ScenarioSampleCsvTests
         Assert.That(parsed.LiveTurnsToTarget, Is.EqualTo(4));
         Assert.That(parsed.ErrorPolicyMode, Is.Empty);
         Assert.That(parsed.ErrorPolicyHash, Is.Empty);
-        Assert.That(ScenarioSampleCsv.SplitFields(rewritten), Has.Count.EqualTo(36));
+        Assert.That(ScenarioSampleCsv.SplitFields(rewritten), Has.Count.EqualTo(38));
         Assert.That(ScenarioSampleCsv.Parse(rewritten), Is.EqualTo(parsed));
     }
 
@@ -269,7 +269,7 @@ public sealed class ScenarioSampleCsvTests
         var parsed = ScenarioSampleCsv.Parse(line);
         var fields = ScenarioSampleCsv.SplitFields(line);
 
-        Assert.That(fields, Has.Count.EqualTo(36));
+        Assert.That(fields, Has.Count.EqualTo(38));
         Assert.That(fields[33], Is.EqualTo("qwen/qwen3-coder-30b"));
         Assert.That(fields[34], Is.EqualTo("0.1"));
         Assert.That(fields[35], Is.EqualTo("0.95"));
@@ -297,7 +297,7 @@ public sealed class ScenarioSampleCsvTests
     [Test]
     public void PreSamplingThirtyThreeColumnRow_ParsesWithEmptyModelKeyAndNullSamplingAndKeepsErrorPolicy()
     {
-        // Drop the last three fields (modelKey, temperature, topP) to produce a row written before they existed.
+        // Drop the last five fields (modelKey, temperature, topP, contractHash, contractPlacement) to produce a row written before they existed.
         var line = ScenarioSampleCsv.ToCsvLine(FullSample with
         {
             LiveTurnsToTarget = 4,
@@ -308,7 +308,7 @@ public sealed class ScenarioSampleCsvTests
             TopP = 0.9,
         });
         var previous = line;
-        for (var dropped = 0; dropped < 3; dropped++)
+        for (var dropped = 0; dropped < 5; dropped++)
         {
             previous = previous[..previous.LastIndexOf(',')];
         }
@@ -328,10 +328,10 @@ public sealed class ScenarioSampleCsvTests
     [Test]
     public void ParseThrowsFormatExceptionForTwentyNineColumns()
     {
-        // 28 commas make 29 empty fields: none of the 30-, 31-, 33- or 36-column layouts.
+        // 28 commas make 29 empty fields: none of the 30-, 31-, 33-, 36- or 38-column layouts.
         Assert.That(
             () => ScenarioSampleCsv.Parse(new string(',', 28)),
-            Throws.TypeOf<FormatException>().With.Message.Contains("Expected 30, 31, 33 or 36 CSV columns, found 29."));
+            Throws.TypeOf<FormatException>().With.Message.Contains("Expected 30, 31, 33, 36 or 38 CSV columns, found 29."));
     }
 
     [Test]

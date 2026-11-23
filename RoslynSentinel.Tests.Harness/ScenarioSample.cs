@@ -26,6 +26,8 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// <param name="ModelKey">LM Studio model key from the transcript header; "" when the transcript has none (it predates the field), the sample is inconclusive, or for an old CSV row without the column.</param>
 /// <param name="Temperature">Sampling temperature from the transcript header; null means the server default (or an unknown value: old transcript, inconclusive sample, old CSV row).</param>
 /// <param name="TopP">Top-p from the transcript header; null means the server default (or an unknown value, as for Temperature).</param>
+/// <param name="ContractHash">Content hash of the workflow contract stamped on the run; "" when unstamped or for an old CSV row without the column.</param>
+/// <param name="ContractPlacement">Name of the contract placement stamped on the run; "" when unstamped or for an old CSV row without the column.</param>
 public sealed record ScenarioSample(
     string ScenarioId,
     int ScenarioType,
@@ -44,7 +46,9 @@ public sealed record ScenarioSample(
     string ErrorPolicyHash = "",
     string ModelKey = "",
     double? Temperature = null,
-    double? TopP = null)
+    double? TopP = null,
+    string ContractHash = "",
+    string ContractPlacement = "")
 {
     /// <summary>True when the sample did not run; see InconclusiveReason.</summary>
     public bool IsInconclusive => InconclusiveReason.Length > 0;
@@ -55,7 +59,7 @@ public static class ScenarioSampleCsv
 {
     /// <summary>Column names, in the order ToCsvLine writes them.</summary>
     public const string Header =
-        "scenarioId,scenarioType,faultKind,sampleIndex,commit,dirty,liftRenames,firstCallSucceeded,firstErrorCode,firstErrorClass,recovered,callsToRecover,recoveryUsedExpectedTool,markerPresent,turnCount,stopReason,failureClass,passed,finalStateVerdict,turnCapHit,callsAfterFirstError,turnsAfterFirstError,outputCharsAfterFirstError,maxIdenticalCallRepeat,identicalReasoningBlocks,retryPhraseCount,schemaDrift,resultDrift,inconclusiveReason,transcriptPath,liveTurnsToTarget,errorPolicyMode,errorPolicyHash,modelKey,temperature,topP";
+        "scenarioId,scenarioType,faultKind,sampleIndex,commit,dirty,liftRenames,firstCallSucceeded,firstErrorCode,firstErrorClass,recovered,callsToRecover,recoveryUsedExpectedTool,markerPresent,turnCount,stopReason,failureClass,passed,finalStateVerdict,turnCapHit,callsAfterFirstError,turnsAfterFirstError,outputCharsAfterFirstError,maxIdenticalCallRepeat,identicalReasoningBlocks,retryPhraseCount,schemaDrift,resultDrift,inconclusiveReason,transcriptPath,liveTurnsToTarget,errorPolicyMode,errorPolicyHash,modelKey,temperature,topP,contractHash,contractPlacement";
 
     /// <summary>Column count of rows written before liveTurnsToTarget existed; Parse still accepts them.</summary>
     public const int LegacyColumnCount = 30;
@@ -65,6 +69,9 @@ public static class ScenarioSampleCsv
 
     /// <summary>Column count of rows written after errorPolicyMode and errorPolicyHash but before modelKey, temperature and topP existed; Parse still accepts them.</summary>
     public const int PreSamplingColumnCount = 33;
+
+    /// <summary>Column count of rows written after modelKey, temperature and topP but before contractHash and contractPlacement existed; Parse still accepts them.</summary>
+    public const int PreContractColumnCount = 36;
 
     /// <summary>One CSV line (no line terminator). Score columns are all empty when Score is null.</summary>
     public static string ToCsvLine(ScenarioSample sample)
@@ -107,11 +114,14 @@ public static class ScenarioSampleCsv
             Csv(sample.ErrorPolicyHash),
             Csv(sample.ModelKey),
             NullableDouble(sample.Temperature),
-            NullableDouble(sample.TopP));
+            NullableDouble(sample.TopP),
+            Csv(sample.ContractHash),
+            Csv(sample.ContractPlacement));
     }
 
     /// <summary>
-    /// Parses one CSV line written by ToCsvLine. Accepts Header's column count, PreSamplingColumnCount (no modelKey,
+    /// Parses one CSV line written by ToCsvLine. Accepts Header's column count, PreContractColumnCount (no contractHash or
+    /// contractPlacement columns; both are empty for those), PreSamplingColumnCount (no modelKey,
     /// temperature or topP columns; ModelKey is empty and Temperature and TopP are null for those), PreErrorPolicyColumnCount
     /// (also no error policy columns; ErrorPolicyMode and ErrorPolicyHash are empty for those) or LegacyColumnCount (also no
     /// liveTurnsToTarget; LiveTurnsToTarget is null for those). Throws FormatException for any other count.
@@ -120,9 +130,9 @@ public static class ScenarioSampleCsv
     {
         var f = SplitFields(csvLine);
         var expected = Header.Split(',').Length;
-        if (f.Count != expected && f.Count != PreSamplingColumnCount && f.Count != PreErrorPolicyColumnCount && f.Count != LegacyColumnCount)
+        if (f.Count != expected && f.Count != PreContractColumnCount && f.Count != PreSamplingColumnCount && f.Count != PreErrorPolicyColumnCount && f.Count != LegacyColumnCount)
         {
-            throw new FormatException($"Expected {LegacyColumnCount}, {PreErrorPolicyColumnCount}, {PreSamplingColumnCount} or {expected} CSV columns, found {f.Count}.");
+            throw new FormatException($"Expected {LegacyColumnCount}, {PreErrorPolicyColumnCount}, {PreSamplingColumnCount}, {PreContractColumnCount} or {expected} CSV columns, found {f.Count}.");
         }
 
         ScoreResult? score = f[14].Length == 0 ? null : new ScoreResult(
@@ -162,9 +172,11 @@ public static class ScenarioSampleCsv
             f.Count >= PreErrorPolicyColumnCount ? ParseNullableInt(f[30]) : null,
             f.Count >= PreSamplingColumnCount ? f[31] : string.Empty,
             f.Count >= PreSamplingColumnCount ? f[32] : string.Empty,
-            f.Count == expected ? f[33] : string.Empty,
-            f.Count == expected ? ParseNullableDouble(f[34]) : null,
-            f.Count == expected ? ParseNullableDouble(f[35]) : null);
+            f.Count >= PreContractColumnCount ? f[33] : string.Empty,
+            f.Count >= PreContractColumnCount ? ParseNullableDouble(f[34]) : null,
+            f.Count >= PreContractColumnCount ? ParseNullableDouble(f[35]) : null,
+            f.Count == expected ? f[36] : string.Empty,
+            f.Count == expected ? f[37] : string.Empty);
     }
 
     /// <summary>Appends one row, writing Header first when the file is missing or empty. Not thread-safe: one writer per run.</summary>
