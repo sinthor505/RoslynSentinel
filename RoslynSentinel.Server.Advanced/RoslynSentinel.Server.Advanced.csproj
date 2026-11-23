@@ -31,6 +31,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- EvalHostTable.DefaultPath is beside the running binary; SubAgent/SubAgentEval resolve hostAlias through it. Same Link pattern as Tests.ModelEval. -->
+    <Content Include="..\scripts\eval-hosts.json" Link="eval-hosts.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="RoslynSentinel.Common" />
   </ItemGroup>
 

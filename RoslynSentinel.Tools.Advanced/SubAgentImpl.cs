@@ -5,7 +5,7 @@ namespace RoslynSentinel.Tools.Advanced;
 
 /// <summary>
 /// Plain DI-constructed implementation backing <see cref="SubAgentTools"/>: dispatches a prompt to a
-/// real LM Studio model in a throwaway worktree and returns what the model said. Unlike
+/// real model (on a model host chosen per call) in a throwaway worktree and returns what the model said. Unlike
 /// <see cref="SubAgentEvalImpl"/> it has no build/test opinion.
 /// </summary>
 public sealed class SubAgentImpl(IWorkspaceManager workspaceManager, ILogger logger)
@@ -41,7 +41,7 @@ public sealed class SubAgentImpl(IWorkspaceManager workspaceManager, ILogger log
 
     public async Task<SentinelCallToolResult<SubAgentResult>> SubAgent(
         ToolCallReason reason, string prompt, string model, int maxTokensPerTurn,
-        int? turnCap, int? wallClockCapMinutes, SubAgentResponseFormat responseFormat, bool disposeWorktree, CancellationToken cancellationToken)
+        int? turnCap, int? wallClockCapMinutes, SubAgentResponseFormat responseFormat, bool disposeWorktree, string? hostAlias, CancellationToken cancellationToken)
     {
         var validationError = SubAgentModelRun.Validate(prompt, model, maxTokensPerTurn, turnCap, wallClockCapMinutes);
         if (validationError is not null)
@@ -62,6 +62,13 @@ public sealed class SubAgentImpl(IWorkspaceManager workspaceManager, ILogger log
                 SolutionNotLoadedMessage.Build(workspaceManager.LoadState) + " SubAgent branches the loaded solution's git repo."));
         }
 
+        // Before the worktree/child launch, so an unknown alias, a down host or a missing model costs nothing.
+        var (baseUrl, hostError) = await SubAgentModelRun.ResolveAndCheckHostAsync(hostAlias, model, cancellationToken);
+        if (hostError is not null)
+        {
+            return Failure(hostError);
+        }
+
         var runId = SubAgentRunNaming.NewRunId();
         string? logDirectory = null;
         logger.LogInformation("SubAgent {RunId}: starting for model {Model}. Reason: {Reason}", runId, model, reason);
@@ -73,7 +80,7 @@ public sealed class SubAgentImpl(IWorkspaceManager workspaceManager, ILogger log
             logDirectory = child.LogDirectory;
 
             var run = await SubAgentModelRun.RunAsync(
-                child, SystemPrompt, ApplyResponseFormat(prompt, responseFormat), model, maxTokensPerTurn,
+                child, SystemPrompt, ApplyResponseFormat(prompt, responseFormat), model, baseUrl, maxTokensPerTurn,
                 turnCap, wallClockCapMinutes, cancellationToken);
 
             var output = run.Transcript.FinalMessage();
@@ -106,7 +113,7 @@ public sealed class SubAgentImpl(IWorkspaceManager workspaceManager, ILogger log
         {
             // Never surface the raw exception or stack trace. The type name plus the capped message goes
             // in Detail so the caller can tell a bad host or model from an internal fault without a
-            // debugger (e.g. LM Studio's "No models loaded" arrives as an InvalidOperationException).
+            // debugger (e.g. a host's "No models loaded" arrives as an InvalidOperationException).
             logger.LogError(ex, "SubAgent {RunId}: failed unexpectedly.", runId);
             return Failure(new ResultError(ToolErrorCode.Exception,
                 $"SubAgent failed unexpectedly ({ex.GetType().Name}). Run id {runId}; see the server log and the run's agent.log for detail." + (logDirectory is null ? "" : $" Logs: {logDirectory}"),

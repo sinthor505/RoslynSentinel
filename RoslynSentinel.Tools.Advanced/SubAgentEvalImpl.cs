@@ -8,13 +8,13 @@ namespace RoslynSentinel.Tools.Advanced;
 
 /// <summary>
 /// Plain DI-constructed implementation backing <see cref="SubAgentEvalTools"/>: runs a prompt against
-/// a real LM Studio model in a throwaway worktree, then builds and tests whatever the model left.
+/// a real model (on a model host chosen per call) in a throwaway worktree, then builds and tests whatever the model left.
 /// </summary>
 public sealed class SubAgentEvalImpl(IWorkspaceManager workspaceManager, ILogger logger)
 {
     public async Task<SentinelCallToolResult<SubAgentEvalResult>> SubAgentEval(
         ToolCallReason reason, string prompt, string model, int maxTokensPerTurn,
-        string? baseBranch, int? turnCap, int? wallClockCapMinutes, bool disposeWorktree, CancellationToken cancellationToken)
+        string? baseBranch, int? turnCap, int? wallClockCapMinutes, bool disposeWorktree, string? hostAlias, CancellationToken cancellationToken)
     {
         var validationError = SubAgentModelRun.Validate(prompt, model, maxTokensPerTurn, turnCap, wallClockCapMinutes);
         if (validationError is not null)
@@ -35,6 +35,13 @@ public sealed class SubAgentEvalImpl(IWorkspaceManager workspaceManager, ILogger
                 SolutionNotLoadedMessage.Build(workspaceManager.LoadState) + " SubAgentEval branches the loaded solution's git repo."));
         }
 
+        // Before the worktree/child launch, so an unknown alias, a down host or a missing model costs nothing.
+        var (baseUrl, hostError) = await SubAgentModelRun.ResolveAndCheckHostAsync(hostAlias, model, cancellationToken);
+        if (hostError is not null)
+        {
+            return Failure(hostError);
+        }
+
         var runId = SubAgentRunNaming.NewRunId();
         string? logDirectory = null;
         logger.LogInformation("SubAgentEval {RunId}: starting for model {Model}. Reason: {Reason}", runId, model, reason);
@@ -46,7 +53,7 @@ public sealed class SubAgentEvalImpl(IWorkspaceManager workspaceManager, ILogger
             logDirectory = child.LogDirectory;
 
             var run = await SubAgentModelRun.RunAsync(
-                child, AgentSystemPrompts.CodingAgent, prompt, model, maxTokensPerTurn, turnCap, wallClockCapMinutes, cancellationToken);
+                child, AgentSystemPrompts.CodingAgent, prompt, model, baseUrl, maxTokensPerTurn, turnCap, wallClockCapMinutes, cancellationToken);
 
             // Read what the model touched before the post-run Build/RunTest snapshots, so the
             // snapshots' own side effects can never be mistaken for the model's edits.
@@ -92,7 +99,7 @@ public sealed class SubAgentEvalImpl(IWorkspaceManager workspaceManager, ILogger
         {
             // Never surface the raw exception or stack trace. The type name plus the capped message goes
             // in Detail so the caller can tell a bad host or model from an internal fault without a
-            // debugger (e.g. LM Studio's "No models loaded" arrives as an InvalidOperationException).
+            // debugger (e.g. a host's "No models loaded" arrives as an InvalidOperationException).
             logger.LogError(ex, "SubAgentEval {RunId}: failed unexpectedly.", runId);
             return Failure(new ResultError(ToolErrorCode.Exception,
                 $"SubAgentEval failed unexpectedly ({ex.GetType().Name}). Run id {runId}; see the server log and the run's agent.log for detail." + (logDirectory is null ? "" : $" Logs: {logDirectory}"),

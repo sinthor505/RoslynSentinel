@@ -16,21 +16,22 @@ public class SubAgentEvalTools
 
     [McpServerTool(Name = "SubAgentEval")]
     [Produces(DataTag.Report)]
-    [Description("Runs a prompt against a real LM Studio model in a fresh, worktree-isolated copy of the repo " +
+    [Description("Runs a prompt against a real model on a model host in a fresh, worktree-isolated copy of the repo " +
         "(branched from committed HEAD, so uncommitted edits in the live session are not visible to it), then " +
         "builds and tests the result. Returns a structured pass/fail report: build/test outcome, turn count, " +
         "stop reason, files touched, and a failure excerpt when the run did not converge cleanly. The worktree " +
         "is deleted afterward; the transcript path in the result survives. Slow: builds a private server, runs " +
         "the model, then builds and runs the tests. Use for an ad-hoc micro-eval question (\"can this model do " +
         "X\"), not for a scoped multi-step plan (use PlanStepRunner for that). Only usable when the loaded " +
-        "solution is the RoslynSentinel repo.")]
+        "solution is the RoslynSentinel repo. Before any launch it checks that the model host answers and lists the " +
+        "model, and refuses otherwise.")]
     public Task<SentinelCallToolResult<SubAgentEvalResult>> SubAgentEvalTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Full task text for the dispatched model, inlined by value - never a file path.")]
         string prompt,
-        [Description("Name of a model already loaded in LM Studio, exactly as LM Studio lists it (same value as --llm-model).")]
+        [Description("Name of a model already loaded on the model host, exactly as the host lists it (same value as --llm-model).")]
         string model,
-        [Description("Required, no default. Per-turn output token ceiling sent to LM Studio. Size it for the prompt's expected reasoning load; too small truncates a turn mid-reasoning.")]
+        [Description("Required, no default. Per-turn output token ceiling sent to the model host. Size it for the prompt's expected reasoning load; too small truncates a turn mid-reasoning.")]
         int maxTokensPerTurn,
         [Description("Git ref the worktree branches from. Omit for HEAD.")]
         string? baseBranch = null,
@@ -40,6 +41,8 @@ public class SubAgentEvalTools
         int? wallClockCapMinutes = null,
         [Description("Whether to dispose the worktree after the model run.")]
         bool disposeWorktree = true,
+        [Description(SubAgentModelRun.HostAliasDescription)]
+        string? hostAlias = null,
         CancellationToken cancellationToken = default)
-        => _impl.SubAgentEval(reason, prompt, model, maxTokensPerTurn, baseBranch, turnCap, wallClockCapMinutes, disposeWorktree, cancellationToken);
+        => _impl.SubAgentEval(reason, prompt, model, maxTokensPerTurn, baseBranch, turnCap, wallClockCapMinutes, disposeWorktree, hostAlias, cancellationToken);
 }

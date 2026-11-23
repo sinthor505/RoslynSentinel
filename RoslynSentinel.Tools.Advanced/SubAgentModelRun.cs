@@ -38,7 +38,7 @@ public static class SubAgentModelRun
         if (string.IsNullOrWhiteSpace(model))
         {
             return new ResultError(ToolErrorCode.InvalidArgument,
-                "model is empty. Pass the name of a model already loaded in LM Studio, exactly as LM Studio lists it.");
+                "model is empty. Pass the name of a model already loaded on the model host, exactly as the host lists it.");
         }
 
         if (maxTokensPerTurn < 1)
@@ -63,6 +63,110 @@ public static class SubAgentModelRun
         return null;
     }
 
+    /// <summary>Description of the shared <c>hostAlias</c> tool parameter.</summary>
+    public const string HostAliasDescription = "Optional alias of a model host from eval-hosts.json (for example 112u or 85lms). Omit for the server's own host (--llm-base-url). " +
+        "The host must answer GET <baseUrl>/models within 5 s and list the model, or the call is refused before anything is launched.";
+
+    /// <summary>How long the pre-run <c>GET &lt;baseUrl&gt;/models</c> may take before the host counts as unreachable.</summary>
+    public static readonly TimeSpan HostCheckTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>Most model ids named in a "models present" error.</summary>
+    private const int MaxListedModels = 30;
+
+    /// <summary>
+    /// Resolves the model host for one call and checks it before anything is launched, so a refusal costs
+    /// no worktree or child server. A blank <paramref name="hostAlias"/> selects the process-wide
+    /// <see cref="LlmOptions.BaseUrl"/>; an alias is looked up in eval-hosts.json (<paramref name="hostTablePath"/>,
+    /// default <see cref="EvalHostTable.DefaultPath"/>). The check is one <c>GET &lt;baseUrl&gt;/models</c> (OpenAI-compatible,
+    /// served by both llama-server and LM Studio) that must answer within <see cref="HostCheckTimeout"/> and list
+    /// <paramref name="model"/>. Returns the base URL to use, or an error naming what was found.
+    /// </summary>
+    public static async Task<(string BaseUrl, ResultError? Error)> ResolveAndCheckHostAsync(
+        string? hostAlias, string model, CancellationToken cancellationToken, string? hostTablePath = null)
+    {
+        var baseUrl = LlmOptions.BaseUrl;
+        if (!string.IsNullOrWhiteSpace(hostAlias))
+        {
+            IReadOnlyList<EvalHost> table;
+            try
+            {
+                table = EvalHostTable.Load(hostTablePath);
+            }
+            catch (InvalidOperationException)
+            {
+                // The exception text names the file's full path; keep it out of the tool result.
+                return (baseUrl, new ResultError(ToolErrorCode.PreconditionNotMet,
+                    $"hostAlias '{hostAlias.Trim()}' could not be resolved: {EvalHostTable.FileName} is present but failed validation. " +
+                    "The alias table is read from the file beside the server binary; omit hostAlias to use the process-wide host."));
+            }
+
+            var host = EvalHostTable.FindByAlias(table, hostAlias);
+            if (host is null)
+            {
+                var known = table.Count == 0
+                    ? $"none ({EvalHostTable.FileName} was not found beside the server binary, or lists no hosts)"
+                    : string.Join(", ", table.Select(h => h.Alias));
+                return (baseUrl, new ResultError(ToolErrorCode.InvalidArgument,
+                    $"hostAlias '{hostAlias.Trim()}' is not in {EvalHostTable.FileName}. Known aliases: {known}. " +
+                    $"Omitting hostAlias uses the process-wide host {LlmOptions.BaseUrl}."));
+            }
+
+            baseUrl = host.BaseUrl;
+        }
+
+        // The check applies to the process-wide host as well as to an alias: a down host or a missing model
+        // is the same wasted worktree build either way, and no existing test drives SubAgent through a host.
+        return (baseUrl, await CheckHostAsync(baseUrl, model, cancellationToken));
+    }
+
+    private static async Task<ResultError?> CheckHostAsync(string baseUrl, string model, CancellationToken cancellationToken)
+    {
+        var modelsUrl = baseUrl.TrimEnd('/') + "/models";
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(HostCheckTimeout);
+
+        string body;
+        try
+        {
+            using var http = new HttpClient();
+            using var response = await http.GetAsync(modelsUrl, timeout.Token);
+            if (!response.IsSuccessStatusCode)
+            {
+                return new ResultError(ToolErrorCode.PreconditionNotMet,
+                    $"The model host did not accept the pre-run check: GET {modelsUrl} answered {(int)response.StatusCode} {response.StatusCode}. Nothing was launched.");
+            }
+
+            body = await response.Content.ReadAsStringAsync(timeout.Token);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            return new ResultError(ToolErrorCode.PreconditionNotMet,
+                $"The model host is unreachable: GET {modelsUrl} did not answer within {HostCheckTimeout.TotalSeconds:0} s (TimeoutException). Nothing was launched.");
+        }
+        catch (Exception ex)
+        {
+            var kind = ex.InnerException is null ? ex.GetType().Name : $"{ex.GetType().Name} ({ex.InnerException.GetType().Name})";
+            return new ResultError(ToolErrorCode.PreconditionNotMet,
+                $"The model host is unreachable: GET {modelsUrl} failed with {kind}. Nothing was launched.");
+        }
+
+        var listed = LlamaServerModels.Parse(body);
+        if (LlamaServerModels.FindListed(listed, model) is not null)
+        {
+            return null;
+        }
+
+        var present = listed.Count == 0
+            ? "none (the host answered but listed no models)"
+            : string.Join(", ", listed.Take(MaxListedModels).Select(m => m.Id)) + (listed.Count > MaxListedModels ? $" ... ({listed.Count} in total)" : "");
+        return new ResultError(ToolErrorCode.NotFound,
+            $"Model '{model}' is not in the model list of {modelsUrl}. Models present: {present}. Nothing was launched.");
+    }
+
     /// <summary>
     /// Waits, bounded by SolutionLoadWait.DefaultTimeout like GetCurrentSolutionAsync, for a queued or running solution load; returns a SolutionLoadTimeout error when it is still running, else null.
     /// </summary>
@@ -84,17 +188,18 @@ public static class SubAgentModelRun
     /// Writes agent.log and transcript.json under <see cref="SubAgentChildServer.LogDirectory"/>.
     /// </summary>
     /// <param name="systemPrompt">System prompt for the dispatched model.</param>
+    /// <param name="baseUrl">Model host /v1 root for this call, as returned by <see cref="ResolveAndCheckHostAsync"/>.</param>
     public static async Task<AgentRunResult> RunAsync(
-        SubAgentChildServer child, string systemPrompt, string prompt, string model, int maxTokensPerTurn,
+        SubAgentChildServer child, string systemPrompt, string prompt, string model, string baseUrl, int maxTokensPerTurn,
         int? turnCap, int? wallClockCapMinutes, CancellationToken cancellationToken)
     {
         // A fresh HttpClient and LmStudioAgentClient per call: nothing about the model is shared
         // between two calls in flight in this process, which is the whole reason the model is an
         // explicit constructor argument rather than the process-wide LlmOptions.Model.
-        // TODO SubAgent/SubAgentEval always use the process-wide LlmOptions.BaseUrl: no per-call host (eval-hosts.json aliases such as 112u/113u/85u), no liveness/loaded-model check and no coordination with roslynsentinel-evalqueue.ps1, so a call can land on a host mid-queue; tool descriptions still say "LM Studio" though hosts default to Unsloth llama-server
+        // TODO SubAgent/SubAgentEval do not coordinate with roslynsentinel-evalqueue.ps1, so a call can still land on a host that is mid-queue (the pre-run check only proves the host answers and lists the model)
         using var httpClient = new HttpClient
         {
-            BaseAddress = new Uri(LlmOptions.BaseUrl.TrimEnd('/') + "/"),
+            BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/"),
             Timeout = TimeSpan.FromSeconds(Math.Max(LlmOptions.TimeoutSeconds * 4, 600)),
         };
 

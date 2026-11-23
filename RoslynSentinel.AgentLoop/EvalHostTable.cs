@@ -43,6 +43,13 @@ public static class EvalHostTable
         return table.FirstOrDefault(h => string.Equals(Normalise(h.BaseUrl), wanted, StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>Finds the entry with this alias (case-insensitive, surrounding whitespace ignored); null when none matches.</summary>
+    public static EvalHost? FindByAlias(IReadOnlyList<EvalHost> table, string alias)
+    {
+        var wanted = alias.Trim();
+        return table.FirstOrDefault(h => string.Equals(h.Alias, wanted, StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>Suffix from the default table, else the sanitised URL.</summary>
     public static string DeriveSuffix(string baseUrl) => DeriveSuffix(DefaultTable.Value, baseUrl);
 
