@@ -22,7 +22,8 @@ The lower-frequency conventions. Consult when touching tests, docs, scripts or t
 - **Scripts:** before hand-rolling a shell loop for a repeated task, check `scripts/` for a front-door
   `.ps1` (`roslynsentinel-modeleval.ps1`, `roslynsentinel-planstep.ps1`, `build.ps1`, ...).
   `Get-TelemetryRollup.ps1` rolls the per-instance tool telemetry up per tool; see
-  [reference_server_telemetry.md](reference_server_telemetry.md).
+  [reference_server_telemetry.md](reference_server_telemetry.md). `Get-EditToolFriction.ps1` classifies
+  ReplaceSnippet/ReplaceRange calls in eval transcripts by outcome (shape, anchor, compile rejects).
 - **Solution:** `RoslynSentinel.slnx` (there is no root `.sln`).
 
 ## Scratch root and repo hygiene
