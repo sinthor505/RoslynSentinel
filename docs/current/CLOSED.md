@@ -8,6 +8,18 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## SemanticFindReplace(replaceConstruction) accepts generic constructed types when the factory returns an assignable type - resolved (2026-11-23)
+
+`SemanticFindReplace(replaceConstruction)` accepts generic constructed types when the factory returns an assignable type (2026-11-21) - decided 2026-11-22: the up-front refusal at `ConstructionReplacer.cs:72` (TargetIneligible, the real reason plan_document_changeset_type Step 7 hand-batched ~140 sites) becomes a per-site check that the factory's return type is assignable to the closed constructed type; declared local types are left as they are; acceptance: a preview of `new Dictionary<FilePathWrapper, string>()` -> a `DocumentChangeSet` factory rewrites the sites with no TargetIneligible, and a non-assignable factory is still refused; Medium - [proposal](proposals/proposal_semantic_find_replace_construction_initializers_and_skip_echo.md)
+
+Evidence: 413065fa; SemanticFindReplaceConstructionTests generic-target tests (derived factory rewrites assignable sites and skips others per site; unrelated factory refused TargetIneligible); declared local types are not retyped
+
+## replaceConstruction reports a dropped nested inner site as rewritten - resolved (2026-11-23)
+
+replaceConstruction reports a dropped nested inner site as rewritten (2026-11-22) - `ConstructionReplacer.cs:233-237` (code TODO at :237) drops the inner edit of `new X(new X())` but counts it as rewritten; report it as skipped with a "nested" reason or rewrite it inside the outer replacement; acceptance: a nested construction's reported counts match the edits on disk; Small - [proposal](proposals/proposal_semantic_find_replace_construction_initializers_and_skip_echo.md)
+
+Evidence: 81c7b70d; SemanticFindReplaceConstructionTests.ReplaceConstruction_NestedInnerSiteInsideInitializerSite_IsReportedSkippedNotRewritten (dropped inner edit is now an Unsupported site with a nested reason)
+
 ## Git stage lineRange cuts mixed -/+ hunks - resolved (2026-11-23)
 
 Git stage `lineRange` cuts mixed -/+ hunks (2026-11-22) - decided 2026-11-22 (owner: build now): `GitHunkParser.SelectLines` (`:132-146`, `SliceInsertion` `:151-191` returns null on any `-` line; refusal `GitImpl.cs:2254-2270`) slices like `git add -p`: keep selected `-`/`+`, unselected `-` becomes context, unselected `+` is dropped, header recounted (apply already uses `--unidiff-zero`, `:2451`); pure-deletion hunks cannot straddle a range (single new-file position), so only mixed hunks need this; acceptance: an integration test staging half of a mixed hunk leaves the rest unstaged, with CRLF and no-newline-at-end cases; Medium
