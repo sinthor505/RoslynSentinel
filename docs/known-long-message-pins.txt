@@ -34,13 +34,11 @@ ComprehensiveToolTests.cs | 1
 ConstructorParameterCallSiteFixupTests.cs | 1
 ContextHelperIndentationDiagnosisTests.cs | 2
 ContextHelperLineAfterTests.cs | 3
-ContextHelperSelectorTests.cs | 25
 ContextHelperTests.cs | 1
 CreateFileDeleteFileTests.cs | 2
 DeclarationToolTests.cs | 2
 DeleteFileMissTests.cs | 1
 DiffEngineTests.cs | 1
-DocCommentIdNotFoundCandidateTests.cs | 5
 DocumentationToolsTests.cs | 1
 EditEffectEvidenceTests.cs | 1
 EditImpactGateWiringTests.cs | 3
@@ -59,7 +57,6 @@ MakeStaticRewritesCallersTests.cs | 1
 MemberAddManyGuardTests.cs | 2
 MemberInsertAnchorTests.cs | 3
 MemberRefactoringMissClassEnumTests.cs | 4
-MemberRefactoringNotFoundTests.cs | 10
 MemberRefactoringTests.cs | 19
 MemberRemoveTests.cs | 2
 MemberReplaceMultiDeclarationTests.cs | 2
@@ -84,10 +81,8 @@ ReplaceSnippetErrorCodeTests.cs | 3
 ReplaceSnippetRenameLiftTests.cs | 1
 SearchModeTests.cs | 1
 SearchSolutionTextIncludeTestsTests.cs | 5
-SearchSolutionTextRecoveryHintTests.cs | 10
 SemanticRefactoringMissAdvancedTests.cs | 3
 SemanticReplaceEngineTests.cs | 2
 SequenceLargeResultPagingTests.cs | 3
-SnippetErrorFormatterTests.cs | 28
 SnippetLookupTests.cs | 1
 WorkspaceLookupMissTests.cs | 3

@@ -17,6 +17,8 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
 [Category("WorkspaceTools")]
+// Subject is the wording of the message: exempt from the long-message-pin ratchet (MessageTextRatchetTests).
+[Category("MessageTextSubject")]
 public class SearchSolutionTextRecoveryHintTests
 {
     private string _dir = string.Empty;

@@ -13,6 +13,8 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 // name when the tool catalog is not loaded in the test process, so the asserts name the tool, not its argument list.
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
+// Subject is the wording of the message: exempt from the long-message-pin ratchet (MessageTextRatchetTests).
+[Category("MessageTextSubject")]
 public sealed class MemberRefactoringNotFoundTests
 {
     private const string FilePath = "Calc.cs";

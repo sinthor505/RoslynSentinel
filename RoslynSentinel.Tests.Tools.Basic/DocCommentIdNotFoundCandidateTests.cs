@@ -18,6 +18,8 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 /// </summary>
 [TestFixture]
 [Category("RefactoringSignatureTools")]
+// Subject is the wording of the message: exempt from the long-message-pin ratchet (MessageTextRatchetTests).
+[Category("MessageTextSubject")]
 public class DocCommentIdNotFoundCandidateTests
 {
     private const string ProjectName = "OrderApp";

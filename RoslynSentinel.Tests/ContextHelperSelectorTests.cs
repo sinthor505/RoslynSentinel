@@ -4,6 +4,8 @@ using RoslynSentinel.Common.SnippetMatching;
 namespace RoslynSentinel.Tests;
 
 [Parallelizable(ParallelScope.All)]
+// Subject is the wording of the message: exempt from the long-message-pin ratchet (MessageTextRatchetTests).
+[Category("MessageTextSubject")]
 public class ContextHelperSelectorTests
 {
     // Snippet occurs at lines 5-6 (in A), 12-13 (in B) and 19-20 (in the B(int) overload).

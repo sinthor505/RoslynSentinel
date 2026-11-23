@@ -11,6 +11,8 @@ namespace RoslynSentinel.Tests;
 /// match when they are sent to <see cref="SnippetResolver"/> again (the round trip).
 /// </summary>
 [Parallelizable(ParallelScope.All)]
+// Subject is the wording of the message: exempt from the long-message-pin ratchet (MessageTextRatchetTests).
+[Category("MessageTextSubject")]
 public class SnippetErrorFormatterTests
 {
     private const string Pad = "        ";
