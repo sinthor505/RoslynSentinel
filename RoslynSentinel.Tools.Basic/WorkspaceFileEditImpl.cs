@@ -370,6 +370,7 @@ public class WorkspaceFileEditImpl
             var json = await File.ReadAllTextAsync(blobPath, cancellationToken);
             var doc = JsonSerializer.Deserialize<JsonElement>(json);
             var allItems = doc.GetProperty("items").EnumerateArray().Select(e => JsonSerializer.Deserialize<OperationItemRecord>(e.GetRawText())!).ToList();
+            OperationItemRecord.ResolveAfterSources(allItems);
             // Last-only rule: refuse when a newer, non-undone operation blob touched any of these files; the drift guard below still covers writes that left no blob.
             var targetPaths = allItems.Where(r => r.Outcome == ItemRecordOutcome.Succeeded).Select(r => r.FilePath).ToList();
             if (solutionRoot != null && targetPaths.Count > 0)

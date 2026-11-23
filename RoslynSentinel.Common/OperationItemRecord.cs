@@ -24,6 +24,11 @@ public class OperationItemRecord
     {
         get; set;
     }
+    /// <summary>When set, AfterSource is not stored: the after-text equals the BeforeSource of the item in the same blob whose FilePath is this value (the text is stored once). Null on every item of an older blob. Readers call ResolveAfterSources after deserializing.</summary>
+    public string? AfterSourceFromFilePath
+    {
+        get; set;
+    }
     /// <summary>Structured Roslyn diagnostics that caused a validation failure. Null when outcome is not a compiler error.</summary>
     public List<DiagnosticInfo>? CompilerDiagnostics { get; set; }
 
@@ -55,5 +60,30 @@ public class OperationItemRecord
     public bool Created
     {
         get; set;
+    }
+
+    /// <summary>Fills AfterSource from the referenced item's BeforeSource for every item that carries AfterSourceFromFilePath and has no AfterSource; leaves every other item untouched. A reference that matches no item (FilePath compared OrdinalIgnoreCase) or whose item has a null BeforeSource leaves AfterSource null.</summary>
+    public static void ResolveAfterSources(IReadOnlyList<OperationItemRecord> items)
+    {
+        foreach (var item in items)
+        {
+            if (item.AfterSourceFromFilePath is null || item.AfterSource is not null)
+            {
+                continue;
+            }
+            OperationItemRecord? referenced = null;
+            foreach (var candidate in items)
+            {
+                if (string.Equals(candidate.FilePath, item.AfterSourceFromFilePath, StringComparison.OrdinalIgnoreCase))
+                {
+                    referenced = candidate;
+                    break;
+                }
+            }
+            if (referenced is not null)
+            {
+                item.AfterSource = referenced.BeforeSource;
+            }
+        }
     }
 }

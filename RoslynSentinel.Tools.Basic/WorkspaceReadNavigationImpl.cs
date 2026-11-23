@@ -1648,6 +1648,7 @@ public class WorkspaceReadNavigationImpl
             var json = await File.ReadAllTextAsync(blobPath, cancellationToken);
             var doc = JsonSerializer.Deserialize<JsonElement>(json);
             var allItems = doc.GetProperty("items").EnumerateArray().Select(e => JsonSerializer.Deserialize<OperationItemRecord>(e.GetRawText())!).ToList();
+            OperationItemRecord.ResolveAfterSources(allItems);
             IEnumerable<OperationItemRecord> filtered = allItems;
             if (!string.IsNullOrEmpty(filter))
             {
