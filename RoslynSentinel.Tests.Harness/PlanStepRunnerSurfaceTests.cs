@@ -103,6 +103,7 @@ public class PlanStepRunnerSurfaceTests
             ("StepPrompts.BuildUserPrompt", StepPrompts.BuildUserPrompt(
                 PlanStepFile.Parse(1, "01-sample.md", "01-sample.md", "Rename Foo to Bar in Foo.cs."))),
             ("ErrorPolicyWiring.ComposePrompt(CodingAgent)", ErrorPolicyWiring.ComposePrompt(AgentSystemPrompts.CodingAgent)),
+            ("ErrorPolicyWiring.ComposePrompt(CodingAgentContract)", ErrorPolicyWiring.ComposePrompt(AgentSystemPrompts.CodingAgentContract)),
         };
 
         var candidates = new SortedSet<string>(FallbackToolNames, StringComparer.Ordinal);

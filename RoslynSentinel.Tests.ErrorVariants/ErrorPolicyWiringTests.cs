@@ -45,6 +45,35 @@ public class ErrorPolicyWiringTests
     }
 
     [Test]
+    public void ComposePrompt_ContractOffNoFile_ReturnsContractUnchanged()
+    {
+        Assert.That(ErrorPolicyWiring.ComposePrompt(AgentSystemPrompts.CodingAgentContract, ErrorPolicyMode.Off, null), Is.EqualTo(AgentSystemPrompts.CodingAgentContract));
+        Assert.That(ErrorPolicyWiring.ComposePrompt(AgentSystemPrompts.CodingAgentContract, ErrorPolicyMode.Off, "   "), Is.EqualTo(AgentSystemPrompts.CodingAgentContract));
+    }
+
+    [TestCase(ErrorPolicyMode.Off)]
+    [TestCase(ErrorPolicyMode.Pointer)]
+    [TestCase(ErrorPolicyMode.Inline)]
+    public void ComposePrompt_ContractFileSetAnyMode_AppendsErrorHandlingBlock(ErrorPolicyMode mode)
+    {
+        string path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(path, OneEntryPolicy);
+
+            string result = ErrorPolicyWiring.ComposePrompt(AgentSystemPrompts.CodingAgentContract, mode, path);
+
+            Assert.That(result, Does.StartWith(AgentSystemPrompts.CodingAgentContract.TrimEnd()));
+            Assert.That(result, Does.Contain("## Error handling"));
+            Assert.That(result, Does.Contain("### Error handling: FileNotFound.Edit"));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Test]
     public void ChildServerArgs_OffNoFile_IsEmpty()
     {
         Assert.That(ErrorPolicyWiring.ChildServerArgs(ErrorPolicyMode.Off, null), Is.Empty);

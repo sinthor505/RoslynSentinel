@@ -59,4 +59,37 @@ public sealed class ErrorPolicyEvalPromptTests
             }
         }
     }
+
+    [Test]
+    public void ComposePrompt_ContractModeOffNoFile_YieldsTheContract()
+    {
+        string result = ErrorPolicyWiring.ComposePrompt(AgentSystemPrompts.CodingAgentContract, ErrorPolicyMode.Off, null);
+
+        Assert.That(result, Is.EqualTo(AgentSystemPrompts.CodingAgentContract));
+        Assert.That(result, Does.Not.Contain(ErrorHandlingHeading));
+    }
+
+    [Test]
+    public void ComposePrompt_ContractPointerWithPolicyFile_StartsWithContractAndAddsBlock()
+    {
+        string policyPath = Path.Combine(Path.GetTempPath(), "errorpolicy-" + Path.GetRandomFileName() + ".md");
+        try
+        {
+            File.WriteAllText(policyPath,
+                "### FileNotFound.Lookup\n" +
+                "Use the lookup tool before retrying.\n");
+
+            string result = ErrorPolicyWiring.ComposePrompt(AgentSystemPrompts.CodingAgentContract, ErrorPolicyMode.Pointer, policyPath);
+
+            Assert.That(result, Does.StartWith(AgentSystemPrompts.CodingAgentContract.TrimEnd()));
+            Assert.That(result, Does.Contain("### Error handling: FileNotFound.Lookup"));
+        }
+        finally
+        {
+            if (File.Exists(policyPath))
+            {
+                File.Delete(policyPath);
+            }
+        }
+    }
 }
