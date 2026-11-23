@@ -8,6 +8,24 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Git stage lineRange cuts mixed -/+ hunks - resolved (2026-11-23)
+
+Git stage `lineRange` cuts mixed -/+ hunks (2026-11-22) - decided 2026-11-22 (owner: build now): `GitHunkParser.SelectLines` (`:132-146`, `SliceInsertion` `:151-191` returns null on any `-` line; refusal `GitImpl.cs:2254-2270`) slices like `git add -p`: keep selected `-`/`+`, unselected `-` becomes context, unselected `+` is dropped, header recounted (apply already uses `--unidiff-zero`, `:2451`); pure-deletion hunks cannot straddle a range (single new-file position), so only mixed hunks need this; acceptance: an integration test staging half of a mixed hunk leaves the rest unstaged, with CRLF and no-newline-at-end cases; Medium
+
+Evidence: c418a4f9, 3ac51349, e7a73856; GitHunkParserTests, GitStageLineRangeTests and Git_Stage smoke tests green (136 Tests.Tools.Basic). Rule: removed block taken iff the range covers the first added line; otherwise the kept added run is inserted after the unselected block; a cut after an old-side no-newline marker is refused (the insertion would join onto the last line)
+
+## Git stage partial-hunk report moves to GitStageHunksResult.Note - resolved (2026-11-23)
+
+Git stage partial-hunk report moves to a new `GitStageHunksResult.Note` (2026-11-22) - decided 2026-11-22: `Warning` elsewhere means degradation (`GitImpl.cs:3021`, `:3126`), so route `PartialHunkNotes` (`GitImpl.cs:2382-2398`) to an optional Note like `GitHunksResult.Note` (`:555`) and keep Warning for the remaining-count mismatch; acceptance: a lineRange partial stage returns Note set and Warning null, `ClaudeLeanSchemaBudgetTests` green; Small
+
+Evidence: 255986ec; GitStageLineRangeTests asserts Note set and Warning null
+
+## Track docs/known-build-warnings.Solution.txt - resolved (2026-11-23)
+
+Track `docs/known-build-warnings.Solution.txt` (2026-11-22) - decided 2026-11-22 (owner): it is gitignored, so Solution warning-baseline edits stay local while Basic/Advanced are committed; drop it from `.gitignore` and commit the current baseline; acceptance: the file is tracked and `scripts/build.ps1 -Flavor Solution` rewrites it with only real warning changes in the diff; Small
+
+Evidence: e3340a14 (gitignore line dropped, current baseline committed); the build.ps1 -Flavor Solution rewrite check is left for the after-batch run
+
 ## Four repo-root walk-ups with their own miss behaviour - folded into plan (2026-11-23)
 
 INBOX 2026-11-23 01:00: four hand-written repo-root walk-ups keep their own miss behaviour, so plan_test_placement Step 2 did not delegate them to `RepoRootLocator.Find`; two more walk-ups were uncounted by the plan.
