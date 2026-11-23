@@ -14,7 +14,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// substring check for the wrong reason, and was only caught by the model's own separate
 /// LLM-driven verify phase, not by any mechanical assertion.
 /// </summary>
-internal static class FunctionalFixVerifier
+public static class FunctionalFixVerifier
 {
     /// <summary>
     /// Runs `dotnet build` against the given ContosoOrders.Core.csproj, loads the resulting
