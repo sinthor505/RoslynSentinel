@@ -19,6 +19,7 @@ namespace RoslynSentinel.Engines.Basic;
 /// Whether the factory accepts a site's arguments is decided by speculatively binding the rewritten call at the site
 /// (full overload resolution: named arguments, conversions, optional and params parameters), not by comparing counts.
 /// Sites that cannot be rewritten safely are reported as skipped with a reason; they never block the other sites.
+/// A generic target (open definition such as 'T:Ns.Box`1') is supported: the factory must return a subtype of a constructed form, and each constructed site is checked for assignability to the factory's return type.
 /// </remarks>
 public static class ConstructionReplacer
 {
@@ -67,11 +68,6 @@ public static class ConstructionReplacer
             return Fail(ToolErrorCode.InvalidArgument, $"symbol: '{targetType.Name}' is a {targetType.TypeKind.ToString().ToLowerInvariant()}, which cannot be constructed with new. {SymbolHint}");
         }
 
-        if (targetType.IsGenericType)
-        {
-            return Fail(ToolErrorCode.TargetIneligible, $"symbol: '{targetType.ToDisplayString()}' is a generic type; replaceConstruction supports only non-generic types.");
-        }
-
         var targetTypeId = targetType.GetDocumentationCommentId();
         if (targetTypeId is null)
         {
@@ -100,9 +96,16 @@ public static class ConstructionReplacer
             return Fail(ToolErrorCode.TargetIneligible, $"factory: the project that declares '{factory.ToDisplayString()}' cannot see type '{targetType.ToDisplayString()}'. Pass a factory declared in a project that references it.");
         }
 
-        if (!IsAssignable(factoryCompilation!, factory.ReturnType, typeInFactoryCompilation))
+        if (!targetType.IsGenericType)
         {
-            return Fail(ToolErrorCode.TargetIneligible, BuildNotAssignableMessage(factoryCompilation!, factory, typeInFactoryCompilation));
+            if (!IsAssignable(factoryCompilation!, factory.ReturnType, typeInFactoryCompilation))
+            {
+                return Fail(ToolErrorCode.TargetIneligible, BuildNotAssignableMessage(factoryCompilation!, factory, typeInFactoryCompilation));
+            }
+        }
+        else if (!DerivesFromConstructedForm(factory.ReturnType, typeInFactoryCompilation))
+        {
+            return Fail(ToolErrorCode.TargetIneligible, BuildNotAssignableGenericMessage(factory, targetType));
         }
 
         var filter = ParseProjectFilter(projectFilter);
@@ -190,7 +193,7 @@ public static class ConstructionReplacer
 
                     var line = text.Lines.GetLineFromPosition(node.SpanStart).LineNumber + 1;
                     var before = node.ToString();
-                    var skipReason = GetSkipReason(node, model, factoryHere, factory, factoryTypeIds, project.Name, out var replacementPrefix, out var wholeNodeReplacement);
+                    var skipReason = GetSkipReason(node, model, factoryHere, factory, factoryTypeIds, project.Name, ctor.ContainingType, targetType.IsGenericType, out var replacementPrefix, out var wholeNodeReplacement);
                     if (skipReason is not null)
                     {
                         sites.Add(new SemanticReplaceSite(document.FilePath, line, SemanticReplaceRole.Unsupported, before, before, skipReason));
@@ -268,6 +271,8 @@ public static class ConstructionReplacer
         IMethodSymbol factory,
         HashSet<string> factoryTypeIds,
         string projectName,
+        INamedTypeSymbol siteType,
+        bool targetIsGeneric,
         out string replacementPrefix,
         out string? wholeNodeReplacement)
     {
@@ -321,6 +326,11 @@ public static class ConstructionReplacer
         if (!model.IsAccessible(node.SpanStart, factoryHere))
         {
             return "factory is not accessible from this site";
+        }
+
+        if (targetIsGeneric && !IsAssignable(model.Compilation, factoryHere.ReturnType, siteType))
+        {
+            return $"factory returns '{factoryHere.ReturnType.ToMinimalDisplayString(model, node.SpanStart)}', which is not implicitly assignable to this site's type '{siteType.ToMinimalDisplayString(model, node.SpanStart)}'; the site was left unchanged";
         }
 
         string argumentListText;
@@ -442,6 +452,24 @@ public static class ConstructionReplacer
             ? $"Methods on '{factory.ContainingType.Name}' that qualify: {string.Join(", ", candidates)}."
             : $"Add a static method on '{factory.ContainingType.Name}' that returns '{type.Name}' (or a subtype), then pass its id.";
         return $"factory: '{factory.ToDisplayString()}' returns '{factory.ReturnType.ToDisplayString()}', which is not implicitly assignable to the constructed type '{type.ToDisplayString()}', so rewritten sites could stop compiling. {suggestion}";
+    }
+
+    private static bool DerivesFromConstructedForm(ITypeSymbol returnType, INamedTypeSymbol openType)
+    {
+        for (ITypeSymbol? current = returnType; current is not null; current = current.BaseType)
+        {
+            if (current is INamedTypeSymbol named && SymbolEqualityComparer.Default.Equals(named.OriginalDefinition, openType))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string BuildNotAssignableGenericMessage(IMethodSymbol factory, INamedTypeSymbol openType)
+    {
+        return $"factory: '{factory.ToDisplayString()}' returns '{factory.ReturnType.ToDisplayString()}', which is neither '{openType.ToDisplayString()}' nor a subtype of any constructed form of it, so rewritten sites could stop compiling. Pass a factory whose return type derives from '{openType.ToDisplayString()}'.";
     }
 
     private static List<string>? ParseProjectFilter(string? projectFilter)

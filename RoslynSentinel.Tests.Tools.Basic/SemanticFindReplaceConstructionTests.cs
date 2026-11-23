@@ -471,6 +471,48 @@ public class SemanticFindReplaceConstructionTests
     }
 
     [Test]
+    [Description("A generic target rewrites each constructed site the factory's return type is assignable to and skips the others")]
+    public async Task ReplaceConstruction_GenericTargetWithDerivedFactory_RewritesAssignableSitesAndSkipsOthers()
+    {
+        const string listType = "T:System.Collections.Generic.List`1";
+        var consumers = GizmoConsumersFile(
+            "public System.Collections.Generic.List<int> Ints() => new System.Collections.Generic.List<int>();",
+            "public System.Collections.Generic.List<string> Strings() => new System.Collections.Generic.List<string>();");
+        await SeedGizmoFixtureAsync(consumers);
+
+        var preview = Data(await RunAsync(SemanticReplaceMode.preview, listType, BagCreate));
+        var intSite = FindSite(preview, "GizmoConsumers.cs", "new System.Collections.Generic.List<int>()");
+        Assert.That(intSite.GetProperty("After").GetString(), Is.EqualTo("BagFactory.Create()"));
+        Assert.That(intSite.GetProperty("UnsupportedReason").ValueKind, Is.EqualTo(JsonValueKind.Null));
+        var stringSite = FindSite(preview, "GizmoConsumers.cs", "new System.Collections.Generic.List<string>()");
+        Assert.That(stringSite.GetProperty("UnsupportedReason").GetString(), Does.Contain("assignable"));
+        Assert.That(ReadSeeded(GizmoConsumersPath), Is.EqualTo(consumers), "Preview writes nothing");
+
+        var data = Data(await RunAsync(SemanticReplaceMode.apply, listType, BagCreate));
+        Assert.That(data.GetProperty("rewritten").GetInt32(), Is.EqualTo(1));
+        Assert.That(ReadSeeded(GizmoConsumersPath), Is.EqualTo(GizmoConsumersFile(
+            "public System.Collections.Generic.List<int> Ints() => BagFactory.Create();",
+            "public System.Collections.Generic.List<string> Strings() => new System.Collections.Generic.List<string>();")));
+    }
+
+    [Test]
+    [Description("A generic target with a factory whose return type is unrelated to the generic type refuses the whole operation")]
+    public async Task ReplaceConstruction_GenericTargetWithUnrelatedFactory_RefusesAndWritesNothing()
+    {
+        const string listType = "T:System.Collections.Generic.List`1";
+        var consumers = GizmoConsumersFile(
+            "public System.Collections.Generic.List<int> Ints() => new System.Collections.Generic.List<int>();");
+        await SeedGizmoFixtureAsync(consumers);
+
+        var result = await RunAsync(SemanticReplaceMode.apply, listType, GizmoCreate);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(result.ErrorData.Message, Does.Contain("neither"));
+        Assert.That(ReadSeeded(GizmoConsumersPath), Is.EqualTo(consumers));
+    }
+
+    [Test]
     [Description("Apply with nothing rewritable writes nothing and issues no changeId")]
     public async Task ReplaceConstruction_ApplyWithNothingToRewrite_ReportsSkippedSitesWithoutChangeId()
     {
