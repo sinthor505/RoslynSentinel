@@ -239,6 +239,33 @@ public class SchemaLeanProfileTests
     }
 
     [Test]
+    public async Task ToolsList_ReadTools_CarryReadOnlyHint_AndGitDoesNot()
+    {
+        var tools = await WithClientAsync(Array.Empty<string>(), async client =>
+        {
+            var listed = await client.ListToolsAsync(cancellationToken: TestContext.CurrentContext.CancellationToken);
+
+            // Clone the value out so it outlives the client/host disposal.
+            return listed.Select(t => (t.Name, ReadOnly: t.ProtocolTool.Annotations?.ReadOnlyHint)).ToList();
+        });
+
+        var readOnlyByName = tools.ToDictionary(t => t.Name, t => t.ReadOnly);
+
+        foreach (var name in new[] { "ReadFile", "GetFileOutline", "Search" })
+        {
+            Assert.That(readOnlyByName, Does.ContainKey(name), $"{name} should be listed by tools/list.");
+            Assert.That(readOnlyByName[name], Is.EqualTo(true), $"{name} should advertise annotations.readOnlyHint = true.");
+        }
+
+        // Git is multi-operation, so it must not claim read-only. Member is checked too when it is listed.
+        // If neither is listed in this harness, only the positive assertions above apply.
+        foreach (var name in new[] { "Git", "Member" }.Where(readOnlyByName.ContainsKey))
+        {
+            Assert.That(readOnlyByName[name] == true, Is.False, $"{name} is multi-operation and must not advertise readOnlyHint = true.");
+        }
+    }
+
+    [Test]
     public async Task Lean_CallPassingValidateOnApplyFalse_IsRefused()
     {
         var text = await WithClientAsync(["--schema-profile=lean"], async client =>
