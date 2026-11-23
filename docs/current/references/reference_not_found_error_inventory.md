@@ -392,8 +392,8 @@ Code- or type-coupled (not text; safe against wording changes, sensitive to code
 
 - Common `NotFoundEvidence.cs:44` matches codes "NotFound", "MethodNotFound", "FileNotFound" (via
   `ToolResultMarshaller.cs:170`).
-- Common `IResultStatus.cs:58` maps NotFound or NoMatches to `ResultStatus.NotFound`; `EngineResultWrapper.cs:72`
-  and `EditOutcomeExtensions.cs:25` map back to `ToolErrorCode.NotFound`.
+- Common `IResultStatus.cs:58` maps NotFound or NoMatches to `ResultStatus.NotFound`;
+  `EditOutcomeExtensions.cs:25` maps back to `ToolErrorCode.NotFound` (`EngineResultWrapper` was removed 2026-11-23).
 - Tools.Basic `DocumentationTools.cs:21`; `WorkspaceFileEditImpl.cs` `is ToolNotFoundException` handling and the batch
   failure code (the rejected-origin and rewrite notes are appended at `:1311`, `:1316`, `:1614-1621`; the earlier
   lines `:1278`, `:1283`, `:1597-1603` and `:1666` drifted, re-measure); `WorkspaceBuildTestImpl.cs:320` (catches

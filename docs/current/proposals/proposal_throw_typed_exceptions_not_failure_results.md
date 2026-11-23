@@ -1,6 +1,6 @@
 # Engines and resolvers throw typed exceptions for failure; results carry only successful or legitimately empty outcomes
 
-**Status:** IN-PROGRESS 2026-10-24; S0, S1, S2 and the first S3 tool-layer cleanup are committed (see "Start here"); next steps are the remaining S3 items, Q4 `MoveAllTypesToFiles*`, then S4/S5. Direction (exceptions are the single failure carrier) is already decided in `plans/plan_error_codes_follow_cause.md`, this proposal covers the remaining hop and the payload question.
+**Status:** IN-PROGRESS 2026-10-24; S0, S1, S2 and the first S3 tool-layer cleanup are committed (see "Start here"); next steps are the remaining S3 items, Q4 `MoveAllTypesToFiles*`, then S4/S5. Direction (exceptions are the single failure carrier) is already decided in `plans/plan_error_codes_follow_cause.md`, this proposal covers the remaining hop and the payload question. Q3 (a build or test run that did not run throws) and the removal of `EngineResultWrapper<T>` are done: `plans/closed/plan_remove_engine_result_wrapper.md` (2026-11-23).
 
 ## Start here (implementation, fresh session)
 

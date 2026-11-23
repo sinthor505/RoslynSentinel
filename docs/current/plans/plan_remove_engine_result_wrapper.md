@@ -468,6 +468,7 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
 - Done when: `Build` 0 errors; `ResultStatusTests` passes.
 
 ### Step 13 - Tool boundary emits the exception's own code
+- Done: d15f67b68939221c5e5b5d9c78778bec9af4e0ad
 - Files: `RoslynSentinel.Tools.Basic/WorkspaceBuildTestImpl.cs`, `RoslynSentinel.Tools.Basic/WorkspaceHealthMiscImpl.cs`,
   `RoslynSentinel.Engines.Basic/TestInstanceLauncher.cs`
 - Depends on: Step 12b (and Step 0 done, so Step 16 knows its pins)
@@ -495,6 +496,7 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
 - Done when: `Build` 0 errors. Tests are run after Step 16.
 
 ### Step 14 - BuildEngine sites throw the exception for their cause
+- Done: d15f67b68939221c5e5b5d9c78778bec9af4e0ad
 - Files: `RoslynSentinel.Engines.Basic/BuildEngine.cs`
 - Depends on: Step 13
 - Pairs with: Step 15
@@ -515,6 +517,7 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
 - Done when: `Build` 0 errors. Dispatcher runs `ErrorPolicyKindRatchetTests` and `ToolHintRatchetTests`.
 
 ### Step 15 - TestRunEngine sites throw the exception for their cause
+- Done: d15f67b68939221c5e5b5d9c78778bec9af4e0ad
 - Files: `RoslynSentinel.Engines.Basic/TestRunEngine.cs`
 - Depends on: Step 13
 - Pairs with: Step 14
@@ -535,6 +538,7 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
 - Done when: `Build` 0 errors. Dispatcher runs `ErrorPolicyKindRatchetTests` and `ToolHintRatchetTests`.
 
 ### Step 16 - Tests for the reclassified codes
+- Done: d15f67b68939221c5e5b5d9c78778bec9af4e0ad
 - Files: `BuildEngineTests.cs`, `BuildScopeFullBuildTests.cs`, `SurfaceAwareHintsBuildTestingTests.cs`,
   `BatteryTwentyTests.cs` (all `RoslynSentinel.Tests.Tools.Basic`), plus the pins from Step 0
 - Depends on: Steps 14, 15
@@ -568,6 +572,10 @@ data at `TestRunEngine.cs:172` no test projects and `:231` gate busy) or "starte
     - `BuildScopeFullBuildTests.cs:218-234` (unknown project `Nope`) -> `ThrowsAsync<ToolNotFoundException>`.
     - `SurfaceAwareHintsBuildTestingTests.cs:35,94,179,234-235` -> `NoProjectsException` message reads; comment at
       `:9` names BuildNotRun.
+    - Changed in Step 16 beyond this list: `ResultStatusTests.TestRunResult_IncompleteRun_IsFailedWithIncompleteMessage`
+      now expects `TestRunIncomplete` (plus a new incomplete-with-failures test); `BatteryTwentyTests` quick-build
+      zero-project test pins `NoProjects`; new `NotRunWireCodeTests.cs`. `BatteryTwentyTests.cs:1358` measured
+      `SolutionNotLoaded` (the review's reading).
     - Unchanged (still correct): `ResultStatusTests.cs:593-594,803,830,841`, `LoopLatchTests.cs:128-129`,
       `ErrorPolicySymbolWireResolverRouteTests.cs:39`, `ResultStatusSubAgentEvalTests.cs:47-64`,
       `SubAgentEvalResultTests.cs`; launcher-marker `BuildFailed` flags (`LaunchBuildMarker*`, `IdleRestartPolicy*`)

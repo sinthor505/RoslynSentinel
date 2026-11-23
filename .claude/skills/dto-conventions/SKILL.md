@@ -66,8 +66,9 @@ ones are not renamed for this rule alone (see section 5).
 
 Every operation result implements the status interface `IOperationResult` (renamed from
 `IResultStatus`): `Status` and a derived `IsError` (`Code` and `Message` are not interface members; a type may
-still expose them as its own properties). Use a DTO for 2+ fields; deriving from
-`EngineResultBase` gives the interface for free. Do not add new uses of `EngineResultWrapper<T>`.
+still expose them as its own properties). Use a DTO for 2+ fields. An engine returns the payload type itself; an
+operation that could not run throws a typed `ToolException` (for example `BuildNotRunException`,
+`ToolNotFoundException`), never a failure result.
 
 ## 5. Wire safety
 

@@ -222,6 +222,7 @@ public sealed class SubAgentChildServerLauncher(ILogger logger)
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
+            // TODO a build that could not start reports BuildFailed; ToolErrorCode.BuildNotRun is the code for "did not run"
             throw new SubAgentLaunchException(
                 ToolErrorCode.BuildFailed, "Could not run 'dotnet build' for the worktree's server.", ex.Message, ex);
         }

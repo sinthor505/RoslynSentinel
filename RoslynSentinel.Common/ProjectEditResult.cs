@@ -5,7 +5,7 @@ namespace RoslynSentinel.Common;
 /// <summary>
 /// Result of a project- or folder-level edit (create project, split project, namespace-folder preview).
 /// Carries no single-file text: those operations describe their changes through the outcome and message.
-/// Sits beside <see cref="EngineResultBase"/> until the project-level callers migrate to it.
+/// Single-file edits are described by <see cref="DocumentEditResult"/> instead.
 /// </summary>
 public sealed record ProjectEditResult : IOperationResult
 {
