@@ -64,6 +64,8 @@ internal sealed class ModelEvalMcpEnvironment : IAsyncDisposable
     /// <paramref name="borrowedFixture"/>, when non-null, is used instead of a new fixture (<paramref name="restorePackages"/>
     /// is then ignored) and is NOT disposed by <see cref="DisposeAsync"/>: the caller owns it and disposes it itself, so
     /// several worlds can be built in turn over the same on-disk solution.
+    /// <paramref name="fullToolSchema"/> false (default) hides validateOnApply from every tool schema the world lists and refuses validateOnApply:false;
+    /// true offers the full schema. <c>SchemaOptions.Profile</c> is deliberately untouched.
     /// If any step throws, the partly built world is disposed before the exception propagates.
     /// </summary>
     public static async Task<ModelEvalMcpEnvironment> CreateAsync(
@@ -73,12 +75,13 @@ internal sealed class ModelEvalMcpEnvironment : IAsyncDisposable
         ModelEvalStaging? afterLoad,
         CancellationToken cancellationToken,
         Action<IMcpServerBuilder, IServiceCollection>? configureToolSurface = null,
-        RoslynSentinel.Tests.TestSolutionFixture? borrowedFixture = null)
+        RoslynSentinel.Tests.TestSolutionFixture? borrowedFixture = null,
+        bool fullToolSchema = false)
     {
         var environment = new ModelEvalMcpEnvironment();
         try
         {
-            await environment.InitializeAsync(sampleDirectory, restorePackages, beforeLoad, afterLoad, configureToolSurface, borrowedFixture, cancellationToken);
+            await environment.InitializeAsync(sampleDirectory, restorePackages, beforeLoad, afterLoad, configureToolSurface, borrowedFixture, fullToolSchema, cancellationToken);
             return environment;
         }
         catch
@@ -95,6 +98,7 @@ internal sealed class ModelEvalMcpEnvironment : IAsyncDisposable
         ModelEvalStaging? afterLoad,
         Action<IMcpServerBuilder, IServiceCollection>? configureToolSurface,
         RoslynSentinel.Tests.TestSolutionFixture? borrowedFixture,
+        bool fullToolSchema,
         CancellationToken cancellationToken)
     {
         // restorePackages: ContosoOrders.Tests needs restore assets or a solution-scope build reports CS0246 for every Xunit file
@@ -111,6 +115,15 @@ internal sealed class ModelEvalMcpEnvironment : IAsyncDisposable
         mcpBuilder.WithTasks(
             new InMemoryMcpTaskStore(),
             o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
+        // These three are process-static: a world built later resets them. Tools are built lazily at host start (the statics
+        // are read when the host resolves the tool singletons), not at registration, so they must be set before the host starts.
+        // The ModelEval assembly runs its fixtures sequentially (no assembly-level Parallelizable), which is why a per-world
+        // static is safe here. They are deliberately not restored afterwards: a toolset enabled later in the same world builds
+        // tools with the same setting.
+        RoslynSentinel.Common.HiddenSchemaParams.Clear();
+        RoslynSentinel.Server.Advanced.ToolArgumentValidator.ClearSchemaCacheForTests();
+        RoslynSentinel.Common.SchemaOptions.ConfigureHiddenParameters(fullToolSchema ? Array.Empty<string>() : new[] { "validateOnApply" });
+
         if (configureToolSurface is null)
         {
             mcpBuilder.AddRoslynSentinelToolsAdvanced(

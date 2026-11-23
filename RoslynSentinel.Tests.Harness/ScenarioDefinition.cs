@@ -27,6 +27,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// <param name="ResumeFaultExtraCalls">Seeded resume scenarios only (ResumeFaultSeeded true): further authored calls placed in the SAME assistant turn as the ResumeFaultTool call, executed in order after it on the fixture, each with its real result. {SOLUTION} in the arguments is replaced as for ResumeFaultArguments. null/empty = the turn holds only the ResumeFaultTool call. Ignored for an unseeded fault.</param>
 /// <param name="AbsentTargetNames">StopAndReport scenarios only: names of the task's target that does not exist in the solution (for example a file or method name). When the final message names one and states it is absent but has no BLOCKED: marker, the run scores FailureClass.ProseStop (see StopAbsenceDetector). null = never ProseStop.</param>
 /// <param name="ReplyMustName">Locate scenarios only: a name the model's final message must contain (whole word, case-insensitive) for a Correct final-state verdict to stand; without it the verdict is demoted to Unchanged (see <see cref="GateVerdictOnReply"/>). null = the reply is not graded.</param>
+/// <param name="OfferFullToolSchema">Mechanism only: true builds the sample's world with the full tool schema (validateOnApply offered); no scenario sets it.</param>
 public sealed record ScenarioDefinition(
     string Id,
     int ScenarioType,
@@ -51,7 +52,8 @@ public sealed record ScenarioDefinition(
     bool EndOnCorrectFinalState = false,
     IReadOnlyList<(string Tool, string Arguments)>? ResumeFaultExtraCalls = null,
     IReadOnlyList<string>? AbsentTargetNames = null,
-    string? ReplyMustName = null)
+    string? ReplyMustName = null,
+    bool OfferFullToolSchema = false)
 {
     /// <summary>Environment variable holding a positive integer that replaces TurnCap for a live run (the script's -TurnCap).</summary>
     public const string TurnCapVariable = "ROSLYNSENTINEL_MODELEVAL_TURN_CAP";

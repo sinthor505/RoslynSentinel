@@ -40,6 +40,7 @@ internal sealed record ImplementationScenarioStep(
 /// <paramref name="SeedFiles"/> is the step-0 overlay on the ContosoOrders sample. A parked scenario carries
 /// <paramref name="ParkedReason"/> and its test cases are reported Ignored.
 /// </summary>
+/// <param name="OfferFullToolSchema">Mechanism only: true builds the sample's world with the full tool schema (validateOnApply offered); no scenario sets it.</param>
 internal sealed record ImplementationScenario(
     string Id,
     string Title,
@@ -49,7 +50,8 @@ internal sealed record ImplementationScenario(
     IReadOnlyList<ImplementationScenarioStep> Steps,
     int TurnCap = 25,
     string PreferredHost = "113",
-    string? ParkedReason = null)
+    string? ParkedReason = null,
+    bool OfferFullToolSchema = false)
 {
     /// <summary>Context budget in characters: seed text + the longest step prompt (~6k tokens at 24,000).</summary>
     public const int ContextBudgetCharacters = 24000;
