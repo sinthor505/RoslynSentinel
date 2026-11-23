@@ -33,7 +33,7 @@ public class TestSolutionFixtureRestoreTests
 
     /// <summary>
     /// Runs the same solution-scope in-memory build that the Build tool uses for level=quickBuild
-    /// (BuildEngine.RunQuickBuildAsync) against a freshly loaded copy of the solution.
+    /// (BuildEngine.RunQuickBuildCoreAsync) against a freshly loaded copy of the solution.
     /// </summary>
     private static async Task<BuildResult> RunSolutionQuickBuildAsync(string solutionPath)
     {
@@ -43,13 +43,15 @@ public class TestSolutionFixtureRestoreTests
             await workspaceManager.LoadSolutionAsync(solutionPath, null, TestSolutionFixture.LoadTimeout, CancellationToken.None);
             var diagnosticEngine = Battery.Basic.TestEngines.DiagnosticEngine(workspaceManager);
             var buildEngine = Battery.Basic.TestEngines.BuildEngine(workspaceManager, diagnosticEngine);
-            var result = await buildEngine.RunQuickBuildAsync(ToolScope.solution, null, maxDetails: 200, CancellationToken.None);
-            if (!result.TryGetData(out var build))
+            try
             {
-                Assert.Fail("quickBuild returned no BuildResult data.");
+                return await buildEngine.RunQuickBuildCoreAsync(ToolScope.solution, null, maxDetails: 200, CancellationToken.None);
             }
-
-            return build!;
+            catch (BuildNotRunException ex)
+            {
+                Assert.Fail("quickBuild did not run: " + ex.Message);
+                throw;
+            }
         }
         finally
         {
