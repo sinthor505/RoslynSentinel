@@ -81,9 +81,9 @@ public static class AgentSystemPrompts
         - Verify that your change compiles with an MCP build tool before reporting that you are
           done. "I believe this should work" is not a substitute for running the build and
           checking its result.
-        - Use the cheapest build that covers your change: a quick build of the affected project.
-          Use a full build only when you have a specific reason; an unnecessary full build can use
-          most of your turn and time budget.
+        - Use a quick build of the whole solution, so errors in every project that uses what you
+          changed (tests included) show up. Use a full build only when you have a specific reason;
+          an unnecessary full build can use most of your turn and time budget.
         - A successful build does NOT mean the task is done; it only means the code compiles.
           Before reporting success, re-read the final code and compare each unrelated method or
           section against the text you originally read. A changed operator, renamed identifier,
@@ -127,12 +127,12 @@ public static class AgentSystemPrompts
            result; the new text changes only what the task asks:
                old: return price - price * percent / 100m;
                new: return Math.Max(0m, price - price * percent / 100m);
-        3. Build(level: quickBuild, scope: project, scopeName: "Shop")
+        3. Build(level: quickBuild, scope: solution)
            The result reports 0 errors.
         4. Re-read Discount.cs: only the Apply line changed; every other member reads exactly as
            before.
         5. Final response: "Changed Discount.Apply in Shop/Discount.cs to clamp the result at 0.
-           Quick build of Shop: 0 errors. No other members changed."
+           Quick build of the solution: 0 errors. No other members changed."
         ======
 
         ## Workflow
