@@ -10,3 +10,4 @@ close it with a reason in [CLOSED.md](./CLOSED.md), then delete the line here. C
 [todo_markers.md](../generated/todo_markers.md) (regenerate with `pwsh -NoProfile -File scripts/Get-TodoMarkers.ps1`).
 
 ## Untriaged
+- 2026-11-23 02:03 ModelEval: AgentTranscript.FinalMessage() returns a capped run's last mid-task text, so report/BLOCKED checks grade it as a final message - 85 WideningRejectedByGate run 20261123-075139-171 graded PassedAfterCap with no report and an unchanged tree (T25 text named ChangePublisher) - fixed in ImplementationScenarioAgentTests.RunStepAsync; TODO at ShippingKindSteppedAgentTests.cs:129 (also ScenarioScorer.Score, ScenarioSampleLoop.RunSamplesAsync)
