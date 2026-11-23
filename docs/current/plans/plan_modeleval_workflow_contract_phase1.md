@@ -1,6 +1,6 @@
 # Plan: Standing workflow contract behind a switch, ScenarioTask record and renderer, contract stamp, validateOnApply hide switch (proposal Phasing step 1)
 
-**Status:** APPROVED 2026-11-23. Review fixes folded in (Decision 7); runs Batched with the owner present. Phasing step 1 of [proposal_modeleval_standing_workflow_contract.md](../proposals/proposal_modeleval_standing_workflow_contract.md).
+**Status:** IN PROGRESS 2026-11-23. Steps 1-5, 10, 11, 15, 19 done (0522f742..8e5dc5f8, batch A); batches B, C and Step 21 left. Phasing step 1 of [proposal_modeleval_standing_workflow_contract.md](../proposals/proposal_modeleval_standing_workflow_contract.md).
 
 ## Problem
 
@@ -123,6 +123,7 @@ Wire impact: none (authoring input to a renderer, never serialized or returned b
 ## Steps
 
 ### Step 1 - Contract skeleton (AgentLoop)
+- Done: 0522f742
 - Files: RoslynSentinel.AgentLoop/ScenarioTask.cs (new), RoslynSentinel.AgentLoop/WorkflowContract.cs (new), RoslynSentinel.AgentLoop/AgentSystemPrompts.cs
 - Depends on: none
 - Effect: text-neutral (new members, no callers).
@@ -140,6 +141,7 @@ Wire impact: none (authoring input to a renderer, never serialized or returned b
 - Lane: implementer (3 files, 3 edits, depth tier 1).
 
 ### Step 2 - Contract text constants
+- Done: ffa5bd71
 - Files: RoslynSentinel.AgentLoop/AgentSystemPrompts.cs
 - Depends on: 1
 - Effect: text-neutral (the constants have no caller yet).
@@ -148,6 +150,7 @@ Wire impact: none (authoring input to a renderer, never serialized or returned b
 - Lane: implementer (1 file, 2 edits). Pairs with: Step 3.
 
 ### Step 3 - Renderer and contract helpers
+- Done: bf3a8b71
 - Files: RoslynSentinel.AgentLoop/ScenarioTask.cs, RoslynSentinel.AgentLoop/WorkflowContract.cs
 - Depends on: 1
 - Effect: text-neutral (no caller yet).
@@ -158,6 +161,7 @@ Wire impact: none (authoring input to a renderer, never serialized or returned b
 - Lane: implementer (2 files, ~6 edits). Pairs with: Step 2.
 
 ### Step 4 - Contract stamp plumbing (AgentLoop)
+- Done: 8a6993a4
 - Files: RoslynSentinel.AgentLoop/AgentTranscript.cs, RoslynSentinel.AgentLoop/ModelAgentRunner.cs
 - Depends on: none (pairs after Step 1 for scheduling only)
 - Effect: text-neutral; transcripts gain two optional JSON fields only when a stamp is set.
@@ -166,6 +170,7 @@ Wire impact: none (authoring input to a renderer, never serialized or returned b
 - Lane: implementer (2 files, 4 edits). Pairs with: Step 6.
 
 ### Step 5 - EvalContractOptions and assembly setup
+- Done: f0a23fc4
 - Files: RoslynSentinel.Tests.Harness/EvalContractOptions.cs (new), RoslynSentinel.Tests.ModelEval/ModelEvalAssemblySetUp.cs
 - Depends on: 1, 4 (compile); behaviour needs 2 and 3
 - Effect: text-neutral with both variables unset.
@@ -217,6 +222,7 @@ Wire impact: none (authoring input to a renderer, never serialized or returned b
 - Lane: implementer-sweep (1 operation, 5 files, 6 call sites, 1 project). Pairs with: Step 8.
 
 ### Step 10 - Hidden-parameter option on SchemaOptions and the patcher (server source)
+- Done: c8b9eb54
 - Files: RoslynSentinel.Common/SchemaOptions.cs, RoslynSentinel.Common/McpToolSchemaPatcher.cs, RoslynSentinel.Common/HiddenSchemaParams.cs
 - Depends on: none
 - Effect: text-neutral (the default list is empty; a Full or Lean server emits the same schemas as today).
@@ -228,6 +234,7 @@ Wire impact: none (authoring input to a renderer, never serialized or returned b
 - Lane: implementer (3 files, ~7 edits, depth tier 1; the rename is one `RenameSymbol` call). Pairs with: Step 11.
 
 ### Step 11 - Refusal robust to a stale registry, facts-only wording (server source)
+- Done: 85d2d169
 - Files: RoslynSentinel.Server.Advanced/ToolArgumentValidator.cs
 - Depends on: none
 - Effect: behaviour-changing only for the refusal text (the Lean case): one clause is reworded and the refusal no longer fires when the schema declares the parameter.
@@ -263,6 +270,7 @@ Wire impact: none (authoring input to a renderer, never serialized or returned b
 - Lane: implementer (1 non-C# file, 1 edit).
 
 ### Step 15 - Tests: contract constants, helpers and renderer
+- Done: 0c6f7c89
 - Files: RoslynSentinel.Tests.Harness/WorkflowContractTests.cs (new), RoslynSentinel.Tests.Harness/ScenarioTaskRenderTests.cs (new)
 - Depends on: 2, 3
 - Effect: text-neutral (tests).
@@ -297,6 +305,7 @@ Wire impact: none (authoring input to a renderer, never serialized or returned b
 - Lane: test-writer (3 files). Pairs with: Step 14.
 
 ### Step 19 - Tests: the hide-params option on the server
+- Done: 8e5dc5f8
 - Files: RoslynSentinel.Tests.Server/SchemaHiddenParametersTests.cs (new)
 - Depends on: 10, 11
 - Effect: text-neutral (tests).
