@@ -139,18 +139,7 @@ public class PlanStepRunnerSurfaceTests
     }
 
     /// <summary>Walks up from the test directory to the folder holding RoslynSentinel.slnx; null when absent.</summary>
-    private static string? FindRepoRoot()
-    {
-        for (var dir = new DirectoryInfo(TestContext.CurrentContext.TestDirectory); dir is not null; dir = dir.Parent)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "RoslynSentinel.slnx")))
-            {
-                return dir.FullName;
-            }
-        }
-
-        return null;
-    }
+    private static string? FindRepoRoot() => RepoRootLocator.TryFind(AppContext.BaseDirectory);
 
     /// <summary>Full path of a repo-relative file; Assert.Ignore when the repo or the file is not present.</summary>
     private static string RequireRepoFile(string relativePath)
