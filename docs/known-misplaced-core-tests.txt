@@ -9,10 +9,6 @@ RoslynSentinel.Tests.Advanced/BugFixTests.cs::AddBracesNullReturnRegressionTests
 RoslynSentinel.Tests.Advanced/BugFixTests.cs::Bug53MakeMethodThreadSafeRegressionTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Advanced/BugFixTests.cs::CallGraphNullReturnRegressionTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Advanced/BugHuntSevenTests.cs::BH05_ConvertLockOverloadBugTests | RoslynSentinel.Tests.Basic
-RoslynSentinel.Tests.Advanced/ChangeSignaturePrimaryConstructorTests.cs::ChangeSignaturePrimaryConstructorTests | RoslynSentinel.Tests.Basic
-RoslynSentinel.Tests.Advanced/ChangeSignatureReflectionConstructionTests.cs::ChangeSignatureReflectionConstructionTests | RoslynSentinel.Tests.Basic
-RoslynSentinel.Tests.Advanced/ChangeSignatureRemovedParameterUseTests.cs::ChangeSignatureRemovedParameterUseTests | RoslynSentinel.Tests.Basic
-RoslynSentinel.Tests.Advanced/ChangeSignatureWrapperTests.cs::ChangeSignatureWrapperTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Advanced/ConstructionSiteFindingsTests.cs::ConstructionSiteFindingsTests | RoslynSentinel.Tests.Tools.Basic
 RoslynSentinel.Tests.Advanced/GenericContainerNameTests.cs::GenericContainerNameTests | RoslynSentinel.Tests.Basic
 RoslynSentinel.Tests.Advanced/GenericContainerNameTests.cs::SyntaxTargetResolverTests | RoslynSentinel.Tests.Basic
