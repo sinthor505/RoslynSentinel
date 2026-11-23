@@ -39,7 +39,6 @@ public class WorkspaceBuildTestImpl
     {
         try
         {
-            EngineResultWrapper<DiagnosticSummary> result;
             DiagnosticSummary summary;
             if (scope == ToolScope.file)
             {
@@ -56,8 +55,7 @@ public class WorkspaceBuildTestImpl
                 // wire form (solution-root-relative '/' or absolute) here, and reuse it for the quickBuild
                 // file scope below so both agree on the file.
                 scopeName = _workspaceManager.ResolveFromWire(scopeName).Absolute;
-                result = await _diagnosticEngine.GetFileDiagnosticsAsync(scopeName, cancellationToken: cancellationToken);
-                summary = result.Data;
+                summary = await _diagnosticEngine.GetFileDiagnosticsCoreAsync(scopeName, cancellationToken: cancellationToken);
             }
             else if (scope == ToolScope.project)
             {
@@ -70,13 +68,11 @@ public class WorkspaceBuildTestImpl
                     };
                 }
 
-                result = await _diagnosticEngine.GetProjectDiagnosticsAsync(scopeName, cancellationToken: cancellationToken);
-                summary = result.Data;
+                summary = await _diagnosticEngine.GetProjectDiagnosticsCoreAsync(scopeName, cancellationToken: cancellationToken);
             }
             else if (scope == ToolScope.solution)
             {
-                result = await _diagnosticEngine.GetSolutionDiagnosticsAsync(maxDetails, cancellationToken: cancellationToken);
-                summary = result.Data;
+                summary = await _diagnosticEngine.GetSolutionDiagnosticsCoreAsync(maxDetails, cancellationToken: cancellationToken);
             }
             else
             {
@@ -90,14 +86,18 @@ public class WorkspaceBuildTestImpl
             BuildResult? buildVerification = null;
             if (verify != BuildVerifyLevel.noBuild)
             {
-                var buildRun = verify is BuildVerifyLevel.fullBuild or BuildVerifyLevel.fullBuildThrowaway
-                    ? await _buildEngine.RunFullBuildAsync(cancellationToken, level: verify, isCallable: CallableCheck)
-                    : await _buildEngine.RunQuickBuildAsync(scope, scopeName, maxDetails, cancellationToken, isCallable: CallableCheck);
-                if (buildRun.TryGetData(out var rawBuild))
+                // TODO surface a build that did not run as a finding instead of skipping verification
+                try
                 {
+                    var rawBuild = verify is BuildVerifyLevel.fullBuild or BuildVerifyLevel.fullBuildThrowaway
+                        ? await _buildEngine.RunFullBuildCoreAsync(cancellationToken, level: verify, isCallable: CallableCheck)
+                        : await _buildEngine.RunQuickBuildCoreAsync(scope, scopeName, maxDetails, cancellationToken, isCallable: CallableCheck);
                     // Project like Build does (breakdown, root-cause order); every error is inline and the result marshaller pages a long list.
                     buildVerification = BuildResultProjector.Project(
                         rawBuild, new BuildProjection(maxDetails, IncludeOutput: false, IncludeWarnings: false), await GetTransitiveDependenciesAsync(cancellationToken));
+                }
+                catch (BuildNotRunException)
+                {
                 }
             }
 
@@ -106,18 +106,18 @@ public class WorkspaceBuildTestImpl
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = false,
-                    SuccessData = result.Data with { BuildVerification = buildVerification },
-                    Findings = WithForeignWriterFindings(result.Findings, summary)
+                    SuccessData = summary with { BuildVerification = buildVerification },
+                    Findings = WithForeignWriterFindings([], summary)
                 };
             }
 
-            var relevant = result.Data.Details.Where(d => d.Severity is "Error" or "Warning").ToList();
+            var relevant = summary.Details.Where(d => d.Severity is "Error" or "Warning").ToList();
             var groups = relevant.GroupBySeverity(topN);
             return new SentinelCallToolResult<object>()
             {
                 IsError = false,
                 SuccessData = new DiagnosticsSummaryResult(TotalIssues: relevant.Count, Errors: summary.Errors, Warnings: summary.Warnings, TopIssues: groups, BuildVerification: buildVerification),
-                Findings = WithForeignWriterFindings(result.Findings, summary)
+                Findings = WithForeignWriterFindings([], summary)
             };
         }
         catch (Exception ex)
