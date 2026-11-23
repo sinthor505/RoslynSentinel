@@ -145,7 +145,7 @@ public class RunTestTests
     }
 
     [Test]
-    public async Task RunTest_ScopeProjectUnresolvedScopeName_ReturnsTestRunFailedAsync()
+    public async Task RunTest_ScopeProjectUnresolvedScopeName_ReturnsNotFoundAsync()
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
@@ -155,12 +155,12 @@ public class RunTestTests
         var result = await workspaceTools.RunTestTool(reason: "test message", ToolScope.project, scopeName: "DoesNotExist");
 
         Assert.That(!result.IsError, Is.False);
-        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("TestRunFailed"));
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         Assert.That(result.ErrorData!.Message, Does.Contain("DoesNotExist"));
     }
 
     [Test]
-    public async Task RunTest_ScopeFile_ReturnsTestRunFailedExplainingUnsupportedAsync()
+    public async Task RunTest_ScopeFile_ReturnsInvalidArgumentExplainingUnsupportedAsync()
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
@@ -170,7 +170,7 @@ public class RunTestTests
         var result = await workspaceTools.RunTestTool(reason: "test message", ToolScope.file);
 
         Assert.That(!result.IsError, Is.False);
-        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("TestRunFailed"));
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
         Assert.That(result.ErrorData!.Message, Does.Contain("scope=file"));
     }
 

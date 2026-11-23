@@ -211,7 +211,7 @@ public class BuildScopeFullBuildTests
 
     [Test]
     [NonParallelizable]
-    public async Task FullBuild_UnknownProject_ThrowsBuildNotRunWithListAllHint()
+    public async Task FullBuild_UnknownProject_ThrowsNotFoundWithListAllHint()
     {
         var root = Path.Combine(Path.GetTempPath(), "RoslynSentinelScope_" + Guid.NewGuid().ToString("n"));
         Directory.CreateDirectory(root);
@@ -222,10 +222,12 @@ public class BuildScopeFullBuildTests
             await workspaceManager.LoadSolutionAsync(Path.Combine(root, "ScopeFixture.slnx"));
             var buildEngine = TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager));
 
-            var ex = await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50,
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50,
                 level: BuildVerifyLevel.fullBuildThrowaway, scope: ToolScope.project, scopeName: "Nope"));
 
             Assert.That(ex.Message, Does.Contain("ListAll"));
+            Assert.That(ex.MissingTargetKind, Is.EqualTo(MissingTargetKinds.Project));
+            Assert.That(ex.MissingTargetName, Is.EqualTo("Nope"));
         }
         finally
         {
@@ -246,7 +248,7 @@ public class BuildScopeFullBuildTests
 
     [Test]
     [NonParallelizable]
-    public async Task FullBuild_ProjectScopeWithoutScopeName_ThrowsBuildNotRun()
+    public async Task FullBuild_ProjectScopeWithoutScopeName_ThrowsInvalidArgument()
     {
         var root = Path.Combine(Path.GetTempPath(), "RoslynSentinelScope_" + Guid.NewGuid().ToString("n"));
         Directory.CreateDirectory(root);
@@ -257,7 +259,7 @@ public class BuildScopeFullBuildTests
             await workspaceManager.LoadSolutionAsync(Path.Combine(root, "ScopeFixture.slnx"));
             var buildEngine = TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager));
 
-            await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50,
+            await Assert.ThrowsAsync<ToolInvalidArgumentException>(async () => await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50,
                 level: BuildVerifyLevel.fullBuildThrowaway, scope: ToolScope.project, scopeName: null));
         }
         finally

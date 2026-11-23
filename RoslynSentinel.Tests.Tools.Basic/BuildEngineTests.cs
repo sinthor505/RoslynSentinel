@@ -15,19 +15,19 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 public class BuildEngineTests
 {
     [Test]
-    public async Task RunQuickBuildAsync_ZeroProjectScope_ThrowsBuildNotRunAsync()
+    public async Task RunQuickBuildAsync_ZeroProjectScope_ThrowsNoProjectsAsync()
     {
         var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         workspaceManager.SetTestSolution(TestSolutionBuilder.CreateEmptySolution());
         var diagnosticEngine = TestEngines.DiagnosticEngine(workspaceManager);
         var buildEngine = TestEngines.BuildEngine(workspaceManager, diagnosticEngine);
 
-        await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunQuickBuildAsync(ToolScope.solution, null, maxDetails: 50, CancellationToken.None));
+        await Assert.ThrowsAsync<NoProjectsException>(async () => await buildEngine.RunQuickBuildAsync(ToolScope.solution, null, maxDetails: 50, CancellationToken.None));
 
         workspaceManager.Dispose();
     }
     [Test]
-    public async Task RunFullBuildAsync_ZeroProjectSolution_ThrowsBuildNotRunAsync()
+    public async Task RunFullBuildAsync_ZeroProjectSolution_ThrowsNoProjectsAsync()
     {
         var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         workspaceManager.SetTestSolution(TestSolutionBuilder.CreateEmptySolution());
@@ -35,7 +35,7 @@ public class BuildEngineTests
         var diagnosticEngine = TestEngines.DiagnosticEngine(workspaceManager);
         var buildEngine = TestEngines.BuildEngine(workspaceManager, diagnosticEngine);
 
-        await Assert.ThrowsAsync<BuildNotRunException>(async () => await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50));
+        await Assert.ThrowsAsync<NoProjectsException>(async () => await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50));
 
         workspaceManager.Dispose();
     }

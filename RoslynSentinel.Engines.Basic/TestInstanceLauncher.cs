@@ -326,9 +326,9 @@ public sealed class TestInstanceLauncher
         {
             data = await _buildEngine.RunFullBuildAsync(cancellationToken, 5, false, BuildVerifyLevel.fullBuildThrowaway);
         }
-        catch (BuildNotRunException ex)
+        catch (ToolException ex)
         {
-            throw new TestInstanceException(ToolErrorCode.BuildFailed, "The build needed for the test instance did not run: " + ex.Message);
+            throw new TestInstanceException(ex.ErrorCode, "The build needed for the test instance did not run: " + ex.Message);
         }
 
         if (data.Outcome != BuildOutcome.Succeeded)

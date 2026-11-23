@@ -74,9 +74,9 @@ public record TestRunResult(
     [System.Text.Json.Serialization.JsonIgnore]
     public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);
 
-    /// <summary>ToolErrorCode.TestRunFailed when IsError (the closest existing code for both cases); null otherwise.</summary>
+    /// <summary>ToolErrorCode.TestRunIncomplete when the run did not complete (timeout, hang, no TRX); ToolErrorCode.TestRunFailed when it completed with failures; null otherwise.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public string? Code => IsError ? ToolErrorCode.TestRunFailed : null;
+    public string? Code => !RunCompleted ? ToolErrorCode.TestRunIncomplete : !RunSucceeded ? ToolErrorCode.TestRunFailed : null;
 
     /// <summary>Detail, or a count or incomplete-run text, when IsError; null otherwise.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
@@ -119,7 +119,7 @@ public class TestRunEngine
 
         if (scope == ToolScope.file)
         {
-            throw new TestRunNotRunException("scope=file is not supported by RunTest - there is no per-file test-execution unit in `dotnet test`. Use scope=project or scope=solution, optionally narrowed with filter.");
+            throw new ToolInvalidArgumentException("scope=file is not supported by RunTest - there is no per-file test-execution unit in `dotnet test`. Use scope=project or scope=solution, optionally narrowed with filter.");
         }
 
         List<(string Name, string Path)> targets;
@@ -127,14 +127,14 @@ public class TestRunEngine
         {
             if (string.IsNullOrEmpty(scopeName))
             {
-                throw new TestRunNotRunException("scopeName (projectName) is required when scope=project.");
+                throw new ToolInvalidArgumentException("scopeName (projectName) is required when scope=project.");
             }
 
             var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
             var project = ProjectLookup.FindProject(solution, scopeName);
             if (project is null)
             {
-                throw new TestRunNotRunException(ProjectNotFoundDetail.Build(scopeName, solution.Projects.Select(p => p.Name).ToList(), "scopeName"));
+                throw new ToolNotFoundException(ProjectNotFoundDetail.Build(scopeName, solution.Projects.Select(p => p.Name).ToList(), "scopeName"), missingTargetKind: MissingTargetKinds.Project, missingTargetName: scopeName);
             }
 
             if (project.FilePath is null)
@@ -153,7 +153,7 @@ public class TestRunEngine
             }
             catch (SolutionNotLoadedException ex)
             {
-                throw new TestRunNotRunException($"{ex.Message} RunTest needs a loaded solution.");
+                throw new SolutionNotLoadedException($"{ex.Message} RunTest needs a loaded solution.");
             }
 
             targets = solution.Projects
@@ -164,21 +164,7 @@ public class TestRunEngine
 
             if (targets.Count == 0)
             {
-                return new TestRunResult(
-                    RunSucceeded: false,
-                    ExitCode: -1,
-                    TotalCount: 0,
-                    PassedCount: 0,
-                    FailedCount: 0,
-                    SkippedCount: 0,
-                    FailureSummary: [],
-                    Results: [],
-                    StdoutTail: null,
-                    StderrTail: null,
-                    Duration: DateTime.UtcNow - start,
-                    Detail: "No test projects (referencing Microsoft.NET.Test.Sdk) were found in the loaded solution.",
-                    RunCompleted: false
-                );
+                throw new NoProjectsException("No test projects (referencing Microsoft.NET.Test.Sdk) were found in the loaded solution.");
             }
         }
 
@@ -222,21 +208,7 @@ public class TestRunEngine
         }
         catch (BuildGateBusyException busy)
         {
-            return new TestRunResult(
-                RunSucceeded: false,
-                ExitCode: -1,
-                TotalCount: 0,
-                PassedCount: 0,
-                FailedCount: 0,
-                SkippedCount: 0,
-                FailureSummary: [],
-                Results: [],
-                StdoutTail: null,
-                StderrTail: null,
-                Duration: DateTime.UtcNow - start,
-                Detail: busy.Message,
-                RunCompleted: false
-            );
+            throw new TestRunNotRunException(busy.Message);
         }
 
         var projectResults = new List<(TestRunResult Result, string ProjectName)>();

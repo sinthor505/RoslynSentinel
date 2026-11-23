@@ -96,7 +96,7 @@ public class WorkspaceBuildTestImpl
                     buildVerification = BuildResultProjector.Project(
                         rawBuild, new BuildProjection(maxDetails, IncludeOutput: false, IncludeWarnings: false), await GetTransitiveDependenciesAsync(cancellationToken));
                 }
-                catch (BuildNotRunException)
+                catch (ToolException)
                 {
                 }
             }
@@ -452,14 +452,14 @@ public class WorkspaceBuildTestImpl
 
             return buildToolResult with { StatusMessage = buildSummary };
         }
-        catch (BuildNotRunException ex)
-        {
-            // Phase 1: the wire keeps BuildFailed for a build that did not run (plan_remove_engine_result_wrapper.md Step 13 switches to the exception's code).
-            return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.BuildFailed, ex.Message) };
-        }
         catch (ToolNotFoundException ex)
         {
             return new SentinelCallToolResult<object>() { IsError = true, ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Build") };
+        }
+        catch (ToolException ex)
+        {
+            // The exception names its own cause (BuildNotRun, NoProjects, InvalidArgument, SolutionNotLoaded, TimedOut). No "Build failed: " prefix: it would misdescribe a build that never ran.
+            return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ex.ErrorCode, ex.Message, StructuredDetail: ex.StructuredDetail) };
         }
         catch (Exception ex)
         {
@@ -511,7 +511,7 @@ public class WorkspaceBuildTestImpl
             if (!testRunResult.RunCompleted)
             {
                 var incompleteMessage = (testRunResult.Detail ?? "Test run did not complete.") + " " + ToolCallHint.Next("Build", "to rule out compile errors, then retry the test run.", ("level", "quickBuild"));
-                return new SentinelCallToolResult<object>() { IsError = true, SuccessData = projected, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, incompleteMessage), StatusMessage = incompleteMessage, WorkspaceVersion = _workspaceManager.WorkspaceVersion };
+                return new SentinelCallToolResult<object>() { IsError = true, SuccessData = projected, ErrorData = new ResultError(ToolErrorCode.TestRunIncomplete, incompleteMessage), StatusMessage = incompleteMessage, WorkspaceVersion = _workspaceManager.WorkspaceVersion };
             }
 
             var failedRows = testRunResult.Results.Where(r => r.Outcome == TestOutcome.Failed).ToList();
@@ -539,10 +539,14 @@ public class WorkspaceBuildTestImpl
 
             return finalResult;
         }
-        // Transitional (plan_remove_engine_result_wrapper.md): fixed TestRunFailed keeps the wire unchanged; Step 13 emits the exception's own code.
-        catch (TestRunNotRunException ex)
+        catch (ToolNotFoundException ex)
         {
-            return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, ex.Message) };
+            return new SentinelCallToolResult<object>() { IsError = true, ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "RunTest") };
+        }
+        catch (ToolException ex)
+        {
+            // The exception names its own cause (TestRunNotRun, NoProjects, InvalidArgument, SolutionNotLoaded). No "RunTest failed: " prefix: it would misdescribe a run that never started.
+            return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ex.ErrorCode, ex.Message, StructuredDetail: ex.StructuredDetail) };
         }
         catch (Exception ex)
         {

@@ -1293,6 +1293,7 @@ public class Order
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NoProjects));
         Assert.That(result.ErrorData!.Message, Does.Contain("ListAll"));
     }
 
@@ -1355,7 +1356,7 @@ public class Order
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.BuildTool(reason: "test message", BuildVerifyLevel.fullBuild);
 
-        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.BuildFailed)); // TODO engine: message embeds the server start time, so only the code is pinned
+        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.SolutionNotLoaded)); // TODO engine: message embeds the server start time, so only the code is pinned
         Assert.That(result.ErrorData, Is.Not.Null);
     }
     // --- SplitProjectByFolderTool ---

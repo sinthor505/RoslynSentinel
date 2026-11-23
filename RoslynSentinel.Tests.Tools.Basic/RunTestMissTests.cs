@@ -40,7 +40,7 @@ public sealed class RunTestMissTests
         var result = await Battery.Basic.TestTools.WorkspaceTools(workspace.Manager).RunTestTool(reason: "test message", ToolScope.project, scopeName: scopeName);
 
         Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("TestRunFailed"));
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         Assert.That(workspace.ReadText(FileName), Is.EqualTo(before), "A refused lookup must not write the file.");
         return result.ErrorData!.Message;
     }

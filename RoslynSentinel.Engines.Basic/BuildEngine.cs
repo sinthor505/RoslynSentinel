@@ -52,7 +52,7 @@ public class BuildEngine
         {
             if (string.IsNullOrEmpty(scopeName))
             {
-                throw new BuildNotRunException("scopeName (filePath) is required when scope=file.");
+                throw new ToolInvalidArgumentException("scopeName (filePath) is required when scope=file.");
             }
             summary = await _diagnosticEngine.GetFileDiagnosticsAsync(scopeName, cancellationToken);
             var solutionForFile = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -64,7 +64,7 @@ public class BuildEngine
         {
             if (string.IsNullOrEmpty(scopeName))
             {
-                throw new BuildNotRunException("scopeName (projectName) is required when scope=project.");
+                throw new ToolInvalidArgumentException("scopeName (projectName) is required when scope=project.");
             }
             summary = await _diagnosticEngine.GetProjectDiagnosticsAsync(scopeName, cancellationToken);
             var solutionForProject = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -87,8 +87,14 @@ public class BuildEngine
 
         if (projectsCompiled.Count == 0)
         {
-            throw new BuildNotRunException(
-                $"Quick build compiled zero projects. Scope '{scope}' with scopeName '{scopeName}' resolved to nothing -- no compile verdict is available.{ListingSentence(ListingCall(isCallable), "to see valid project/file names.")}");
+            var zeroProjectsMessage =
+                $"Quick build compiled zero projects. Scope '{scope}' with scopeName '{scopeName}' resolved to nothing -- no compile verdict is available.{ListingSentence(ListingCall(isCallable), "to see valid project/file names.")}";
+            if (scope == ToolScope.solution)
+            {
+                throw new NoProjectsException(zeroProjectsMessage);
+            }
+
+            throw new ToolNotFoundException(zeroProjectsMessage, missingTargetKind: scope == ToolScope.file ? MissingTargetKinds.Document : MissingTargetKinds.Project, missingTargetName: scopeName);
         }
 
         // The engine returns every diagnostic: solution scope fetched the uncapped list (int.MaxValue) and
@@ -238,13 +244,13 @@ public class BuildEngine
         var solutionPath = currentSolution?.FilePath ?? _workspaceManager.SolutionPath;
         if (string.IsNullOrEmpty(solutionPath))
         {
-            throw new BuildNotRunException(SolutionNotLoadedMessage.Build(_workspaceManager.LoadState) + " A full build needs a loaded solution.");
+            throw new SolutionNotLoadedException(SolutionNotLoadedMessage.Build(_workspaceManager.LoadState) + " A full build needs a loaded solution.");
         }
 
         var projectNames = currentSolution?.Projects.Select(p => p.Name).ToList() ?? [];
         if (projectNames.Count == 0)
         {
-            throw new BuildNotRunException(NoProjectsMessage(isCallable));
+            throw new NoProjectsException(NoProjectsMessage(isCallable));
         }
 
         // A worktree build targets the worktree's copy of the solution; everything below (target, working directory,
@@ -266,7 +272,7 @@ public class BuildEngine
         {
             if (string.IsNullOrEmpty(scopeName))
             {
-                throw new BuildNotRunException(scope == ToolScope.project
+                throw new ToolInvalidArgumentException(scope == ToolScope.project
                     ? "scopeName (projectName) is required when scope=project."
                     : "scopeName (filePath) is required when scope=file.");
             }
@@ -282,9 +288,15 @@ public class BuildEngine
                 scopedProject = documentId is null ? null : currentSolution!.GetProject(documentId.ProjectId);
             }
 
-            if (scopedProject is null || string.IsNullOrEmpty(scopedProject.FilePath))
+            var unresolvedMessage = $"Full build compiled zero projects. Scope '{scope}' with scopeName '{scopeName}' resolved to no project in the loaded solution -- no compile verdict is available.{ListingSentence(ListingCall(isCallable), "to see valid project/file names.")}";
+            if (scopedProject is null)
             {
-                throw new BuildNotRunException($"Full build compiled zero projects. Scope '{scope}' with scopeName '{scopeName}' resolved to no project in the loaded solution -- no compile verdict is available.{ListingSentence(ListingCall(isCallable), "to see valid project/file names.")}");
+                throw new ToolNotFoundException(unresolvedMessage, missingTargetKind: scope == ToolScope.file ? MissingTargetKinds.Document : MissingTargetKinds.Project, missingTargetName: scopeName);
+            }
+
+            if (string.IsNullOrEmpty(scopedProject.FilePath))
+            {
+                throw new BuildNotRunException(unresolvedMessage);
             }
 
             // Scoped build: the project plus every project it transitively references.
@@ -393,7 +405,7 @@ public class BuildEngine
             var exitState = capture.RootExited
                 ? $"the build process had exited, exit code {capture.ExitCode}"
                 : "the build process had not exited";
-            throw new BuildNotRunException($"The full build timed out after 5 minutes ({exitState}) and the process tree was terminated.");
+            throw new ToolTimedOutException($"The full build timed out after 5 minutes ({exitState}) and the process tree was terminated.");
         }
 
         var stdoutText = capture.StdOut;

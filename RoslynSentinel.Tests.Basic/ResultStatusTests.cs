@@ -817,8 +817,17 @@ public class ResultStatusTests
 
         Assert.That(run.IsError, Is.True);
         Assert.That(run.Status, Is.EqualTo(ResultStatus.Failed));
-        Assert.That(run.Code, Is.EqualTo(ToolErrorCode.TestRunFailed));
+        Assert.That(run.Code, Is.EqualTo(ToolErrorCode.TestRunIncomplete));
         Assert.That(run.Message, Is.EqualTo("Test run did not complete"));
+    }
+
+    [Test]
+    public void TestRunResult_IncompleteRunWithFailedTests_IsStillIncomplete()
+    {
+        TestRunResult run = MakeRun(false, false, 2);
+
+        Assert.That(run.Code, Is.EqualTo(ToolErrorCode.TestRunIncomplete));
+        Assert.That(run.Status, Is.EqualTo(ResultStatus.Failed));
     }
 
     [Test]
