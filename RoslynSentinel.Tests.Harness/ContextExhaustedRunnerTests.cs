@@ -167,6 +167,54 @@ public class ContextExhaustedRunnerTests
     }
 
     [Test]
+    public async Task RunWithContractStamp_TranscriptCarriesHashAndPlacement()
+    {
+        var runner = NewRunner(contextLength: 4096, totalTokens: 1000);
+
+        ModelAgentRunner.ContractStamp = ("9f2c1ab4e077", "system");
+        try
+        {
+            var result = await runner.RunAsync("system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken);
+
+            using var json = JsonDocument.Parse(await File.ReadAllTextAsync(result.TranscriptPath));
+            Assert.Multiple(() =>
+            {
+                Assert.That(result.Transcript.ContractHash, Is.EqualTo("9f2c1ab4e077"));
+                Assert.That(result.Transcript.ContractPlacement, Is.EqualTo("system"));
+                Assert.That(json.RootElement.GetProperty("ContractHash").GetString(), Is.EqualTo("9f2c1ab4e077"));
+                Assert.That(json.RootElement.GetProperty("ContractPlacement").GetString(), Is.EqualTo("system"));
+            });
+        }
+        finally
+        {
+            ModelAgentRunner.ContractStamp = null;
+        }
+    }
+
+    [Test]
+    public async Task RunWithoutContractStamp_TranscriptOmitsContractFields()
+    {
+        var runner = NewRunner(contextLength: 4096, totalTokens: 1000);
+
+        ModelAgentRunner.ContractStamp = null;
+        try
+        {
+            var result = await runner.RunAsync("system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken);
+
+            using var json = JsonDocument.Parse(await File.ReadAllTextAsync(result.TranscriptPath));
+            Assert.Multiple(() =>
+            {
+                Assert.That(json.RootElement.TryGetProperty("ContractHash", out _), Is.False);
+                Assert.That(json.RootElement.TryGetProperty("ContractPlacement", out _), Is.False);
+            });
+        }
+        finally
+        {
+            ModelAgentRunner.ContractStamp = null;
+        }
+    }
+
+    [Test]
     public void Transcript_WithoutStampProperties_Deserializes()
     {
         var transcript = JsonSerializer.Deserialize<AgentTranscript>("{\"RunId\":\"r1\"}");
@@ -179,6 +227,8 @@ public class ContextExhaustedRunnerTests
             Assert.That(transcript.WorkingTreeDirty, Is.Null);
             Assert.That(transcript.ErrorPolicyMode, Is.Null);
             Assert.That(transcript.ErrorPolicyHash, Is.Null);
+            Assert.That(transcript.ContractHash, Is.Null);
+            Assert.That(transcript.ContractPlacement, Is.Null);
         });
     }
 

@@ -272,6 +272,38 @@ public class ScenarioRescoringTests
         Assert.That(samples[0].LiveTurnsToTarget, Is.EqualTo(1));
     }
 
+    [Test]
+    public async Task RescoreRunFolder_KeepsContractHashAndPlacementColumns()
+    {
+        var values = ColdRowValues
+            .Append(("contractHash", "9f2c1ab4e077"))
+            .Append(("contractPlacement", "system"))
+            .ToArray();
+        WriteRun(ScenarioSampleCsv.Header, TwoTurnTranscript(), values);
+        var outputCsv = Path.Combine(_folder, "rescored.csv");
+
+        var samples = await RescoreAsync(Scenario("S1"), outputCsv);
+
+        Assert.That(samples, Has.Count.EqualTo(1));
+        Assert.That(samples[0].ContractHash, Is.EqualTo("9f2c1ab4e077"));
+        Assert.That(samples[0].ContractPlacement, Is.EqualTo("system"));
+        var written = ScenarioSampleCsv.Parse(File.ReadAllLines(outputCsv)[1]);
+        Assert.That(written.ContractHash, Is.EqualTo("9f2c1ab4e077"));
+        Assert.That(written.ContractPlacement, Is.EqualTo("system"));
+    }
+
+    [Test]
+    public async Task RescoreRunFolder_LegacyLayoutRow_RescoresWithEmptyContractColumns()
+    {
+        WriteRun(LegacyHeader, TwoTurnTranscript(), ColdRowValues);
+
+        var samples = await RescoreAsync(Scenario("S1"), Path.Combine(_folder, "rescored.csv"));
+
+        Assert.That(samples, Has.Count.EqualTo(1));
+        Assert.That(samples[0].ContractHash, Is.Empty);
+        Assert.That(samples[0].ContractPlacement, Is.Empty);
+    }
+
     private Task<IReadOnlyList<ScenarioSample>> RescoreAsync(ScenarioDefinition scenario, string outputCsv) =>
         ScenarioRescoring.RescoreRunFolderAsync(
             _folder,

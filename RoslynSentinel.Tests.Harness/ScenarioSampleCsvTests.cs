@@ -165,6 +165,9 @@ public sealed class ScenarioSampleCsvTests
         Assert.That(columns[33], Is.EqualTo("modelKey"));
         Assert.That(columns[34], Is.EqualTo("temperature"));
         Assert.That(columns[35], Is.EqualTo("topP"));
+        Assert.That(columns[36], Is.EqualTo("contractHash"));
+        Assert.That(columns[37], Is.EqualTo("contractPlacement"));
+        Assert.That(ScenarioSampleCsv.PreContractColumnCount, Is.EqualTo(36));
         Assert.That(ScenarioSampleCsv.PreSamplingColumnCount, Is.EqualTo(33));
         Assert.That(ScenarioSampleCsv.PreErrorPolicyColumnCount, Is.EqualTo(31));
         Assert.That(ScenarioSampleCsv.LegacyColumnCount, Is.EqualTo(30));
@@ -323,6 +326,54 @@ public sealed class ScenarioSampleCsvTests
         Assert.That(parsed.ModelKey, Is.Empty);
         Assert.That(parsed.Temperature, Is.Null);
         Assert.That(parsed.TopP, Is.Null);
+    }
+
+    [Test]
+    public void ContractColumns_RoundTripThroughCsvLine()
+    {
+        var sample = FullSample with { ContractHash = "9f2c1ab4e077", ContractPlacement = "system, prefix \"x\"" };
+
+        var line = ScenarioSampleCsv.ToCsvLine(sample);
+        var parsed = ScenarioSampleCsv.Parse(line);
+
+        Assert.That(ScenarioSampleCsv.SplitFields(line), Has.Count.EqualTo(38));
+        Assert.That(parsed.ContractHash, Is.EqualTo("9f2c1ab4e077"));
+        Assert.That(parsed.ContractPlacement, Is.EqualTo("system, prefix \"x\""));
+        Assert.That(parsed, Is.EqualTo(sample));
+    }
+
+    [Test]
+    public void PreContractThirtySixColumnRow_ParsesWithEmptyContractColumnsAndReserializesWithThirtyEight()
+    {
+        // Drop the last two fields (contractHash, contractPlacement) to produce a row written before they existed.
+        var line = ScenarioSampleCsv.ToCsvLine(FullSample with
+        {
+            LiveTurnsToTarget = 4,
+            ErrorPolicyMode = "pointer",
+            ErrorPolicyHash = "0123456789ab",
+            ModelKey = "m",
+            Temperature = 0.2,
+            TopP = 0.9,
+            ContractHash = "9f2c1ab4e077",
+            ContractPlacement = "system",
+        });
+        var previous = line;
+        for (var dropped = 0; dropped < 2; dropped++)
+        {
+            previous = previous[..previous.LastIndexOf(',')];
+        }
+
+        Assert.That(ScenarioSampleCsv.SplitFields(previous), Has.Count.EqualTo(ScenarioSampleCsv.PreContractColumnCount));
+
+        var parsed = ScenarioSampleCsv.Parse(previous);
+        var rewritten = ScenarioSampleCsv.ToCsvLine(parsed);
+
+        Assert.That(parsed.ContractHash, Is.Empty);
+        Assert.That(parsed.ContractPlacement, Is.Empty);
+        Assert.That(parsed.ModelKey, Is.EqualTo("m"));
+        Assert.That(parsed.Temperature, Is.EqualTo(0.2));
+        Assert.That(parsed.TopP, Is.EqualTo(0.9));
+        Assert.That(ScenarioSampleCsv.SplitFields(rewritten), Has.Count.EqualTo(38));
     }
 
     [Test]
