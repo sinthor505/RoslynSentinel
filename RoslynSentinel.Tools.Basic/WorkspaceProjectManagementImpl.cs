@@ -29,15 +29,22 @@ public class WorkspaceProjectManagementImpl
     private readonly StructuralRefinementEngine _structuralRefinementEngine;
     private readonly SolutionStructureEngine _solutionStructureEngine;
     private readonly ILogger _logger;
+    private readonly Func<string, TimeSpan, CancellationToken, Task<SolutionRestoreResult>> _restoreSolution;
 
     private const int ListWorkspaceSolutionsMaxFilesWalked = 5000;
 
-    public WorkspaceProjectManagementImpl(IWorkspaceManager workspaceManager, StructuralRefinementEngine structuralRefinementEngine, ILogger logger, SolutionStructureEngine solutionStructureEngine)
+    // dotnet restore of a large solution can take minutes; same ceiling as the full Build.
+    private static readonly TimeSpan RestoreBeforeLoadTimeout = TimeSpan.FromMinutes(5);
+
+    /// <param name="restoreSolution">Seam for the restore that LoadSolution(forceReload) runs before loading; null = the real <see cref="SolutionRestore.RestoreAsync"/>. Tests pass a fake so no dotnet process is spawned.</param>
+    public WorkspaceProjectManagementImpl(IWorkspaceManager workspaceManager, StructuralRefinementEngine structuralRefinementEngine, ILogger logger, SolutionStructureEngine solutionStructureEngine,
+        Func<string, TimeSpan, CancellationToken, Task<SolutionRestoreResult>>? restoreSolution = null)
     {
         _workspaceManager = workspaceManager;
         _structuralRefinementEngine = structuralRefinementEngine;
         _solutionStructureEngine = solutionStructureEngine;
         _logger = logger;
+        _restoreSolution = restoreSolution ?? SolutionRestore.RestoreAsync;
     }
 
     public async Task<SentinelCallToolResult<object>> ListSolutionItems(ToolCallReason reason, SolutionItemsKind kind,
@@ -687,6 +694,74 @@ public class WorkspaceProjectManagementImpl
     // same advice. Process-wide because the workspace manager is a singleton per server process.
     private static readonly ConcurrentDictionary<string, string> AdvisedRestoreStates = new(StringComparer.OrdinalIgnoreCase);
 
+    // Restores the solution before a forced reload and returns a fact sentence for the LoadSolution result (leading space,
+    // never empty). Never throws except for caller cancellation: any restore problem is reported and the load goes ahead.
+    private async Task<string> RestoreBeforeLoadAsync(string solutionPath, string? baseRepoDir, CancellationToken cancellationToken)
+    {
+        var resolved = ResolveSolutionPathForRestore(solutionPath, baseRepoDir);
+        if (resolved is null)
+        {
+            return " Restore before loading was skipped: the solution path did not resolve to an existing file before the load, so the load used the existing restore state.";
+        }
+
+        try
+        {
+            var result = await _restoreSolution(resolved, RestoreBeforeLoadTimeout, cancellationToken);
+            return DescribeRestoreResult(result, RestoreBeforeLoadTimeout);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Restore before loading '{SolutionPath}' failed unexpectedly", solutionPath);
+            return " Restore before loading could not run (unexpected error, details in the server log); the load used the existing restore state.";
+        }
+    }
+
+    // Mirrors the rooted / baseRepoDir / working-directory candidates the workspace manager tries; null when none exists.
+    private static string? ResolveSolutionPathForRestore(string solutionPath, string? baseRepoDir)
+    {
+        var path = solutionPath.Trim().Trim('"', '\'');
+        if (path.Length == 0)
+        {
+            return null;
+        }
+
+        if (Path.IsPathRooted(path))
+        {
+            return File.Exists(path) ? path : null;
+        }
+
+        var candidates = new List<string>();
+        if (!string.IsNullOrWhiteSpace(baseRepoDir))
+        {
+            candidates.Add(Path.GetFullPath(Path.Combine(baseRepoDir.Trim().Trim('"', '\''), path)));
+        }
+
+        candidates.Add(Path.GetFullPath(path));
+        return candidates.FirstOrDefault(File.Exists);
+    }
+
+    internal static string DescribeRestoreResult(SolutionRestoreResult result, TimeSpan timeout)
+    {
+        var seconds = result.Duration.TotalSeconds.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
+        if (!result.Started)
+        {
+            return " Restore before loading could not run: the dotnet CLI could not be started; the load used the existing restore state.";
+        }
+
+        if (result.TimedOut)
+        {
+            return $" Restore before loading did not finish within {timeout.TotalSeconds:0} s and was terminated; the load used the existing restore state. Option: {ToolCallHint.Call("Build", ("level", "fullBuild"))} then {ToolCallHint.Call("LoadSolution", ("forceReload", "true"))}.";
+        }
+
+        if (!result.Succeeded)
+        {
+            var output = result.OutputTail.Length > 0 ? $" Last restore output: {result.OutputTail}" : "";
+            return $" Restore before loading ended with exit code {result.ExitCode} after {seconds} s; the load used the existing restore state.{output}";
+        }
+
+        return $" Restored the solution first (dotnet restore, {seconds} s).";
+    }
+
     public async Task<SentinelCallToolResult<object>> LoadSolution(ToolCallReason reason, string solutionPath, string? baseRepoDir = null,
         bool forceReload = false, int timeoutSeconds = 30, CancellationToken cancellationToken = default)
     {
@@ -720,6 +795,9 @@ public class WorkspaceProjectManagementImpl
                 };
             }
 
+            // A project added since the last load has no obj/project.assets.json; Build restores into a throwaway
+            // path, so only an explicit restore here lets the reload see it. A restore problem never blocks the load.
+            var restoreNote = forceReload ? await RestoreBeforeLoadAsync(solutionPath, baseRepoDir, cancellationToken) : "";
             await _workspaceManager.LoadSolutionAsync(solutionPath, baseRepoDir, timeout, cancellationToken);
             var solutionRoot = _workspaceManager.GetSolutionRoot();
             if (solutionRoot != null)
@@ -734,7 +812,7 @@ public class WorkspaceProjectManagementImpl
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = false,
-                    SuccessData = $"Solution {verb}: {solutionPath}.{reloadNote}{BuildPostLoadHint(solutionRoot, projectFilePaths)}"
+                    SuccessData = $"Solution {verb}: {solutionPath}.{reloadNote}{restoreNote}{BuildPostLoadHint(solutionRoot, projectFilePaths)}"
                 };
             }
             else

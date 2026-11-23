@@ -244,6 +244,7 @@ public sealed class SubAgentChildServerLauncher(ILogger logger)
     /// </summary>
     private async Task RestoreSolutionAsync(string solutionPath, string worktreePath, string runId, CancellationToken cancellationToken)
     {
+        // TODO duplicates RoslynSentinel.Engines.Basic SolutionRestore.RestoreAsync (shared helper added for LoadSolution forceReload); switch to it and drop this copy once the worktree launch tests can run
         try
         {
             var result = await RunProcessAsync(

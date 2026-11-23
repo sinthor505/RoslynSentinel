@@ -11,3 +11,4 @@ close it with a reason in [CLOSED.md](./CLOSED.md), then delete the line here. C
 
 ## Untriaged
 - 2026-11-22 23:00 bridge/uplift-phase Succeeded blob items never receive BeforeSource although BridgeAppliedInfo/UpliftCallerInfo carry it (no consumer of .BeforeSource found), so UndoChange cannot revert them - Search "\.BeforeSource" shows no a.BeforeSource/u.BeforeSource read - RoslynSentinel.Tools.Advanced/AsyncifyTools.cs RunBridgePhaseAsync (// TODO)
+- 2026-11-22 23:30 SubAgentChildServerLauncher.RestoreSolutionAsync duplicates the new shared SolutionRestore.RestoreAsync (Engines.Basic) - left unswitched (no worktree launch test run in this slice) - RoslynSentinel.Tools.Advanced/SubAgentChildServerLauncher.cs RestoreSolutionAsync (// TODO)
