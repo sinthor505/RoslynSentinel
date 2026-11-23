@@ -41,7 +41,6 @@ namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 /// the branching/scaling logic must stay in `CalcDisc`, closing off the broader reading.
 /// </summary>
 [TestFixture]
-[TestFixture]
 public class OrderPricingRefactorAgentTests
 {
     private const string UserPromptTemplate = """

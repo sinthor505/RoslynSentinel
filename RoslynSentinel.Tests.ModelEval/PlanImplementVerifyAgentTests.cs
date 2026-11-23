@@ -33,8 +33,6 @@ namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 /// required in addition to, not instead of, the mechanical check.
 /// </summary>
 [TestFixture]
-// TODO duplicate [TestFixture] attribute (pre-existing): NUnit may run every test in this fixture twice; confirm and remove one
-[TestFixture]
 public class PlanImplementVerifyAgentTests
 {
     // Standalone fragment (not a full sentence on its own -> designed to be spliced into a prompt via

@@ -13,10 +13,8 @@
 
   <ItemGroup>
     <!-- Internals that move here are used by these test assemblies. -->
-    <InternalsVisibleTo Include="RoslynSentinel.Tests" />
     <InternalsVisibleTo Include="RoslynSentinel.Tests.ModelEval" />
     <InternalsVisibleTo Include="RoslynSentinel.Tests.ErrorVariants" />
-    <InternalsVisibleTo Include="RoslynSentinel.Tests.Basic" />
   </ItemGroup>
 
 </Project>

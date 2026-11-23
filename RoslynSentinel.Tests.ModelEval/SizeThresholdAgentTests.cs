@@ -20,8 +20,6 @@ namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 /// pass/fail (a size flipping from reliable to unreliable is the expected, useful outcome here, not
 /// a bug in this harness).
 /// </summary>
-// TODO duplicated [TestFixture] attribute (pre-existing): drop one, checking first that the Explicit test is not discovered twice.
-[TestFixture]
 [TestFixture]
 public class SizeThresholdAgentTests
 {

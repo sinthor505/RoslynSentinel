@@ -22,8 +22,6 @@ namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 /// actually complied (turn 1 had zero tool calls) so compliant vs. non-compliant runs can be compared
 /// post-hoc, the same technique used for the reasoning-pattern analysis this test follows up on.
 /// </summary>
-// TODO duplicated [TestFixture] attribute (pre-existing): drop one, checking first that the Explicit test is not discovered twice.
-[TestFixture]
 [TestFixture]
 public class PlanThenExecuteAgentTests
 {

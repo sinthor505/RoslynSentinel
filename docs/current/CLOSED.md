@@ -8,6 +8,18 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## AgentLoop dead InternalsVisibleTo - resolved (2026-11-22)
+
+Remove the dead InternalsVisibleTo entries for Tests and Tests.Basic from `RoslynSentinel.AgentLoop.csproj` (:16, :19) (2026-11-22) - confirmed 2026-11-22: neither project references AgentLoop directly or transitively; keep the ModelEval and ErrorVariants entries; acceptance: Build 0 errors; Small
+
+Evidence: punchlist #3: entries removed; Build 0 errors; Tests/Tests.Basic do not reach AgentLoop
+
+## Duplicated [TestFixture] in Tests.ModelEval - resolved (2026-11-22)
+
+Remove the duplicated `[TestFixture]` in Tests.ModelEval (2026-11-22) - `PlanThenExecuteAgentTests.cs:26-27`, `SizeThresholdAgentTests.cs:24-25`, `PlanImplementVerifyAgentTests.cs:35/37` (inline TODOs) and `OrderPricingRefactorAgentTests.cs:43-44` (no TODO); acceptance: the NUnit test list shows each fixture once, Build 0 errors; Small
+
+Evidence: punchlist #2: one [TestFixture] left in each of 4 files; Build 0 errors
+
 ## workspaceStale with a RoslynSentinel.sln reload failure after a .slnx load - resolved (2026-11-22)
 
 `workspaceStale` with a RoslynSentinel.sln reload failure after a successful .slnx LoadSolution (2026-11-21) - seen once by a subagent of session bf9528c5, not reproduced in the main session; no code spot
