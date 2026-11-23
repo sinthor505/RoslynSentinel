@@ -146,28 +146,31 @@ public class WorkspaceHealthMiscImpl
         try
         {
             var result = await GetWorkspaceHealthAsync(cancellationToken: cancellationToken);
+            IReadOnlyList<Finding>? buildFindings = null;
 
-            if (verify != BuildVerifyLevel.noBuild)
+            // Verification needs a loaded solution with projects; without one there is nothing to build and the health report stands alone.
+            if (verify != BuildVerifyLevel.noBuild && result.HasLoadedSolution && result.ProjectCount > 0)
             {
-                // TODO surface a build that did not run as a finding instead of skipping verification
-                try
+                var (data, notRunFinding) = await WorkspaceBuildTestImpl.RunVerificationBuildAsync(() => verify is BuildVerifyLevel.fullBuild or BuildVerifyLevel.fullBuildThrowaway
+                    ? _buildEngine.RunFullBuildAsync(cancellationToken, level: verify)
+                    : _buildEngine.RunQuickBuildAsync(ToolScope.solution, null, 50, cancellationToken));
+                if (notRunFinding is not null)
                 {
-                    var data = verify is BuildVerifyLevel.fullBuild or BuildVerifyLevel.fullBuildThrowaway
-                        ? await _buildEngine.RunFullBuildAsync(cancellationToken, level: verify)
-                        : await _buildEngine.RunQuickBuildAsync(ToolScope.solution, null, 50, cancellationToken);
+                    buildFindings = [notRunFinding];
+                }
+
+                if (data is not null)
+                {
                     // TODO pass the project dependency graph (root-cause ordering) like Build does; null means every project with errors counts as a root cause. Errors are no longer capped by the projector, so a long list is cut by the marshaller (ResultPager.Fit, nested under buildVerification).
                     result = result with { BuildVerification = BuildResultProjector.Project(data, new BuildProjection(20, IncludeOutput: false, IncludeWarnings: false), null) };
-                }
-                catch (ToolException)
-                {
-                    // The build did not run, so verification is skipped as before.
                 }
             }
 
             return new SentinelCallToolResult<WorkspaceHealthReport, ResultError>
             {
                 IsError = false,
-                SuccessData = result
+                SuccessData = result,
+                Findings = buildFindings ?? []
             };
         }
         catch (Exception ex)

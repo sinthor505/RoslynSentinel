@@ -84,20 +84,22 @@ public class WorkspaceBuildTestImpl
             }
 
             BuildResult? buildVerification = null;
+            IReadOnlyList<Finding> buildFindings = [];
             if (verify != BuildVerifyLevel.noBuild)
             {
-                // TODO surface a build that did not run as a finding instead of skipping verification
-                try
+                var (rawBuild, notRunFinding) = await RunVerificationBuildAsync(() => verify is BuildVerifyLevel.fullBuild or BuildVerifyLevel.fullBuildThrowaway
+                    ? _buildEngine.RunFullBuildAsync(cancellationToken, level: verify, isCallable: CallableCheck)
+                    : _buildEngine.RunQuickBuildAsync(scope, scopeName, maxDetails, cancellationToken, isCallable: CallableCheck));
+                if (notRunFinding is not null)
                 {
-                    var rawBuild = verify is BuildVerifyLevel.fullBuild or BuildVerifyLevel.fullBuildThrowaway
-                        ? await _buildEngine.RunFullBuildAsync(cancellationToken, level: verify, isCallable: CallableCheck)
-                        : await _buildEngine.RunQuickBuildAsync(scope, scopeName, maxDetails, cancellationToken, isCallable: CallableCheck);
+                    buildFindings = [notRunFinding];
+                }
+
+                if (rawBuild is not null)
+                {
                     // Project like Build does (breakdown, root-cause order); every error is inline and the result marshaller pages a long list.
                     buildVerification = BuildResultProjector.Project(
                         rawBuild, new BuildProjection(maxDetails, IncludeOutput: false, IncludeWarnings: false), await GetTransitiveDependenciesAsync(cancellationToken));
-                }
-                catch (ToolException)
-                {
                 }
             }
 
@@ -107,7 +109,7 @@ public class WorkspaceBuildTestImpl
                 {
                     IsError = false,
                     SuccessData = summary with { BuildVerification = buildVerification },
-                    Findings = WithForeignWriterFindings([], summary)
+                    Findings = WithForeignWriterFindings(buildFindings, summary)
                 };
             }
 
@@ -117,7 +119,7 @@ public class WorkspaceBuildTestImpl
             {
                 IsError = false,
                 SuccessData = new DiagnosticsSummaryResult(TotalIssues: relevant.Count, Errors: summary.Errors, Warnings: summary.Warnings, TopIssues: groups, BuildVerification: buildVerification),
-                Findings = WithForeignWriterFindings([], summary)
+                Findings = WithForeignWriterFindings(buildFindings, summary)
             };
         }
         catch (Exception ex)
@@ -320,6 +322,25 @@ public class WorkspaceBuildTestImpl
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return existing;
+        }
+    }
+
+    // A verification build that did not run (BuildNotRunException: competing build, build gate busy, no project path)
+    // yields no BuildResult and one Caution finding naming the cause. Any other exception, including other ToolExceptions
+    // and OperationCanceledException, propagates to the caller's outer catch.
+    internal static async Task<(BuildResult? Result, Finding? NotRunFinding)> RunVerificationBuildAsync(Func<Task<BuildResult>> run)
+    {
+        try
+        {
+            return (await run(), null);
+        }
+        catch (BuildNotRunException ex)
+        {
+            return (null, new Finding(
+                "BuildVerification",
+                $"The requested build verification did not run, so this result has no build verdict: {ex.Message} "
+                + $"Options: {ToolCallHint.Call("Build", ("level", "fullBuildThrowaway"))} once the cause above is cleared.",
+                FindingSeverity.Caution));
         }
     }
 
