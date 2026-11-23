@@ -321,11 +321,14 @@ public sealed class TestInstanceLauncher
 
     private async Task RebuildAsync(CancellationToken cancellationToken)
     {
-        var result = await _buildEngine.RunFullBuildAsync(cancellationToken, 5, false, BuildVerifyLevel.fullBuildThrowaway);
-        if (!result.TryGetData(out var data))
+        BuildResult data;
+        try
         {
-            throw new TestInstanceException(ToolErrorCode.BuildFailed,
-                "The build needed for the test instance did not run: " + (result.Error?.Message ?? result.Outcome.ToString()));
+            data = await _buildEngine.RunFullBuildCoreAsync(cancellationToken, 5, false, BuildVerifyLevel.fullBuildThrowaway);
+        }
+        catch (BuildNotRunException ex)
+        {
+            throw new TestInstanceException(ToolErrorCode.BuildFailed, "The build needed for the test instance did not run: " + ex.Message);
         }
 
         if (data.Outcome != BuildOutcome.Succeeded)
