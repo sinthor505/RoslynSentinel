@@ -6,6 +6,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Advanced;
 
+using static RoslynSentinel.Tests.Support.FormatKit;
+
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
 
@@ -40,23 +42,7 @@ public class MoveTypeToOuterScopeFormatCharacterizationTests
         _workspaceManager.SetTestSolution(solution);
     }
 
-    /// <summary>Joins lines with LF, then converts to CRLF when requested.</summary>
-    private static string Src(bool crlf, params string[] lines)
-    {
-        var text = string.Join("\n", lines);
-        return crlf ? text.Replace("\n", "\r\n") : text;
-    }
-
-    // One CRLF terminator on an untouched line of an LF document: the last character of the anchor.
-    private const string StrayAnchor = "    private   int _other;\n";
-
-    private static string WithStrayCrlf(string lfText)
-    {
-        Assert.That(lfText, Does.Contain(StrayAnchor), "Precondition: the anchor line is present.");
-        var mixed = lfText.Replace(StrayAnchor, StrayAnchor.Substring(0, StrayAnchor.Length - 1) + "\r\n");
-        Assert.That(mixed.Count(c => c == '\r'), Is.EqualTo(1), "Precondition: exactly one stray CRLF.");
-        return mixed;
-    }
+    private static string WithStrayCrlf(string lfText) => RoslynSentinel.Tests.Support.FormatKit.WithStrayCrlf(lfText, "    private   int _other;");
 
     private async Task<string> MoveAsync(bool allowWidenToInternal = false)
     {
