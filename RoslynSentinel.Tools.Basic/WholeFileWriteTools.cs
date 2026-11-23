@@ -141,13 +141,33 @@ public class WholeFileWriteTools
         FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         try
         {
-            // The same existence decision the text edit tools use (NonProjectFile); DeleteFile keeps accepting any existing file, including one outside the solution root.
-            if (!NonProjectFile.ExistsOnDisk(filePathResolved))
+            // DeleteFile shares the text edit tools' rule (NonProjectFile.Classify), so an existing file outside the solution root is refused.
+            Solution? solution = null;
+            try
+            {
+                solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+            }
+            catch (SolutionNotLoadedException)
+            {
+                // No solution: Classify sees no project documents.
+            }
+
+            var status = NonProjectFile.Classify(solution, _workspaceManager.GetSolutionRoot(), filePathResolved);
+            if (status == NonProjectFileStatus.Missing)
             {
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.NotFound, await DeleteFileMissTextAsync(filePathResolved, filePath, cancellationToken))
+                };
+            }
+
+            if (status == NonProjectFileStatus.OutsideSolutionRoot)
+            {
+                return new SentinelCallToolResult<object>()
+                {
+                    IsError = true,
+                    ErrorData = new ResultError(ToolErrorCode.NotFound, FileNotFoundMessage.Build((string)filePathResolved, Array.Empty<FileCandidate>(), solution?.Projects.Count() ?? 0, _activeToolSurface is null ? null : (Func<string, bool>)_activeToolSurface.IsCallable))
                 };
             }
 

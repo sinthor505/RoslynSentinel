@@ -113,7 +113,7 @@ public class ReplaceSnippetNonProjectFileTests
     }
 
     [Test]
-    public async Task ReplaceSnippet_ExistingFileOutsideSolutionRoot_KeepsNotFoundWhileDeleteFileKeepsAcceptingItAsync()
+    public async Task ReplaceSnippetAndDeleteFile_ExistingFileOutsideSolutionRoot_BothRefuseAsync()
     {
         using var h = await CreateHarnessAsync("alpha\n");
         var outsideDir = Directory.CreateTempSubdirectory("rs-outside-root-");
@@ -129,10 +129,13 @@ public class ReplaceSnippetNonProjectFileTests
             Assert.That(edit.ErrorData.Message, Does.Contain("outside the loaded solution"));
             Assert.That(await File.ReadAllTextAsync(outsidePath), Is.EqualTo("alpha\nbeta\n"));
 
-            // Documented asymmetry: DeleteFile has never asked for a project document or a root, so it still accepts any existing file.
+            // Both tools refuse and agree (owner ruling E1): DeleteFile uses the same NonProjectFile.Classify rule as the text edit tools.
             var delete = await h.Writer.DeleteFileTool(reason: "delete a file outside the root", outsidePath);
-            Assert.That(delete.IsError, Is.False, delete.ErrorData?.Message);
-            Assert.That(File.Exists(outsidePath), Is.False);
+            Assert.That(delete.IsError, Is.True);
+            Assert.That(delete.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+            Assert.That(delete.ErrorData.Message, Does.Contain("outside the loaded solution"));
+            Assert.That(File.Exists(outsidePath), Is.True);
+            Assert.That(await File.ReadAllTextAsync(outsidePath), Is.EqualTo("alpha\nbeta\n"));
         }
         finally
         {

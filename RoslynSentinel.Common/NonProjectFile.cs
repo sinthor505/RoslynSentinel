@@ -39,8 +39,8 @@ public static class NonProjectFile
     private static readonly string[] CodeExtensions = [".cs", ".csx"];
 
     /// <summary>
-    /// True when a file exists at the validated absolute <paramref name="path"/>. DeleteFile's file-exists decision: it accepts any existing
-    /// file, including one outside the solution root (it never asked for a project document).
+    /// True when a file exists at the validated absolute <paramref name="path"/>. It is only the file-exists test used by Classify and by
+    /// DeleteFile's Missing check; DeleteFile refuses OutsideSolutionRoot via Classify.
     /// </summary>
     public static bool ExistsOnDisk(FilePathWrapper path)
         => !string.IsNullOrWhiteSpace(path.Absolute) && File.Exists(path.Absolute);
