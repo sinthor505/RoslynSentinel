@@ -1465,28 +1465,32 @@ public class WorkspaceFileEditImpl
             StructuredDetail: RejectionDetail(impact, liftVerdicts, validation.Diagnostics, nearMisses));
     }
 
+    /// <summary>The single-file compile-rejection headline of <see cref="ApplyEditTailAsync"/>; <paramref name="nextStep"/> is the tool-specific sentence after "The file is unchanged: " (ends with a space).</summary>
+    private static string StandardCompileRejectionHeadline(string toolName, string nextStep) =>
+        $"{toolName}: the edit matched the target file, but the resulting code introduces new compiler errors - change not applied. The file is unchanged: {nextStep}";
+
     /// <summary>
-    /// The apply tail shared by the single-edit ReplaceSnippet and ReplaceRange (proposal_replace_range_tool.md, "Apply tail extraction"): applies
+    /// The apply tail shared by the single-edit ReplaceSnippet, ReplaceRange and ReplaceSnippetBatch (proposal_replace_range_tool.md, "Apply tail extraction"): applies
     /// <paramref name="initialChanges"/> through the write chokepoint with the stale-read refusal, maps write refusals, optionally near-miss-corrects and
     /// rename-lifts a compile rejection, composes the compile-rejection error, keeps the rejected/applied-edit memories (when <paramref name="editMemory"/>
     /// is given), writes the operation blob and returns the success summary with the UndoChange hint and the optional diff. The caller owns match
-    /// resolution, the no-type-left guard, the in-flight registration and the exception boundary.
+    /// resolution, the no-type-left guard, the in-flight registration, the validate-only branch and the exception boundary.
     /// </summary>
-    /// <param name="toolName">Names the tool in WriteRefusal, near-miss correction and the compile-rejection headline (for example "ReplaceSnippet").</param>
+    /// <param name="toolName">Names the tool in WriteRefusal and near-miss correction (for example "ReplaceSnippet").</param>
     /// <param name="operationKind">The operation-blob kind label (for example "replace_snippet").</param>
-    /// <param name="targetPath">The file the edit targets; its file memories are forgotten after a successful write.</param>
+    /// <param name="targetPath">The file the edit targets; its file memories (and those of every <paramref name="editMemory"/> path and written file) are forgotten after a successful write.</param>
     /// <param name="initialChanges">The files as they would be written.</param>
     /// <param name="editedSpans">The edit's replaced span(s) in the baseline text, for rename lifting and impact attribution.</param>
-    /// <param name="compileRejectionNextStep">The tool-specific sentence that ends the compile-rejection headline (it follows "The file is unchanged: ").</param>
+    /// <param name="compileRejectionHeadline">The complete compile-rejection headline, ending with a space; <see cref="StandardCompileRejectionHeadline"/> builds the single-file form.</param>
     /// <param name="summaryPrefixNotes">Notes put before the apply summary, in order; null entries are skipped.</param>
     /// <param name="enableNearMissCorrection">false skips <see cref="NearMissAutoCorrector"/>.</param>
     /// <param name="enableRenameLift">false skips <see cref="TryLiftRenameAsync"/>.</param>
-    /// <param name="editMemory">The (oldContent, newContent, inserted text) key for <c>_rejectedEdits</c>/<c>_appliedEdits</c>; null skips both memories.</param>
+    /// <param name="editMemory">One (path, oldContent, newContent, inserted text) key per edit for <c>_rejectedEdits</c> (a repeat needs every key to repeat) and, for a key whose inserted text is not null, <c>_appliedEdits</c>; null skips both memories.</param>
     private async Task<SentinelCallToolResult<ReplaceSnippetResult>> ApplyEditTailAsync(
         string toolName, string operationKind, string targetPath, DocumentChangeSet initialChanges,
-        IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>> editedSpans, string compileRejectionNextStep,
+        IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>> editedSpans, string compileRejectionHeadline,
         IEnumerable<string?> summaryPrefixNotes, bool validateOnApply, bool returnDiff,
-        bool enableNearMissCorrection, bool enableRenameLift, (string OldContent, string NewContent, string InsertedText)? editMemory,
+        bool enableNearMissCorrection, bool enableRenameLift, IReadOnlyList<(string Path, string? OldContent, string NewContent, string? InsertedText)>? editMemory,
         CancellationToken cancellationToken)
     {
         var snippetChanges = initialChanges;
@@ -1532,16 +1536,17 @@ public class WorkspaceFileEditImpl
         if (result.IsError && result.ValidationResult != null)
         {
             var isRepeat = false;
-            if (editMemory is { } rejectedKey)
+            if (editMemory is { } rejectedKeys)
             {
-                isRepeat = _rejectedEdits.IsRepeat(targetPath, rejectedKey.OldContent, rejectedKey.NewContent);
-                _rejectedEdits.Remember(targetPath, rejectedKey.OldContent, rejectedKey.NewContent);
+                isRepeat = rejectedKeys.All(k => _rejectedEdits.IsRepeat(k.Path, k.OldContent, k.NewContent));
+                foreach (var rejectedKey in rejectedKeys)
+                    _rejectedEdits.Remember(rejectedKey.Path, rejectedKey.OldContent, rejectedKey.NewContent);
             }
             return new SentinelCallToolResult<ReplaceSnippetResult>()
             {
                 IsError = true,
                 ErrorData = await ComposeCompileRejectionAsync(
-                    $"{toolName}: the edit matched the target file, but the resulting code introduces new compiler errors - change not applied. The file is unchanged: {compileRejectionNextStep}",
+                    compileRejectionHeadline,
                     isRepeat, liftText, snippetChanges, result.ValidationResult,
                     // Spans only for the model's own text: a lifted (merged) set was changed outside them.
                     // Batch H5 R5: after a lift the spans are the model's own line ranges mapped onto the merged text, so an error the rename left in the model's file but outside its edit is attributed.
@@ -1552,6 +1557,8 @@ public class WorkspaceFileEditImpl
         if (!result.IsError)
         {
             ForgetFileMemories(targetPath);
+            foreach (var keyedEdit in editMemory ?? [])
+                ForgetFileMemories(keyedEdit.Path);
             // A lifted rename also wrote other files (snippetChanges is the merged set then): an earlier rejected edit of one of them
             // must not make the "file still has the old text" note fire, because the lift rewrote that file (batch G R3).
             foreach (var writtenFile in snippetChanges.Keys)
@@ -1562,8 +1569,9 @@ public class WorkspaceFileEditImpl
         }
         var changeId = Guid.NewGuid().ToString("n")[..8];
         // Batch H4 R1: remember the applied edit so an identical second call is a no-op (see AppliedEditMemory). A lifted edit wrote other files too, so it is not remembered.
-        if (editMemory is { } appliedKey && !result.IsError && liftNote is null && nearMissFindings is null)
-            _appliedEdits.Remember(targetPath, appliedKey.OldContent, appliedKey.NewContent, changeId, appliedKey.InsertedText);
+        if (editMemory is { } appliedKeys && !result.IsError && liftNote is null && nearMissFindings is null)
+            foreach (var appliedKey in appliedKeys.Where(k => k.InsertedText is not null))
+                _appliedEdits.Remember(appliedKey.Path, appliedKey.OldContent, appliedKey.NewContent, changeId, appliedKey.InsertedText!);
         var blobWrite = await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, operationKind, result, blobChangeId: changeId, cancellationToken: cancellationToken);
         var summaryBody = liftNote is null ? result.Summary : $"{liftNote} {result.Summary}";
         var appliedSummary = string.Join(" ", summaryPrefixNotes.Append(summaryBody).Where(part => part is not null));
@@ -1834,10 +1842,10 @@ public class WorkspaceFileEditImpl
                     var indentNote = reindent.LinesAdjusted > 0 ? $"newContent indentation was adjusted to the file's on {reindent.LinesAdjusted} line(s); returnDiff shows the written text." : null;
                     return await ApplyEditTailAsync(
                         "ReplaceSnippet", "replace_snippet", (string)targetPath, snippetChanges, liftSpans,
-                        "take the next oldContent from the file as it is now, not from the rejected newContent. ",
+                        StandardCompileRejectionHeadline("ReplaceSnippet", "take the next oldContent from the file as it is now, not from the rejected newContent. "),
                         [selectorNote, indentNote], validateOnApply, returnDiff,
                         enableNearMissCorrection: true, enableRenameLift: true,
-                        (oldContent, newContent!, reindent.InsertedTexts[0]), cancellationToken);
+                        [((string)targetPath, oldContent, newContent!, reindent.InsertedTexts[0])], cancellationToken);
                 }
                 catch (Exception ex)
                 {
@@ -2033,7 +2041,7 @@ public class WorkspaceFileEditImpl
             // Near-miss correction and rename lift are tied to oldContent text and stay off; no edit memory (nothing to key on without oldContent).
             return await ApplyEditTailAsync(
                 "ReplaceRange", "replace_range", (string)targetPath, rangeChanges, editedSpans,
-                "the anchors still match the file as it is now; fix newContent and send it again. ",
+                StandardCompileRejectionHeadline("ReplaceRange", "the anchors still match the file as it is now; fix newContent and send it again. "),
                 [rangeNote], validateOnApply: true, returnDiff: false,
                 enableNearMissCorrection: false, enableRenameLift: false, editMemory: null, cancellationToken);
         }
@@ -2340,85 +2348,15 @@ public class WorkspaceFileEditImpl
 
         try
         {
-            // TODO fold ReplaceSnippetBatch tail into the shared helper (ApplyEditTailAsync)
-            var result = await _workspaceManager.ApplyProposedChangesAsync(finalContents, validateChanges: validateOnApply, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
-            // TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)
-            if (WriteRefusal.TryMap("ReplaceSnippet", result, out var refusal, WriteRefusal.LedgerOf(_workspaceManager)))
-                return new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = true, ErrorData = refusal };
-            // Experimental rename lifting (--lift-renames, off by default); see TryLiftRenameAsync and the single-edit path.
-            string? liftNote = null;
-            string? liftRefusalNote = null;
-            IReadOnlyDictionary<string, IReadOnlyList<(int Line, string OldText, string NewText)>>? liftRewrites = null;
-            List<ImpactVerdict>? liftVerdicts = null;
-            // Batch H5 R5: the model's own texts, kept because a lift replaces finalContents with the merged set (see RenameLifter.MergedEditedSpansAsync).
-            var candidateContents = finalContents;
-            IReadOnlyList<Finding>? nearMissFindings = null;
-            if (result.IsError && result.ValidationResult != null
-                && await NearMissAutoCorrector.TryAutoCorrectAsync(_workspaceManager, finalContents, result.ValidationResult, "ReplaceSnippet", StaleReadPolicy.RefuseIfObservedStale, cancellationToken) is { } nearMissFix)
-            {
-                result = nearMissFix.ApplyResult;
-                finalContents = new DocumentChangeSet(nearMissFix.CorrectedChanges);
-                nearMissFindings = nearMissFix.Findings;
-            }
-            if (result.IsError && result.ValidationResult != null && await TryLiftRenameAsync(finalContents, liftSpans, cancellationToken) is { } lift)
-            {
-                if (lift.Result is null)
-                {
-                    liftRefusalNote = lift.Note; // refused: the ordinary rejection stands, with the reason in front
-                }
-                else
-                {
-                    if (WriteRefusal.TryMap("ReplaceSnippet", lift.Result, out var liftRefusal, WriteRefusal.LedgerOf(_workspaceManager)))
-                        return new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = true, ErrorData = liftRefusal };
-                    result = lift.Result;
-                    finalContents = lift.Changes!;
-                    liftNote = lift.Note;
-                    liftVerdicts = lift.Verdicts;
-                    liftRewrites = lift.Rewrites;
-                }
-            }
-            var liftText = liftNote ?? liftRefusalNote;
-            if (result.IsError && result.ValidationResult != null)
-            {
-                var isRepeat = newContentsByFile.All(kv => kv.Value.All(c => _rejectedEdits.IsRepeat(kv.Key, c.OldContent, c.NewContent)));
-                foreach (var (rejectedPath, rejectedEdits) in newContentsByFile)
-                    foreach (var rejectedEdit in rejectedEdits)
-                        _rejectedEdits.Remember(rejectedPath, rejectedEdit.OldContent, rejectedEdit.NewContent);
-                return new SentinelCallToolResult<ReplaceSnippetResult>()
-                {
-                    IsError = true,
-                    ErrorData = await ComposeCompileRejectionAsync(
-                        "ReplaceSnippet batch: every edit matched, but the resulting code introduces new compiler errors, so nothing was changed; every file is exactly as you last read it. ",
-                        isRepeat, liftText, finalContents, result.ValidationResult,
-                        // Spans only for the model's own text: a lifted (merged) set was changed outside them.
-                        // Batch H5 R5: after a lift the spans are the model's own line ranges mapped onto the merged text, so an error the rename left in the model's file but outside its edit is attributed.
-                        liftNote is null ? liftSpans : await RenameLifter.MergedEditedSpansAsync(_workspaceManager, candidateContents, finalContents, liftSpans, cancellationToken),
-                        liftVerdicts, cancellationToken)
-                };
-            }
-            if (!result.IsError)
-            {
-                // finalContents is the merged set after a lift, so this also forgets the files the lift wrote (batch G R3), not only the edited ones.
-                foreach (var writtenPath in newContentsByFile.Keys.Concat(finalContents.Keys.Select(k => (string)k)))
-                    ForgetFileMemories(writtenPath);
-                // After the forget: the lift's own rewrites of the other files are what a later stale oldContent should be told about.
-                if (liftRewrites is not null)
-                    RewrittenLineMemory.Shared.Remember("the rename lift", liftRewrites);
-            }
-            var changeId = Guid.NewGuid().ToString("n")[..8];
-            var blobWrite = await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet_batch", result, blobChangeId: changeId, cancellationToken: cancellationToken);
-            var summaryBody = liftNote is null ? result.Summary : $"{liftNote} {result.Summary}";
-            var appliedSummary = selectorNotes.Count == 0 ? summaryBody : string.Join(" ", selectorNotes) + " " + summaryBody;
-            var strippedResult = result with { PreImages = null, Summary = blobWrite.Written ? $"{appliedSummary} Call {ToolCallHint.Call("UndoChange", ("changeId", changeId))} to revert." : appliedSummary };
-            string? diffContent = returnDiff
-                ? ValidateAndApplyHelper.BuildDiffFromPreImages(finalContents, result.PreImages)
-                : null;
-            return new SentinelCallToolResult<ReplaceSnippetResult>()
-            {
-                IsError = false,
-                SuccessData = new ReplaceSnippetResult(strippedResult, null, diffContent, blobWrite.Written ? changeId : null),
-                Findings = nearMissFindings is null ? WithLiftFinding(result.Findings, liftVerdicts) : WithLiftFinding(result.Findings, liftVerdicts).Concat(nearMissFindings).ToList()
-            };
+            // One key per edit for the rejected-edit memory; a null inserted text keeps the batch out of the applied-edit memory (TODO duplicate-apply no-op above).
+            var batchEditKeys = newContentsByFile
+                .SelectMany(kv => kv.Value.Select(c => (Path: kv.Key, c.OldContent, c.NewContent, InsertedText: (string?)null)))
+                .ToList();
+            return await ApplyEditTailAsync(
+                "ReplaceSnippet", "replace_snippet_batch", newContentsByFile.Keys.First(), finalContents, liftSpans,
+                "ReplaceSnippet batch: every edit matched, but the resulting code introduces new compiler errors, so nothing was changed; every file is exactly as you last read it. ",
+                selectorNotes, validateOnApply, returnDiff,
+                enableNearMissCorrection: true, enableRenameLift: true, batchEditKeys, cancellationToken);
         }
         catch (Exception ex)
         {
