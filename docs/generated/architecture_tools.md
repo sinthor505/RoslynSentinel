@@ -53,8 +53,8 @@
 | ScanTools | RunScanDetector | Intelligence | - | Dispatches a named scan detector across a file, project, or solution. |
 | ScanTools | ScanBreakingChanges | Intelligence | - | Compares a captured API baseline against current code and reports breaking changes. |
 | ScanTools | ScanDuplicateBlocksInClass | Intelligence | - | Finds duplicate statement sequences within a single class's methods via structural hashing. |
-| SubAgentEvalTools | SubAgentEval | SubAgentEval | - | Runs a prompt against a real LM Studio model in a fresh, worktree-isolated copy of the repo (branched from committed... |
-| SubAgentTools | SubAgent | claude-lean (on demand), SubAgent | - | Runs a prompt against a real LM Studio model in a fresh, worktree-isolated copy of the repo (branched from committed... |
+| SubAgentEvalTools | SubAgentEval | SubAgentEval | - | Runs a prompt against a real model on a model host in a fresh, worktree-isolated copy of the repo (branched from... |
+| SubAgentTools | SubAgent | claude-lean (on demand), SubAgent | - | Runs a prompt against a real model on a model host in a fresh, worktree-isolated copy of the repo (branched from... |
 
 ## RoslynSentinel.Tools.Basic
 

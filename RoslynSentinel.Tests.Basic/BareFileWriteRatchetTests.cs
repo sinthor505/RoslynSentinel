@@ -22,6 +22,8 @@ public class BareFileWriteRatchetTests
         // Agent-loop log and transcript files (non-workspace).
         ["RoslynSentinel.AgentLoop/ModelAgentRunner.cs::FormatForAgentLog"] = 1,
         ["RoslynSentinel.AgentLoop/ModelAgentRunner.cs::WriteTranscriptAsync"] = 1,
+        // evalqueue SetUp-complete marker under the scratch root (harness state, not a workspace file; best-effort, never throws).
+        ["RoslynSentinel.AgentLoop/EvalQueueSetupMarker.cs::WriteIfQueued"] = 1,
         // Model-eval run archive: copies a run directory into the results tree and writes test-result.txt (non-workspace, scratch output).
         ["RoslynSentinel.AgentLoop/RunDirectoryArchive.cs::CopyDirectoryRecursive"] = 1,
         ["RoslynSentinel.AgentLoop/RunDirectoryArchive.cs::WriteTestResult"] = 1,
@@ -42,6 +44,8 @@ public class BareFileWriteRatchetTests
         // replaces atomically; Load copies a closed tab's state file on a resume (session-id seed).
         ["RoslynSentinel.Common/TabToolsetState.cs::Load"] = 1,
         ["RoslynSentinel.Common/TabToolsetState.cs::Save"] = 1,
+        // Per-session tool-call transcript JSONL under the scratch root (server state, not a workspace file; append-only).
+        ["RoslynSentinel.Common/ToolCallTranscript.cs::Record"] = 1,
         // Full-test marker under .roslynsentinel/ (server state, not a workspace source file): temp file, then atomic replace.
         ["RoslynSentinel.Engines.Basic/FullTestMarkerStore.cs::Write"] = 1,
         // .gitignore inside a throwaway build output directory.
