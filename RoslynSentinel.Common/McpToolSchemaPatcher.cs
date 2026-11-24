@@ -12,9 +12,8 @@ using ModelContextProtocol.Server;
 namespace RoslynSentinel.Common;
 
 /// <summary>
-/// Registers <see cref="McpServerTool"/> instances the same way
-/// <c>McpServerBuilderExtensions.WithTools<TToolType></c> does, except it also supplies a
-/// <see cref="AIJsonSchemaCreateOptions.TransformSchemaNode"/> that patches up the two known-broken
+/// Builds the startup and runtime tools (<see cref="CreateSentinelTool"/>) with the schema patches below applied.
+/// The patches supply a <see cref="AIJsonSchemaCreateOptions.TransformSchemaNode"/> that patches up the two known-broken
 /// schema shapes <c>JsonSchemaExporter</c> produces for custom-converter wrapper types.
 /// </summary>
 /// <remarks>
@@ -37,8 +36,8 @@ namespace RoslynSentinel.Common;
 /// The SDK's own <c>WithTools<T>()</c> never passes a
 /// <see cref="McpServerToolCreateOptions.SchemaCreateOptions"/> (confirmed by decompiling
 /// ModelContextProtocol.Core 2.2.0's <c>AIFunctionMcpServerTool</c>), so there is no way to plug this
-/// fix in through the SDK's extension method -> this reimplements its registration loop with that one
-/// option supplied.
+/// fix in through the SDK's extension method -> <c>CreateSentinelTool</c> (called by
+/// ToolSurfaceController.BuildStartupTools and the runtime toolset service) supplies that option instead.
 /// </remarks>
 public static class McpToolSchemaPatcher
 {
@@ -56,7 +55,7 @@ public static class McpToolSchemaPatcher
 
         // A schema object with no "type" at all (only "description", possibly alongside "default")
         // is the exporter's other fallback for a custom-converter type it can't introspect further ->
-        // every WithSentinelTools<T>-generated parameter that DOES have a normal shape always carries a
+        // every parameter built by CreateSentinelTool that DOES have a normal shape always carries a
         // "type", so an object missing one here is never an intentionally-untyped schema, always this
         // fallback. Defaulting it to "string" matches every current custom-converter wrapper type
         // (ToolCallReason, FilePathWrapper) being string-backed.
@@ -125,30 +124,6 @@ public static class McpToolSchemaPatcher
     }
 
     /// <summary>
-    /// Drop-in replacement for <c>IMcpServerBuilder.WithTools<TToolType>()</c> that fixes up
-    /// any bare-<c>true</c> schema node produced for <typeparamref name="TToolType"/>'s tool methods.
-    /// </summary>
-    [Obsolete("Startup tools come from the ToolClassRegistry tables; see ToolSurfaceStartupPopulation.")]
-    public static IMcpServerBuilder WithSentinelTools<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.NonPublicMethods)] TToolType>(
-        this IMcpServerBuilder builder,
-        JsonSerializerOptions? serializerOptions = null)
-    {
-        // Present only for the exclusive "claude-lean" mode (registered by AddRoslynSentinelToolsBasic
-        // before any tool class); null everywhere else, which keeps every tool of the class.
-        var allowList = builder.Services
-            .LastOrDefault(d => d.ServiceType == typeof(ToolAllowList))
-            ?.ImplementationInstance as ToolAllowList;
-
-        foreach (var (toolMethod, _) in SentinelToolMethods(typeof(TToolType), allowList))
-        {
-            builder.Services.AddSingleton<McpServerTool>(services =>
-                CreateSentinelTool(toolMethod, typeof(TToolType), services, serializerOptions));
-        }
-
-        return builder;
-    }
-
-    /// <summary>
     /// The <see cref="McpServerToolAttribute"/> methods of <paramref name="toolType"/> that <paramref name="allowList"/>
     /// keeps, in reflection order (instance, static; public, then non-public), each with its tool name
     /// (the attribute's <c>Name</c>, else the method name). A null allow list keeps every tool.
@@ -180,7 +155,7 @@ public static class McpToolSchemaPatcher
 
     /// <summary>
     /// Builds one fully patched <see cref="McpServerTool"/> for <paramref name="toolMethod"/>: the SDK's
-    /// own creation plus every schema patch <see cref="WithSentinelTools{TToolType}"/> applies at startup
+    /// own creation plus every schema patch the startup population applies at startup
     /// (x-tags, ReplaceSnippet limits, lean profile). Shared by the startup registration and by the
     /// runtime toolset service so a tool added later (McpToolsetControl) is byte-for-byte the same tool
     /// it would have been had it been registered at startup.
@@ -498,7 +473,7 @@ public static class McpToolSchemaPatcher
     /// AIJsonUtilities.CreateFunctionJsonSchema), not POCO properties, so RewriteBrokenSchemaNode's
     /// ParameterAttributeProvider path can't see which parameter is being rewritten there. The limits
     /// are runtime-configurable (ReplaceSnippetOptions.Configure, called from every server entry point
-    /// before AddRoslynSentinelTools*/WithSentinelTools runs), so they can't be baked into the
+    /// before AddRoslynSentinelTools* runs), so they can't be baked into the
     /// [Description] const strings in ToolParams - only a post-build patch like this can surface them.
     /// </remarks>
     internal static void ApplyReplaceSnippetLimits(McpServerTool tool, MethodInfo toolMethod)

@@ -2,7 +2,7 @@ namespace RoslynSentinel.Common;
 
 /// <summary>
 /// Optional per-tool allow-list: when one is registered in the service collection before the tool
-/// classes are, <see cref="McpToolSchemaPatcher.WithSentinelTools{TToolType}"/> registers only the
+/// classes are, ToolSurfaceController.BuildStartupTools builds only the
 /// tool methods whose MCP name is in <see cref="ToolNames"/>. Tool classes are otherwise selected
 /// whole (ToolClassRegistry), which is too coarse for a toolset that wants some tools of a class and
 /// not others. Registered only for the exclusive "claude-lean" mode; absent for every other mode,
