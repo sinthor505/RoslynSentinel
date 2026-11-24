@@ -76,4 +76,40 @@ public class TestRunOutcomeTests
         Assert.That(json, Does.Match("(?i)\"outcome\":\\s*\"NoTestsMatched\""));
         Assert.That(json, Does.Not.Contain("runSucceeded").IgnoreCase.And.Not.Contain("runCompleted").IgnoreCase.And.Not.Contain("ranToCompletion").IgnoreCase);
     }
+
+    [Test]
+    public void InvalidFilterDetail_ExitZero_IsNull()
+    {
+        Assert.That(TestRunEngine.InvalidFilterDetail("FullyQualifiedName~Foo", 0, "", "An exception occurred. Incorrect format for TestCaseFilter"), Is.Null);
+    }
+
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase("   ")]
+    public void InvalidFilterDetail_BlankFilter_IsNull(string? filter)
+    {
+        Assert.That(TestRunEngine.InvalidFilterDetail(filter, 1, "", "Incorrect format for TestCaseFilter"), Is.Null);
+    }
+
+    [Test]
+    public void InvalidFilterDetail_NoSignature_IsNull()
+    {
+        Assert.That(TestRunEngine.InvalidFilterDetail("FullyQualifiedName~Foo", 1, "Build FAILED.", "error CS1002: ; expected"), Is.Null);
+    }
+
+    [Test]
+    public void InvalidFilterDetail_RejectedFilter_NamesAdapterLineAndOmitsStackTrace()
+    {
+        const string stderr = "An exception occurred while invoking executor 'executor://nunit3testexecutor/': Incorrect format for TestCaseFilter Error: Invalid Condition 'FullyQualifiedName~'. Specify the correct format and try again. Note that the incorrect format can lead to no test getting executed.\n"
+            + "   at NUnit.Engine.Services.Filters.TestFilterFactory.Create(String filter)\n";
+
+        var detail = TestRunEngine.InvalidFilterDetail("FullyQualifiedName~(Foo", 1, "", stderr);
+
+        Assert.That(detail, Is.Not.Null);
+        Assert.That(detail, Does.Contain("rejected the filter 'FullyQualifiedName~(Foo'"));
+        Assert.That(detail, Does.Contain("exited with code 1"));
+        Assert.That(detail, Does.Contain("Incorrect format for TestCaseFilter"));
+        Assert.That(detail, Does.Not.Contain("TestFilterFactory"));
+        Assert.That(detail, Does.Not.Contain("tests matched"));
+    }
 }

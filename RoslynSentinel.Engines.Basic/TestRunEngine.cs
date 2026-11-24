@@ -107,6 +107,9 @@ public class TestRunEngine
     /// <summary>Prefix of the stderr line `dotnet test` prints when a `[SetUpFixture]` `[OneTimeTearDown]` throws.</summary>
     public const string TearDownFailureSignaturePrefix = "TearDown failed for test fixture ";
 
+    /// <summary>Adapter message fragment that NUnit's test executor writes when a `--filter` expression is malformed.</summary>
+    public const string InvalidFilterSignature = "Incorrect format for TestCaseFilter";
+
     /// <summary>Runs `dotnet test` per test project into this server instance's .roslynsentinel/build/&lt;instance&gt;/
     /// artifacts directory (always; the projects' own bin/obj are not written) while holding the server-wide
     /// <see cref="BuildGate"/> for the whole run. <paramref name="useScratchDir"/> is obsolete and ignored; it stays
@@ -486,6 +489,35 @@ public class TestRunEngine
         return merged;
     }
 
+    /// <summary>Returns the detail text for a run whose `--filter` the test adapter rejected (non-zero exit, adapter
+    /// signature in stderr or stdout), or null when the filter was not rejected. Names the adapter line only, never
+    /// a stack trace.</summary>
+    public static string? InvalidFilterDetail(string? filter, int exitCode, string stdout, string stderr)
+    {
+        if (string.IsNullOrWhiteSpace(filter) || exitCode == 0)
+        {
+            return null;
+        }
+
+        static string? SignatureLine(string text) => text
+            .Split('\n')
+            .Select(line => line.Trim())
+            .FirstOrDefault(line => line.Contains(InvalidFilterSignature, StringComparison.Ordinal));
+
+        var line = SignatureLine(stderr) ?? SignatureLine(stdout);
+        if (line is null)
+        {
+            return null;
+        }
+
+        if (line.Length > 300)
+        {
+            line = line[..300];
+        }
+
+        return $"The test adapter rejected the filter '{filter}' (dotnet test exited with code {exitCode}); no test ran. Adapter message: {line} The filter is a `dotnet test --filter` expression such as FullyQualifiedName~ClassName or FullyQualifiedName~Namespace.Class.Method.";
+    }
+
     /// <summary>Runs `dotnet test` against a single project with its own dedicated TRX file, and
     /// parses the result. Never throws -> timeouts, missing TRX, and process failures are all
     /// reported via <see cref="TestRunResult.Outcome"/> and <see cref="TestRunResult.Detail"/>
@@ -590,7 +622,7 @@ public class TestRunEngine
 
             if (!File.Exists(trxPath))
             {
-                var noTrxDetail = lockDetail ?? "No TRX result file was produced - the run failed before any test adapter reported results.";
+                var noTrxDetail = lockDetail ?? InvalidFilterDetail(filter, process.ExitCode, stdoutText, stderrText) ?? "No TRX result file was produced - the run failed before any test adapter reported results.";
                 return new TestRunResult(
                     Outcome: ClassifyOutcome(exitCode: process.ExitCode, failedCount: 0, totalCount: 0, hung: hungTestName is not null, timedOut: false, trxExists: false),
                     ExitCode: process.ExitCode,
@@ -615,7 +647,8 @@ public class TestRunEngine
             var failedCount = failedResults.Count;
             var skippedCount = allResults.Count(r => r.Outcome is TestOutcome.Skipped or TestOutcome.NotExecuted);
 
-            string? detail = lockDetail;
+            var invalidFilterDetail = totalCount == 0 ? InvalidFilterDetail(filter, process.ExitCode, stdoutText, stderrText) : null;
+            string? detail = lockDetail ?? invalidFilterDetail;
             if (detail is null && totalCount == 0)
             {
                 detail = !string.IsNullOrEmpty(filter)
@@ -624,7 +657,7 @@ public class TestRunEngine
             }
 
             var outcome = ClassifyOutcome(process.ExitCode, failedCount, totalCount, hung: hungTestName is not null, timedOut: false, trxExists: true);
-            if (outcome == TestRunOutcome.RunError && hungDetail is null)
+            if (outcome == TestRunOutcome.RunError && hungDetail is null && invalidFilterDetail is null)
             {
                 // Non-zero exit with no failed test: facts only, appended to any 0-matched or lock text already in detail.
                 var exitDetail = $"dotnet test exited with code {process.ExitCode} but no test failed (fixture setup/teardown error or test host crash); see StderrTail/StdoutTail.";
