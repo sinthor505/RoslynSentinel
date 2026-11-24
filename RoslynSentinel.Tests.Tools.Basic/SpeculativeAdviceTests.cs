@@ -150,7 +150,7 @@ public class SpeculativeAdviceTests
     {
         IReadOnlyList<SymbolCandidate> candidates = [new SymbolCandidate("CalcDiscount", "method", "Calculator", "Calc.cs", 12, null, 1)];
 
-        var text = SymbolNotFoundDetail.RenderCandidates("CalcDsc", "method", "the loaded solution", candidates);
+        var text = SymbolNotFoundDetail.RenderCandidates("CalcDsc", "method", "the loaded solution", candidates, wholeSolution: true);
 
         Assert.That(text, Does.EndWith("\nRetry with the exact symbol you meant. If none of these is the symbol you meant, it does not exist in this solution."));
     }

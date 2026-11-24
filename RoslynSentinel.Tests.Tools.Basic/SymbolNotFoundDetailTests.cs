@@ -218,7 +218,7 @@ public class SymbolNotFoundDetailTests
         Assert.That(text, Does.Contain("Symbol 'CalcDsc' (method) was not found in " + ScopeDescription));
         Assert.That(text, Does.Contain("Did you mean one of these?"));
         Assert.That(text, Does.Contain("CalcDisc (method) in OrderPricingCalculator, " + OrderPricingFixture.FileName));
-        Assert.That(text, Does.Contain(ToolCallHint.Call("Search", ("mode", "symbol"), ("query", "CalcDisc"), ("filePath", OrderPricingFixture.FileName))));
+        Assert.That(text, Does.Contain(ToolCallHint.Call("Search", ("mode", "symbol"), ("query", "CalcDisc"), ("containingType", "OrderPricingCalculator"), ("filePath", OrderPricingFixture.FileName))));
         Assert.That(text, Does.Contain("does not exist in this solution"));
         Assert.That(text, Does.Not.Contain("tell the user"));
         Assert.That(text, Does.Not.Contain("You MUST"));
@@ -428,7 +428,7 @@ public class SymbolNotFoundDetailTests
         var text = await SymbolNotFoundDetail.BuildAsync(projects, "CalcDsc", "method", ScopeDescription, ProjectName, retryCall: _ => null);
 
         Assert.That(text, Does.Contain($"docCommentId '{CalcDiscId}'"));
-        Assert.That(text, Does.Contain(ToolCallHint.Call("Search", ("mode", "symbol"), ("query", "CalcDisc"), ("filePath", OrderPricingFixture.FileName))));
+        Assert.That(text, Does.Contain(ToolCallHint.Call("Search", ("mode", "symbol"), ("query", "CalcDisc"), ("containingType", "OrderPricingCalculator"), ("filePath", OrderPricingFixture.FileName))));
     }
 
     [Test]
@@ -466,7 +466,7 @@ public class SymbolNotFoundDetailTests
 
         Assert.That(withoutId, Does.Not.Contain("docCommentId"), "a candidate without an id has no id to state");
         Assert.That(withoutId, Does.Not.Contain("Tool()"));
-        Assert.That(withoutId, Does.Contain("-> " + ToolCallHint.Call("Search", ("mode", "symbol"), ("query", "CalcDisc"), ("filePath", "Calc.cs"))));
+        Assert.That(withoutId, Does.Contain("-> " + ToolCallHint.Call("Search", ("mode", "symbol"), ("query", "CalcDisc"), ("containingType", "OrderPricingCalculator"), ("filePath", "Calc.cs"))));
         Assert.That(withNextCall, Does.Contain("-> Next()"));
         Assert.That(withNextCall, Does.Not.Contain("Tool()"));
     }
@@ -584,7 +584,7 @@ public class SymbolNotFoundDetailTests
     {
         var projects = Projects(BuildSolution());
         ToolCallContext.Set(null);
-        var today = await SymbolNotFoundDetail.BuildAsync(projects, "CalcDsc", "method", ScopeDescription, ProjectName);
+        var today = await SymbolNotFoundDetail.BuildAsync(projects, "CalcDsc", "method", ScopeDescription, ProjectName, wholeSolution: true);
 
         SetWorkspaceCurrent(true);
         var current = await SymbolNotFoundDetail.BuildAsync(projects, "CalcDsc", "method", ScopeDescription, ProjectName, wholeSolution: true);
