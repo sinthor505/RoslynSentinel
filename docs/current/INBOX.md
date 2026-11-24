@@ -11,3 +11,4 @@ close it with a reason in [CLOSED.md](./CLOSED.md), then delete the line here. C
 
 ## Untriaged
 - 2026-11-24 00:10 UndoChange reverts a multi-item file last-write-wins (restores the last item's BeforeSource), so AsyncifyTools must stamp the first BeforeSource on every item of a file - RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs ~:452 - // TODO UndoChange reverts multi-item files last-write-wins (punchlist #5)
+- 2026-11-24 00:50 LmStudioAgentClient retries a response with status=incomplete (max_output_tokens hit) once, same cause as the spent-truncation case #16 no longer retries - RoslynSentinel.AgentLoop/LmStudioAgentClient.cs (plain InvalidOperationException in CompleteOnceAsync, near the StreamTruncatedException throw) - no code TODO (owner decision: also skip the retry? recommend yes)

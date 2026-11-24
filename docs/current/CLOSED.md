@@ -8,6 +8,36 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Saved-transcript scoring never checks ToolNotTried (punchlist #10) - resolved (2026-11-23)
+
+Saved-transcript scoring never checks ToolNotTried (2026-11-23) - ScenarioId is the synthetic `saved:<folder>`, so `ScenarioRegistry.Find` cannot resolve it in `SavedTranscriptScoring.ScoreFile` (code TODO there); Small
+
+Evidence: afda1279; SavedTranscriptScoringTests (stamped id, results.csv id, fallback, unknown id, JSON round trip), ScenarioScorerTests, StreamRunawayRunnerTests, ContextExhaustedRunnerTests; 149 tests incl. ratchets green
+
+## RemovePinnedSentence LfEndings variant cannot be tested (punchlist #11) - resolved (2026-11-23)
+
+RemovePinnedSentence LfEndings variant cannot be tested (2026-11-24) - `ImplementationScenarioGoldenTests.Variant_OutcomeMatchesTable` writes every overlay through `ImplementationScenario.NormalizeToCrlf`; code TODO in `RemovePinnedSentenceScenario.cs` BuildVariants; Small
+
+Evidence: 18576a1b; ImplementationScenarioGoldenTests.Variant_OutcomeMatchesTable RemovePinnedSentence rows (54 tests incl. ratchets green)
+
+## Truncated phrase-loop turns are retried (punchlist #16) - resolved (2026-11-23)
+
+Truncated phrase-loop turns are retried (2026-11-23) - skip the retry when the truncated attempt streamed >= 90% of the token cap, and abort a phrase loop while streaming (one >= 15-char sentence repeated 20 times in content or reasoning) with new stop reason `ReasoningLoopDetected` (todo review 2026-11-23); Small-Medium - [proposal](proposals/proposal_stream_phrase_loop_detector.md)
+
+Evidence: d0676da1; StreamRunawayRunnerTests (spent truncation not retried, content/reasoning phrase loop -> ReasoningLoopDetected), StreamPhraseLoopDetectorTests; 80 tests green. Open: status=incomplete path still retried (see INBOX)
+
+## Capped runs graded on a mid-task message (punchlist #4) - resolved (2026-11-23)
+
+Capped runs graded on a mid-task message (2026-11-23) - add `AgentTranscript.FinalMessageIfFinished()` ("" unless `StopReason` is ModelFinished; null counts as finished so old transcripts rescore the same) and use it at the grading sites (`ScenarioScorer` x3, `ScenarioSampleLoop`, `ScenarioRescoring`, `ShippingKindSteppedAgentTests.cs:129` TODO, PlanStepRunner `Program.cs:246`); SubAgentEval/SubAgentImpl keep `FinalMessage()` (todo review 2026-11-23); acceptance: AgentTranscriptFinalMessageTests cases + a ScenarioScorer test where a capped "BLOCKED:" text does not pass; Small
+
+Evidence: af46a862, 50abcf49, f8135371; AgentTranscriptFinalMessageTests, ScenarioScorerTests (capped BLOCKED case), 162 tests incl. ratchets green
+
+## SamplerMismatchException ends the run without a result (punchlist #13) - resolved (2026-11-23)
+
+SamplerMismatchException ends the run without a result (2026-11-23) - transcript.json is already written (StopReason Exception, `ModelAgentRunner.cs:216-220`); catch `SamplerMismatchException` beside the StreamTruncated catch (`ModelAgentRunner.cs:394`), add `AgentStopReason.SamplerMismatch` (append last), log the detail, return Converged=false (todo review 2026-11-23); acceptance: Harness runner test, RunAsync does not throw and StopReason is SamplerMismatch on result and transcript; code TODO at the `LmStudioAgentClient.cs` throw site; Small-Medium
+
+Evidence: 75c460c1; StreamRunawayRunnerTests.SamplerValueEchoedDifferently_StopsWithSamplerMismatch_NoException, LmStudioAgentClientSettingsTests
+
 ## Git commit on a foreign index.lock reports GitNothingToCommit (punchlist #3) - resolved (2026-11-23)
 
 Git commit on a foreign `.git/index.lock` reports GitNothingToCommit (2026-11-23) - new `GitErrorCodes.IndexLocked` detected structurally in `GitImpl.CommitAsync` (`GitImpl.cs:3819-3830`): exit 128 + `<git dir>/index.lock` exists (per-worktree git dir), hint names the lock path; also record why the index looked "nothing staged"; acceptance: `GitCommitUntrackedParityTests.Commit_IndexLockHeldByAnotherProcess_...` asserts the new code (todo review 2026-11-23); Small

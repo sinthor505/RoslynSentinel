@@ -1,6 +1,7 @@
 # Stop retrying spent truncated turns and abort phrase loops while streaming
 
-**Status:** APPROVED 2026-11-23. Decided in todo review 2026-11-23; not built.
+**Status:** IMPLEMENTED 2026-11-24 (d0676da1, punchlist #16). Decided in todo review 2026-11-23. Not done: the `status=incomplete` path
+(plain `InvalidOperationException`, `LmStudioAgentClient.cs`) is still retried although `max_output_tokens` is the same cause as a spent truncation.
 
 ## Motivation
 
