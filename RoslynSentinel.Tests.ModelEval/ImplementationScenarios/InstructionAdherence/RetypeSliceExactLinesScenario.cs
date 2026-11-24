@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Scenarios;
+namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.InstructionAdherence;
 
 /// <summary>
 /// Retype two result-record parameters to DocumentChangeSet and update exactly the producers that build them (engine and tests),

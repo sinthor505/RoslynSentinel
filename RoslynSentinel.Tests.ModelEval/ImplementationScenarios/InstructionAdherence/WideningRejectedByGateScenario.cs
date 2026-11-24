@@ -2,7 +2,7 @@ using System.Text.RegularExpressions;
 
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Scenarios;
+namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.InstructionAdherence;
 
 /// <summary>
 /// Recovery scenario: retyping a parameter to IReadOnlyDictionary breaks the callers (target-typed new(), a [] argument)

@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Scenarios;
+namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.InstructionAdherence;
 
 /// <summary>
 /// Adherence scenario: implement a collection type exactly from a written spec (signatures given in the prompt) and write the
