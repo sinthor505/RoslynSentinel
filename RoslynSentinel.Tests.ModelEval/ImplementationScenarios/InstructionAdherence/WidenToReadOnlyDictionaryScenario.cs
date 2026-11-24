@@ -1,5 +1,3 @@
-using System.Text.RegularExpressions;
-
 using RoslynSentinel.Common.AgentLoop;
 
 namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.InstructionAdherence;
@@ -304,8 +302,8 @@ public class ReadOnlyViewTests
                 },
                 AllowedPaths: new List<string> { ChangeValidatorPath, ChangeHelperPath },
                 HiddenTestSource: null,
-                ExtraCheck: static ctx => Task.FromResult<string?>(CheckWidenedFiles(ctx)),
-                CannedFinalMessage: null,
+                ExtraCheck: static ctx => Task.FromResult<string?>(CheckCrefsResolve(ctx)),
+                CannedFinalMessage: CannedReport,
                 DoneWhenTests: new[] { "ReadOnlyViewTests" }),
         },
         PreferredHost: "112",
@@ -328,24 +326,17 @@ public class ReadOnlyViewTests
         source.Replace("Dictionary<FilePath, string>", "IReadOnlyDictionary<FilePath, string>")
             .Replace("Dictionary{FilePath, string}", "IReadOnlyDictionary{FilePath, string}");
 
-    /// <summary>Caller files must be untouched; the two target files must use the widened type and no new Dictionary.</summary>
-    private static string? CheckWidenedFiles(ImplementationScenarioCheckContext ctx)
-    {
-        string[] callerPaths =
-        {
-            CoreFolder + "OrderImporter.cs",
-            CoreFolder + "BatchPublisher.cs",
-            CoreFolder + "ReportBuilder.cs",
-            CoreFolder + "CandidateChecker.cs",
-        };
-        foreach (var path in callerPaths)
-        {
-            if (!ctx.IsUnchanged(path))
-            {
-                return $"caller changed: {path}";
-            }
-        }
+    private const string CannedReport = """
+DONE: retyped all ten Dictionary<FilePath, string> parameters of ChangeValidator.cs and ChangeHelper.cs to IReadOnlyDictionary<FilePath, string> and respelled the doc crefs that named them; no other file changed.
+""";
 
+    /// <summary>
+    /// The step's ExtraCheck: with the two files compiled together with the folder's other files, every &lt;see cref&gt; in them resolves
+    /// (no CS1574, CS1580, CS1581 or CS1584). The callers staying unchanged is the scope check's job (AllowedPaths); the parameter types are
+    /// ReadOnlyViewTests' job. The Core project does not generate documentation, so the model gets no such diagnostic from the build.
+    /// </summary>
+    private static string? CheckCrefsResolve(ImplementationScenarioCheckContext ctx)
+    {
         string[] targetPaths = { ChangeValidatorPath, ChangeHelperPath };
         foreach (var path in targetPaths)
         {
@@ -353,16 +344,17 @@ public class ReadOnlyViewTests
             {
                 return $"missing: {path}";
             }
+        }
 
-            var text = ctx.ReadText(path);
-            if (text.Contains("new Dictionary<", StringComparison.Ordinal))
+        var compilation = ctx.Compile(CoreFolder.TrimEnd('/'));
+        foreach (var path in targetPaths)
+        {
+            var diagnostics = compilation.DocumentationDiagnostics(path);
+            if (diagnostics.Count > 0)
             {
-                return $"new Dictionary<  added in {path}";
-            }
-
-            if (Regex.IsMatch(text, @"(?<!ReadOnly)Dictionary\{FilePath"))
-            {
-                return $"cref still spells Dictionary in {path}";
+                var first = diagnostics[0];
+                var line = first.Location.GetLineSpan().StartLinePosition.Line + 1;
+                return $"unresolved doc reference in {path} ({diagnostics.Count} diagnostic(s)); first: {first.Id} at line {line}: {first.GetMessage()}";
             }
         }
 
