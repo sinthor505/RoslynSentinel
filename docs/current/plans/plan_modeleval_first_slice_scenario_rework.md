@@ -1,6 +1,6 @@
 # Plan: rework the 18 first-slice eval scenarios into realistic briefs with behavioural acceptance tests (proposal Phasing step 3)
 
-**Status:** IN PROGRESS 2026-11-23. Steps 54-59 done (7d94a62c..76df6d43); Steps 1-11 done (2b578dea..5765c966); Steps 12-21 done (7cbfc4d9..3db4c7c0); Steps 22-26 done (b5d6d45d..0d6ee1e0); 13(o)+(q) slice and Steps 27-30, 60-63 done (5dd5a5a8..5ebf3f29). Approved 2c34a882; review amendments and the owner's answers are Decision 13 (overrides step text); Batched mode, owner present. Phasing step 3 of [proposal_modeleval_standing_workflow_contract.md](../proposals/proposal_modeleval_standing_workflow_contract.md), written from [finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md](../findings/finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md). Depends on [plan_modeleval_workflow_contract_phase1.md](./closed/plan_modeleval_workflow_contract_phase1.md) (called "P1" below).
+**Status:** IN PROGRESS 2026-11-23. Steps 54-59 done (7d94a62c..76df6d43); Steps 1-11 done (2b578dea..5765c966); Steps 12-21 done (7cbfc4d9..3db4c7c0); Steps 22-26 done (b5d6d45d..0d6ee1e0); 13(o)+(q) slice and Steps 27-30, 60-63 done (5dd5a5a8..5ebf3f29); Steps 31-39 done (ab3a1976..86f825b2). Approved 2c34a882; review amendments and the owner's answers are Decision 13 (overrides step text); Batched mode, owner present. Phasing step 3 of [proposal_modeleval_standing_workflow_contract.md](../proposals/proposal_modeleval_standing_workflow_contract.md), written from [finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md](../findings/finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md). Depends on [plan_modeleval_workflow_contract_phase1.md](./closed/plan_modeleval_workflow_contract_phase1.md) (called "P1" below).
 
 ## Problem
 
@@ -759,6 +759,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: test-writer (3 files).
 
 ### Step 31 - S5 RetypeSliceExactLines: brief, fixture, tests
+- Done: ab3a1976 (with Step 32)
 - Files: RoslynSentinel.Tests.ModelEval/ImplementationScenarios/InstructionAdherence/RetypeSliceExactLinesScenario.cs
 - Depends on: 2; P1 Steps 1, 3, 5
 - Effect: behaviour-changing.
@@ -767,6 +768,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~5 edits). Pairs with: Step 27 or 28.
 
 ### Step 32 - S5: grader and variants
+- Done: ab3a1976
 - Files: RetypeSliceExactLinesScenario.cs
 - Depends on: 31, 5, 8
 - Effect: behaviour-changing.
@@ -775,6 +777,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~8 edits).
 
 ### Step 33 - S15 MigrateOntoEnvironmentHelper: brief, fixture, tests
+- Done: 915beb10 (with Step 34)
 - Files: RoslynSentinel.Tests.ModelEval/ImplementationScenarios/InstructionAdherence/MigrateOntoEnvironmentHelperScenario.cs
 - Depends on: 2; P1 Steps 1, 3, 5
 - Effect: behaviour-changing.
@@ -783,6 +786,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~5 edits).
 
 ### Step 34 - S15: grader and variants
+- Done: 915beb10
 - Files: MigrateOntoEnvironmentHelperScenario.cs
 - Depends on: 33, 5, 8
 - Effect: behaviour-changing.
@@ -791,6 +795,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~9 edits).
 
 ### Step 35 - S10/S11 NotFoundToTypedThrow: briefs, fixture, tests
+- Done: 3255f1f2 (with Step 36)
 - Files: RoslynSentinel.Tests.ModelEval/ImplementationScenarios/InstructionAdherence/NotFoundToTypedThrowScenario.cs
 - Depends on: 2; P1 Steps 1, 3, 5
 - Effect: behaviour-changing.
@@ -799,6 +804,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~7 edits).
 
 ### Step 36 - S10/S11: graders and variants
+- Done: 3255f1f2 (S11 variants use BaseStep 1)
 - Files: NotFoundToTypedThrowScenario.cs
 - Depends on: 35, 5, 6, 8
 - Effect: behaviour-changing.
@@ -807,6 +813,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~10 edits).
 
 ### Step 37 - S4 ChangeSetTypeFromSpec: brief, fixture, tests
+- Done: 86f825b2 (with Step 38)
 - Files: RoslynSentinel.Tests.ModelEval/ImplementationScenarios/InstructionAdherence/ChangeSetTypeFromSpecScenario.cs
 - Depends on: 2; P1 Steps 1, 3, 5
 - Effect: behaviour-changing.
@@ -815,6 +822,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~8 edits).
 
 ### Step 38 - S4: grader and variants
+- Done: 86f825b2 (mutants derived from GoldenTypeSource; the golden runs as a fourth control mutant)
 - Files: ChangeSetTypeFromSpecScenario.cs
 - Depends on: 37, 5, 6, 8
 - Effect: behaviour-changing.
@@ -823,6 +831,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~8 edits).
 
 ### Step 39 - Batch D gate
+- Done: gate passed at 86f825b2 (stop family and harness 89/89; S5, S15, S4 goldens 9/9 each; S10/S11 13/13)
 - Files: none edited
 - Depends on: 27-38, 60-63
 - Effect: text-neutral.
