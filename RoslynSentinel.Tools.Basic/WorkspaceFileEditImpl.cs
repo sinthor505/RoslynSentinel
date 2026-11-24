@@ -1606,21 +1606,45 @@ public class WorkspaceFileEditImpl
     {
         try
         {
-            bool hasSingularEdit = filePath is not null || !string.IsNullOrEmpty(oldContent) || newContent != null
-                || withinMember is not null || matchLine is not null;
             bool hasBatchEdit = batchEdits != null;
-            // Tolerated: a top-level filePath beside batchEdits with nothing else singular set; models repeat it, so it becomes the default file for items with a blank filePath.
-            bool hasTopLevelFilePathOnly = hasBatchEdit && filePath is not null && string.IsNullOrEmpty(oldContent) && string.IsNullOrEmpty(newContent)
-                && withinMember is null && matchLine is null && lineBefore is null && lineAfter is null;
+            // Beside batchEdits, a top-level filePath alone is the default file for items with a blank filePath (models repeat it).
+            // A top-level oldContent/newContent beside batchEdits is appended as one more item (SnippetEdit carries every selector
+            // too, so withinMember/matchLine/lineBefore/lineAfter travel with it). The only conflict is a top-level edit that
+            // cannot form an item: oldContent without newContent, newContent without oldContent, or a selector with neither.
+            // An empty newContent with no oldContent and no selector is tolerated as unset, like the old filePath-only rule.
+            bool hasTopLevelItemFields = !string.IsNullOrEmpty(oldContent) || !string.IsNullOrEmpty(newContent)
+                || withinMember is not null || matchLine is not null || lineBefore is not null || lineAfter is not null;
 
-            if (hasSingularEdit && hasBatchEdit && !hasTopLevelFilePathOnly)
+            if (hasBatchEdit && hasTopLevelItemFields)
             {
-                return new SentinelCallToolResult<ReplaceSnippetResult>()
+                if (string.IsNullOrEmpty(oldContent) || newContent is null)
                 {
-                    IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
-                        "ReplaceSnippet: supply either filePath/oldContent/newContent or 'batchEdits', not both.")
-                };
+                    var given = new[]
+                    {
+                        (!string.IsNullOrEmpty(oldContent), "oldContent"), (!string.IsNullOrEmpty(newContent), "newContent"),
+                        (withinMember is not null, "withinMember"), (matchLine is not null, "matchLine"),
+                        (lineBefore is not null, "lineBefore"), (lineAfter is not null, "lineAfter")
+                    }.Where(p => p.Item1).Select(p => p.Item2);
+                    var missing = string.IsNullOrEmpty(oldContent) ? "oldContent" : "newContent";
+                    return new SentinelCallToolResult<ReplaceSnippetResult>()
+                    {
+                        IsError = true,
+                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
+                            $"ReplaceSnippet: top-level {string.Join("/", given)} beside batchEdits cannot form an edit because {missing} is not set. "
+                            + "Options: pass oldContent and newContent together (they count as one more batch item), move the edit into batchEdits, or drop batchEdits.")
+                    };
+                }
+
+                batchEdits = [.. batchEdits!, new SnippetEdit
+                {
+                    FilePath = filePath ?? "",
+                    OldContent = oldContent,
+                    NewContent = newContent,
+                    LineBefore = lineBefore,
+                    LineAfter = lineAfter,
+                    WithinMember = withinMember,
+                    MatchLine = matchLine
+                }];
             }
 
             if (hasBatchEdit)
@@ -2137,7 +2161,7 @@ public class WorkspaceFileEditImpl
             var edit = batchEdits[i];
             if (string.IsNullOrEmpty(edit.FilePath))
             {
-                perEditErrors.Add($"batchEdits[{i}]: filePath is required.");
+                perEditErrors.Add($"batchEdits[{i}] has no filePath. Options: set filePath on batchEdits[{i}], or pass one top-level filePath that every item without its own filePath uses.");
                 continue;
             }
             if (string.IsNullOrEmpty(edit.OldContent))

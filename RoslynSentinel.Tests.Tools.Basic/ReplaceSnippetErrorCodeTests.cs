@@ -477,7 +477,7 @@ public class ReplaceSnippetErrorCodeTests
         {
             Assert.That(result.IsError, Is.True);
             Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
-            Assert.That(result.ErrorData.Message, Does.Contain("not both"));
+            Assert.That(result.ErrorData.Message, Does.Contain("cannot form an edit because oldContent is not set"));
         }
 
         Assert.That(h.Workspace.ReadText(MemberDupRelativePath), Is.EqualTo(original), "a rejected call must not write anything");

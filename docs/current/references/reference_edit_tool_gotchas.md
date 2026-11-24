@@ -11,7 +11,7 @@ when one of them rejects an edit.
 - `ReplaceSnippet` matches the old snippet exactly, whitespace and line endings included.
 
 ## Gotchas
-- A top-level `filePath` beside `batchEdits` is accepted only as the default for batch items without their own `filePath`; mixing it with `oldContent`, `newContent` or a selector (`withinMember`, `matchLine`, `lineBefore`, `lineAfter`) is rejected as InvalidArgument (`WorkspaceFileEditImpl.cs` `hasTopLevelFilePathOnly`, e0ceceab).
+- `ReplaceSnippet`: a top-level `filePath` beside `batchEdits` is the default for batch items without their own `filePath`; a top-level `oldContent`/`newContent` (with any selectors) beside `batchEdits` is appended as one more item. Only a top-level edit that cannot form an item (`oldContent` without `newContent`, the reverse, or a selector with neither) is rejected as InvalidArgument (`WorkspaceFileEditImpl.cs` `ReplaceSnippet`). The `Modify*` batch tools still reject any singular parameter beside their batch.
 - Order batch edits definitions-first (the compile gate rejects non-compiling intermediate states);
   rename a field and all its usages in one atomic batch.
 - Snippets must match exactly, whitespace and line endings included; copy context from a

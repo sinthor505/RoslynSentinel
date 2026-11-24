@@ -162,24 +162,31 @@ public class ReplaceSnippetBatchTests
     }
 
     [Test]
-    public async Task ReplaceSnippet_BothEditsAndSingularParamsSupplied_RejectsAsInvalidArgumentAsync()
+    public async Task ReplaceSnippet_TopLevelOldNewWithBatchEdits_AppliesAsExtraItemAsync()
     {
         using var workspace = CreateWorkspace();
         var tools = BuildTools(workspace.Manager);
 
-        var targetFile = workspace.PathOf(StatusRelativePath);
-        var anchor = FirstLine(workspace.ReadText(StatusRelativePath));
+        var fileA = workspace.PathOf(LineRelativePath);
+        var fileB = workspace.PathOf(StatusRelativePath);
+        var anchorA = FirstLine(workspace.ReadText(LineRelativePath));
+        var anchorB = FirstLine(workspace.ReadText(StatusRelativePath));
 
+        // The top-level oldContent/newContent is appended to the batch as one more item and uses the top-level filePath.
         var result = await tools.ReplaceSnippetTool(
-            reason: "test both supplied",
-            ProposedChangeAction.validate,
-            filePath: targetFile,
-            oldContent: anchor,
-            newContent: anchor + " // x",
-            batchEdits: [new SnippetEdit { FilePath = targetFile, OldContent = anchor, NewContent = anchor + " // y" }]);
+            reason: "test top-level edit beside batch",
+            ProposedChangeAction.apply,
+            filePath: fileA,
+            oldContent: anchorA,
+            newContent: anchorA + " // top-level-item",
+            batchEdits: [new SnippetEdit { FilePath = fileB, OldContent = anchorB, NewContent = anchorB + " // batch-item" }]);
 
-        Assert.That(!result.IsError, Is.False);
-        Assert.That(result.ErrorData!.Message, Does.Contain("not both"));
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.Multiple(() =>
+        {
+            Assert.That(workspace.ReadText(LineRelativePath), Does.Contain("// top-level-item"));
+            Assert.That(workspace.ReadText(StatusRelativePath), Does.Contain("// batch-item"));
+        });
     }
 
     [Test]
@@ -201,6 +208,79 @@ public class ReplaceSnippetBatchTests
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         Assert.That(workspace.ReadText(StatusRelativePath), Does.Contain("// default-file"));
+    }
+
+    [Test]
+    public async Task ReplaceSnippet_BatchItemWithoutFilePath_ErrorNamesBothFixOptionsAsync()
+    {
+        using var workspace = CreateWorkspace();
+        var tools = BuildTools(workspace.Manager);
+
+        var anchor = FirstLine(workspace.ReadText(StatusRelativePath));
+
+        var result = await tools.ReplaceSnippetTool(
+            reason: "test missing item filePath",
+            ProposedChangeAction.validate,
+            batchEdits: [new SnippetEdit { OldContent = anchor, NewContent = anchor + " // x" }]);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+            Assert.That(result.ErrorData.Message, Does.Contain("batchEdits[0] has no filePath"));
+            Assert.That(result.ErrorData.Message, Does.Contain("set filePath on batchEdits[0]"));
+            Assert.That(result.ErrorData.Message, Does.Contain("top-level filePath"));
+        });
+    }
+
+    [Test]
+    public async Task ReplaceSnippet_TopLevelOldContentWithoutNewContentBesideBatch_ErrorNamesFixAsync()
+    {
+        using var workspace = CreateWorkspace();
+        var tools = BuildTools(workspace.Manager);
+
+        var targetFile = workspace.PathOf(StatusRelativePath);
+        var original = workspace.ReadText(StatusRelativePath);
+        var anchor = FirstLine(original);
+
+        var result = await tools.ReplaceSnippetTool(
+            reason: "test top-level oldContent only",
+            ProposedChangeAction.apply,
+            filePath: targetFile,
+            oldContent: anchor,
+            batchEdits: [new SnippetEdit { FilePath = targetFile, OldContent = anchor, NewContent = anchor + " // y" }]);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+            Assert.That(result.ErrorData.Message, Does.Contain("top-level oldContent"));
+            Assert.That(result.ErrorData.Message, Does.Contain("newContent is not set"));
+            Assert.That(result.ErrorData.Message, Does.Contain("move the edit into batchEdits"));
+            Assert.That(workspace.ReadText(StatusRelativePath), Is.EqualTo(original), "a rejected call must not write anything");
+        });
+    }
+
+    [Test]
+    public async Task ReplaceSnippet_TopLevelOldNewWithoutAnyFilePathBesideBatch_ErrorNamesItemIndexAsync()
+    {
+        using var workspace = CreateWorkspace();
+        var tools = BuildTools(workspace.Manager);
+
+        var fileB = workspace.PathOf(StatusRelativePath);
+        var anchorA = FirstLine(workspace.ReadText(LineRelativePath));
+        var anchorB = FirstLine(workspace.ReadText(StatusRelativePath));
+
+        var result = await tools.ReplaceSnippetTool(
+            reason: "test top-level edit without filePath",
+            ProposedChangeAction.validate,
+            oldContent: anchorA,
+            newContent: anchorA + " // z",
+            batchEdits: [new SnippetEdit { FilePath = fileB, OldContent = anchorB, NewContent = anchorB + " // w" }]);
+
+        Assert.That(result.IsError, Is.True);
+        // The top-level edit is appended after the one supplied item, so it is batchEdits[1].
+        Assert.That(result.ErrorData!.Message, Does.Contain("batchEdits[1] has no filePath"));
     }
 
     [Test]
