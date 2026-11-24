@@ -14,7 +14,7 @@ public enum ToolSurfaceOrigin
 /// <param name="Name">Tool name as exposed to clients.</param>
 /// <param name="ClassName">Declaring tool class.</param>
 /// <param name="Origin">Whether the tool was registered at startup or by a toolset.</param>
-/// <param name="ToolSet">Toolset that gates the tool, or null when ungated.</param>
+/// <param name="ToolSet">Runtime toolset whose apply added the tool, or null for a startup tool.</param>
 /// <param name="ListedParameters">Parameter names still listed in the emitted schema.</param>
 /// <param name="HiddenParameters">Parameter names stripped from the emitted schema but still accepted.</param>
 public sealed record ToolSurfaceTool(string Name, string ClassName, ToolSurfaceOrigin Origin, string? ToolSet,

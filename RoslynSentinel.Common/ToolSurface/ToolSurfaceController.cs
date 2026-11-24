@@ -21,11 +21,19 @@ public sealed class ToolSurfaceController
     private readonly ToolsetService? _toolsets;
     private readonly IReadOnlyList<string> _schemaPatchNames;
 
-    // Guards _current/_built/_subscribed only. It is never held while calling into ToolsetService or the SDK
-    // collection: SetEnabled raises Changed on the mutating thread while holding the toolset lock, and our handler
-    // calls Refresh, which reads the toolset service (taking that lock). Holding this lock across such a call
-    // could deadlock against a thread that holds the toolset lock and is waiting for this one.
+    // Serializes ApplyToolset calls. Held across the createTool callback and the SDK collection mutation; the
+    // collection's Changed handler (Refresh) runs on the applying thread while this gate is held.
+    private readonly object _applyGate = new();
+
+    // Guards _current/_built/_subscribed only. Lock order is _applyGate -> _lock, never the reverse (an apply's own
+    // Changed handler calls Refresh, which takes _lock while the apply holds _applyGate). _lock is never held
+    // while calling into the SDK collection or ToolsetService. Refresh reads _runtimeLayer without a lock: the
+    // layer is an immutable dictionary replaced wholesale by reference.
     private readonly object _lock = new();
+
+    // The runtime toolsets currently on and the tool instances each apply added. Replaced, never mutated.
+    private volatile IReadOnlyDictionary<ToolSetName, IReadOnlyList<McpServerTool>> _runtimeLayer =
+        new Dictionary<ToolSetName, IReadOnlyList<McpServerTool>>();
 
     private volatile ToolSurfaceSnapshot _current = ToolSurfaceSnapshot.Empty;
     private volatile bool _built;
@@ -74,17 +82,120 @@ public sealed class ToolSurfaceController
     /// <param name="toolSet">The toolset being switched.</param>
     /// <param name="enabled">True to enable the set, false to disable it.</param>
     /// <param name="toolNames">Tool names the set declares for this server flavor.</param>
-    /// <param name="createTool">Builds the tool for a name, or returns null when it cannot be built.</param>
+    /// <param name="createTool">
+    /// Builds the tool for a name, or returns null when it cannot be built. Not called for a name already present
+    /// in the collection. It runs under the apply gate and must not call back into this controller.
+    /// </param>
     /// <returns>What the switch did.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="toolSet"/> is not a defined toolset.</exception>
+    /// <exception cref="InvalidOperationException">The server has no tool collection to mutate.</exception>
     public ToolsetChange ApplyToolset(ToolSetName toolSet, bool enabled, IReadOnlyList<string> toolNames,
         Func<string, McpServerTool?> createTool)
-        => throw new NotImplementedException(); // TODO implement (Step 2)
+    {
+        if (!Enum.IsDefined(toolSet))
+        {
+            throw new ArgumentOutOfRangeException(nameof(toolSet), toolSet, $"Unknown toolset. Valid values: {string.Join(", ", Enum.GetNames<ToolSetName>())}.");
+        }
+
+        var collection = _serverOptions.Value.ToolCollection
+            ?? throw new InvalidOperationException("The server exposes no mutable tool collection, so toolsets cannot be switched at runtime.");
+
+        lock (_applyGate)
+        {
+            var layer = _runtimeLayer;
+            bool isOn = layer.ContainsKey(toolSet);
+            var added = new List<string>();
+            var removed = new List<string>();
+            var unavailable = new List<string>();
+
+            if (enabled && !isOn)
+            {
+                var built = new List<McpServerTool>();
+                foreach (var name in toolNames)
+                {
+                    if (collection.TryGetPrimitive(name, out _))
+                    {
+                        unavailable.Add(name);
+                        continue;
+                    }
+
+                    var tool = createTool(name);
+                    if (tool is null)
+                    {
+                        unavailable.Add(name);
+                        continue;
+                    }
+
+                    built.Add(tool);
+                }
+
+                // Built first, added second: a creation failure above leaves the surface and layer untouched.
+                using (collection.DeferChangedEvents())
+                {
+                    var addedTools = new List<McpServerTool>();
+                    foreach (var tool in built)
+                    {
+                        if (collection.TryAdd(tool))
+                        {
+                            added.Add(tool.ProtocolTool.Name);
+                            addedTools.Add(tool);
+                        }
+                        else
+                        {
+                            unavailable.Add(tool.ProtocolTool.Name);
+                        }
+                    }
+
+                    // The layer is replaced before the scope is disposed: disposing raises Changed, and the
+                    // handler's Refresh reads the layer, so it must already be consistent (A2 ordering guarantee).
+                    var next = new Dictionary<ToolSetName, IReadOnlyList<McpServerTool>>(layer)
+                    {
+                        [toolSet] = addedTools,
+                    };
+                    _runtimeLayer = next;
+                }
+            }
+            else if (!enabled && isOn)
+            {
+                using (collection.DeferChangedEvents())
+                {
+                    foreach (var tool in layer[toolSet])
+                    {
+                        if (collection.Remove(tool))
+                        {
+                            removed.Add(tool.ProtocolTool.Name);
+                        }
+                    }
+
+                    // Same ordering as the enable branch: the layer is replaced before the scope is disposed.
+                    var next = new Dictionary<ToolSetName, IReadOnlyList<McpServerTool>>(layer);
+                    next.Remove(toolSet);
+                    _runtimeLayer = next;
+                }
+            }
+
+            var current = _runtimeLayer;
+            return new ToolsetChange(
+                ToolSet: toolSet,
+                Enabled: current.ContainsKey(toolSet),
+                Changed: enabled != isOn,
+                AddedTools: added,
+                RemovedTools: removed,
+                UnavailableTools: unavailable,
+                EnabledToolSets: current.Keys.OrderBy(s => s).ToArray(),
+                ActiveTools: collection.PrimitiveNames.OrderBy(n => n, StringComparer.Ordinal).ToArray());
+        }
+    }
 
     /// <summary>The runtime toolsets currently on, in enum order.</summary>
-    public IReadOnlyList<ToolSetName> RuntimeToolSets => throw new NotImplementedException(); // TODO implement (Step 2)
+    public IReadOnlyList<ToolSetName> RuntimeToolSets => _runtimeLayer.Keys.OrderBy(s => s).ToArray();
 
     /// <summary>The tool names runtime toolsets currently have on the live surface, ordinal order.</summary>
-    public IReadOnlyCollection<string> RuntimeToolNames => throw new NotImplementedException(); // TODO implement (Step 2)
+    public IReadOnlyCollection<string> RuntimeToolNames => _runtimeLayer.Values
+        .SelectMany(tools => tools.Select(t => t.ProtocolTool.Name))
+        .Distinct(StringComparer.Ordinal)
+        .OrderBy(n => n, StringComparer.Ordinal)
+        .ToArray();
 
     /// <summary>The startup MCP server options whose tool collection this controller maintains.</summary>
     internal McpServerOptions ServerOptions => _serverOptions.Value;
@@ -125,7 +236,19 @@ public sealed class ToolSurfaceController
             };
         }
 
-        // Gather first, outside the controller lock (see _lock).
+        // Gather first, outside the controller lock (see _lock). The layer is read once, without a lock.
+        var layer = _runtimeLayer;
+        var layerSetByTool = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (set, layerTools) in layer.OrderBy(kv => kv.Key))
+        {
+            foreach (var layerTool in layerTools)
+            {
+                // TryAdd, not ToDictionary: two sets sharing a tool name must not throw; the first set wins.
+                layerSetByTool.TryAdd(layerTool.ProtocolTool.Name, set.ToString());
+            }
+        }
+
+        // TODO remove with the ToolsetService parameter (Step 6)
         var dynamicNames = _toolsets?.DynamicToolNames;
         var declaringClasses = ActiveToolSurface.DeclaringClassByTool();
 
@@ -136,12 +259,25 @@ public sealed class ToolSurfaceController
             var schemaElement = tool.ProtocolTool.InputSchema;
             var schemaText = schemaElement.ValueKind == JsonValueKind.Undefined ? string.Empty : schemaElement.GetRawText();
 
-            var isDynamic = dynamicNames is not null && dynamicNames.Contains(name);
+            string? toolSetName;
+            bool isDynamic;
+            if (layerSetByTool.TryGetValue(name, out var layerSet))
+            {
+                isDynamic = true;
+                toolSetName = layerSet;
+            }
+            else
+            {
+                // TODO remove with the ToolsetService parameter (Step 6)
+                isDynamic = dynamicNames is not null && dynamicNames.Contains(name);
+                toolSetName = isDynamic ? ToolsetCatalog.FindSet(name)?.ToString() : null;
+            }
+
             var row = new ToolSurfaceTool(
                 name,
                 declaringClasses.TryGetValue(name, out var className) ? className : string.Empty,
                 isDynamic ? ToolSurfaceOrigin.RuntimeToolset : ToolSurfaceOrigin.Startup,
-                isDynamic ? ToolsetCatalog.FindSet(name)?.ToString() : null,
+                toolSetName,
                 ListedParameterNames(schemaElement),
                 HiddenSchemaParams.HiddenFor(name));
             tools.Add((row, schemaText));
@@ -149,7 +285,10 @@ public sealed class ToolSurfaceController
 
         tools.Sort((a, b) => string.CompareOrdinal(a.Row.Name, b.Row.Name));
 
-        var enabledToolSets = _toolsets?.EnabledToolSets.Select(s => s.ToString()).ToList() ?? [];
+        // TODO remove the _toolsets fallback with the ToolsetService parameter (Step 6)
+        var enabledToolSets = layer.Count > 0
+            ? layer.Keys.OrderBy(s => s).Select(s => s.ToString()).ToList()
+            : _toolsets?.EnabledToolSets.Select(s => s.ToString()).ToList() ?? [];
         var fingerprint = ComputeFingerprint(tools);
 
         lock (_lock)
@@ -198,7 +337,8 @@ public sealed class ToolSurfaceController
         var text = new StringBuilder();
         foreach (var (row, schema) in sortedTools)
         {
-            text.Append(row.Name).Append('\0').Append(schema).Append('\0');
+            // The attribution is part of the fingerprint so a pure attribution change moves the version.
+            text.Append(row.Name).Append('\0').Append(schema).Append('\0').Append(row.ToolSet ?? "").Append('\0');
         }
 
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString()))).ToLowerInvariant();
