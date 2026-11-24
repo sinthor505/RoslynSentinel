@@ -202,6 +202,23 @@ public class ToolSurfaceControllerApplyTests
     }
 
     [Test]
+    public void ZeroToolEnable_BumpsVersion_WithToolsetAppliedTrigger()
+    {
+        var (controller, _) = CreateController();
+        var previousVersion = controller.Refresh("test").Version;
+
+        // Every member is unavailable (the factory builds nothing), so no tool moves and Changed never fires.
+        var change = controller.ApplyToolset(ToolSetName.git, true, ["TypedMember"], _ => null);
+        var snapshot = controller.Refresh("test");
+
+        Assert.That(change.Changed, Is.True);
+        Assert.That(change.AddedTools, Is.Empty);
+        Assert.That(snapshot.Version, Is.EqualTo(previousVersion + 1));
+        Assert.That(snapshot.Trigger, Is.EqualTo("toolsetApplied"));
+        Assert.That(snapshot.EnabledToolSets, Does.Contain("git"));
+    }
+
+    [Test]
     public void UndefinedToolSet_Throws_AndChangesNothing()
     {
         var (controller, collection) = CreateController();

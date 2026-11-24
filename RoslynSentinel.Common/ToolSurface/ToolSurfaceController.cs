@@ -100,6 +100,7 @@ public sealed class ToolSurfaceController
         var collection = _serverOptions.Value.ToolCollection
             ?? throw new InvalidOperationException("The server exposes no mutable tool collection, so toolsets cannot be switched at runtime.");
 
+        ToolsetChange result;
         lock (_applyGate)
         {
             var layer = _runtimeLayer;
@@ -175,7 +176,7 @@ public sealed class ToolSurfaceController
             }
 
             var current = _runtimeLayer;
-            return new ToolsetChange(
+            result = new ToolsetChange(
                 ToolSet: toolSet,
                 Enabled: current.ContainsKey(toolSet),
                 Changed: enabled != isOn,
@@ -185,6 +186,17 @@ public sealed class ToolSurfaceController
                 EnabledToolSets: current.Keys.OrderBy(s => s).ToArray(),
                 ActiveTools: collection.PrimitiveNames.OrderBy(n => n, StringComparer.Ordinal).ToArray());
         }
+
+        // A zero-tool apply (every member unavailable) moves no tool, so the collection's Changed never fires and
+        // the snapshot would keep a stale EnabledToolSets and version. A normal apply's Changed handler already
+        // refreshed, so this refresh finds no difference. The _built guard keeps the startup path unchanged: applies
+        // before the hosted service's first Refresh build no snapshot.
+        if (result.Changed && _built)
+        {
+            Refresh("toolsetApplied");
+        }
+
+        return result;
     }
 
     /// <summary>The runtime toolsets currently on, in enum order.</summary>
