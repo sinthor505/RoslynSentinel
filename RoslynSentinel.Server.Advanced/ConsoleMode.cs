@@ -53,8 +53,7 @@ public static class ConsoleMode
     /// population adds the table-driven ones) minus the controller's runtime-toolset tools, so the output stays the
     /// startup surface. Falls back to the DI <see cref="McpServerTool"/> instances when no collection exists, and to
     /// constructing tools directly via <see cref="McpServerTool.Create"/> over all loaded RoslynSentinel.Server.*
-    /// assemblies when that yields zero (e.g. singleton factory delay or scope mismatch at startup time) -> mirrors
-    /// what <c>WithSentinelTools<T>()</c> does.
+    /// assemblies when that yields zero (e.g. singleton factory delay or scope mismatch at startup time) -> a last-resort fallback that reads tool types straight from those assemblies.
     /// Shared by <see cref="BuildToolManifestFor"/> and <see cref="WriteStartupDump"/> so the two
     /// can never independently drift.
     /// </summary>

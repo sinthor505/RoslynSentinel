@@ -469,16 +469,6 @@ public static class RoslynSentinelServiceExtensionsBasic
             }
         }
 
-        if (activeToolClasses.Contains("RefactoringTools"))
-        {
-            services.AddSingleton<RefactoringSignatureTools>();
-            mcpBuilder.WithSentinelTools<RefactoringSignatureTools>();
-            services.AddSingleton<RefactoringStructuralTools>();
-            mcpBuilder.WithSentinelTools<RefactoringStructuralTools>();
-            services.AddSingleton<RefactoringExtractionDocsTools>();
-            mcpBuilder.WithSentinelTools<RefactoringExtractionDocsTools>();
-        }
-
         // Sees the claude-lean widened set, so this stays after the activeToolClasses rebinding in the claude-lean block above.
         AddStartupToolClasses(services, "Basic", ToolClassRegistry.SelectStartupToolTypes(ToolClassRegistry.BasicToolClassTypes, activeToolClasses, activeModes.Contains(ToolClassRegistry.ClaudeLeanMode)));
     }
