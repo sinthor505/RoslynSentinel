@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## WideningRejectedByGate prompt does not say the tree must stay unchanged (punchlist #8) - resolved (2026-11-23)
+
+WideningRejectedByGate prompt does not say the tree must stay unchanged (2026-11-23) - Ornith (112, f16f4458) resent the gate-rejected edits with `validateOnApply:false`, wrote them and reported the 9 breaks -> BuildBroken (run 20261123-155817-336 T5); fix the prompt text in `WideningRejectedByGateScenario.cs` (and/or whether eval models see `validateOnApply`); Small
+
+Evidence: STALE: already fixed before triage - 4e7cb804/9b9a530f hide and refuse validateOnApply for eval models (ModelEvalMcpEnvironment.cs, ToolArgumentValidator.cs); 000d55ba rewrote the prompt (WideningRejectedByGateScenario.cs IfFails "write nothing; leave every file as it was"); EvalToolSchemaVisibilityTests.NoRegisteredScenarioOptsIn
+
 ## Compile-gate hint "every affected use in ONE call" read as policy - resolved (2026-11-23)
 
 INBOX 2026-11-23 08:20: the edit gate hint "Make the change and every affected use in ONE call" steered models to edit callers in tasks that require callers unchanged (4B WideningRejectedByGate: caller files changed in 3/4 runs, overnight runs 20261123-091450-528, -102214-665, -102706-975) - `ValidateAndApplyHelper.cs:42`, `EditImpactAnalyzer.cs:678-679`
