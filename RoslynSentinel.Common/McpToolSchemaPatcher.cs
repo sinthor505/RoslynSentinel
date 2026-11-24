@@ -177,7 +177,7 @@ public static class McpToolSchemaPatcher
     /// As <see cref="CreateSentinelTool(MethodInfo, Type, IServiceProvider, JsonSerializerOptions?)"/>, with the factory chosen
     /// explicitly: <paramref name="useReplicatedFactory"/> builds the tool through <see cref="SentinelToolFactory"/> (our own
     /// <c>AIFunction</c> and <c>MarshalResult</c> hook), otherwise through the SDK's <c>McpServerTool.Create(MethodInfo, ...)</c>.
-    /// <paramref name="services"/> may be null. The three <c>Apply*</c> patches run on the result either way.
+    /// <paramref name="services"/> may be null. The registered <c>IToolSchemaPatch</c> pipeline (the four defaults when none are registered) runs on the result either way.
     /// </summary>
     public static McpServerTool CreateSentinelTool(
         MethodInfo toolMethod,
@@ -208,10 +208,19 @@ public static class McpToolSchemaPatcher
                 CreateOptions(services, serializerOptions));
         }
 
-        ApplyConsumesTags(tool, toolMethod);
-        ApplyBatchItemFields(tool, toolMethod);
-        ApplyReplaceSnippetLimits(tool, toolMethod);
-        ApplyHiddenParameters(tool, toolMethod);
+        // An empty or missing registration falls back to the four defaults (same order, so schemas
+        // are byte-identical); a null provider (reflection catalog, direct test construction) takes the same fallback.
+        var patches = services?.GetService<IEnumerable<IToolSchemaPatch>>()?.ToList();
+        if (patches is null || patches.Count == 0)
+        {
+            patches = [.. DefaultToolSchemaPatches.All];
+        }
+
+        foreach (var patch in patches.OrderBy(p => p.Order).ThenBy(p => p.Name, StringComparer.Ordinal))
+        {
+            patch.Apply(tool, toolMethod);
+        }
+
         return tool;
     }
 

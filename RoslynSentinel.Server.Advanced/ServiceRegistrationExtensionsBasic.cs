@@ -364,6 +364,15 @@ public static class RoslynSentinelServiceExtensionsBasic
             services.AddSingleton(toolAllowList);
         }
 
+        // The default schema patches are registered as instances from DefaultToolSchemaPatches.All (the classes are
+        // internal to Common, so the generic ServiceDescriptor.Singleton<IToolSchemaPatch, X>() form would be CS0122 here).
+        // A host adds a patch by registering it before or after this call, and replaces one with RemoveAll<IToolSchemaPatch>()
+        // plus its own list. An empty registration falls back to the defaults, so "no patches" is not expressible.
+        foreach (var patch in DefaultToolSchemaPatches.All)
+        {
+            services.TryAddEnumerable(ServiceDescriptor.Singleton(typeof(IToolSchemaPatch), patch));
+        }
+
         // Unconditional, mode-independent dependencies of the tool classes below (the *Impl helpers, the plain ILogger,
         // and a default WriteToolAdviceHelper). TryAdd-only, so the gated WriteToolAdviceHelper registered right after
         // (plain AddSingleton, last wins) overrides the default. See Tools.Basic's ToolServiceCollectionExtensionsBasic.
