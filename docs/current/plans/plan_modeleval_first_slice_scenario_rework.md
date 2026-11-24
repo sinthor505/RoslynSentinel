@@ -1,6 +1,6 @@
 # Plan: rework the 18 first-slice eval scenarios into realistic briefs with behavioural acceptance tests (proposal Phasing step 3)
 
-**Status:** IN PROGRESS 2026-11-23. Steps 54-59 done (7d94a62c..76df6d43); Steps 1-11 done (2b578dea..5765c966). Approved 2c34a882; review amendments and the owner's answers are Decision 13 (overrides step text); Batched mode, owner present. Phasing step 3 of [proposal_modeleval_standing_workflow_contract.md](../proposals/proposal_modeleval_standing_workflow_contract.md), written from [finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md](../findings/finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md). Depends on [plan_modeleval_workflow_contract_phase1.md](./closed/plan_modeleval_workflow_contract_phase1.md) (called "P1" below).
+**Status:** IN PROGRESS 2026-11-23. Steps 54-59 done (7d94a62c..76df6d43); Steps 1-11 done (2b578dea..5765c966); Steps 12-21 done (7cbfc4d9..3db4c7c0). Approved 2c34a882; review amendments and the owner's answers are Decision 13 (overrides step text); Batched mode, owner present. Phasing step 3 of [proposal_modeleval_standing_workflow_contract.md](../proposals/proposal_modeleval_standing_workflow_contract.md), written from [finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md](../findings/finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md). Depends on [plan_modeleval_workflow_contract_phase1.md](./closed/plan_modeleval_workflow_contract_phase1.md) (called "P1" below).
 
 ## Problem
 
@@ -544,6 +544,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 ### Batch B - priority scenarios (Steps 12-21)
 
 ### Step 12 - S6 SweepConstructionSites: brief, fixture, tests
+- Done: 7cbfc4d9
 - Files: RoslynSentinel.Tests.ModelEval/ImplementationScenarios/ErrorRecovery/SweepConstructionSitesScenario.cs
 - Depends on: 2; P1 Steps 1, 3, 5
 - Effect: behaviour-changing (prompt text, seed gains a test file).
@@ -552,6 +553,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~6 edits).
 
 ### Step 13 - S6: grader and canned report
+- Done: eff7813e
 - Files: SweepConstructionSitesScenario.cs
 - Depends on: 12, 4, 5
 - Effect: behaviour-changing (the grader).
@@ -560,6 +562,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~5 edits).
 
 ### Step 14 - S6: variants
+- Done: f8c8e209
 - Files: SweepConstructionSitesScenario.cs
 - Depends on: 13, 8
 - Effect: text-neutral (tests data).
@@ -568,6 +571,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~8 edits).
 
 ### Step 15 - S3 WideningRejectedByGate: brief, fixture, tests
+- Done: 000d55ba
 - Files: RoslynSentinel.Tests.ModelEval/ImplementationScenarios/InstructionAdherence/WideningRejectedByGateScenario.cs
 - Depends on: 2; P1 Steps 1, 3, 5
 - Effect: behaviour-changing.
@@ -576,6 +580,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~6 edits).
 
 ### Step 16 - S3: grader and canned report
+- Done: 3927579e
 - Files: WideningRejectedByGateScenario.cs
 - Depends on: 15, 4, 5
 - Effect: behaviour-changing.
@@ -584,6 +589,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~6 edits).
 
 ### Step 17 - S3: variants and the gate-message test
+- Done: da27acca, a890aad2 (R7 holds: the gate names all three files with codes)
 - Files: WideningRejectedByGateScenario.cs, RoslynSentinel.Tests.ModelEval/WideningGateMessageTests.cs (new)
 - Depends on: 16, 8, 10
 - Effect: text-neutral (tests).
@@ -592,6 +598,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 scenario file, ~8 edits) then test-writer (1 new file). Sequential.
 
 ### Step 18 - S2 WidenToReadOnlyDictionary: brief, fixture, tests
+- Done: db84b7b0
 - Files: RoslynSentinel.Tests.ModelEval/ImplementationScenarios/InstructionAdherence/WidenToReadOnlyDictionaryScenario.cs
 - Depends on: 2; P1 Steps 1, 3, 5
 - Effect: behaviour-changing.
@@ -600,6 +607,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~6 edits).
 
 ### Step 19 - S2: grader and canned report
+- Done: 387427be
 - Files: WidenToReadOnlyDictionaryScenario.cs
 - Depends on: 18, 5
 - Effect: behaviour-changing.
@@ -608,6 +616,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~4 edits).
 
 ### Step 20 - S2: variants
+- Done: 8677d707
 - Files: WidenToReadOnlyDictionaryScenario.cs
 - Depends on: 19, 8
 - Effect: text-neutral.
@@ -616,6 +625,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~7 edits).
 
 ### Step 21 - Batch B gate
+- Done: gate passed after fixture fix 3db4c7c0 (S2 prose crefs `Dictionary{FilePath, string}` gave CS1584; respelled `Dictionary{TKey, TValue}`)
 - Files: none edited
 - Depends on: 12-20
 - Effect: text-neutral.
