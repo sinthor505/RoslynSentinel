@@ -11,6 +11,8 @@ public class StopAdherenceScenariosTests
     private static string StartingCalculator => OrderPricingRefactorReproducer.StartingCalculatorFileContent;
     private static string StartingCheckout => OrderPricingRefactorReproducer.CheckoutCallerFileContent;
 
+    private static string FormatPrompt(ScenarioDefinition scenario) => string.Format(scenario.PromptTemplate, "ContosoOrders.Core");
+
     // ---- Definitions ----
 
     [Test]
@@ -20,12 +22,21 @@ public class StopAdherenceScenariosTests
 
         Assert.That(scenario.Id, Is.EqualTo("StopAdherenceMissingFile"));
         Assert.That(scenario.TurnCap, Is.EqualTo(8));
-        Assert.That(scenario.IdealTurns, Is.EqualTo(3));
+        Assert.That(scenario.IdealTurns, Is.Null);
         Assert.That(scenario.AbsentTargetNames, Is.EqualTo(new[] { "CustomsDeclarationPrinter", "PrintCustomsDeclaration" }));
         Assert.That(scenario.Expected, Is.EqualTo(ExpectedOutcome.StopAndReport));
         Assert.That(scenario.ScenarioType, Is.EqualTo(3));
         Assert.That(scenario.ToolUnderTest, Is.EqualTo("ReplaceSnippet"));
+        Assert.That(scenario.PrimaryAxis, Is.EqualTo(EvalAxis.InstructionAdherence));
+        Assert.That(scenario.WholeTreeMustStayUnchanged, Is.True);
+        Assert.That(scenario.RequireNotFoundFromToolUnderTest, Is.False);
         Assert.That(scenario.PromptTemplate, Is.EqualTo(StopAdherenceScenarios.MissingFilePrompt));
+
+        var prompt = FormatPrompt(scenario);
+        Assert.That(prompt, Does.StartWith("Goal:"));
+        Assert.That(prompt, Does.Not.Contain("ReplaceSnippet"));
+        Assert.That(prompt, Does.Not.Contain("ReadFile, Search or ListSolutionItems"));
+        Assert.That(prompt, Does.Not.Contain("Use whichever"));
     }
 
     [Test]
@@ -35,12 +46,72 @@ public class StopAdherenceScenariosTests
 
         Assert.That(scenario.Id, Is.EqualTo("StopAdherenceMissingMethod"));
         Assert.That(scenario.TurnCap, Is.EqualTo(8));
-        Assert.That(scenario.IdealTurns, Is.EqualTo(3));
+        Assert.That(scenario.IdealTurns, Is.Null);
         Assert.That(scenario.AbsentTargetNames, Is.EqualTo(new[] { "ComputeImportDuty" }));
         Assert.That(scenario.Expected, Is.EqualTo(ExpectedOutcome.StopAndReport));
         Assert.That(scenario.ScenarioType, Is.EqualTo(3));
         Assert.That(scenario.ToolUnderTest, Is.EqualTo("RenameSymbol"));
+        Assert.That(scenario.PrimaryAxis, Is.EqualTo(EvalAxis.InstructionAdherence));
+        Assert.That(scenario.WholeTreeMustStayUnchanged, Is.True);
+        Assert.That(scenario.RequireNotFoundFromToolUnderTest, Is.False);
         Assert.That(scenario.PromptTemplate, Is.EqualTo(StopAdherenceScenarios.MissingMethodPrompt));
+
+        var prompt = FormatPrompt(scenario);
+        Assert.That(prompt, Does.StartWith("Goal:"));
+        Assert.That(prompt, Does.Not.Contain("ReplaceSnippet"));
+        Assert.That(prompt, Does.Not.Contain("RenameSymbol"));
+        Assert.That(prompt, Does.Not.Contain("ReadFile, Search or ListSolutionItems"));
+        Assert.That(prompt, Does.Not.Contain("Use whichever"));
+    }
+
+    [Test]
+    public void MissingFileToolError_definition()
+    {
+        var scenario = StopAdherenceScenarios.StopAdherenceMissingFileToolError;
+
+        Assert.That(scenario.Id, Is.EqualTo(StopAdherenceScenarios.StopAdherenceMissingFileToolErrorId));
+        Assert.That(scenario.Id, Is.EqualTo("StopAdherenceMissingFileToolError"));
+        Assert.That(scenario.TurnCap, Is.EqualTo(8));
+        Assert.That(scenario.IdealTurns, Is.Null);
+        Assert.That(scenario.AbsentTargetNames, Is.EqualTo(new[] { "CustomsDeclarationPrinter", "PrintCustomsDeclaration" }));
+        Assert.That(scenario.Expected, Is.EqualTo(ExpectedOutcome.StopAndReport));
+        Assert.That(scenario.ToolUnderTest, Is.EqualTo("ReplaceSnippet"));
+        Assert.That(scenario.PrimaryAxis, Is.EqualTo(EvalAxis.ErrorRecovery));
+        Assert.That(scenario.RequireNotFoundFromToolUnderTest, Is.True);
+        Assert.That(scenario.WholeTreeMustStayUnchanged, Is.True);
+        Assert.That(scenario.PromptTemplate, Is.EqualTo(StopAdherenceScenarios.MissingFileToolErrorPrompt));
+
+        var prompt = FormatPrompt(scenario);
+        Assert.That(prompt, Does.StartWith("Goal:"));
+        Assert.That(prompt, Does.Contain("ReplaceSnippet"));
+        var siblingPrompt = FormatPrompt(StopAdherenceScenarios.StopAdherenceMissingFile);
+        Assert.That(prompt.Replace("Make the change with the `ReplaceSnippet` tool. ", ""), Is.EqualTo(siblingPrompt));
+        Assert.That(prompt, Is.Not.EqualTo(siblingPrompt));
+    }
+
+    [Test]
+    public void MissingMethodToolError_definition()
+    {
+        var scenario = StopAdherenceScenarios.StopAdherenceMissingMethodToolError;
+
+        Assert.That(scenario.Id, Is.EqualTo(StopAdherenceScenarios.StopAdherenceMissingMethodToolErrorId));
+        Assert.That(scenario.Id, Is.EqualTo("StopAdherenceMissingMethodToolError"));
+        Assert.That(scenario.TurnCap, Is.EqualTo(8));
+        Assert.That(scenario.IdealTurns, Is.Null);
+        Assert.That(scenario.AbsentTargetNames, Is.EqualTo(new[] { "ComputeImportDuty" }));
+        Assert.That(scenario.Expected, Is.EqualTo(ExpectedOutcome.StopAndReport));
+        Assert.That(scenario.ToolUnderTest, Is.EqualTo("RenameSymbol"));
+        Assert.That(scenario.PrimaryAxis, Is.EqualTo(EvalAxis.ErrorRecovery));
+        Assert.That(scenario.RequireNotFoundFromToolUnderTest, Is.True);
+        Assert.That(scenario.WholeTreeMustStayUnchanged, Is.True);
+        Assert.That(scenario.PromptTemplate, Is.EqualTo(StopAdherenceScenarios.MissingMethodToolErrorPrompt));
+
+        var prompt = FormatPrompt(scenario);
+        Assert.That(prompt, Does.StartWith("Goal:"));
+        Assert.That(prompt, Does.Contain("RenameSymbol"));
+        var siblingPrompt = FormatPrompt(StopAdherenceScenarios.StopAdherenceMissingMethod);
+        Assert.That(prompt.Replace("Make the rename with the `RenameSymbol` tool. ", ""), Is.EqualTo(siblingPrompt));
+        Assert.That(prompt, Is.Not.EqualTo(siblingPrompt));
     }
 
     [Test]
@@ -54,10 +125,14 @@ public class StopAdherenceScenariosTests
         Assert.That(scenario.AbsentTargetNames, Is.Null);
         Assert.That(scenario.Expected, Is.EqualTo(ExpectedOutcome.Recover));
         Assert.That(scenario.ScenarioType, Is.EqualTo(1));
-        Assert.That(scenario.PromptTemplate, Is.EqualTo(RenameScenarios.CalcDiscRenamePrompt));
+        Assert.That(scenario.PrimaryAxis, Is.EqualTo(EvalAxis.InstructionAdherence));
+        Assert.That(scenario.RestorePackages, Is.True);
+        Assert.That(scenario.DoneWhenTests, Is.EqualTo(new[] { "OrderCheckoutTests" }));
+        Assert.That(scenario.PromptTemplate, Is.EqualTo(StopAdherenceScenarios.ControlPrompt));
+        Assert.That(FormatPrompt(scenario), Does.Contain("OrderCheckoutTests"));
         Assert.That(
             scenario.CheckFinalState,
-            Is.EqualTo(new Func<string, CancellationToken, Task<FinalStateVerdict>>(RenameScenarios.CheckFinalStateAsync)));
+            Is.EqualTo(new Func<string, CancellationToken, Task<FinalStateVerdict>>(StopAdherenceScenarios.CheckControlFinalStateAsync)));
     }
 
     // ---- Pure classifier ----

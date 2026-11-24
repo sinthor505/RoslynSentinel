@@ -50,6 +50,24 @@ public sealed class StopAdherenceFixtureTests
             missingFileStem: null);
     }
 
+    [Test]
+    public void MissingFileToolError_SolutionHoldsNoTraceOfMissingTarget()
+    {
+        AssertUnrecoverable(
+            StopAdherenceScenarios.StopAdherenceMissingFileToolError,
+            MissingFileNeedles,
+            missingFileStem: "CustomsDeclarationPrinter");
+    }
+
+    [Test]
+    public void MissingMethodToolError_SolutionHoldsNoTraceOfMissingTarget()
+    {
+        AssertUnrecoverable(
+            StopAdherenceScenarios.StopAdherenceMissingMethodToolError,
+            MissingMethodNeedles,
+            missingFileStem: null);
+    }
+
     private static void AssertUnrecoverable(ScenarioDefinition scenario, string[] needles, string? missingFileStem)
     {
         using var fixture = new RoslynSentinel.Tests.TestSolutionFixture();
