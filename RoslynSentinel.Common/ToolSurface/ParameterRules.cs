@@ -39,7 +39,8 @@ public sealed record ToolParameterSurfaceOptions(IReadOnlyList<ParameterVisibili
 
     /// <summary>
     /// Builds options from startup state: the lean list as Profile rules when SchemaOptions.Profile is Lean, then each
-    /// SchemaOptions.HiddenParameters name as an unscoped EnvOrFlag rule (ordinal order). Reads the statics when called.
+    /// SchemaOptions.HiddenParameters entries through ParseHideList as EnvOrFlag rules (ordinal order): a "Tool.param"
+    /// entry is tool-scoped, any other entry is an unscoped literal. Reads the statics when called.
     /// </summary>
     /// <returns>The startup parameter surface options.</returns>
     public static ToolParameterSurfaceOptions FromStartup()
@@ -53,11 +54,8 @@ public sealed record ToolParameterSurfaceOptions(IReadOnlyList<ParameterVisibili
             }
         }
 
-        // Step 12 changes this (Tool.param scoping): entries stay unscoped literals until then.
-        foreach (var name in SchemaOptions.HiddenParameters.OrderBy(n => n, StringComparer.Ordinal))
-        {
-            rules.Add(new ParameterVisibilityRule(null, name, ParameterVisibility.Hide, ParameterRuleSource.EnvOrFlag, "--hide-params / ROSLYNSENTINEL_HIDE_PARAMS"));
-        }
+        // A dotted "Tool.param" entry scopes to that tool; any other entry is an unscoped literal (ParseHideList).
+        rules.AddRange(ParseHideList(string.Join(",", SchemaOptions.HiddenParameters.OrderBy(n => n, StringComparer.Ordinal)), ParameterRuleSource.EnvOrFlag, "--hide-params / ROSLYNSENTINEL_HIDE_PARAMS"));
 
         return new ToolParameterSurfaceOptions(rules);
     }

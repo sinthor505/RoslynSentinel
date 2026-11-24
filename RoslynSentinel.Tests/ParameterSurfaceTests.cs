@@ -141,14 +141,14 @@ public class ParameterSurfaceTests
 
     [Test]
     [NonParallelizable]
-    public void FromStartup_DottedEntry_IsAnUnscopedLiteral()
+    public void FromStartup_DottedEntry_ScopesToTool()
     {
-        // Step 12 flips this test: Tool.param entries in --hide-params become scoped rules.
         SchemaOptions.Configure(new[] { "--schema-profile=full", "--hide-params=ReplaceSnippet.validateOnApply" });
         var surface = ParameterSurface.FromStartup();
 
-        Assert.That(surface.ResolveHidden("ReplaceSnippet", "validateOnApply"), Is.Null);
-        Assert.That(surface.ResolveHidden("AnyTool", "ReplaceSnippet.validateOnApply"), Is.Not.Null);
+        Assert.That(surface.ResolveHidden("ReplaceSnippet", "validateOnApply"), Is.Not.Null);
+        Assert.That(surface.ResolveHidden("ApplyDiff", "validateOnApply"), Is.Null);
+        Assert.That(surface.ResolveHidden("AnyTool", "ReplaceSnippet.validateOnApply"), Is.Null);
     }
 
     [Test]

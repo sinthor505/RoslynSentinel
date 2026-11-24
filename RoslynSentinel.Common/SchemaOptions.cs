@@ -25,7 +25,10 @@ public static class SchemaOptions
     /// <summary>The Lean profile's hidden parameter list, in the order it is applied. Single source of truth for the Lean list.</summary>
     public static IReadOnlyList<string> LeanHiddenParameters { get; } = ["autoStage", "returnDiff", "validateOnApply", "lineBefore", "lineAfter"];
 
-    /// <summary>Explicit parameter names hidden from every tool schema via <c>--hide-params</c> (or <c>ROSLYNSENTINEL_HIDE_PARAMS</c>), ordinal-compared.</summary>
+    /// <summary>
+    /// Explicit parameter names hidden via <c>--hide-params</c> (or <c>ROSLYNSENTINEL_HIDE_PARAMS</c>), ordinal-compared.
+    /// A plain name hides that parameter on every tool schema; a <c>Tool.param</c> entry scopes the hide to that one tool.
+    /// </summary>
     public static IReadOnlySet<string> HiddenParameters { get; private set; } = new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>Splits on ',' and ';', trims, drops empty entries and keeps unknown names. Never throws; null or blank gives an empty set.</summary>
@@ -91,6 +94,7 @@ public static class SchemaOptions
     /// Parses --emit-datatags (falling back to ROSLYNSENTINEL_EMIT_DATATAGS) into <see cref="EmitDataTags"/>,
     /// --schema-profile (falling back to ROSLYNSENTINEL_SCHEMA_PROFILE) into <see cref="Profile"/> and
     /// --hide-params (falling back to ROSLYNSENTINEL_HIDE_PARAMS) into <see cref="HiddenParameters"/>.
+    /// A <c>Tool.param</c> entry in --hide-params scopes the hide to that one tool; any other entry hides the name on every tool.
     /// A flag wins over its environment variable. Call once at process startup, before DI is built.
     /// </summary>
     public static void Configure(string[] args)
