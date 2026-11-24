@@ -1,8 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
-using Microsoft.Extensions.Options;
-
 using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Common;
@@ -86,23 +84,6 @@ public sealed class ToolsetService
         _services = services;
         _supportedClassNames = supportedClassNames;
         _assemblySource = assemblySource ?? LoadedToolAssemblies;
-    }
-
-    /// <param name="serverOptions">The server options whose <c>ToolCollection</c> is mutated.</param>
-    /// <param name="services">The root provider tools are built against (and construct their targets from).</param>
-    /// <param name="supportedClassNames">
-    /// Tool classes whose dependencies the server registered for dynamic use. A tool declared by a class
-    /// outside this set is reported unavailable rather than added in a state that would fail when called.
-    /// </param>
-    /// <param name="assemblySource">Assemblies to scan for tool methods; defaults to the loaded RoslynSentinel.Tools.* assemblies.</param>
-    [Obsolete("Use the constructor that takes the ToolSurfaceController; this one builds a private controller.")]
-    public ToolsetService(
-        IOptions<McpServerOptions> serverOptions,
-        IServiceProvider services,
-        IReadOnlySet<string> supportedClassNames,
-        Func<IEnumerable<Assembly>>? assemblySource = null)
-        : this(new ToolSurfaceController(serverOptions), services, supportedClassNames, assemblySource)
-    {
     }
 
     /// <summary>The sets currently on, in enum order. Read from the controller's runtime layer.</summary>
