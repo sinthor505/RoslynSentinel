@@ -106,10 +106,18 @@ Ground truth for "does this tool exist / is it gated": `McpServerStatus(toolList
   `HiddenParametersPatch` reads it through the services overload `IToolSchemaPatch.Apply(tool, method, services)`
   and records what it stripped per tool instance (`StrippedToolParameters`); the snapshot carries `Parameters`,
   `HiddenParameterGroups` (hidden names grouped by winning rule) and `UnmatchedHideRules`; the call-time validator
-  accepts a hidden name by reading the snapshot row. `HiddenSchemaParams` is an obsolete mirror kept only for
-  `ToolCallHint` and the validator fallback until stage E.
-- Not yet on the snapshot: `ActiveToolSurface.IsCallable` (still startup configuration), the validator's schema
-  cache and `ToolCallHint`; later stages of [proposal_tool_surface_controller.md](../proposals/proposal_tool_surface_controller.md) move them.
+  accepts a hidden name by reading the snapshot row.
+- Call-time readers: the validation filter captures one snapshot per call (`ToolSurfaceController.CurrentIfBuilt`;
+  a version-0 snapshot counts as none) and passes it to every `ToolArgumentValidator` pass; the validator caches
+  schemas per snapshot instance, so a toolset toggle or a second host in the same process never sees a stale
+  schema and tests need no reset. `ToolCallHint` reads hidden parameters from its own catalog (`ToolSignatureCatalog`,
+  built from the same patched schemas). There is no static hidden-name registry any more.
+- `ActiveToolSurface` is bound to the live snapshot (`WithLiveSnapshot`), but `IsCallable` still answers from
+  startup configuration: counting runtime-toolset tools as callable is held for an owner decision (SubAgent child
+  servers are eval surfaces; stage E plan R8).
+- Not yet on the snapshot: the live per-host hint catalog, `WriteToolAdviceHelper.IsExposed` (a second
+  startup-only rule) and population of the collection by the controller (stage F); see
+  [proposal_tool_surface_controller.md](../proposals/proposal_tool_surface_controller.md).
 
 ### Request pipeline (`WithRequestFilters` in `AddRoslynSentinelToolsBasic`)
 

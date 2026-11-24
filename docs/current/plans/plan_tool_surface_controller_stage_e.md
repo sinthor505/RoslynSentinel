@@ -1,6 +1,6 @@
 # Plan: Tool-surface controller stage E - caches keyed by snapshot, one captured snapshot per call, runtime-toolset tools callable
 
-**Status:** APPROVED 2026-11-24. Stage E: validator and hints read the snapshot, schema cache keyed per snapshot, HiddenSchemaParams deleted; Steps 17-18 (runtime-toolset tools callable) on HOLD for the owner (R8, SubAgent children are eval surfaces). Review fixes applied; other decisions taken at recommendation (owner away).
+**Status:** IN PROGRESS 2026-11-24. Steps 1-16, 19-20 done (07a48893..615805a8); Steps 17-18 deferred (HOLD, R8); Step 21 full run pending. Approved 2026-11-24: Stage E: validator and hints read the snapshot, schema cache keyed per snapshot, HiddenSchemaParams deleted; Steps 17-18 (runtime-toolset tools callable) on HOLD for the owner (R8, SubAgent children are eval surfaces). Review fixes applied; other decisions taken at recommendation (owner away).
 
 Stage 4 of [proposal_tool_surface_controller.md](../proposals/proposal_tool_surface_controller.md). Follows phase A/B
 ([closed/plan_tool_surface_controller.md](closed/plan_tool_surface_controller.md)), stage C
@@ -156,6 +156,7 @@ Suggested orchestrator batches:
   its commit carries `Closes:`).
 
 ### Step 1 - Contract skeleton
+- Done: 07a48893
 - Files: `RoslynSentinel.Common/ActiveToolSurface.cs`, `RoslynSentinel.Common/ToolSurface/ToolSurfaceController.cs`,
   `RoslynSentinel.Common/ToolSignatureCatalog.cs`
 - Depends on: none
@@ -187,6 +188,7 @@ Suggested orchestrator batches:
 - Done when: `Build` 0 errors.
 
 ### Step 2 - Implement CurrentIfBuilt and the live-snapshot binding (stored, not yet read)
+- Done: ef86f1c9
 - Files: `RoslynSentinel.Common/ActiveToolSurface.cs`, `RoslynSentinel.Common/ToolSurface/ToolSurfaceController.cs`
 - Depends on: 1
 - Pairs with: Step 3
@@ -203,6 +205,7 @@ Suggested orchestrator batches:
 - Done when: `Build` 0 errors.
 
 ### Step 3 - Catalog hidden-parameter map; the reflection catalog fills it
+- Done: 16863873
 - Files: `RoslynSentinel.Common/ToolSignatureCatalog.cs`, `RoslynSentinel.Common/ToolSignatureCatalogReflection.cs`
 - Depends on: 1
 - Pairs with: Step 2
@@ -220,6 +223,7 @@ Suggested orchestrator batches:
   `TestSuiteFilterTests`: all pass.
 
 ### Step 4 - Register the bound ActiveToolSurface
+- Done: b91f9439
 - Files: `RoslynSentinel.Server.Advanced/ServiceRegistrationExtensionsBasic.cs`
 - Depends on: 2
 - Pairs with: Step 6
@@ -242,6 +246,7 @@ Suggested orchestrator batches:
   `NoActiveToolsStartupTests`, `McpToolsetControlTests`: all pass.
 
 ### Step 5 - Eval-surface callability proof test
+- Done: d2c8a06a
 - Files: `RoslynSentinel.Tests.ModelEval/EvalSurfaceCallabilityTests.cs` (new)
 - Depends on: 4
 - Pairs with: Step 7
@@ -264,6 +269,7 @@ Suggested orchestrator batches:
 - Done when: dispatcher runs `EvalSurfaceCallabilityTests`: all cases pass; the printed deltas are copied into R1.
 
 ### Step 6 - Validator: one snapshot per pass for the hidden-reading paths
+- Done: c5594d85
 - Files: `RoslynSentinel.Server.Advanced/ToolArgumentValidator.cs`
 - Depends on: none in this plan (pairs with Step 4)
 - Effect: text-neutral (the same `Current` is read once per pass instead of once per hidden check). The snapshot decides hidden
@@ -287,6 +293,7 @@ Suggested orchestrator batches:
   `NumericEnumArgumentTests`: all pass.
 
 ### Step 7 - Validator: the other five passes take the snapshot
+- Done: b1dda85a
 - Files: `RoslynSentinel.Server.Advanced/ToolArgumentValidator.cs`
 - Depends on: 6
 - Pairs with: Step 5
@@ -299,6 +306,7 @@ Suggested orchestrator batches:
 - Done when: `Build` 0 errors; synchronous pre-commit gate: the Step 6 list: all pass.
 
 ### Step 8 - The validation filter captures the snapshot once per call
+- Done: 5413d71b (R1 measurement eee9c423)
 - Files: `RoslynSentinel.Server.Advanced/ServiceRegistrationExtensionsBasic.cs`
 - Depends on: 4 (same file), 6, 7
 - Effect: text-neutral (single snapshot per call for hidden names and the cache key; answers equal today's unless an apply commits
@@ -314,6 +322,7 @@ Suggested orchestrator batches:
 - Done when: `Build` 0 errors; synchronous pre-commit gate: the Step 6 list plus `McpToolsetControlTests`: all pass.
 
 ### Step 9 - Schema cache keyed by snapshot instance
+- Done: 91bd37d6
 - Files: `RoslynSentinel.Server.Advanced/ToolArgumentValidator.cs`
 - Depends on: 6 (the `surface` parameter), 8 (so production passes a snapshot)
 - Pairs with: Step 11
@@ -336,6 +345,7 @@ Suggested orchestrator batches:
   `ToolSurfaceControllerTests`: all pass.
 
 ### Step 10 - Cache and per-call capture tests
+- Done: 53f95fa8
 - Files: `RoslynSentinel.Tests.Server/ToolSurfaceCacheTests.cs` (new)
 - Depends on: 8, 9
 - Pairs with: Step 12
@@ -358,6 +368,7 @@ Suggested orchestrator batches:
 - Done when: dispatcher runs `ToolSurfaceCacheTests`: all pass.
 
 ### Step 11 - ToolCallHint reads the catalog's hidden map
+- Done: 0971300a
 - Files: `RoslynSentinel.Common/ToolCallHint.cs`, `RoslynSentinel.Tests/ToolCallHintTests.cs`
 - Depends on: 3
 - Pairs with: Step 9
@@ -382,6 +393,7 @@ Suggested orchestrator batches:
   `TestSuiteFilterTests`, `SchemaLeanProfileTests`, `SchemaHiddenParametersTests`: all pass.
 
 ### Step 12 - The validator drops the registry fallback
+- Done: d3ef14ae
 - Files: `RoslynSentinel.Server.Advanced/ToolArgumentValidator.cs`, `RoslynSentinel.Tests.Server/SchemaHiddenParametersTests.cs`,
   `RoslynSentinel.Tests.Server/ToolSurfaceParameterTests.cs`
 - Depends on: 6, 11 (no other production reader of the registry is left)
@@ -408,6 +420,7 @@ Suggested orchestrator batches:
 - Done when: `Build` 0 errors; synchronous pre-commit gate: the Step 6 list: all pass.
 
 ### Step 13 - Sweep: delete the obsolete static resets
+- Done: 8484a2b4
 - Files (all `RoslynSentinel.Tests.Server/`): `HiddenParametersParityTests.cs` (`ResetStatics` `:39-40`), `ToolSchemaPatchPipelineTests.cs`
   (`:47-48`), `ToolSurfaceControllerTests.cs` (`:35-36`), `ToolSurfaceControllerWiringTests.cs` (`:37-38`), `ToolSurfaceParameterTests.cs`
   (`ResetStatics` `:43-44`, `HarnessRegisteredSurface_WinsOverStartupDefault` `:224` plus the comment line that explains it),
@@ -424,6 +437,7 @@ Suggested orchestrator batches:
   touched classes: all pass.
 
 ### Step 14 - SchemaLeanProfileTests asserts move onto snapshot rows
+- Done: 95ec7e20
 - Files: `RoslynSentinel.Tests.Server/SchemaLeanProfileTests.cs`
 - Depends on: none in this plan
 - Pairs with: Step 13
@@ -440,6 +454,7 @@ Suggested orchestrator batches:
 - Done when: dispatcher runs `SchemaLeanProfileTests`: all pass.
 
 ### Step 15 - The eval harness drops the static resets
+- Done: 86b74f2a
 - Files: `RoslynSentinel.Tests.ModelEval/ModelEvalMcpEnvironment.cs`
 - Depends on: 9, 11, 12 (nothing reads the registry or the name-keyed cache any more)
 - Effect: text-neutral by construction; **eval-surface file** (the eval STOP rule applies)
@@ -452,6 +467,7 @@ Suggested orchestrator batches:
   unchanged outcomes (any change: STOP, do not commit).
 
 ### Step 16 - Delete HiddenSchemaParams and ClearSchemaCacheForTests
+- Done: 615805a8
 - Files: `RoslynSentinel.Common/McpToolSchemaPatcher.cs`, `RoslynSentinel.Common/HiddenSchemaParams.cs` (deleted with `DeleteFile`),
   `RoslynSentinel.Server.Advanced/ToolArgumentValidator.cs`
 - Depends on: 11, 12, 13, 14, 15
@@ -467,6 +483,7 @@ Suggested orchestrator batches:
   `ToolCallHintTests`, `ToolSurfaceCacheTests`: all pass.
 
 ### Step 17 - HOLD (owner decision R8), BEHAVIOUR-CHANGING: IsCallable counts runtime-toolset tools
+- Done: DEFERRED (HOLD, owner decision R8; INBOX line)
 - Files: `RoslynSentinel.Common/ActiveToolSurface.cs` (plus the R8 option's files: (b) adds the launcher flag, (c) adds the Harness
   pin test as a prerequisite step)
 - Depends on: 4, 5 (landed and green); **owner approval of R8**. Not run overnight.
@@ -490,6 +507,7 @@ Suggested orchestrator batches:
   all pass.
 
 ### Step 18 - HOLD (with Step 17): callability tests
+- Done: DEFERRED (HOLD, depends on 17)
 - Files: `RoslynSentinel.Tests.Server/ActiveToolSurfaceLiveTests.cs` (new), `RoslynSentinel.Tests.Tools.Basic/CallableToolHintLiveSurfaceTests.cs` (new)
 - Depends on: 17
 - Effect: text-neutral
@@ -508,6 +526,7 @@ Suggested orchestrator batches:
 - Done when: dispatcher runs `ActiveToolSurfaceLiveTests` and `CallableToolHintLiveSurfaceTests`: all pass.
 
 ### Step 19 - LIVE check
+- Done: 2026-11-24 on servedSha 615805a8: A ok-fresh (v1 startup, ListSolutionItems inactive with hint), B ok-rejected (Unknown parameter bogusParam on runtime tool ListSolutionItems), C ok-rejected (validateOnApply on Search), D n/a (held; baseline: ReadFile not-found hint does not name ListSolutionItems with projectAdmin on), E restored (projectAdmin off)
 - Files: none
 - Depends on: Steps 1-16 committed (17-18 are held: cases that need them record `n/a (held)`); own-server restart (`McpServerControl(StopServer)`, then `LoadSolution`);
   no subagent mid-operation
@@ -529,6 +548,7 @@ Suggested orchestrator batches:
 - Done when: A-E recorded.
 
 ### Step 20 - Docs
+- Done: this commit
 - Files: `docs/current/references/reference_architecture_map.md`
 - Depends on: 9, 11, 16 (17 is held)
 - Effect: none (docs)
@@ -542,6 +562,7 @@ Suggested orchestrator batches:
 - Done when: the section matches the code; links resolve.
 
 ### Step 21 - No stubs left, full run, close
+- Done: both sweeps 0 matches (non-test); INBOX lines added; full run pending
 - Files: `docs/current/INBOX.md` (lines below), `docs/current/TODO.md` (the stages line), this plan (via `ProjectDoc close`)
 - Depends on: all above except the held Steps 17-18
 - Effect: none
