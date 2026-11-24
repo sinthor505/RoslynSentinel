@@ -64,6 +64,14 @@ public sealed class ToolSurfaceController
     /// <summary>The parameter-visibility rules this controller applies when it builds a snapshot.</summary>
     public ParameterSurface Parameters { get; }
 
+    /// <summary>Builds the startup tools: requests in order, each request's types in order, each type's [McpServerTool] methods in the order WithSentinelTools enumerates them, skipping names allowList rejects. Static: it never resolves a controller.</summary>
+    /// <param name="requests">The startup requests, one per registration method, in tools/list order.</param>
+    /// <param name="allowList">Optional allow list; a tool whose name it rejects is skipped. Null means no filtering.</param>
+    /// <param name="services">Service provider used to construct the tool classes; no controller is resolved from it.</param>
+    /// <returns>The startup tools in tools/list order.</returns>
+    public static IReadOnlyList<McpServerTool> BuildStartupTools(IEnumerable<ToolSurfaceStartupRequest> requests, ToolAllowList? allowList, IServiceProvider services)
+        => throw new NotImplementedException();
+
     /// <summary>
     /// The most recently built snapshot. While no refresh has yet found a tool collection (a host that never
     /// started), each read retries the build with trigger <c>firstRead</c>.
