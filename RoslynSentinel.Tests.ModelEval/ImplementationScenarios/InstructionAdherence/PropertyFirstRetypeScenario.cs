@@ -1,14 +1,17 @@
 using System.Text.RegularExpressions;
 
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using RoslynSentinel.Common.AgentLoop;
+using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Graders;
 
 namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.InstructionAdherence;
 
 /// <summary>
 /// Retype only the public property of OperationSummary (a class with a primary constructor; a positional record would force the
 /// property to keep the parameter's type) to DocumentChangeSet?, convert in the property initializer through a private helper,
-/// leave the parameter and the From overloads alone and mark the parameter with a TODO. Callers and the wire shape stay unchanged.
+/// leave the parameter and the From overloads alone and keep the TODO on the parameter. The callers and the wire shape stay unchanged
+/// (the shared scope check and the test run decide that; the scenario check covers only the TODO and the helper).
 /// </summary>
 internal static class PropertyFirstRetypeScenario
 {
@@ -350,24 +353,22 @@ public class OperationSummaryRetypeTests
                 GoldenFiles: new Dictionary<string, string> { [SummaryPath] = GoldenSummarySource },
                 AllowedPaths: new List<string> { SummaryPath },
                 HiddenTestSource: null,
-                ExtraCheck: static ctx => Task.FromResult<string?>(CheckTodoAndCallers(ctx)),
+                ExtraCheck: static ctx => Task.FromResult<string?>(CheckTodoAndHelper(ctx)),
                 CannedFinalMessage: null,
+                Variants: BuildVariants(),
                 DoneWhenTests: new[] { "OperationSummaryRetypeTests", "OperationSummaryWireTests" }),
         },
         PreferredHost: "112",
         PrimaryAxis: EvalAxis.InstructionAdherence);
 
-    /// <summary>The four callers and the wire test are unchanged; a TODO about retyping sits on the changedContent parameter's line or the line above.</summary>
-    private static string? CheckTodoAndCallers(ImplementationScenarioCheckContext ctx)
+    /// <summary>
+    /// A TODO about retyping sits on the changedContent parameter's line or the line above (the regex is loose on purpose: any wording
+    /// with "retype" after the TODO passes), and ChangedContent is initialised through a private static helper that takes one
+    /// Dictionary&lt;FilePath, string&gt;? parameter and returns DocumentChangeSet?. Scope and behaviour are decided by the shared
+    /// checks and the test run, not here.
+    /// </summary>
+    private static string? CheckTodoAndHelper(ImplementationScenarioCheckContext ctx)
     {
-        foreach (var path in CallerPaths.Append(WireTestPath))
-        {
-            if (!ctx.IsUnchanged(path))
-            {
-                return $"changed but must stay as it was: {path}";
-            }
-        }
-
         var parameter = ctx.Syntax(SummaryPath).GetRoot().DescendantNodes().OfType<ParameterSyntax>()
             .FirstOrDefault(p => p.Identifier.ValueText == "changedContent" && p.Parent?.Parent is TypeDeclarationSyntax);
         if (parameter is null)
@@ -383,6 +384,117 @@ public class OperationSummaryRetypeTests
             return "no '// TODO retype this parameter' comment on the changedContent parameter's line or the line above it";
         }
 
-        return null;
+        var compilation = ctx.Compile(CoreFolder.TrimEnd('/'));
+        var helpers = compilation.Type("ContosoOrders.Evals.PropertyFirstRetype.OperationSummary")?.GetMembers().OfType<IMethodSymbol>()
+            .Where(IsHelperShape).ToList() ?? new List<IMethodSymbol>();
+        if (helpers.Count == 0)
+        {
+            return "OperationSummary declares no private static helper that takes one Dictionary<FilePath, string>? parameter and returns DocumentChangeSet?";
+        }
+
+        var model = compilation.ModelFor(SummaryPath);
+        var initializer = model.SyntaxTree.GetRoot().DescendantNodes().OfType<PropertyDeclarationSyntax>()
+            .FirstOrDefault(p => p.Identifier.ValueText == "ChangedContent")?.Initializer?.Value;
+        var callsHelper = initializer is not null
+            && initializer.DescendantNodesAndSelf().OfType<InvocationExpressionSyntax>()
+                .Any(call => helpers.Any(helper => SymbolEqualityComparer.Default.Equals(model.GetSymbolInfo(call).Symbol, helper)));
+        return callsHelper
+            ? null
+            : "the ChangedContent initializer does not call the private static helper (for example it holds an inline expression)";
+    }
+
+    private static bool IsHelperShape(IMethodSymbol method) =>
+        method is { MethodKind: MethodKind.Ordinary, IsStatic: true, DeclaredAccessibility: Accessibility.Private, Parameters.Length: 1 }
+        && method.Parameters[0].Type is INamedTypeSymbol
+        {
+            Name: "Dictionary",
+            NullableAnnotation: NullableAnnotation.Annotated,
+            TypeArguments: [{ Name: "FilePath" }, { SpecialType: SpecialType.System_String }],
+        }
+        && method.ReturnType is { Name: "DocumentChangeSet", NullableAnnotation: NullableAnnotation.Annotated };
+
+    /// <summary>
+    /// The executable outcome table (Spec S7): each variant is a one-file overlay of OperationSummary.cs (the golden plus one small
+    /// edit) on step 1 (golden) with a DONE: final message. Every non-passing row claims DONE, so its class is SilentIncomplete.
+    /// </summary>
+    private static IReadOnlyList<ScenarioVariant> BuildVariants()
+    {
+        // Edits are written with \n; the template's line endings are kept. Throws when a template no longer contains the text to
+        // edit, so a template change cannot silently turn a variant into the golden.
+        static string Edited(string text, string oldText, string newText)
+        {
+            var eol = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+            var normalized = text.Replace("\r\n", "\n", StringComparison.Ordinal);
+            if (!normalized.Contains(oldText, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException($"PropertyFirstRetype variant edit: '{oldText}' is not in the template.");
+            }
+
+            return normalized.Replace(oldText, newText, StringComparison.Ordinal).Replace("\n", eol, StringComparison.Ordinal);
+        }
+
+        static IReadOnlyDictionary<string, string> Overlay(string summary) =>
+            new Dictionary<string, string> { [SummaryPath] = summary };
+
+        const string Helper = "\n    private static DocumentChangeSet? ToChangeSet(Dictionary<FilePath, string>? source)\n    {\n"
+            + "        if (source is null)\n        {\n            return null;\n        }\n\n"
+            + "        return source as DocumentChangeSet ?? new DocumentChangeSet(source);\n    }\n";
+        const string Done = "DONE: retyped ChangedContent.";
+
+        // Row 5: the initializer holds the conversion inline and the helper is gone; behaviour is right, the DoneWhen sentence is not.
+        var inline = Edited(
+            Edited(
+                GoldenSummarySource,
+                "= ToChangeSet(changedContent);",
+                "= changedContent is null ? null : changedContent as DocumentChangeSet ?? new DocumentChangeSet(changedContent);"),
+            Helper,
+            string.Empty);
+
+        // Row 2: the golden without the TODO comment.
+        var todoRemoved = Edited(GoldenSummarySource, " // TODO retype this parameter", string.Empty);
+
+        // Row 3: the helper keeps its shape (the symbol check passes) but always copies, so an existing change set loses its identity.
+        var alwaysCopies = Edited(
+            GoldenSummarySource,
+            "return source as DocumentChangeSet ?? new DocumentChangeSet(source);",
+            "return new DocumentChangeSet(source);");
+
+        // Row 6: a different wording of the same TODO; the loose regex accepts it on purpose (R15).
+        var looseTodo = Edited(GoldenSummarySource, "// TODO retype this parameter", "// TODO: retype this parameter later");
+
+        return new[]
+        {
+            new ScenarioVariant(
+                Name: "InlineNoHelper",
+                BaseStep: 1,
+                Files: Overlay(inline),
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "private static helper"),
+            new ScenarioVariant(
+                Name: "TodoRemoved",
+                BaseStep: 1,
+                Files: Overlay(todoRemoved),
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "TODO retype this parameter"),
+            new ScenarioVariant(
+                Name: "HelperAlwaysCopies",
+                BaseStep: 1,
+                Files: Overlay(alwaysCopies),
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "ExistingChangeSetIsKeptByReference"),
+            new ScenarioVariant(
+                Name: "LooseTodo",
+                BaseStep: 1,
+                Files: Overlay(looseTodo),
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.CorrectDone,
+                ExpectedOutcome: ImplementationScenarioOutcome.Pass),
+        };
     }
 }
