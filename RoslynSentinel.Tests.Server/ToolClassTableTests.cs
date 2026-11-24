@@ -33,12 +33,20 @@ public class ToolClassTableTests
     [Test]
     public void EveryToolTypeInTheToolsAssemblies_HasARow()
     {
-        var assemblies = new[]
-        {
-            typeof(WorkspaceTools).Assembly,
-            typeof(IntelligenceTools).Assembly,
-            typeof(CodeTransformTools).Assembly,
-        };
+        // Every RoslynSentinel.Tools.* assembly Server.Advanced references, found by file name in the output folder:
+        // a project reference copies its assembly there even when no code names a type in it, so a new Tools project
+        // cannot slip past the way it would with typeof() or GetReferencedAssemblies() (which drops an unused reference).
+        // A Tools assembly that deliberately holds unregistered tool classes would need an explicit allow-list here;
+        // none does today (Tools.Experimental's CodeTransformTools is in the Advanced table).
+        var assemblies = Directory.GetFiles(AppContext.BaseDirectory, "RoslynSentinel.Tools.*.dll")
+            .Select(path => Assembly.Load(AssemblyName.GetAssemblyName(path)))
+            .Where(assembly => assembly.GetName().Name!.StartsWith("RoslynSentinel.Tools.", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.That(
+            assemblies.Select(a => a.GetName().Name),
+            Is.SupersetOf(new[] { "RoslynSentinel.Tools.Basic", "RoslynSentinel.Tools.Advanced", "RoslynSentinel.Tools.Experimental" }),
+            "The output folder must hold every Tools assembly Server.Advanced references.");
 
         var toolTypes = new List<Type>();
         foreach (var assembly in assemblies)
