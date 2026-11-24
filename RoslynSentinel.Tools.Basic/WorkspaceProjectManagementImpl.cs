@@ -886,6 +886,7 @@ public class WorkspaceProjectManagementImpl
         {
             var result = await _solutionStructureEngine.CreateProjectAsync(projectName, projectType, cancellationToken);
 
+            // TODO No test covers this CreateProject restore branch (Tests.Tools.Basic has no CreateProject fixture pattern; punchlist #19).
             // The engine does not reload the workspace, so the earliest hook is right after it returns: the csproj exists on disk
             // and the new project is restored before anything loads it. A restore problem never fails the creation.
             var solutionDir = _workspaceManager.SolutionPath is { } slnPath ? Path.GetDirectoryName(slnPath) : null;
