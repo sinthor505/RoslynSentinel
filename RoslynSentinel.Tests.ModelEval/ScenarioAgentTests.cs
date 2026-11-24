@@ -29,6 +29,8 @@ public class ScenarioAgentTests
 
     private const int DefaultSamples = 10;
 
+    [Test]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1 -Test Scenario -Scenario <id>; resume scenarios use the capture they name.")]
     public async Task RunScenario_SamplesAndScores()
     {
         await RunScenarioAsync(Environment.GetEnvironmentVariable(ScenarioVariable));

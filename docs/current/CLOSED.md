@@ -8,6 +8,10 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## `-Test Scenario` ran no test: RunScenario_SamplesAndScores lost [Test]/[Explicit] - resolved (2026-11-24)
+
+Scenario rework Step 29 (a9d45ba6) moved the attributes onto the new RunStopFamily_SamplesAndScores, leaving the env-var entry point a plain method; every queued `-Test Scenario` job ended Crashed ("No test matches the given testcase filter Name=RunScenario_SamplesAndScores", evalqueue 112 job 20261124-070932-001). Attributes restored in RoslynSentinel.Tests.ModelEval/ScenarioAgentTests.cs (harness auto-fix).
+
 ## RunTest fast suite silently skips [Explicit] fixtures (punchlist #12) - resolved (2026-11-24)
 
 RunTest `fast` suite silently skips `[Explicit]` fixtures selected by the filter (2026-11-23) - `FullyQualifiedName~ImplementationScenarioGoldenTests.Budget_`: fast 15 skipped ("No model needed", exit 0), full 15 passed; the fast suite's added TestCategory condition stops the NUnit adapter treating the filter as an explicit selection; Small
