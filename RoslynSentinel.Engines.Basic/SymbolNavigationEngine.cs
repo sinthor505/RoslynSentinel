@@ -3662,6 +3662,7 @@ public class SymbolNavigationEngine
             var signature = c.Symbol is IMethodSymbol m
                 ? m.ToDisplayString(SymbolDisplayFormat.CSharpShortErrorMessageFormat)
                 : c.Symbol.Name;
+            // TODO a top-level type falls back to its namespace's last segment, shown as "in GitWorktree" and containingType "GitWorktree" as if it were a type (same fallback at DescribeCandidateLocations, DescribeNearMissCandidatesAsync, FindCallersWithTargetAsync)
             var containingType = c.Symbol.ContainingType?.Name ?? c.Symbol.ContainingNamespace?.Name ?? "?";
             var kind = !counted && c.Symbol.ContainingType?.TypeKind == TypeKind.Interface
                 ? "interface member"
