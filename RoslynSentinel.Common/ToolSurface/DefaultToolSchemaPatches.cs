@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using System.Reflection;
+using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Common;
@@ -71,6 +73,13 @@ internal sealed class HiddenParametersPatch : IToolSchemaPatch
     public int Order => 400;
 
     /// <inheritdoc />
-    public void Apply(McpServerTool tool, MethodInfo toolMethod) =>
-        McpToolSchemaPatcher.ApplyHiddenParameters(tool, toolMethod);
+    public void Apply(McpServerTool tool, MethodInfo toolMethod) => Apply(tool, toolMethod, services: null);
+
+    /// <summary>
+    /// Reads the standalone DI <see cref="ParameterSurface"/> singleton, never the ToolSurfaceController: resolving
+    /// the controller builds every tool, so a patch resolving it would re-enter a singleton under construction.
+    /// The FromStartup fallback covers <c>services: null!</c> from ToolSignatureCatalogReflection and direct test builds.
+    /// </summary>
+    public void Apply(McpServerTool tool, MethodInfo toolMethod, IServiceProvider? services) =>
+        McpToolSchemaPatcher.ApplyHiddenParameters(tool, toolMethod, services?.GetService<ParameterSurface>() ?? ParameterSurface.FromStartup());
 }

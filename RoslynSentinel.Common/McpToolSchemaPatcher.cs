@@ -218,7 +218,7 @@ public static class McpToolSchemaPatcher
 
         foreach (var patch in patches.OrderBy(p => p.Order).ThenBy(p => p.Name, StringComparer.Ordinal))
         {
-            patch.Apply(tool, toolMethod);
+            patch.Apply(tool, toolMethod, services);
         }
 
         return tool;
@@ -621,20 +621,20 @@ public static class McpToolSchemaPatcher
     /// <summary>
     /// Removes the hidden parameters from <paramref name="tool"/>'s already-built top-level
     /// <see cref="Tool.InputSchema"/> (and from its <c>required</c> array). The names come from
-    /// <see cref="SchemaOptions.EffectiveHiddenParameters"/>: the Lean profile list (<c>--schema-profile=lean</c>)
-    /// plus any explicit names from <c>--hide-params</c>. Nothing is hidden when both are empty.
+    /// <see cref="ParameterSurface"/>: the Lean profile list (<c>--schema-profile=lean</c>), the <c>--hide-params</c>
+    /// entries and any harness rules. Nothing is hidden when the surface hides nothing.
     /// </summary>
     /// <remarks>
     /// Only the top-level <c>properties</c> object is touched: nested item schemas (e.g.
     /// <c>batchEdits</c> items, which carry their own <c>lineBefore</c>/<c>lineAfter</c>) are left
     /// alone. The C# method keeps every parameter, so runtime binding is unchanged; the names that were
-    /// actually stripped are registered in <see cref="HiddenSchemaParams"/> so the argument validator,
+    /// actually stripped are recorded per tool instance in <see cref="StrippedToolParameters"/> (the snapshot's source)
+    /// and mirrored into <see cref="HiddenSchemaParams"/> for ToolCallHint, so the argument validator,
     /// which treats the emitted schema as its allow-list, still accepts them at call time.
     /// </remarks>
-    internal static void ApplyHiddenParameters(McpServerTool tool, MethodInfo toolMethod)
+    internal static void ApplyHiddenParameters(McpServerTool tool, MethodInfo toolMethod, ParameterSurface surface)
     {
-        var hidden = SchemaOptions.EffectiveHiddenParameters();
-        if (hidden.Count == 0)
+        if (!surface.HidesAnything)
         {
             return;
         }
@@ -648,10 +648,11 @@ public static class McpToolSchemaPatcher
         }
 
         var removed = new List<string>();
-        foreach (string name in hidden)
+        foreach (string name in propertiesObj.Select(p => p.Key).ToList())
         {
-            if (propertiesObj.Remove(name))
+            if (surface.ResolveHidden(tool.ProtocolTool.Name, name) is not null)
             {
+                propertiesObj.Remove(name);
                 removed.Add(name);
             }
         }
@@ -677,6 +678,8 @@ public static class McpToolSchemaPatcher
         }
 
         tool.ProtocolTool.InputSchema = JsonSerializer.SerializeToElement(schemaNode);
+        StrippedToolParameters.Record(tool, removed);
+        // TODO HiddenSchemaParams is the ToolCallHint mirror; remove with ToolCallHint's move to the snapshot (stage E)
         HiddenSchemaParams.Register(tool.ProtocolTool.Name, removed);
     }
 }

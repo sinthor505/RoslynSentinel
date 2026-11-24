@@ -59,6 +59,11 @@ public static class SchemaOptions
     /// The names to hide from tool schemas: the Lean list when <see cref="Profile"/> is Lean, followed by
     /// the explicit <see cref="HiddenParameters"/> names not already in it, sorted ordinally.
     /// </summary>
+    /// <remarks>
+    /// The production caller moved to <see cref="ParameterSurface"/> (the hidden-parameters schema patch).
+    /// Kept only for tests until they are migrated.
+    /// </remarks>
+    [Obsolete("Use ParameterSurface.ResolveHidden")]
     public static IReadOnlyList<string> EffectiveHiddenParameters()
     {
         var result = new List<string>();
