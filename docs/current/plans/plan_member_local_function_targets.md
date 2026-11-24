@@ -1,6 +1,6 @@
 # Plan: Member view/replace/remove can target a local function
 
-**Status:** DRAFT 2026-11-24. Owner decisions A (ReadFile inherits view), B (containerName also names the enclosing method) and C (plan doc first) settled in session 30a40d85.
+**Status:** APPROVED 2026-11-24 (owner; to be run in a fresh session with the implement-plan skill). Owner decisions A (ReadFile inherits view), B (containerName also names the enclosing method) and C (plan doc first) settled in session 30a40d85.
 
 ## Problem
 
