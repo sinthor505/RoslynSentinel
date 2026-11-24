@@ -63,6 +63,11 @@ public record ActiveToolSurface
         return DeclaringClassByTool().TryGetValue(toolName, out var className) && ActiveToolClasses.Contains(className);
     }
 
+    /// <summary>Returns a copy whose IsCallable also counts tools a runtime toolset added, read from liveSnapshot
+    /// (null while no snapshot is built). The copy is made with a record with-expression, so every other member
+    /// carries over.</summary>
+    public ActiveToolSurface WithLiveSnapshot(Func<ToolSurfaceSnapshot?> liveSnapshot) => throw new NotImplementedException(); // TODO implement (Step 2)
+
     private static readonly object DeclaringClassesLock = new();
     private static int _declaringClassesAssemblyCount = -1;
     private static IReadOnlyDictionary<string, string> _declaringClassByTool = new Dictionary<string, string>();

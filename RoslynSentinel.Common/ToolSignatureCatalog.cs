@@ -53,6 +53,16 @@ public sealed class ToolSignatureCatalog
         return new ToolSignatureCatalog(tools.ToFrozenDictionary(StringComparer.Ordinal), names.AsReadOnly());
     }
 
+    /// <summary>
+    /// Builds a catalog from (tool name, InputSchema) pairs plus, per tool, the parameter names stripped from that schema but still accepted. A null map means no hidden parameters.
+    /// </summary>
+    public static ToolSignatureCatalog FromSchemas(IEnumerable<KeyValuePair<string, JsonElement>> inputSchemasByToolName, IReadOnlyDictionary<string, IReadOnlyCollection<string>>? hiddenParametersByToolName) => throw new NotImplementedException(); // TODO implement (Step 3)
+
+    /// <summary>
+    /// True when parameterName was stripped from toolName's schema in this catalog but is still accepted (ordinal, both names).
+    /// </summary>
+    public bool IsHidden(string toolName, string parameterName) => throw new NotImplementedException(); // TODO implement (Step 3)
+
     public bool Contains(string toolName) => toolName is not null && _tools.ContainsKey(toolName);
 
     public bool TryGetParameters(string toolName, out IReadOnlyList<ToolParameterSpec> parameters)

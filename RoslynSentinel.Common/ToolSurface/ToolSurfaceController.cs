@@ -81,6 +81,10 @@ public sealed class ToolSurfaceController
         }
     }
 
+    /// <summary>The committed snapshot, or null while no refresh has found a tool collection. Unlike Current it never
+    /// triggers a build.</summary>
+    public ToolSurfaceSnapshot? CurrentIfBuilt => throw new NotImplementedException(); // TODO implement (Step 2)
+
     /// <summary>
     /// Applies one runtime toolset: enable adds the tools <paramref name="createTool"/> builds for
     /// <paramref name="toolNames"/>, disable removes exactly the instances this controller added for the set.
