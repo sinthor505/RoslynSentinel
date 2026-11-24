@@ -40,11 +40,13 @@ public class ClaudeLeanSchemaBudgetTests
     // Raised 47500 -> 48000 on 2026-11-22 (TODO punchlist #11): the MoveFile tool joined the claude-lean core; measured 47688 (headroom 312).
     // Raised 48000 -> 48400: the growth is the readOnlyHint annotation added by punchlist #14 (ReadOnly = true on 37 read tools).
     // Raised 48400 -> 48500 (plan_tool_surface_controller A5): McpServerStatus description clause for toolSurface.surfaceVersion.
-    private const int AdvancedTotalBudget = 48500;
+    // Raised 48500 -> 49000 on 2026-11-24 (owner approved, plan_member_local_function_targets Step 5): Member memberName/containerName descriptions name the local-function target (~95 chars); headroom was 8.
+    private const int AdvancedTotalBudget = 49000;
     // Basic raised 40000 -> 45000 on 2026-11-10 (core split slice 1): ChangeSignature (~1.9k) and MoveMember (3356) moved from Tools.Advanced to Tools.Basic (CoreRefactoringTools), so the Basic flavor now serves them and measures 44948 chars, the same as Advanced.
     // Raised 48000 -> 48400: the growth is the readOnlyHint annotation added by punchlist #14 (ReadOnly = true on 37 read tools).
     // Raised 48400 -> 48500 (plan_tool_surface_controller A5): McpServerStatus description clause for toolSurface.surfaceVersion.
-    private const int BasicTotalBudget = 48500; // raised with AdvancedTotalBudget on 2026-11-15 (three times) and 2026-11-20 and 2026-11-22 (#10, #11)
+    // Raised 48500 -> 49000 on 2026-11-24 with AdvancedTotalBudget (plan_member_local_function_targets Step 5).
+    private const int BasicTotalBudget = 49000; // raised with AdvancedTotalBudget on 2026-11-15 (three times) and 2026-11-20 and 2026-11-22 (#10, #11)
     private const int AdvancedMaxToolBudget = 5000;
     private const int BasicMaxToolBudget = 5000;
     // Search per-tool budget.
