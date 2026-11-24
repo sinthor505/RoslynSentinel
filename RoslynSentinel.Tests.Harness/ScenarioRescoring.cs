@@ -141,7 +141,8 @@ public static class ScenarioRescoring
                     seededTurns: scenario.ResumeKeepTurns,
                     idealTurns: scenario.IdealTurns,
                     turnCap: scenario.TurnCap,
-                    absentTargetNames: scenario.AbsentTargetNames);
+                    absentTargetNames: scenario.AbsentTargetNames,
+                    requireNotFoundFromToolUnderTest: scenario.RequireNotFoundFromToolUnderTest);
                 sample = new ScenarioSample(
                     scenarioId, scenarioType, faultKind, sampleIndex, commit, dirty, liftRenames,
                     score, schemaDrift, resultDrift, inconclusiveReason, transcriptPath,

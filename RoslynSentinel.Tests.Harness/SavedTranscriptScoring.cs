@@ -49,7 +49,9 @@ public static class SavedTranscriptScoring
             ExpectedOutcome.Recover,
             expectedRecoveryTool: null,
             verdict: null,
-            stopReason: transcript.StopReason);
+            stopReason: transcript.StopReason,
+            // TODO unknown scenario id scores without the tool-not-tried requirement (a saved transcript carries no scenario id, so ScenarioRegistry.Find cannot resolve one)
+            requireNotFoundFromToolUnderTest: false);
 
         var runFolderLeaf = Path.GetFileName(Path.GetDirectoryName(Path.GetFullPath(path)) ?? "");
         // ScenarioType 0 means a saved transcript scored outside a scenario (scenario types are 1-4).
