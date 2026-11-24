@@ -23,6 +23,8 @@ public static class ScenarioRegistry
         LocateScenarios.LocateMethodByDescription,
         StopAdherenceScenarios.StopAdherenceMissingFile,
         StopAdherenceScenarios.StopAdherenceMissingMethod,
+        StopAdherenceScenarios.StopAdherenceMissingFileToolError,
+        StopAdherenceScenarios.StopAdherenceMissingMethodToolError,
         StopAdherenceScenarios.StopAdherenceControl,
         ResumeScenarios.StaleCallerEditAfterRename,
         ResumeScenarios.StaleWorkspaceAfterRename,
