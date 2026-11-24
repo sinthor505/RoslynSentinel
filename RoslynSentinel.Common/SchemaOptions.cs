@@ -49,7 +49,11 @@ public static class SchemaOptions
         return names;
     }
 
-    /// <summary>Replaces the explicit hidden set (ordinal). Does not touch <see cref="Profile"/> or <see cref="EmitDataTags"/>.</summary>
+    /// <summary>
+    /// Replaces the explicit hidden set (ordinal). Does not touch <see cref="Profile"/> or <see cref="EmitDataTags"/>.
+    /// Obsolete for production use: register a ParameterSurface in DI. The remaining callers are test resets.
+    /// </summary>
+    [Obsolete("Register a ParameterSurface in DI")]
     public static void ConfigureHiddenParameters(IEnumerable<string> names)
     {
         HiddenParameters = new HashSet<string>(names, StringComparer.Ordinal);

@@ -115,14 +115,19 @@ internal sealed class ModelEvalMcpEnvironment : IAsyncDisposable
         mcpBuilder.WithTasks(
             new InMemoryMcpTaskStore(),
             o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
-        // These three are process-static: a world built later resets them. Tools are built lazily at host start (the statics
-        // are read when the host resolves the tool singletons), not at registration, so they must be set before the host starts.
-        // The ModelEval assembly runs its fixtures sequentially (no assembly-level Parallelizable), which is why a per-world
-        // static is safe here. They are deliberately not restored afterwards: a toolset enabled later in the same world builds
-        // tools with the same setting.
+        // Hidden-parameter rules are per host now (the ParameterSurface registered below). The ToolCallHint mirror (HiddenSchemaParams)
+        // and the validator schema cache are still process-static (stage E), so a world built later resets them. Tools are built lazily
+        // at host start, so these registrations stay before the host starts. The ModelEval assembly runs its fixtures sequentially,
+        // which is why resetting the statics per world is safe.
         RoslynSentinel.Common.HiddenSchemaParams.Clear();
         RoslynSentinel.Server.Advanced.ToolArgumentValidator.ClearSchemaCacheForTests();
-        RoslynSentinel.Common.SchemaOptions.ConfigureHiddenParameters(fullToolSchema ? Array.Empty<string>() : new[] { "validateOnApply" });
+        // ConfigureHiddenParameters used to replace the explicit (--hide-params) set, so the EnvOrFlag layer is dropped and
+        // the Profile layer kept; fullToolSchema adds no rule. Exactly the old effective list (R6).
+        var rules = RoslynSentinel.Common.ToolParameterSurfaceOptions.FromStartup().Visibility
+            .Where(r => r.Source != RoslynSentinel.Common.ParameterRuleSource.EnvOrFlag).ToList();
+        if (!fullToolSchema)
+            rules.Add(new RoslynSentinel.Common.ParameterVisibilityRule(null, "validateOnApply", RoslynSentinel.Common.ParameterVisibility.Hide, RoslynSentinel.Common.ParameterRuleSource.Harness, "ModelEvalMcpEnvironment"));
+        services.AddSingleton(new RoslynSentinel.Common.ParameterSurface(new RoslynSentinel.Common.ToolParameterSurfaceOptions(rules)));
 
         if (configureToolSurface is null)
         {
