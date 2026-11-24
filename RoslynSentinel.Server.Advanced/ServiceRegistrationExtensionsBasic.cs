@@ -393,6 +393,9 @@ public static class RoslynSentinelServiceExtensionsBasic
             classModes: ToolClassRegistry.BuildClassToModes(),
             allowedToolNames: toolAllowList?.ToolNames);
         services.AddSingleton(activeToolSurface);
+        // ToolsetService is optional in the controller's constructor, so modes without it resolve.
+        services.AddSingleton<ToolSurfaceController>();
+        services.AddHostedService<ToolSurfaceStartup>();
 
         // Always registered, independent of activeToolClasses/--mode/--include-tools/
         // --exclude-tools: the one tool meant to be reachable no matter what selection is in
