@@ -66,6 +66,29 @@ public sealed class ToolSurfaceController
         }
     }
 
+    /// <summary>
+    /// Applies one runtime toolset: enable adds the tools <paramref name="createTool"/> builds for
+    /// <paramref name="toolNames"/>, disable removes exactly the instances this controller added for the set.
+    /// The only writer of runtime tools to the live collection.
+    /// </summary>
+    /// <param name="toolSet">The toolset being switched.</param>
+    /// <param name="enabled">True to enable the set, false to disable it.</param>
+    /// <param name="toolNames">Tool names the set declares for this server flavor.</param>
+    /// <param name="createTool">Builds the tool for a name, or returns null when it cannot be built.</param>
+    /// <returns>What the switch did.</returns>
+    public ToolsetChange ApplyToolset(ToolSetName toolSet, bool enabled, IReadOnlyList<string> toolNames,
+        Func<string, McpServerTool?> createTool)
+        => throw new NotImplementedException(); // TODO implement (Step 2)
+
+    /// <summary>The runtime toolsets currently on, in enum order.</summary>
+    public IReadOnlyList<ToolSetName> RuntimeToolSets => throw new NotImplementedException(); // TODO implement (Step 2)
+
+    /// <summary>The tool names runtime toolsets currently have on the live surface, ordinal order.</summary>
+    public IReadOnlyCollection<string> RuntimeToolNames => throw new NotImplementedException(); // TODO implement (Step 2)
+
+    /// <summary>The startup MCP server options whose tool collection this controller maintains.</summary>
+    internal McpServerOptions ServerOptions => _serverOptions.Value;
+
     /// <summary>Rebuilds the snapshot and returns it; <paramref name="trigger"/> records the cause.</summary>
     /// <param name="trigger">Short label describing why the surface was rebuilt.</param>
     public ToolSurfaceSnapshot Refresh(string trigger)
