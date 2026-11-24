@@ -361,6 +361,7 @@ public class UndoChangeTests
         Assert.That(await File.ReadAllBytesAsync(targetFile), Is.EqualTo(originalBytes), "undo must restore the exact pre-image bytes");
     }
 
+    // LOAD-SENSITIVE: failed once in a parallel worktree run ("BuildHost process is not responding" on the ContosoOrders.sln reload), passed alone; disregard a failure here when the change did not touch workspace loading, and re-run the test alone first.
     [Test]
     [Description("Apply on a BOM-prefixed mixed-EOL file converges to CRLF and keeps the BOM, and UndoChange then restores the exact BOM-prefixed pre-image bytes")]
     public async Task UndoChange_AfterApplyOnBomMixedEolFile_RestoresBomBytesAsync()
