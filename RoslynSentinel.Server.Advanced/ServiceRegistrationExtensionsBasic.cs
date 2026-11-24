@@ -393,7 +393,7 @@ public static class RoslynSentinelServiceExtensionsBasic
             classModes: ToolClassRegistry.BuildClassToModes(),
             allowedToolNames: toolAllowList?.ToolNames);
         services.AddSingleton(activeToolSurface);
-        // ToolsetService is optional in the controller's constructor, so modes without it resolve.
+        // The controller owns the runtime-toolset layer; claude-lean's ToolsetService takes it, so both see one state.
         services.AddSingleton<ToolSurfaceController>();
         services.AddHostedService<ToolSurfaceStartup>();
 
@@ -426,7 +426,7 @@ public static class RoslynSentinelServiceExtensionsBasic
             if (toolsetControlActive)
             {
                 services.AddSingleton(sp => new ToolsetService(
-                    sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ModelContextProtocol.Server.McpServerOptions>>(),
+                    sp.GetRequiredService<ToolSurfaceController>(),
                     sp,
                     // Excluded classes stay unavailable to toolsets too: SubAgent is on demand (modelEval) and the
                     // child server's --exclude-tools=SubAgentTools recursion guard must still hold there.

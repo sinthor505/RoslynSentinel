@@ -296,13 +296,13 @@ public class McpServerStatusToolListingTests
     {
         var collection = CreateCollection("McpServerStatus");
         var options = Options.Create(new McpServerOptions { ToolCollection = collection });
+        var controller = new ToolSurfaceController(options);
         var toolsets = new ToolsetService(
-            options,
+            controller,
             new ServiceCollection().BuildServiceProvider(),
             new HashSet<string> { nameof(TestCategoryTaggingTools) },
             () => new[] { typeof(TestCategoryTaggingTools).Assembly });
         toolsets.SetEnabled(ToolSetName.testCategories, true);
-        var controller = new ToolSurfaceController(options, toolsets);
         controller.Refresh("test");
 
         var status = CallWithSurface(NoActiveClasses(), controller, toolsets, McpServerStatusToolListing.all, "TagTestCategories");

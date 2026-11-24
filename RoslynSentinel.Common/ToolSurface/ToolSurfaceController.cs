@@ -12,13 +12,12 @@ namespace RoslynSentinel.Common;
 /// <remarks>
 /// The snapshot is rebuilt from the live <c>McpServerOptions.ToolCollection</c>. The controller subscribes once to
 /// the collection's <c>Changed</c> event (on the first <see cref="Refresh"/> that finds a collection) and refreshes
-/// itself when toolsets are switched. A refresh that finds the same fingerprint and enabled toolsets keeps the
+/// itself whenever the collection changes. A refresh that finds the same fingerprint and enabled toolsets keeps the
 /// existing snapshot, so <see cref="ToolSurfaceSnapshot.Version"/> only moves when the surface really changed.
 /// </remarks>
 public sealed class ToolSurfaceController
 {
     private readonly IOptions<McpServerOptions> _serverOptions;
-    private readonly ToolsetService? _toolsets;
     private readonly IReadOnlyList<string> _schemaPatchNames;
 
     // Serializes ApplyToolset calls. Held across the createTool callback and the SDK collection mutation; the
@@ -39,14 +38,15 @@ public sealed class ToolSurfaceController
     private volatile bool _built;
     private bool _subscribed;
 
-    /// <summary>Creates the controller from the server options and optional toolset service.</summary>
+    /// <summary>Creates the controller from the server options and optional schema patches.</summary>
     /// <param name="serverOptions">Startup MCP server options that list the registered tools.</param>
-    /// <param name="toolsets">Toolset service used for runtime enablement, or null when none is wired.</param>
     /// <param name="patches">Schema patches registered with the host; null or empty means the default pipeline.</param>
-    public ToolSurfaceController(IOptions<McpServerOptions> serverOptions, ToolsetService? toolsets = null, IEnumerable<IToolSchemaPatch>? patches = null)
+    // Changed in place rather than migration-first: with an old and a new constructor side by side,
+    // new ToolSurfaceController(options) is CS0121 (ambiguous), and MS.DI would pick the longer one and form a
+    // cycle controller -> ToolsetService -> controller.
+    public ToolSurfaceController(IOptions<McpServerOptions> serverOptions, IEnumerable<IToolSchemaPatch>? patches = null)
     {
         _serverOptions = serverOptions;
-        _toolsets = toolsets;
 
         // Mirrors the fallback in McpToolSchemaPatcher.CreateSentinelTool (an empty registration falls back to the
         // defaults), so the snapshot names the pipeline that built the schemas.
@@ -197,9 +197,6 @@ public sealed class ToolSurfaceController
         .OrderBy(n => n, StringComparer.Ordinal)
         .ToArray();
 
-    /// <summary>The startup MCP server options whose tool collection this controller maintains.</summary>
-    internal McpServerOptions ServerOptions => _serverOptions.Value;
-
     /// <summary>Rebuilds the snapshot and returns it; <paramref name="trigger"/> records the cause.</summary>
     /// <param name="trigger">Short label describing why the surface was rebuilt.</param>
     public ToolSurfaceSnapshot Refresh(string trigger)
@@ -248,8 +245,6 @@ public sealed class ToolSurfaceController
             }
         }
 
-        // TODO remove with the ToolsetService parameter (Step 6)
-        var dynamicNames = _toolsets?.DynamicToolNames;
         var declaringClasses = ActiveToolSurface.DeclaringClassByTool();
 
         var tools = new List<(ToolSurfaceTool Row, string Schema)>();
@@ -259,24 +254,13 @@ public sealed class ToolSurfaceController
             var schemaElement = tool.ProtocolTool.InputSchema;
             var schemaText = schemaElement.ValueKind == JsonValueKind.Undefined ? string.Empty : schemaElement.GetRawText();
 
-            string? toolSetName;
-            bool isDynamic;
-            if (layerSetByTool.TryGetValue(name, out var layerSet))
-            {
-                isDynamic = true;
-                toolSetName = layerSet;
-            }
-            else
-            {
-                // TODO remove with the ToolsetService parameter (Step 6)
-                isDynamic = dynamicNames is not null && dynamicNames.Contains(name);
-                toolSetName = isDynamic ? ToolsetCatalog.FindSet(name)?.ToString() : null;
-            }
+            // The layer alone decides origin and set: a tool that a runtime apply added is RuntimeToolset with that set.
+            string? toolSetName = layerSetByTool.TryGetValue(name, out var layerSet) ? layerSet : null;
 
             var row = new ToolSurfaceTool(
                 name,
                 declaringClasses.TryGetValue(name, out var className) ? className : string.Empty,
-                isDynamic ? ToolSurfaceOrigin.RuntimeToolset : ToolSurfaceOrigin.Startup,
+                toolSetName is null ? ToolSurfaceOrigin.Startup : ToolSurfaceOrigin.RuntimeToolset,
                 toolSetName,
                 ListedParameterNames(schemaElement),
                 HiddenSchemaParams.HiddenFor(name));
@@ -285,10 +269,7 @@ public sealed class ToolSurfaceController
 
         tools.Sort((a, b) => string.CompareOrdinal(a.Row.Name, b.Row.Name));
 
-        // TODO remove the _toolsets fallback with the ToolsetService parameter (Step 6)
-        var enabledToolSets = layer.Count > 0
-            ? layer.Keys.OrderBy(s => s).Select(s => s.ToString()).ToList()
-            : _toolsets?.EnabledToolSets.Select(s => s.ToString()).ToList() ?? [];
+        var enabledToolSets = layer.Keys.OrderBy(s => s).Select(s => s.ToString()).ToList();
         var fingerprint = ComputeFingerprint(tools);
 
         lock (_lock)
