@@ -9,10 +9,11 @@ public static class ToolArgumentValidator
     /// Cache of tool name -> (all declared parameter names, required parameter names, each
     /// declared parameter's own schema node for type/enum checks, and a case-insensitive ->
     /// canonical-name lookup used only for the case-normalization pass in
-    /// <see cref="NormalizeParameterCase"/>). Cached because the schema is fixed for the process
-    /// lifetime and this runs on every single tool call.
+    /// <see cref="NormalizeParameterCase"/>). One table per tool-surface snapshot instance: a new
+    /// snapshot (toolset toggle, schema change) gets a fresh table, and an old one is collected
+    /// together with its snapshot. Cached because this runs on every single tool call.
     /// </summary>
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (System.Collections.Generic.HashSet<string> All, System.Collections.Generic.List<string> Required, System.Collections.Generic.Dictionary<string, System.Text.Json.JsonElement> Properties, System.Collections.Generic.Dictionary<string, string> CaseInsensitiveLookup)> SchemaCache = new(StringComparer.Ordinal);
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<RoslynSentinel.Common.ToolSurfaceSnapshot, System.Collections.Concurrent.ConcurrentDictionary<string, (System.Collections.Generic.HashSet<string> All, System.Collections.Generic.List<string> Required, System.Collections.Generic.Dictionary<string, System.Text.Json.JsonElement> Properties, System.Collections.Generic.Dictionary<string, string> CaseInsensitiveLookup)>> SchemaCacheBySnapshot = new();
     /// <summary>
     /// Reads the declared and required parameter names, plus each declared parameter's own schema
     /// node (for type/enum checks), out of the tool's emitted JSON input schema. Reads the schema
@@ -24,13 +25,13 @@ public static class ToolArgumentValidator
     /// </summary>
     private static (System.Collections.Generic.HashSet<string> All, System.Collections.Generic.List<string> Required, System.Collections.Generic.Dictionary<string, System.Text.Json.JsonElement> Properties, System.Collections.Generic.Dictionary<string, string> CaseInsensitiveLookup)? TryGetSchemaParameters(
         ModelContextProtocol.Server.McpServer? server, string? toolName,
-        // surface is accepted but not read yet; Step 9 (caching) uses it.
         RoslynSentinel.Common.ToolSurfaceSnapshot? surface = null)
     {
         if (server is null || string.IsNullOrEmpty(toolName))
             return null;
 
-        if (SchemaCache.TryGetValue(toolName, out var cached))
+        System.Collections.Concurrent.ConcurrentDictionary<string, (System.Collections.Generic.HashSet<string> All, System.Collections.Generic.List<string> Required, System.Collections.Generic.Dictionary<string, System.Text.Json.JsonElement> Properties, System.Collections.Generic.Dictionary<string, string> CaseInsensitiveLookup)>? cache = surface is { Version: > 0 } ? SchemaCacheBySnapshot.GetValue(surface, _ => new(StringComparer.Ordinal)) : null;
+        if (cache is not null && cache.TryGetValue(toolName, out var cached))
             return cached;
 
         try
@@ -92,7 +93,7 @@ public static class ToolArgumentValidator
             // Case-insensitive -> canonical lookup, used only to normalize a case-only mismatch
             // (e.g. "filepath" -> "filePath") before Validate ever runs, so a caller that gets the
             // name right but the case wrong doesn't burn a round-trip on it. Built once here rather
-            // than lowering on every call, since the schema is fixed for the process lifetime.
+            // than lowering on every call, ; it is built once per cached schema entry.
             // A declared name is deliberately left OUT of the lookup - not overwritten - when two
             // declared parameters collide case-insensitively (e.g. a tool that declared both "Id"
             // and "id"), because normalizing to either one would silently discard the model's
@@ -116,7 +117,8 @@ public static class ToolArgumentValidator
             }
 
             var result = (All: all, Required: required, Properties: propertySchemas, CaseInsensitiveLookup: caseInsensitiveLookup);
-            SchemaCache[toolName] = result;
+            if (cache is not null)
+                cache[toolName] = result;
             return result;
         }
         catch (Exception ex)
@@ -129,12 +131,11 @@ public static class ToolArgumentValidator
     }
 
     /// <summary>
-    /// Empties the per-tool schema cache. Production never needs this (the emitted schema is fixed
-    /// for the process lifetime); tests that rebuild tool schemas under a different
-    /// <see cref="RoslynSentinel.Common.SchemaOptions"/> profile in the same process must call it, or a
-    /// stale cached schema would be validated against the new one.
+    /// No-op, kept until its last callers are gone. Schema caches are per tool-surface snapshot
+    /// now: a new snapshot gets a fresh table, so there is nothing to clear.
     /// </summary>
-    public static void ClearSchemaCacheForTests() => SchemaCache.Clear();
+    [Obsolete("Schema caches are per tool-surface snapshot; nothing to clear.")]
+    public static void ClearSchemaCacheForTests() { }
 
     /// <summary>
     /// Nearest declared parameter to <paramref name="unknown"/>, or null when nothing is close
@@ -1329,8 +1330,8 @@ public static class ToolArgumentValidator
 
         // validateOnApply:false is refused where the lean profile hides the parameter: the compile gate
         // always validates on that profile, so the caller has no way to switch it off.
-        // Hidden names come from this server's snapshot. SchemaCache is still process-wide (stage E) and keyed by
-        // tool name, so a world built with the parameter declared after a world with it hidden must not be refused.
+        // Hidden names come from this server's snapshot when one is passed. The guard is cheap and harmless
+        // without a snapshot, so it stays for callers that pass none.
         if (arguments is not null &&
             arguments.TryGetValue("validateOnApply", out var validateOnApplyArg) &&
             (validateOnApplyArg.ValueKind == System.Text.Json.JsonValueKind.False ||
