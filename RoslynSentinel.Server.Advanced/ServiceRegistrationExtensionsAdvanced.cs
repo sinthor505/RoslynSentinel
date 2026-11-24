@@ -142,6 +142,9 @@ public static class RoslynSentinelServiceExtensionsAdvanced
             mcpBuilder.WithSentinelTools<SubAgentTools>();
         }
 
+        // Sees the claude-lean widening above, so it stays after that block.
+        RoslynSentinelServiceExtensionsBasic.AddStartupToolClasses(services, "Advanced", ToolClassRegistry.SelectStartupToolTypes(ToolClassRegistry.AdvancedToolClassTypes, activeToolClasses, activeModes.Contains(ToolClassRegistry.ClaudeLeanMode)));
+
         return mcpBuilder;
     }
 }

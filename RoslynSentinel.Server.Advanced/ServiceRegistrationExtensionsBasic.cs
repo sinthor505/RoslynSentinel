@@ -4,8 +4,10 @@ using System.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 using ModelContextProtocol.Protocol;
+using ModelContextProtocol.Server;
 
 using RoslynSentinel.Common;
 using RoslynSentinel.Common.AgentLoop;
@@ -411,6 +413,10 @@ public static class RoslynSentinelServiceExtensionsBasic
         services.AddSingleton<ToolSurfaceController>();
         services.AddHostedService<ToolSurfaceStartup>();
 
+        // Singleton so its cache outlives the transient OptionsFactory. The population reads the ToolAllowList and the
+        // ToolSurfaceStartupRequest singletons from DI, so it is registered once here.
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IPostConfigureOptions<McpServerOptions>, ToolSurfaceStartupPopulation>());
+
         // Always registered, independent of activeToolClasses/--mode/--include-tools/
         // --exclude-tools: the one tool meant to be reachable no matter what selection is in
         // effect, since it exists for the case where the selection itself might be the problem.
@@ -618,6 +624,29 @@ public static class RoslynSentinelServiceExtensionsBasic
             services.AddSingleton<CoreRefactoringTools>();
             mcpBuilder.WithSentinelTools<CoreRefactoringTools>();
         }
+
+        // Sees the claude-lean widened set, so this stays after the activeToolClasses rebinding in the claude-lean block above.
+        AddStartupToolClasses(services, "Basic", ToolClassRegistry.SelectStartupToolTypes(ToolClassRegistry.BasicToolClassTypes, activeToolClasses, activeModes.Contains(ToolClassRegistry.ClaudeLeanMode)));
+    }
+
+    /// <summary>
+    /// Records one registration method's selected startup tool classes for <c>ToolSurfaceStartupPopulation</c>.
+    /// Each class is registered as a singleton so the population can build it; the population turns the list into
+    /// the startup tools/list entries.
+    /// </summary>
+    /// <param name="services">The service collection being configured.</param>
+    /// <param name="source">Names the registration method that selected the classes ("Basic" or "Advanced").</param>
+    /// <param name="selected">The classes selected for this launch, in tools/list order.</param>
+    internal static void AddStartupToolClasses(IServiceCollection services, string source, IReadOnlyList<Type> selected)
+    {
+        // tools/list order is registration order, and the population runs after the SDK's own options setup, so the
+        // classes migrated to the tables are a suffix after the tools the DI blocks above register.
+        foreach (var type in selected)
+        {
+            services.TryAddSingleton(type);
+        }
+
+        services.AddSingleton(new ToolSurfaceStartupRequest(source, selected));
     }
 
     /// <summary>
