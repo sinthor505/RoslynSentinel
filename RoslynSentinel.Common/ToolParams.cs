@@ -117,7 +117,7 @@ public static class ToolParams
     */
 
     public const string SnippetEdits =
- "Batch form of filePath/oldContent/newContent; oldContent+newContent beside it is one more item. " + BatchSemantics +
+ "Batch form of filePath/oldContent/newContent; oldContent+newContent beside it adds an item. " + BatchSemantics +
  " Each edit has the same size limits.";
 
     public const string ModifierEdits =
