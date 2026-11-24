@@ -29,6 +29,27 @@ public static class BuildIsolation
 
     private static readonly string[] BuildVerbs = ["build", "test", "publish", "pack", "restore", "msbuild"];
 
+    /// <summary>Environment variables MSBuildLocator.RegisterDefaults() pins in this server process to one SDK's MSBuild.</summary>
+    // TODO SolutionRestore.MsBuildPinnedVariables and TestInstanceLauncher.MsBuildPinnedVariables keep their own copy of this list; point them at MsBuildPinnedVariables here.
+    public static readonly IReadOnlyList<string> MsBuildPinnedVariables =
+    [
+        "MSBUILD_EXE_PATH", "MSBuildExtensionsPath", "MSBuildSDKsPath", "MSBuildLoadMicrosoftTargetsReadOnly",
+        "DOTNET_HOST_PATH", "DOTNET_MSBUILD_SDK_RESOLVER_SDKS_DIR", "DOTNET_MSBUILD_SDK_RESOLVER_CLI_DIR",
+    ];
+
+    /// <summary>Removes <see cref="MsBuildPinnedVariables"/> from a `dotnet build` / `dotnet test` child so that dotnet and its MSBuild
+    /// worker nodes resolve one SDK together, by global.json. Left in, the pin sends the nodes to the server's SDK while dotnet
+    /// itself runs the SDK global.json (or the newest installed SDK, in a worktree without global.json) selects; the node handshake
+    /// then fails on an MSBuild version mismatch and the run ends with no output and no TRX. Call before applying caller-supplied
+    /// environment so a caller can still set any of these on purpose.</summary>
+    public static void RemoveInheritedMsBuildPins(ProcessStartInfo startInfo)
+    {
+        foreach (var name in MsBuildPinnedVariables)
+        {
+            startInfo.Environment.Remove(name);
+        }
+    }
+
     /// <summary>Adds `-p:ArtifactsPath=...` so bin/ and obj/ for every project in the invocation land in a
     /// directory unique to this server instance instead of next to the sources. Reused across calls
     /// by the same instance so restore and incremental state stay warm.</summary>

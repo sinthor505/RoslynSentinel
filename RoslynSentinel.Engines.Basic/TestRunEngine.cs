@@ -561,7 +561,11 @@ public class TestRunEngine
             {
                 process.StartInfo.ArgumentList.Add(blameArgument);
             }
-            // Caller env is applied first so the instance-isolation ArtifactsPath argument still wins.
+            // The server's MSBuildLocator pins (MSBUILD_EXE_PATH and friends) must not reach dotnet test: they send its MSBuild worker
+            // nodes to the server's SDK while dotnet runs the SDK global.json selects (the newest installed one in a worktree that
+            // lacks global.json), and the node handshake then fails with no output and no TRX.
+            BuildIsolation.RemoveInheritedMsBuildPins(process.StartInfo);
+            // Caller env is applied after the pin removal (so a caller can set one on purpose) and before ArtifactsPath, which still wins.
             if (environment is not null)
             {
                 foreach (var (key, value) in environment)

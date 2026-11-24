@@ -386,13 +386,7 @@ public class BuildEngine
         // MSBuildLocator.RegisterDefaults() (see PersistentWorkspaceManager) pins this process's
         // environment to a specific MSBuild toolset. Strip the pin from the spawned "dotnet build"
         // child so it resolves its own toolset independently, rather than inheriting ours.
-        process.StartInfo.EnvironmentVariables.Remove("MSBUILD_EXE_PATH");
-        process.StartInfo.EnvironmentVariables.Remove("MSBuildExtensionsPath");
-        process.StartInfo.EnvironmentVariables.Remove("MSBuildSDKsPath");
-        process.StartInfo.EnvironmentVariables.Remove("MSBuildLoadMicrosoftTargetsReadOnly");
-        process.StartInfo.EnvironmentVariables.Remove("DOTNET_HOST_PATH");
-        process.StartInfo.EnvironmentVariables.Remove("DOTNET_MSBUILD_SDK_RESOLVER_SDKS_DIR");
-        process.StartInfo.EnvironmentVariables.Remove("DOTNET_MSBUILD_SDK_RESOLVER_CLI_DIR");
+        BuildIsolation.RemoveInheritedMsBuildPins(process.StartInfo);
 
         process.Start();
 

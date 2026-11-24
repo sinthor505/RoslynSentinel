@@ -60,6 +60,44 @@ public class BuildIsolationTests
     }
 
     [Test]
+    [Category("MsBuildPins")]
+    public void RemoveInheritedMsBuildPins_StripsEveryPinnedVariableAndKeepsTheRest()
+    {
+        var startInfo = new ProcessStartInfo("dotnet");
+        foreach (var name in BuildIsolation.MsBuildPinnedVariables)
+        {
+            startInfo.Environment[name] = @"C:\Program Files\dotnet\sdk\pinned";
+        }
+
+        startInfo.Environment["ROSLYNSENTINEL_TEST_KEEP"] = "kept";
+
+        BuildIsolation.RemoveInheritedMsBuildPins(startInfo);
+
+        foreach (var name in BuildIsolation.MsBuildPinnedVariables)
+        {
+            Assert.That(startInfo.Environment.ContainsKey(name), Is.False, name);
+        }
+
+        Assert.That(startInfo.Environment["ROSLYNSENTINEL_TEST_KEEP"], Is.EqualTo("kept"));
+        Assert.That(BuildIsolation.MsBuildPinnedVariables, Does.Contain("MSBUILD_EXE_PATH").And.Contain("MSBuildSDKsPath").And.Contain("MSBuildExtensionsPath"));
+    }
+
+    // The server pins MSBUILD_EXE_PATH to its own SDK. In a git worktree without global.json (it is git-ignored here) dotnet picks the
+    // newest installed SDK, the MSBuild nodes start from the pinned SDK, the node handshake fails on a version mismatch and the run
+    // ends with no output and no TRX (blocking_error_runtest_no_trx_in_git_worktree). Both engines that spawn dotnet must strip the pin.
+    [TestCase("RoslynSentinel.Engines.Basic/TestRunEngine.cs")]
+    [TestCase("RoslynSentinel.Engines.Basic/BuildEngine.cs")]
+    [Category("MsBuildPins")]
+    public void DotnetSpawningEngines_StripTheInheritedMsBuildPins(string relativePath)
+    {
+        var path = Path.Combine(RepoRootLocator.Find(AppContext.BaseDirectory), relativePath.Replace('/', Path.DirectorySeparatorChar));
+
+        var source = File.ReadAllText(path);
+
+        Assert.That(source, Does.Contain("BuildIsolation.RemoveInheritedMsBuildPins(process.StartInfo)"), relativePath);
+    }
+
+    [Test]
     [NonParallelizable]
     [Category("BuildEngine")] // sentinel:auto-category
     [Category("DiagnosticEngine")] // sentinel:auto-category
