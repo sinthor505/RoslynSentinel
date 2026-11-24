@@ -118,6 +118,60 @@ public class TestSuiteFilterTests
     }
 
     [Test]
+    public void AllSkippedNote_FastWithFilterAllSkipped_NamesTheFullRunAndTheOutOfProcessTerm()
+    {
+        UseRunTestCatalog();
+
+        var note = TestSuiteFilter.AllSkippedNote(TestSuite.fast, "FullyQualifiedName~Budget_", passedCount: 0, failedCount: 0, skippedCount: 15);
+
+        Assert.That(note, Is.Not.Null);
+        Assert.That(note, Does.Contain("15 skipped").And.Contain("suite: full").And.Contain("FullyQualifiedName~Budget_"));
+        Assert.That(note, Does.Contain(TestSuiteFilter.ExcludeOutOfProcess));
+    }
+
+    [Test]
+    public void AllSkippedNote_FastWithScopedFilterAllSkipped_FullRunNoteCarriesScopeAndScopeName()
+    {
+        UseRunTestCatalog();
+
+        var note = TestSuiteFilter.AllSkippedNote(TestSuite.fast, "FullyQualifiedName~Budget_", 0, 0, 15, ToolScope.project, "P.Tests");
+
+        Assert.That(note, Is.Not.Null);
+        Assert.That(note, Does.Contain("scope: project").And.Contain("scopeName: \"P.Tests\""));
+    }
+
+    [Test]
+    public void AllSkippedNote_FullSuite_IsNull()
+    {
+        Assert.That(TestSuiteFilter.AllSkippedNote(TestSuite.full, "FullyQualifiedName~Budget_", 0, 0, 15), Is.Null, "full suite");
+    }
+
+    [Test]
+    public void AllSkippedNote_NoFilter_IsNull()
+    {
+        Assert.That(TestSuiteFilter.AllSkippedNote(TestSuite.fast, null, 0, 0, 15), Is.Null, "no filter given");
+        Assert.That(TestSuiteFilter.AllSkippedNote(TestSuite.fast, "   ", 0, 0, 15), Is.Null, "blank filter");
+    }
+
+    [Test]
+    public void AllSkippedNote_SomeTestsPassed_IsNull()
+    {
+        Assert.That(TestSuiteFilter.AllSkippedNote(TestSuite.fast, "FullyQualifiedName~Budget_", passedCount: 1, failedCount: 0, skippedCount: 14), Is.Null, "a test passed");
+    }
+
+    [Test]
+    public void AllSkippedNote_SomeTestsFailed_IsNull()
+    {
+        Assert.That(TestSuiteFilter.AllSkippedNote(TestSuite.fast, "FullyQualifiedName~Budget_", passedCount: 0, failedCount: 1, skippedCount: 14), Is.Null, "a test failed");
+    }
+
+    [Test]
+    public void AllSkippedNote_NoSkippedTests_IsNull()
+    {
+        Assert.That(TestSuiteFilter.AllSkippedNote(TestSuite.fast, "FullyQualifiedName~Budget_", passedCount: 0, failedCount: 0, skippedCount: 0), Is.Null, "nothing skipped");
+    }
+
+    [Test]
     public void UsesNUnitAdapter_ReadsTheProjectFile()
     {
         var nunit = Path.Combine(_tempDirectory, "NUnitTests.csproj");

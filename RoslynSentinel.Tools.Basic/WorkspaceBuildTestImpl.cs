@@ -547,6 +547,11 @@ public class WorkspaceBuildTestImpl
                 statusMessage += " " + zeroMatchHint;
             }
 
+            if (TestSuiteFilter.AllSkippedNote(suite, filter, testRunResult.PassedCount, testRunResult.FailedCount, testRunResult.SkippedCount, scope, scopeName) is { } allSkippedNote)
+            {
+                statusMessage += " " + allSkippedNote;
+            }
+
             if (stale is not null)
             {
                 statusMessage += " " + FullTestMarkerStore.Describe(stale, now);

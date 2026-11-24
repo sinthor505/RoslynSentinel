@@ -56,18 +56,44 @@ public static class TestSuiteFilter
             return hint;
         }
 
-        var fullRunArguments = new List<(string Name, string Value)> { ("suite", "full"), ("filter", filter) };
+        return hint
+            + $" The fast suite also skips [Category(\"{OutOfProcessCategory}\")] fixtures; if the test lives in one, "
+            + ToolCallHint.Next("RunTest", "to include them.", FullRunArguments(filter, scope, scopeName));
+    }
+
+    /// <summary>
+    /// The full-run call arguments shared by the zero-match and all-skipped notes: the full suite with the caller's filter,
+    /// plus scope and scopeName when the scope is not solution.
+    /// </summary>
+    private static (string Name, string Value)[] FullRunArguments(string filter, ToolScope scope, string? scopeName)
+    {
+        var arguments = new List<(string Name, string Value)> { ("suite", "full"), ("filter", filter) };
         if (scope != ToolScope.solution)
         {
-            fullRunArguments.Add(("scope", scope.ToString()));
+            arguments.Add(("scope", scope.ToString()));
             if (!string.IsNullOrWhiteSpace(scopeName))
             {
-                fullRunArguments.Add(("scopeName", scopeName));
+                arguments.Add(("scopeName", scopeName));
             }
         }
 
-        return hint
-            + $" The fast suite also skips [Category(\"{OutOfProcessCategory}\")] fixtures; if the test lives in one, "
-            + ToolCallHint.Next("RunTest", "to include them.", fullRunArguments.ToArray());
+        return arguments.ToArray();
+    }
+
+    /// <summary>
+    /// The all-skipped addendum: null unless the fast suite ran a filter that matched tests, none passed or failed, and at
+    /// least one was skipped. It states the facts: the fast suite adds the OutOfProcess exclusion to the filter, which can
+    /// keep the test adapter from treating the filter as an explicit selection of [Explicit] fixtures. It names the full run
+    /// with the caller's filter, scope and scopeName, so the call can be pasted as written.
+    /// </summary>
+    public static string? AllSkippedNote(TestSuite suite, string? filter, int passedCount, int failedCount, int skippedCount, ToolScope scope = ToolScope.solution, string? scopeName = null)
+    {
+        if (suite != TestSuite.fast || string.IsNullOrWhiteSpace(filter) || passedCount != 0 || failedCount != 0 || skippedCount == 0)
+        {
+            return null;
+        }
+
+        return $"Every test the filter matched was skipped ({skippedCount} skipped, 0 passed). The fast suite adds {ExcludeOutOfProcess} to the filter, which can keep the test adapter from treating the filter as an explicit selection of [Explicit] fixtures; "
+            + ToolCallHint.Next("RunTest", "to run the filter as written.", FullRunArguments(filter, scope, scopeName));
     }
 }
