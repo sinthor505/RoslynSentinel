@@ -3718,11 +3718,18 @@ public class GitImpl : IGitOperations
 
                     if (addRaw.ExitCode != 0)
                     {
-                        return new GitCommitResult
+                        var addFailed = new GitCommitResult
                         {
                             IsError = true,
                             Error = $"git add failed: {CleanGitStderr(addRaw.Stderr)}"
                         };
+                        var addLockPath = await FindForeignIndexLockAsync(gitRoot, addRaw.ExitCode, cancellationToken);
+                        if (addLockPath is not null)
+                        {
+                            addFailed.ErrorKind = GitErrorCodes.IndexLocked;
+                            addFailed.ErrorDetail = GitErrorDetails.IndexLocked(addLockPath);
+                        }
+                        return addFailed;
                     }
 
                     stagedUntrackedFiles = true;
@@ -3811,11 +3818,9 @@ public class GitImpl : IGitOperations
                 var pathsWereClassified = string.IsNullOrWhiteSpace(paths) || scope == GitStageScope.listed;
                 var nothingStaged = !amend && pathsWereClassified && await NothingStagedAsync(gitRoot, paths, cancellationToken);
 
-                // Index lock tested first: while another process holds index.lock, the staging step before this commit could not write the index,
-                // so NothingStagedAsync saw an empty index and would otherwise report NothingToCommit. Exit 128 is git's die() path for a held lock.
-                var commitGitDir = commitRaw.ExitCode == 128 ? await RunGitAsync(gitRoot, ["rev-parse", "--absolute-git-dir"], cancellationToken) : null;
-                var indexLockPath = commitGitDir is { ExitCode: 0 } ? Path.Combine(commitGitDir.Stdout.Trim(), "index.lock") : null;
-                if (indexLockPath is not null && File.Exists(indexLockPath))
+                // Tested first: a held lock makes both the pre-commit staging and git commit itself fail with exit 128, while the nothing-staged probe reads the index without the lock and can see it empty, so NothingToCommit would mask the real cause.
+                var indexLockPath = await FindForeignIndexLockAsync(gitRoot, commitRaw.ExitCode, cancellationToken);
+                if (indexLockPath is not null)
                 {
                     failed.ErrorKind = GitErrorCodes.IndexLocked;
                     failed.ErrorDetail = GitErrorDetails.IndexLocked(indexLockPath);
@@ -3899,6 +3904,14 @@ public class GitImpl : IGitOperations
         {
             return UnexpectedFailure<GitCommitResult>(ex, "commit");
         }
+    }
+
+    private async Task<string?> FindForeignIndexLockAsync(string gitRoot, int exitCode, CancellationToken cancellationToken)
+    {
+        // Exit 128 is git's die() path for a held lock; the lock file lives in the absolute git dir.
+        var gitDir = exitCode == 128 ? await RunGitAsync(gitRoot, ["rev-parse", "--absolute-git-dir"], cancellationToken) : null;
+        var indexLockPath = gitDir is { ExitCode: 0 } ? Path.Combine(gitDir.Stdout.Trim(), "index.lock") : null;
+        return indexLockPath is not null && File.Exists(indexLockPath) ? indexLockPath : null;
     }
 
     /// <summary>
