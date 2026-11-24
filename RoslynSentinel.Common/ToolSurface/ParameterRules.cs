@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 
 namespace RoslynSentinel.Common;
 
@@ -42,7 +43,25 @@ public sealed record ToolParameterSurfaceOptions(IReadOnlyList<ParameterVisibili
     /// Implemented in Step 3a.
     /// </summary>
     /// <returns>The startup parameter surface options.</returns>
-    public static ToolParameterSurfaceOptions FromStartup() => throw new NotImplementedException(); // TODO implement (Step 3a)
+    public static ToolParameterSurfaceOptions FromStartup()
+    {
+        var rules = new List<ParameterVisibilityRule>();
+        if (SchemaOptions.Profile == SchemaProfile.Lean)
+        {
+            foreach (var name in SchemaOptions.LeanHiddenParameters)
+            {
+                rules.Add(new ParameterVisibilityRule(null, name, ParameterVisibility.Hide, ParameterRuleSource.Profile, "--schema-profile=lean"));
+            }
+        }
+
+        // Step 12 changes this (Tool.param scoping): entries stay unscoped literals until then.
+        foreach (var name in SchemaOptions.HiddenParameters.OrderBy(n => n, StringComparer.Ordinal))
+        {
+            rules.Add(new ParameterVisibilityRule(null, name, ParameterVisibility.Hide, ParameterRuleSource.EnvOrFlag, "--hide-params / ROSLYNSENTINEL_HIDE_PARAMS"));
+        }
+
+        return new ToolParameterSurfaceOptions(rules);
+    }
 
     /// <summary>
     /// Parses a hide list. Splits on ',' and ';', trims, and drops empties. "Tool.param" (exactly one '.', both sides
@@ -54,5 +73,32 @@ public sealed record ToolParameterSurfaceOptions(IReadOnlyList<ParameterVisibili
     /// <param name="origin">Human-readable origin recorded on each rule.</param>
     /// <returns>The parsed Hide rules.</returns>
     public static IReadOnlyList<ParameterVisibilityRule> ParseHideList(string? raw, ParameterRuleSource source, string origin)
-        => throw new NotImplementedException(); // TODO implement (Step 3a)
+        {
+        var rules = new List<ParameterVisibilityRule>();
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return rules;
+        }
+
+        foreach (var part in raw.Split(',', ';'))
+        {
+            var entry = part.Trim();
+            if (entry.Length == 0)
+            {
+                continue;
+            }
+
+            var sides = entry.Split('.');
+            if (sides.Length == 2 && sides[0].Trim().Length > 0 && sides[1].Trim().Length > 0)
+            {
+                rules.Add(new ParameterVisibilityRule(sides[0].Trim(), sides[1].Trim(), ParameterVisibility.Hide, source, origin));
+            }
+            else
+            {
+                rules.Add(new ParameterVisibilityRule(null, entry, ParameterVisibility.Hide, source, origin));
+            }
+        }
+
+        return rules;
+    }
 }
