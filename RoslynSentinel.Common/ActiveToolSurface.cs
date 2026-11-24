@@ -66,7 +66,12 @@ public record ActiveToolSurface
     /// <summary>Returns a copy whose IsCallable also counts tools a runtime toolset added, read from liveSnapshot
     /// (null while no snapshot is built). The copy is made with a record with-expression, so every other member
     /// carries over.</summary>
-    public ActiveToolSurface WithLiveSnapshot(Func<ToolSurfaceSnapshot?> liveSnapshot) => throw new NotImplementedException(); // TODO implement (Step 2)
+    public ActiveToolSurface WithLiveSnapshot(Func<ToolSurfaceSnapshot?> liveSnapshot) => this with { _liveSnapshot = liveSnapshot };
+
+    // A with-copy, so constructor parameters a later plan adds (plan_json_toolset_definitions.md Step 22) carry over.
+    // Record equality now includes the delegate; nothing compares ActiveToolSurface values.
+    // Nothing reads this field yet (IsCallable is unchanged until a later step).
+    private Func<ToolSurfaceSnapshot?>? _liveSnapshot;
 
     private static readonly object DeclaringClassesLock = new();
     private static int _declaringClassesAssemblyCount = -1;

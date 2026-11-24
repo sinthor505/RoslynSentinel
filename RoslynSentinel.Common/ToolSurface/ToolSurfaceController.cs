@@ -83,7 +83,16 @@ public sealed class ToolSurfaceController
 
     /// <summary>The committed snapshot, or null while no refresh has found a tool collection. Unlike Current it never
     /// triggers a build.</summary>
-    public ToolSurfaceSnapshot? CurrentIfBuilt => throw new NotImplementedException(); // TODO implement (Step 2)
+    public ToolSurfaceSnapshot? CurrentIfBuilt
+    {
+        get
+        {
+            // Read _current once. Refresh sets _built before it assigns _current, so during the first build _built can
+            // be true while _current still holds ToolSurfaceSnapshot.Empty (version 0). Do not key on _built here.
+            var snapshot = _current;
+            return snapshot.Version > 0 ? snapshot : null;
+        }
+    }
 
     /// <summary>
     /// Applies one runtime toolset: enable adds the tools <paramref name="createTool"/> builds for
