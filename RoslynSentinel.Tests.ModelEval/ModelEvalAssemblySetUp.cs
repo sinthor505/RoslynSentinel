@@ -33,6 +33,8 @@ public class ModelEvalAssemblySetUp
     [OneTimeSetUp]
     public async Task OneTimeSetUp()
     {
+        // Transcripts of in-process eval hosts go to call-transcripts-tests, not the real-session folder.
+        TestHostAmbientDefaults.Apply();
         LlmOptions.Configure([]);
         // The in-process eval server never runs ServerStdio/ServerHttp, so read the experimental server flags'
         // env vars here (ROSLYNSENTINEL_LIFT_RENAMES, ROSLYNSENTINEL_LOOP_LATCH); unset leaves them off.
