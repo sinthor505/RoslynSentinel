@@ -227,6 +227,9 @@ public static class McpToolSchemaPatcher
     {
         var discovered = new List<(string ToolName, Type ToolType, MethodInfo Method)>();
 
+        // TODO this enumeration and SentinelToolMethods both walk a type's [McpServerTool] methods and derive the tool name; they differ in
+        // BindingFlags.DeclaredOnly (here yes, SentinelToolMethods no), so a shared helper needs that difference decided (a base-class tool method
+        // would be listed once per derived type there) before they can share one loop.
         foreach (var assembly in assemblies.Distinct())
         {
             foreach (var type in assembly.GetTypes())

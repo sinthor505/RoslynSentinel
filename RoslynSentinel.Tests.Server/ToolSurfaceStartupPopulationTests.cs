@@ -13,7 +13,7 @@ namespace RoslynSentinel.Tests.Server;
 /// Pins the startup tool population that the options system applies to every McpServerOptions
 /// (stateless HTTP builds one per request): request and method order, allow-list filtering,
 /// schema parity with CreateSentinelTool, shared tool instances across options, an existing
-/// collection kept with its entries first, the null-collection rule when there are no tools,
+/// collection kept with its entries first, an empty collection created when there are no tools,
 /// and building without a ToolSurfaceController registered.
 /// </summary>
 [TestFixture]
@@ -23,8 +23,8 @@ public class ToolSurfaceStartupPopulationTests
 
     private static ToolSurfaceStartupRequest[] StartupRequests() =>
     [
-        new("status", new[] { typeof(ServerStatusTools), typeof(SymbolRelationshipTools) }),
-        new("workspace", new[] { typeof(WorkspaceTools) }),
+        new(new[] { typeof(ServerStatusTools), typeof(SymbolRelationshipTools) }),
+        new(new[] { typeof(WorkspaceTools) }),
     ];
 
     // Reflection mirror of the expected order: request by request, type by type, each type's
@@ -137,10 +137,10 @@ public class ToolSurfaceStartupPopulationTests
     [Test]
     public void PostConfigure_NoTools_CreatesAnEmptyCollection()
     {
-        // Pins Step 19: with no tools the population still creates an empty tool collection.
+        // With no tools the population still creates an empty tool collection.
         var services = new ServiceCollection().BuildServiceProvider();
         var emptyList = new ToolSurfaceStartupPopulation(services, Array.Empty<ToolSurfaceStartupRequest>());
-        var emptyTypes = new ToolSurfaceStartupPopulation(services, new[] { new ToolSurfaceStartupRequest("empty", Array.Empty<Type>()) });
+        var emptyTypes = new ToolSurfaceStartupPopulation(services, new[] { new ToolSurfaceStartupRequest(Array.Empty<Type>()) });
 
         var fromEmptyList = new McpServerOptions();
         emptyList.PostConfigure(null, fromEmptyList);

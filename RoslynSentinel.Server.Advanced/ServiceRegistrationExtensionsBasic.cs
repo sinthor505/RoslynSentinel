@@ -410,7 +410,8 @@ public static class RoslynSentinelServiceExtensionsBasic
         // The instance is built eagerly above so the claude-lean rebinding of activeToolClasses below cannot leak into it.
         // The controller is resolved lazily and read through CurrentIfBuilt, so resolving ActiveToolSurface (14 constructors,
         // the engine closure, three filters) never builds the tool collection. No consumer is edited: they all take the DI instance.
-        // ImplementationInstance is read only for ToolAllowList (McpToolSchemaPatcher.cs ~line 139), so the factory form breaks no reader.
+        // Nothing reads ServiceDescriptor.ImplementationInstance (ToolAllowList reaches ToolSurfaceStartupPopulation as an injected
+        // singleton), so the factory form breaks no reader.
         services.AddSingleton<ActiveToolSurface>(sp =>
         {
             var controller = new Lazy<ToolSurfaceController?>(() => sp.GetService<ToolSurfaceController>());
@@ -470,7 +471,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         }
 
         // Sees the claude-lean widened set, so this stays after the activeToolClasses rebinding in the claude-lean block above.
-        AddStartupToolClasses(services, "Basic", ToolClassRegistry.SelectStartupToolTypes(ToolClassRegistry.BasicToolClassTypes, activeToolClasses, activeModes.Contains(ToolClassRegistry.ClaudeLeanMode)));
+        AddStartupToolClasses(services, ToolClassRegistry.SelectStartupToolTypes(ToolClassRegistry.BasicToolClassTypes, activeToolClasses, activeModes.Contains(ToolClassRegistry.ClaudeLeanMode)));
     }
 
     /// <summary>
@@ -479,18 +480,17 @@ public static class RoslynSentinelServiceExtensionsBasic
     /// the startup tools/list entries.
     /// </summary>
     /// <param name="services">The service collection being configured.</param>
-    /// <param name="source">Names the registration method that selected the classes ("Basic" or "Advanced").</param>
     /// <param name="selected">The classes selected for this launch, in tools/list order.</param>
-    internal static void AddStartupToolClasses(IServiceCollection services, string source, IReadOnlyList<Type> selected)
+    internal static void AddStartupToolClasses(IServiceCollection services, IReadOnlyList<Type> selected)
     {
-        // tools/list order is registration order, and the population runs after the SDK's own options setup, so the
-        // classes migrated to the tables are a suffix after the tools the DI blocks above register.
+        // tools/list order is request order: the Basic registration's request, then the Advanced one, and within a request
+        // the table order. The population runs after the SDK's own options setup, so these tools follow any the host registered itself.
         foreach (var type in selected)
         {
             services.TryAddSingleton(type);
         }
 
-        services.AddSingleton(new ToolSurfaceStartupRequest(source, selected));
+        services.AddSingleton(new ToolSurfaceStartupRequest(selected));
     }
 
     /// <summary>

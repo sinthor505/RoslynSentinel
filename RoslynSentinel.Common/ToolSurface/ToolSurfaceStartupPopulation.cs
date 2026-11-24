@@ -42,13 +42,7 @@ public sealed class ToolSurfaceStartupPopulation : IPostConfigureOptions<McpServ
     public void PostConfigure(string? name, McpServerOptions options)
     {
         options.ToolCollection ??= new McpServerPrimitiveCollection<McpServerTool>();
-        var tools = Tools;
-        if (tools.Count == 0)
-        {
-            return;
-        }
-
-        foreach (var tool in tools)
+        foreach (var tool in Tools)
         {
             // TryAdd keeps the first tool of a duplicate name, as the SDK's own registration does.
             options.ToolCollection.TryAdd(tool);
