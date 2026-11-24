@@ -32,6 +32,7 @@ The audit of the 18 first-slice prompts found 41 of 117 outcome rows mismatched:
     - (i) Lanes: Steps 23, 28, 36 and 44 go to `implementer-senior` (size); an orchestrator may give any slice to `implementer-senior` when that is faster than a Haiku round trip.
     - (j) Anchors at 7046ff84: `ImplementationScenarioStep` 30-36, `ImplementationScenario` 44-91, `ImplementationScenarioCheckContext` 94-144 (all `internal sealed record`); the `CheckAsync` call in `ImplementationScenarioAgentTests.cs` is at 143, the `StopMarker` relabel at 164. Other anchors unchanged.
     - (k) R11 checked: no script parses `step-<k>.outcome.txt` positionally; Step 7 needs no script change. `roslynsentinel-modeleval.ps1` filters by test name only, so Step 52 documents axis selection with plain `dotnet test --filter`.
+    - (m) Step 53 (owner, after Batch A): `Files_NamesEveryAllowedPath` (Step 8) calls `Assert.Ignore` while a prompt has no `Files:` line; Step 53 turns that ignore into `Assert.Fail` once every prompt is reworked.
     - (l) "Left for the owner" items 1 (RenameSymbol), 2 (narrow budget exclusion) and 4 (control restore per sample) accepted as recommended; item 3 replaced by (e).
 
 NEW-DTO blocks (test-harness records; give them in the `reason` if the hook asks, the paths are test projects):
