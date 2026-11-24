@@ -128,6 +128,7 @@ public static class McpToolSchemaPatcher
     /// Drop-in replacement for <c>IMcpServerBuilder.WithTools<TToolType>()</c> that fixes up
     /// any bare-<c>true</c> schema node produced for <typeparamref name="TToolType"/>'s tool methods.
     /// </summary>
+    [Obsolete("Startup tools come from the ToolClassRegistry tables; see ToolSurfaceStartupPopulation.")]
     public static IMcpServerBuilder WithSentinelTools<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.NonPublicMethods)] TToolType>(
         this IMcpServerBuilder builder,
         JsonSerializerOptions? serializerOptions = null)
@@ -138,7 +139,28 @@ public static class McpToolSchemaPatcher
             .LastOrDefault(d => d.ServiceType == typeof(ToolAllowList))
             ?.ImplementationInstance as ToolAllowList;
 
-        foreach (var toolMethod in typeof(TToolType).GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
+        foreach (var (toolMethod, _) in SentinelToolMethods(typeof(TToolType), allowList))
+        {
+            builder.Services.AddSingleton<McpServerTool>(services =>
+                CreateSentinelTool(toolMethod, typeof(TToolType), services, serializerOptions));
+        }
+
+        return builder;
+    }
+
+    /// <summary>
+    /// The <see cref="McpServerToolAttribute"/> methods of <paramref name="toolType"/> that <paramref name="allowList"/>
+    /// keeps, in reflection order (instance, static; public, then non-public), each with its tool name
+    /// (the attribute's <c>Name</c>, else the method name). A null allow list keeps every tool.
+    /// </summary>
+    /// <param name="toolType">The tool class to enumerate.</param>
+    /// <param name="allowList">Optional allow list; a tool whose name it rejects is skipped. Null means no filtering.</param>
+    /// <returns>The kept tool methods with their tool names, lazily enumerated.</returns>
+    internal static IEnumerable<(MethodInfo Method, string ToolName)> SentinelToolMethods(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.NonPublicMethods)] Type toolType,
+        ToolAllowList? allowList)
+    {
+        foreach (var toolMethod in toolType.GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
         {
             var toolAttribute = toolMethod.GetCustomAttribute<McpServerToolAttribute>();
             if (toolAttribute is null)
@@ -146,16 +168,14 @@ public static class McpToolSchemaPatcher
                 continue;
             }
 
-            if (allowList is not null && !allowList.Allows(toolAttribute.Name ?? toolMethod.Name))
+            var toolName = toolAttribute.Name ?? toolMethod.Name;
+            if (allowList is not null && !allowList.Allows(toolName))
             {
                 continue;
             }
 
-            builder.Services.AddSingleton<McpServerTool>(services =>
-                CreateSentinelTool(toolMethod, typeof(TToolType), services, serializerOptions));
+            yield return (toolMethod, toolName);
         }
-
-        return builder;
     }
 
     /// <summary>

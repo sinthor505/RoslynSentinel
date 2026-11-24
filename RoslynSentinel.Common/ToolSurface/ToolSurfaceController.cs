@@ -70,7 +70,21 @@ public sealed class ToolSurfaceController
     /// <param name="services">Service provider used to construct the tool classes; no controller is resolved from it.</param>
     /// <returns>The startup tools in tools/list order.</returns>
     public static IReadOnlyList<McpServerTool> BuildStartupTools(IEnumerable<ToolSurfaceStartupRequest> requests, ToolAllowList? allowList, IServiceProvider services)
-        => throw new NotImplementedException();
+    {
+        var tools = new List<McpServerTool>();
+        foreach (var request in requests)
+        {
+            foreach (var type in request.ToolTypes)
+            {
+                foreach (var (method, _) in McpToolSchemaPatcher.SentinelToolMethods(type, allowList))
+                {
+                    tools.Add(McpToolSchemaPatcher.CreateSentinelTool(method, type, services));
+                }
+            }
+        }
+
+        return tools;
+    }
 
     /// <summary>
     /// The most recently built snapshot. While no refresh has yet found a tool collection (a host that never
