@@ -77,7 +77,7 @@ public static class ProjectStructure
 
     private static string DeriveExpected(ProjectInfo project, string relativeFolder)
     {
-        // The root differs from FileTools.DescribeKept (the csproj RootNamespace here, DefaultNamespace there); only the folder part is shared.
+        // Deviation: the root differs from FileTools.DescribeKept (the csproj RootNamespace here, DefaultNamespace there); only the folder part is shared.
         return FolderNamespace.Expected(RootNamespace(project), relativeFolder);
     }
 
@@ -241,7 +241,7 @@ public class FolderNamespaceTests
 }
 """;
 
-    private const string CannedReport = "DONE: FolderNamespace.Expected holds the shared folder-segment code; ProjectStructure.DeriveExpected and FileTools.DescribeKept both call it, and a comment in ProjectStructure says where the root rules differ.";
+    private const string CannedReport = "DONE: FolderNamespace.Expected holds the shared folder-segment code; ProjectStructure.DeriveExpected and FileTools.DescribeKept both call it, and a `// Deviation:` comment in ProjectStructure says where the root rules differ.";
 
     // Expression-bodied on purpose: a static readonly field would render before the contract placement is known (initialisation order).
     private static string StepPrompt => EvalContractOptions.Render(new ScenarioTask(
@@ -254,7 +254,7 @@ public class FolderNamespaceTests
             "Where the two callers differ, each keeps its own behaviour exactly.",
         IfFails: EvalContractOptions.PlainIfFails,
         DoneWhen: "The solution builds with 0 errors; all tests in ContosoOrders.Tests pass, including NamespaceTests, RootRuleTests and FolderNamespaceTests; " +
-            "both callers call `FolderNamespace.Expected`; a comment where the callers deviate says so."));
+            "both callers call `FolderNamespace.Expected`; where a caller's rule differs from the helper's, a comment starting `// Deviation:` says how."));
 
     // The contract placement is read once per process, when this Definition initialises (StepPrompt renders then); one process runs one arm.
     public static ImplementationScenario Definition { get; } = new ImplementationScenario(
@@ -293,9 +293,9 @@ public class FolderNamespaceTests
 
     /// <summary>
     /// ProjectInfo.cs is untouched; ProjectStructure.DeriveExpected and FileTools.DescribeKept each contain an invocation whose symbol is
-    /// FolderNamespace.Expected (compiled symbols, not text); and a comment exists in some file of the folder that the seed did not have
-    /// (R15: the brief asks for "a comment where the callers deviate", but the position is not graded and no symbol can see a comment, so
-    /// any new comment text in any file of the folder counts, a doc comment on the new helper included). The tests decide the rest:
+    /// FolderNamespace.Expected (compiled symbols, not text); and a NON-doc comment (`//` or `/* */`, not `///`) whose text starts with
+    /// "Deviation:" exists in ProjectStructure.cs or FileTools.cs, at any location (the brief asks for a comment starting `// Deviation:`;
+    /// no symbol can see a comment, so it is read from the syntax trees, and a doc comment does not count). The tests decide the rest:
     /// NamespaceTests and RootRuleTests pin each caller's own root rule (padded roots), FolderNamespaceTests the helper's shape.
     /// </summary>
     private static string? CheckSharing(ImplementationScenarioCheckContext ctx)
@@ -335,28 +335,51 @@ public class FolderNamespaceTests
             }
         }
 
-        foreach (var file in Directory.EnumerateFiles(ctx.FullPath(CoreFolder), "*.cs", SearchOption.AllDirectories))
+        var docCommentOnly = false;
+        foreach (var path in new[] { StructurePath, ToolsPath })
         {
-            var relative = Path.GetRelativePath(ctx.SolutionDirectory, file).Replace('\\', '/');
-            var seedComments = ctx.SeedFiles.TryGetValue(relative, out var seedText)
-                ? CommentTexts(CSharpSyntaxTree.ParseText(seedText))
-                : new HashSet<string>();
-            if (CommentTexts(CSharpSyntaxTree.ParseText(File.ReadAllText(file))).Any(text => !seedComments.Contains(text)))
+            foreach (var trivia in compilation.ModelFor(path).SyntaxTree.GetRoot().DescendantTrivia())
             {
-                return null;
+                if (!StartsWithDeviation(trivia))
+                {
+                    continue;
+                }
+
+                if (trivia.Kind() is SyntaxKind.SingleLineCommentTrivia or SyntaxKind.MultiLineCommentTrivia)
+                {
+                    return null;
+                }
+
+                docCommentOnly = true;
             }
         }
 
-        return "no comment in the folder is new: the brief asks for a comment where the callers deviate";
+        return docCommentOnly
+            ? "the brief asks for a comment starting `// Deviation:` in ProjectStructure.cs or FileTools.cs; a `///` doc comment starting with Deviation: does not count"
+            : "the brief asks for a comment starting `// Deviation:` in ProjectStructure.cs or FileTools.cs, where a caller's rule differs from the helper's; none was found";
     }
 
-    // The whitespace-normalised text of every comment in a tree (line, block and doc comments); no symbol can see a comment.
-    private static HashSet<string> CommentTexts(SyntaxTree tree) =>
-        tree.GetRoot().DescendantTrivia()
-            .Where(trivia => trivia.Kind() is SyntaxKind.SingleLineCommentTrivia or SyntaxKind.MultiLineCommentTrivia
-                or SyntaxKind.SingleLineDocumentationCommentTrivia or SyntaxKind.MultiLineDocumentationCommentTrivia)
-            .Select(trivia => string.Join(" ", trivia.ToString().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)))
-            .ToHashSet(StringComparer.Ordinal);
+    // True for a comment (line, block or doc) whose text, after the delimiters and whitespace, starts with "Deviation:"; no symbol can see a comment.
+    private static bool StartsWithDeviation(SyntaxTrivia trivia)
+    {
+        var text = trivia.ToString();
+        string body;
+        switch (trivia.Kind())
+        {
+            case SyntaxKind.SingleLineCommentTrivia:
+            case SyntaxKind.SingleLineDocumentationCommentTrivia:
+                body = text.TrimStart().TrimStart('/');
+                break;
+            case SyntaxKind.MultiLineCommentTrivia:
+            case SyntaxKind.MultiLineDocumentationCommentTrivia:
+                body = text.TrimStart().TrimStart('/').TrimStart('*');
+                break;
+            default:
+                return false;
+        }
+
+        return body.Trim().StartsWith("Deviation:", StringComparison.Ordinal);
+    }
 
     /// <summary>
     /// The executable outcome table (Spec S13): each variant is an overlay on step 1 (golden) with a DONE: final message. Every
@@ -380,11 +403,28 @@ public class FolderNamespaceTests
 
         const string Done = "DONE: shared the folder-segment code through FolderNamespace.Expected.";
 
-        // A deviation comment without any of the words the old keyword check looked for (13.2).
+        const string GoldenDeviationComment = "// Deviation: the root differs from FileTools.DescribeKept (the csproj RootNamespace here, DefaultNamespace there); only the folder part is shared.";
+
+        // A deviation comment with the prefix and without any of the words the old keyword check looked for (13.2).
         var commentWithoutKeywords = Edited(
             GoldenStructureSource,
-            "// The root differs from FileTools.DescribeKept (the csproj RootNamespace here, DefaultNamespace there); only the folder part is shared.",
-            "// The two callers choose the namespace base differently; only the folder part is shared.");
+            GoldenDeviationComment,
+            "// Deviation: the two callers choose the namespace base differently; only the folder part is shared.");
+
+        // The deviation is a `///` doc comment on DeriveExpected, and no `//` Deviation: comment is left: a doc comment does not count (13.r).
+        var docCommentOnly = Edited(
+            Edited(
+                GoldenStructureSource,
+                "        " + GoldenDeviationComment + "\n",
+                string.Empty),
+            "    private static string DeriveExpected(",
+            "    /// Deviation: the root differs from FileTools.DescribeKept (the csproj RootNamespace here, DefaultNamespace there); only the folder part is shared.\n    private static string DeriveExpected(");
+
+        // The comment is there but does not start with the Deviation: prefix the brief asks for (13.r).
+        var noPrefix = Edited(
+            GoldenStructureSource,
+            GoldenDeviationComment,
+            "// The root differs from FileTools.DescribeKept (the csproj RootNamespace here, DefaultNamespace there); only the folder part is shared.");
 
         // The helper trims the root for both callers: FileTools now trims a padded DefaultNamespace, which RootRuleTests pins (13.5).
         var helperTrims = Edited(GoldenHelperSource, "new[] { rootNamespace }", "new[] { rootNamespace.Trim() }");
@@ -398,6 +438,22 @@ public class FolderNamespaceTests
                 FinalMessage: Done,
                 ExpectedClass: EvalOutcomeClass.CorrectDone,
                 ExpectedOutcome: ImplementationScenarioOutcome.Pass),
+            new ScenarioVariant(
+                Name: "DocCommentOnly",
+                BaseStep: 1,
+                Files: new Dictionary<string, string> { [StructurePath] = docCommentOnly },
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "a `///` doc comment starting with Deviation: does not count"),
+            new ScenarioVariant(
+                Name: "NoPrefix",
+                BaseStep: 1,
+                Files: new Dictionary<string, string> { [StructurePath] = noPrefix },
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "the brief asks for a comment starting `// Deviation:`"),
             new ScenarioVariant(
                 Name: "HelperTrimsForBoth",
                 BaseStep: 1,
