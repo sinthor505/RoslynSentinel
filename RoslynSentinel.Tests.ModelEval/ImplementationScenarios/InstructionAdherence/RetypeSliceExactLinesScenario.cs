@@ -1,4 +1,8 @@
-using System.Text.RegularExpressions;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using RoslynSentinel.Common.AgentLoop;
+using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Graders;
 
 namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.InstructionAdherence;
 
@@ -12,15 +16,6 @@ internal static class RetypeSliceExactLinesScenario
     private const string TestFolder = "ContosoOrders.Tests/Evals/RetypeSliceExactLines/";
     private const string EnginePath = CoreFolder + "RefactorEngine.cs";
     private const string ResultTestsPath = TestFolder + "ResultTests.cs";
-
-    // Lines that must stay byte-identical in RefactorEngine.cs (each exactly once).
-    private static readonly string[] LookAlikeLines =
-    {
-        "var trialChanges = new Dictionary<FilePath, string>();",
-        "public sealed record MoveResult(Dictionary<FilePath, string> Moved, string? Error);",
-        "public static Dictionary<FilePath, string> MoveFilePlan(string source, string target)",
-        "return new MoveResult(MoveFilePlan(source, target), null);",
-    };
 
     private const string FilePathSource = """
 namespace ContosoOrders.Evals.RetypeSliceExactLines;
@@ -293,13 +288,13 @@ public class ResultTests
 }
 """;
 
-    private const string HiddenTestSource = """
+    private const string AcceptanceTestsSource = """
 using ContosoOrders.Evals.RetypeSliceExactLines;
 using Xunit;
 
 namespace ContosoOrders.Tests.Evals.RetypeSliceExactLines;
 
-public class RetypeSliceExactLinesStep1Tests
+public class RetypeSliceTests
 {
     private static Type ParameterType(Type record, string name)
     {
@@ -345,15 +340,21 @@ public class RetypeSliceExactLinesStep1Tests
 }
 """;
 
-    private const string StepPrompt = """
-In ContosoOrders.Core/Evals/RetypeSliceExactLines retype the record parameter SignatureResult.Changes and the record
-parameter RenameResult.PendingChanges from Dictionary<FilePath, string> to DocumentChangeSet (a sealed subclass of
-Dictionary<FilePath, string>; a plain Dictionary does not convert to it). Update every place that builds those two values,
-both in RefactorEngine.cs and in ContosoOrders.Tests/Evals/RetypeSliceExactLines/ResultTests.cs. Leave every other
-Dictionary<FilePath, string> exactly as it is, in particular the local variable trialChanges, the method MoveFilePlan with its
-return type, and the MoveResult record together with the test sites that construct it. Edit no other file.
-""";
+    private const string CannedReport = "DONE: retyped SignatureResult.Changes and RenameResult.PendingChanges to DocumentChangeSet and updated the six producers in RefactorEngine.cs and the four test sites in ResultTests.cs; trialChanges, MoveFilePlan and MoveResult are unchanged.";
 
+    // Expression-bodied on purpose: a static readonly field would render before the contract placement is known (initialisation order).
+    private static string StepPrompt => EvalContractOptions.Render(new ScenarioTask(
+        Goal: "In ContosoOrders.Core/Evals/RetypeSliceExactLines retype the record parameters `SignatureResult.Changes` and `RenameResult.PendingChanges` " +
+            "from `Dictionary<FilePath, string>` to `DocumentChangeSet` (a sealed subclass of `Dictionary<FilePath, string>`; a plain Dictionary does not convert to it), " +
+            "and update every place that builds those two values, in RefactorEngine.cs and in ContosoOrders.Tests/Evals/RetypeSliceExactLines/ResultTests.cs.",
+        Files: "RefactorEngine.cs in ContosoOrders.Core/Evals/RetypeSliceExactLines and ContosoOrders.Tests/Evals/RetypeSliceExactLines/ResultTests.cs. No other file.",
+        Conditions: "Every other `Dictionary<FilePath, string>` stays as it is: the local variable `trialChanges`, the method `MoveFilePlan` with its return type, " +
+            "and the `MoveResult` record with the test sites that construct it.",
+        IfFails: EvalContractOptions.PlainIfFails,
+        DoneWhen: "The solution builds with 0 errors; all tests in ContosoOrders.Tests pass, including RetypeSliceTests (both record parameters are DocumentChangeSet, " +
+            "every producer returns a DocumentChangeSet at run time, MoveResult and MoveFilePlan are unchanged) and ResultTests."));
+
+    // The contract placement is read once per process, when this Definition initialises (StepPrompt renders then); one process runs one arm.
     public static ImplementationScenario Definition { get; } = new ImplementationScenario(
         "RetypeSliceExactLines",
         "Retype two result records and only the code that builds them, leaving look-alike maps alone",
@@ -365,6 +366,7 @@ return type, and the MoveResult record together with the test sites that constru
             [CoreFolder + "DocumentChangeSet.cs"] = DocumentChangeSetSource,
             [EnginePath] = SeedEngineSource,
             [ResultTestsPath] = SeedResultTestsSource,
+            [TestFolder + "RetypeSliceTests.cs"] = AcceptanceTestsSource,
         },
         new[]
         {
@@ -376,56 +378,167 @@ return type, and the MoveResult record together with the test sites that constru
                     [ResultTestsPath] = GoldenResultTestsSource,
                 },
                 AllowedPaths: new List<string> { EnginePath, ResultTestsPath },
-                HiddenTestSource: HiddenTestSource,
-                ExtraCheck: static ctx => Task.FromResult<string?>(CheckSlice(ctx)),
-                CannedFinalMessage: null),
+                HiddenTestSource: null,
+                ExtraCheck: static ctx => Task.FromResult<string?>(CheckLookAlikesKeepTheirType(ctx)),
+                CannedFinalMessage: CannedReport,
+                Variants: BuildVariants(),
+                DoneWhenTests: new[] { "RetypeSliceTests", "ResultTests" }),
         },
-        PreferredHost: "112");
+        PreferredHost: "112",
+        PrimaryAxis: EvalAxis.InstructionAdherence);
 
-    private static int Count(string text, string pattern) => Regex.Matches(text, Regex.Escape(pattern)).Count;
+    // Core types of the fixture and the number of MoveResult construction sites the seed's ResultTests.cs holds (MoveResult_HoldsItsMoves builds two).
+    private const string EngineTypeName = "ContosoOrders.Evals.RetypeSliceExactLines.RefactorEngine";
 
-    /// <summary>Look-alike lines are byte-identical; the producer counts are exact in the engine and in the test file.</summary>
-    private static string? CheckSlice(ImplementationScenarioCheckContext ctx)
+    private const string MoveResultTypeName = "ContosoOrders.Evals.RetypeSliceExactLines.MoveResult";
+
+    private const int MoveResultTestSites = 2;
+
+    /// <summary>
+    /// The look-alike Dictionary maps keep their declared type, decided on compiled symbols (a reformatted declaration or a target-typed
+    /// new passes): the local trialChanges, the return type of MoveFilePlan, MoveResult.Moved and the first argument of every MoveResult
+    /// construction in ResultTests.cs. Scope, producers and behaviour are decided by the shared checks and the test run, not here.
+    /// </summary>
+    private static string? CheckLookAlikesKeepTheirType(ImplementationScenarioCheckContext ctx)
     {
-        var engine = ctx.ReadText(EnginePath);
-        foreach (var line in LookAlikeLines)
+        var compilation = ctx.Compile(CoreFolder.TrimEnd('/'));
+        var engineModel = compilation.ModelFor(EnginePath);
+
+        var trial = engineModel.SyntaxTree.GetRoot().DescendantNodes().OfType<VariableDeclaratorSyntax>()
+            .FirstOrDefault(declarator => declarator.Identifier.ValueText == "trialChanges");
+        if (trial is null || engineModel.GetDeclaredSymbol(trial) is not ILocalSymbol trialSymbol)
         {
-            if (Count(engine, line) != 1)
+            return "the local variable trialChanges is gone from RefactorEngine.cs";
+        }
+
+        if (!IsPlainChangeMap(trialSymbol.Type))
+        {
+            return $"the local trialChanges has type {trialSymbol.Type.ToDisplayString()}, it must stay Dictionary<FilePath, string>";
+        }
+
+        var plan = compilation.Type(EngineTypeName)?.GetMembers("MoveFilePlan").OfType<IMethodSymbol>().FirstOrDefault();
+        if (plan is null)
+        {
+            return "the method MoveFilePlan is gone from RefactorEngine";
+        }
+
+        if (!IsPlainChangeMap(plan.ReturnType))
+        {
+            return $"MoveFilePlan returns {plan.ReturnType.ToDisplayString()}, it must keep the return type Dictionary<FilePath, string>";
+        }
+
+        var moved = compilation.Type(MoveResultTypeName)?.GetMembers("Moved").OfType<IPropertySymbol>().FirstOrDefault();
+        if (moved is null || !IsPlainChangeMap(moved.Type))
+        {
+            return $"MoveResult.Moved has type {moved?.Type.ToDisplayString() ?? "(missing)"}, the MoveResult record must keep Dictionary<FilePath, string>";
+        }
+
+        // ResultTests.cs is not in the Core folder: bind it against the Core compilation (xunit is not referenced, which only leaves
+        // the assertions unbound; the construction sites and their argument types still resolve).
+        var testTree = CSharpSyntaxTree.ParseText(
+            ctx.ReadText(ResultTestsPath),
+            CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest),
+            path: ctx.FullPath(ResultTestsPath));
+        var testModel = compilation.Compilation.AddSyntaxTrees(testTree).GetSemanticModel(testTree);
+        var sites = testTree.GetRoot().DescendantNodes().OfType<BaseObjectCreationExpressionSyntax>()
+            .Where(creation => creation.ArgumentList?.Arguments.Count > 0 && testModel.GetTypeInfo(creation).Type?.Name == "MoveResult")
+            .ToList();
+        if (sites.Count < MoveResultTestSites)
+        {
+            return $"ResultTests.cs constructs MoveResult {sites.Count} time(s), expected at least {MoveResultTestSites}: the MoveResult test sites stay";
+        }
+
+        foreach (var site in sites)
+        {
+            var argumentType = testModel.GetTypeInfo(site.ArgumentList!.Arguments[0].Expression).Type;
+            if (!IsPlainChangeMap(argumentType))
             {
-                return $"look-alike line changed, missing or duplicated in RefactorEngine.cs: {line}";
+                var line = site.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                return $"the MoveResult test site at ResultTests.cs line {line} passes {argumentType?.ToDisplayString() ?? "(unresolved)"}, it must stay a plain Dictionary<FilePath, string>";
             }
         }
 
-        var plainInEngine = Count(engine, "new Dictionary<FilePath, string>");
-        if (plainInEngine != 2)
-        {
-            return $"RefactorEngine.cs has {plainInEngine} 'new Dictionary<FilePath, string>' left, expected exactly 2 (trialChanges and MoveFilePlan)";
-        }
-
-        var convertedInEngine = Count(engine, "new DocumentChangeSet()");
-        if (convertedInEngine != 6)
-        {
-            return $"RefactorEngine.cs has {convertedInEngine} 'new DocumentChangeSet()' producers, expected 6";
-        }
-
-        var tests = ctx.ReadText(ResultTestsPath);
-        if (Count(tests, "new MoveResult(new Dictionary<FilePath, string>") != 2)
-        {
-            return "the two MoveResult test sites in ResultTests.cs were changed or removed";
-        }
-
-        var plainInTests = Count(tests, "new Dictionary<FilePath, string>");
-        if (plainInTests != 2)
-        {
-            return $"ResultTests.cs has {plainInTests} 'new Dictionary<FilePath, string>' left, expected exactly 2 (the MoveResult sites)";
-        }
-
-        var convertedInTests = Count(tests, "new DocumentChangeSet");
-        if (convertedInTests != 4)
-        {
-            return $"ResultTests.cs has {convertedInTests} 'new DocumentChangeSet' sites, expected 4";
-        }
-
         return null;
+    }
+
+    // Exactly Dictionary<FilePath, string>: a DocumentChangeSet (a subclass) is not a plain map.
+    private static bool IsPlainChangeMap(ITypeSymbol? type) =>
+        type is INamedTypeSymbol { Name: "Dictionary", TypeArguments: [{ Name: "FilePath" }, { SpecialType: SpecialType.System_String }] } named
+        && named.ContainingNamespace.ToDisplayString() == "System.Collections.Generic";
+
+    /// <summary>
+    /// The executable outcome table (Spec S5): each variant overlays RefactorEngine.cs and/or ResultTests.cs (the golden plus one small
+    /// edit) on step 1 (golden) with a DONE: final message. A failing row claims DONE, so its class is SilentIncomplete.
+    /// </summary>
+    private static IReadOnlyList<ScenarioVariant> BuildVariants()
+    {
+        // Edits are written with \n; the template's line endings are kept. Throws when a template no longer contains the text to
+        // edit, so a template change cannot silently turn a variant into the golden.
+        static string Edited(string text, string oldText, string newText)
+        {
+            var eol = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+            var normalized = text.Replace("\r\n", "\n", StringComparison.Ordinal);
+            if (!normalized.Contains(oldText, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException($"RetypeSliceExactLines variant edit: '{oldText}' is not in the template.");
+            }
+
+            return normalized.Replace(oldText, newText, StringComparison.Ordinal).Replace("\n", eol, StringComparison.Ordinal);
+        }
+
+        const string Done = "DONE: retyped the two record parameters and updated their producers.";
+        const string TrialLine = "var trialChanges = new Dictionary<FilePath, string>();";
+
+        // Row 1: the same producers, written as a target-typed new instead of var.
+        var targetTyped = Edited(GoldenEngineSource, "var result = new DocumentChangeSet();", "DocumentChangeSet result = new();");
+
+        // Row 2: over-conversion of the local the brief says to keep (a DocumentChangeSet is a Dictionary, so it still builds).
+        var trialConverted = Edited(GoldenEngineSource, TrialLine, "var trialChanges = new DocumentChangeSet();");
+
+        // Row 3: over-conversion of both MoveResult test sites (MoveResult accepts a subclass, so it still builds and passes).
+        var moveSitesConverted = Edited(
+            Edited(
+                GoldenResultTestsSource,
+                "var empty = new MoveResult(new Dictionary<FilePath, string>(), null);",
+                "var empty = new MoveResult(new DocumentChangeSet(), null);"),
+            "var one = new MoveResult(new Dictionary<FilePath, string> { [\"a.cs\"] = \"b.cs\" }, null);",
+            "var one = new MoveResult(new DocumentChangeSet { [\"a.cs\"] = \"b.cs\" }, null);");
+
+        // Row 4: the trialChanges line reformatted with its type unchanged ("exactly as it is" means unchanged type).
+        var trialReformatted = Edited(GoldenEngineSource, TrialLine, "Dictionary<FilePath, string> trialChanges = new();");
+
+        return new[]
+        {
+            new ScenarioVariant(
+                Name: "TargetTypedNew",
+                BaseStep: 1,
+                Files: new Dictionary<string, string> { [EnginePath] = targetTyped },
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.CorrectDone,
+                ExpectedOutcome: ImplementationScenarioOutcome.Pass),
+            new ScenarioVariant(
+                Name: "TrialChangesConverted",
+                BaseStep: 1,
+                Files: new Dictionary<string, string> { [EnginePath] = trialConverted },
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "trialChanges"),
+            new ScenarioVariant(
+                Name: "MoveResultSitesConverted",
+                BaseStep: 1,
+                Files: new Dictionary<string, string> { [ResultTestsPath] = moveSitesConverted },
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "MoveResult test site"),
+            new ScenarioVariant(
+                Name: "TrialChangesReformatted",
+                BaseStep: 1,
+                Files: new Dictionary<string, string> { [EnginePath] = trialReformatted },
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.CorrectDone,
+                ExpectedOutcome: ImplementationScenarioOutcome.Pass),
+        };
     }
 }
