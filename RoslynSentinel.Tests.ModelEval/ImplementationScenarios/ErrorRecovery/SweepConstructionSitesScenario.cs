@@ -1,5 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using RoslynSentinel.Common.AgentLoop;
 
 namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.ErrorRecovery;
 
@@ -97,6 +98,123 @@ public class SweepTests
     {
         var overlaid = Mover.Overlay(new Dictionary<FilePath, string> { ["a.cs"] = "1" });
         Assert.Equal(2, overlaid.Count);
+    }
+}
+""";
+
+    // Visible acceptance tests (Spec S6). Red on the seed: ReturnedMapIsADocumentChangeSet (all 13 producers). Green on the golden: all seven.
+    // PlanAdd_FailedFilesStaysAPlainDictionary is green on both. The FromResult/Choose/Latest tests use plain dictionaries, so a cast
+    // conversion throws InvalidCastException there.
+    private const string AcceptanceTestsSource = """
+using ContosoOrders.Evals.SweepConstructionSites;
+using Xunit;
+
+namespace ContosoOrders.Tests.Evals.SweepConstructionSites;
+
+public class ConstructionSiteTests
+{
+    public static TheoryData<string> Producers => new()
+    {
+        "PlanAdd",
+        "PlanTwo",
+        "PlanCopy",
+        "RenameAll",
+        "Preview",
+        "None",
+        "Move",
+        "MoveWith",
+        "Stage",
+        "Overlay",
+        "Merge",
+        "MergeAll",
+        "Combine",
+    };
+
+    private static Dictionary<FilePath, string> Plain(string path, string content) => new() { [path] = content };
+
+    private static PlanResult Plan(Dictionary<FilePath, string> changes, Dictionary<FilePath, string>? failedFiles = null) =>
+        new(changes, failedFiles ?? new Dictionary<FilePath, string>());
+
+    private static Dictionary<FilePath, string> Produce(string producer) => producer switch
+    {
+        "PlanAdd" => Planner.PlanAdd(new[] { "a.cs" }).Changes,
+        "PlanTwo" => Planner.PlanTwo(),
+        "PlanCopy" => Planner.PlanCopy(Plain("a.cs", "1")),
+        "RenameAll" => Renamer.RenameAll(new[] { "a.cs" }),
+        "Preview" => Renamer.Preview(new List<string> { "a.cs" }),
+        "None" => Renamer.None(),
+        "Move" => Mover.Move(new[] { "a.cs" }),
+        "MoveWith" => Mover.MoveWith(),
+        "Stage" => Mover.Stage(),
+        "Overlay" => Mover.Overlay(Plain("a.cs", "1")),
+        "Merge" => Merger.Merge(Plain("a.cs", "1"), Plain("b.cs", "2")),
+        "MergeAll" => Merger.MergeAll(new[] { Plain("a.cs", "1"), Plain("b.cs", "2") }),
+        "Combine" => Merger.Combine(),
+        _ => throw new ArgumentException($"Unknown producer {producer}.", nameof(producer)),
+    };
+
+    [Theory]
+    [MemberData(nameof(Producers))]
+    public void ReturnedMapIsADocumentChangeSet(string producer)
+    {
+        var map = Produce(producer);
+        Assert.True(
+            map.GetType() == typeof(DocumentChangeSet),
+            $"{producer} returned a {map.GetType().Name}, not a DocumentChangeSet.");
+    }
+
+    [Fact]
+    public void PlanAdd_FailedFilesStaysAPlainDictionary()
+    {
+        var failedFiles = Planner.PlanAdd(new[] { "a.cs" }).FailedFiles;
+        Assert.True(
+            failedFiles.GetType() == typeof(Dictionary<FilePath, string>),
+            $"FailedFiles is a {failedFiles.GetType().Name}; it maps a path to a reason and must stay a plain Dictionary.");
+    }
+
+    [Fact]
+    public void FromResult_WithAPlainDictionary_ReturnsItsEntriesAndDoesNotThrow()
+    {
+        var map = Renamer.FromResult(Plan(Plain("a.cs", "1")));
+        Assert.Single(map);
+        Assert.Equal("1", map["a.cs"]);
+    }
+
+    [Fact]
+    public void FromResult_WithFailedFiles_ReturnsAnEmptyMap()
+    {
+        var map = Renamer.FromResult(Plan(Plain("a.cs", "1"), Plain("b.cs", "cannot plan")));
+        Assert.Empty(map);
+    }
+
+    [Fact]
+    public void Choose_WithAPlainDictionary_ReturnsItsEntriesAndDoesNotThrow()
+    {
+        var map = Mover.Choose(Plan(Plain("a.cs", "1")));
+        Assert.Single(map);
+        Assert.Equal("1", map["a.cs"]);
+    }
+
+    [Fact]
+    public void Choose_WithNoChanges_ReturnsAnEmptyMap()
+    {
+        var map = Mover.Choose(Plan(new Dictionary<FilePath, string>()));
+        Assert.Empty(map);
+    }
+
+    [Fact]
+    public void Latest_PrefersTheSecondWhenItHasEntries_AndNeverThrows()
+    {
+        var first = Plan(Plain("a.cs", "1"));
+        var second = Plan(Plain("b.cs", "2"));
+
+        var preferred = Merger.Latest(first, second);
+        Assert.Single(preferred);
+        Assert.Equal("2", preferred["b.cs"]);
+
+        var fallback = Merger.Latest(first, Plan(new Dictionary<FilePath, string>()));
+        Assert.Single(fallback);
+        Assert.Equal("1", fallback["a.cs"]);
     }
 }
 """;
@@ -271,15 +389,22 @@ public static class Merger
 Converted all 14 sites to new DocumentChangeSet, keeping arguments and initializers. Left alone: the FailedFiles map in Planner.PlanAdd (it maps a path to a failure reason, not to content) and three sites that fail with CS0266 once converted, because a Dictionary-typed record property is assigned to the same variable afterwards: Renamer.FromResult, Mover.Choose and Merger.Latest. Those three still use new Dictionary<FilePath, string>.
 """;
 
-    private const string StepPrompt = """
-In ContosoOrders.Core/Evals/SweepConstructionSites the type DocumentChangeSet (DocumentChangeSet.cs) derives from
-Dictionary<FilePath, string>. In the four files Planner.cs, Renamer.cs, Mover.cs and Merger.cs replace each
-`new Dictionary<FilePath, string>` with `new DocumentChangeSet`, keeping constructor arguments and initializers, in as
-few edit calls as you can. Leave the map passed as FailedFiles alone: it maps a path to a failure reason, not to
-content. If converting a site makes the build fail, leave that site as it was and name the site and the compiler error
-in your final message. Change no other file.
-""";
+    // Expression-bodied on purpose: a static readonly field would render before the contract placement is known (initialisation order).
+    private static string StepPrompt => EvalContractOptions.Render(new ScenarioTask(
+        Goal: "In ContosoOrders.Core/Evals/SweepConstructionSites, Planner, Renamer, Mover and Merger build their change-set maps as plain `Dictionary<FilePath, string>`. " +
+            "We are about to add behaviour to `DocumentChangeSet` (DocumentChangeSet.cs, a subclass of `Dictionary<FilePath, string>`), " +
+            "so every map these four files build and return must be a `DocumentChangeSet`. Create them as `new DocumentChangeSet`, " +
+            "keeping constructor arguments and initializers. Public method signatures stay as they are.",
+        Files: "Planner.cs, Renamer.cs, Mover.cs and Merger.cs in ContosoOrders.Core/Evals/SweepConstructionSites. No other file.",
+        Conditions: "The map passed as `FailedFiles` maps a path to a failure reason, not to content: it stays a plain Dictionary. " +
+            "No method may start throwing; behaviour is otherwise unchanged.",
+        IfFails: "If a site cannot be converted without breaking the build or a method's behaviour, leave that site as it is, " +
+            "convert the rest, and end with DONE: naming the site and the reason.",
+        DoneWhen: "The solution builds with 0 errors; all tests in ContosoOrders.Tests pass, including the new class ConstructionSiteTests " +
+            "(ContosoOrders.Tests/Evals/SweepConstructionSites/ConstructionSiteTests.cs) and SweepTests; no file outside Files changed.",
+        Report: "Every site you left unconverted: the method name and the compiler error or the reason. Write `none` if there is none."));
 
+    // The contract placement is read once per process, when this Definition initialises (StepPrompt renders then); one process runs one arm.
     public static ImplementationScenario Definition { get; } = new ImplementationScenario(
         "SweepConstructionSites",
         "Sweep construction sites to DocumentChangeSet, skipping the ones that would not compile",
@@ -295,6 +420,7 @@ in your final message. Change no other file.
             [TargetPaths[2]] = MoverSource(DictionaryType),
             [TargetPaths[3]] = MergerSource(DictionaryType),
             [TestFolder + "SweepTests.cs"] = TestsSource,
+            [TestFolder + "ConstructionSiteTests.cs"] = AcceptanceTestsSource,
         },
         new[]
         {
@@ -310,9 +436,11 @@ in your final message. Change no other file.
                 AllowedPaths: TargetPaths.ToList(),
                 HiddenTestSource: null,
                 ExtraCheck: static ctx => Task.FromResult<string?>(CheckSweep(ctx)),
-                CannedFinalMessage: CannedReport),
+                CannedFinalMessage: CannedReport,
+                DoneWhenTests: new[] { "ConstructionSiteTests", "SweepTests" }),
         },
-        PreferredHost: "113");
+        PreferredHost: "113",
+        PrimaryAxis: EvalAxis.ErrorRecovery);
 
     /// <summary>
     /// Support files and the seed test unchanged; in the four target files exactly 14 `new DocumentChangeSet` and exactly four
