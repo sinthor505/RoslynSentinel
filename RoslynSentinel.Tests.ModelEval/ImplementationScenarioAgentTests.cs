@@ -145,7 +145,7 @@ public class ImplementationScenarioAgentTests
         // Only a run the model ended itself has a final message. FinalMessage() returns the last turn's text even when that turn
         // was a tool call cut off by a cap, and a mid-task "I need to report what breaks: ChangePublisher ..." then satisfied a
         // report check (WideningRejectedByGate on 85 graded PassedAfterCap with no report and an unchanged tree).
-        var finalMessage = result.Converged ? result.Transcript.FinalMessage() : "";
+        var finalMessage = result.Transcript.FinalMessageIfFinished();
         var verdict = await ImplementationScenarioChecks.VerdictAsync(
             scenario, step, _environment.SolutionDirectory, finalMessage, changedPaths, cancellationToken);
         var checkOutcome = verdict.Outcome;

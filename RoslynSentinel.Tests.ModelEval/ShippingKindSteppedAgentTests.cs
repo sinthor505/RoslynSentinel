@@ -126,8 +126,8 @@ public class ShippingKindSteppedAgentTests
         repository.CommitWorkingTree($"model result for step {step}");
         File.WriteAllText(Path.Combine(_runDirectory, $"step-{step}.golden.diff"), repository.DiffAgainstStep(step));
 
-        // TODO a capped run's last mid-task text is graded as its final message (fixed in ImplementationScenarioAgentTests.RunStepAsync; ScenarioScorer and ScenarioSampleLoop read FinalMessage() the same way)
-        var finalMessage = result.Transcript.FinalMessage();
+        // A capped run's mid-task text is not graded as an answer.
+        var finalMessage = result.Transcript.FinalMessageIfFinished();
         var (checkOutcome, checkDetail) = await ShippingKindStepChecks.CheckAsync(
             step, _environment.SolutionDirectory, finalMessage, changedPaths, cancellationToken, style);
 

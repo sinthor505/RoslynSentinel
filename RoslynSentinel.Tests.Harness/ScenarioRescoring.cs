@@ -129,7 +129,7 @@ public static class ScenarioRescoring
                 var verdict = Directory.Exists(finalStateFolder)
                     ? await verdictOf(scenario, finalStateFolder, cancellationToken)
                     : null;
-                verdict = scenario.GateVerdictOnReply(verdict, transcript.FinalMessage());
+                verdict = scenario.GateVerdictOnReply(verdict, transcript.FinalMessageIfFinished());
                 var stopReason = ParseStopReason(Field(columns, fields, "stopReason"));
                 var score = ScenarioScorer.Score(
                     transcript,
