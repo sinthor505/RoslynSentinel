@@ -1,6 +1,18 @@
 # `RunTest` returns TestRunIncomplete "No TRX result file was produced" when the solution is loaded from a git worktree
 
-**Status:** OPEN 2026-11-24. Not traced to source: the root cause is a hypothesis; the failing path was not read when this was written.
+**Status:** RESOLVED 2026-11-24 in 6b3f492b. The hypotheses H1 (scratch root) and H2 (`.git` file) below were wrong; H3 was closest (dotnet test failed before writing a TRX, silently).
+
+## Resolution
+Root cause: the server process carries MSBuildLocator pins in its environment (`MSBUILD_EXE_PATH`, `MSBuildSDKsPath`, `MSBuildExtensionsPath`, all pointing at SDK 10.0.404). `TestRunEngine.RunOneProjectAsync` (`RoslynSentinel.Engines.Basic/TestRunEngine.cs`, the `ProcessStartInfo` block that ends at `BuildIsolation.ApplyArtifactsPath`) passed that environment on to `dotnet test`; `BuildEngine.RunFullBuildAsync` already stripped it. `global.json` is git-ignored here (`.gitignore:10 *.json`), so a worktree has none: `dotnet` then runs the newest installed SDK (11.0.100) while its MSBuild worker nodes start from the pinned 10.0.404 MSBuild. The node handshake fails (`MSBUILDDEBUGCOMM` trace: "Handshake failed. Received 12 from host for FileVersionMinor but expected 9"), the nodes are relaunched in a loop (60+ `/nodemode:1` processes in 5 s), and `dotnet test` exits 1 with empty stdout and stderr. That is why neither `includeOutput` nor `StderrTail` showed anything.
+
+Evidence:
+- `RunTest(repoPath: <fresh worktree>)` reproduced the error (same filter on the main tree passed); the same `dotnet test` command line run by hand without the pins passed in the worktree.
+- A hand run with the three pins set from the tool shell exited 1 with no output after about 4 minutes.
+- Copying `global.json` into the worktree (host SDK 10.0.404 again, matching the pin) made the unfixed server's `RunTest(repoPath)` pass.
+
+Fix: `BuildIsolation.MsBuildPinnedVariables` and `BuildIsolation.RemoveInheritedMsBuildPins` (`RoslynSentinel.Engines.Basic/BuildIsolation.cs`); `TestRunEngine` and `BuildEngine` both call it (before caller `environment`, so a caller can still set a pin on purpose). Tests: `BuildIsolationTests.RemoveInheritedMsBuildPins_StripsEveryPinnedVariableAndKeepsTheRest` and `DotnetSpawningEngines_StripTheInheritedMsBuildPins` (Tests.Tools.Basic, OutOfProcess class, 38/38 passed).
+
+Not done: a live `RunTest(repoPath)` check against a restarted server (the running server predates the fix). Left open: `SolutionRestore.MsBuildPinnedVariables` and `TestInstanceLauncher.MsBuildPinnedVariables` still keep their own copy of the pin list (TODO in `BuildIsolation.MsBuildPinnedVariables`); the empty-output exit-1 case still reports only "No TRX result file was produced" (the exit code is in the `ExitCode` field but not in the message).
 
 ## What was being attempted
 Overnight run of the tool-surface controller stage F plan (2026-11-24). Gated slices needed `RunTest` to verify test classes.
