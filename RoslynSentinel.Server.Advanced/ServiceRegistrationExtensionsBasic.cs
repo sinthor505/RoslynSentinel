@@ -398,7 +398,15 @@ public static class RoslynSentinelServiceExtensionsBasic
             activeToolClasses: activeToolClasses,
             classModes: ToolClassRegistry.BuildClassToModes(),
             allowedToolNames: toolAllowList?.ToolNames);
-        services.AddSingleton(activeToolSurface);
+        // The instance is built eagerly above so the claude-lean rebinding of activeToolClasses below cannot leak into it.
+        // The controller is resolved lazily and read through CurrentIfBuilt, so resolving ActiveToolSurface (14 constructors,
+        // the engine closure, three filters) never builds the tool collection. No consumer is edited: they all take the DI instance.
+        // ImplementationInstance is read only for ToolAllowList (McpToolSchemaPatcher.cs ~line 139), so the factory form breaks no reader.
+        services.AddSingleton<ActiveToolSurface>(sp =>
+        {
+            var controller = new Lazy<ToolSurfaceController?>(() => sp.GetService<ToolSurfaceController>());
+            return activeToolSurface.WithLiveSnapshot(() => controller.Value?.CurrentIfBuilt);
+        });
         // The controller owns the runtime-toolset layer; claude-lean's ToolsetService takes it, so both see one state.
         services.AddSingleton<ToolSurfaceController>();
         services.AddHostedService<ToolSurfaceStartup>();
