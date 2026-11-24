@@ -124,6 +124,8 @@ public class GitCasCommitTests
 
     // ---- 3. concurrency ----
 
+    // LOAD-SENSITIVE: failed once in a full parallel worktree run at e013154e (2026-11-24: barrier timeout plus UnauthorizedAccessException
+    // on index.lock from HeldIndexLock.Take), passed alone at the same commit. Probable product cause: see the TODO in HeldIndexLock.Take.
     [Test]
     public void TwoInProcessCommittersRacing_LoseNothing_FsckClean()
     {

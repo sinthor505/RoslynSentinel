@@ -65,6 +65,7 @@ internal sealed partial class Libgit2GitReader
             }
             // The create fails because the file exists; the holder may delete it before the existence check runs, so the error code counts too
             // (Windows ERROR_FILE_EXISTS 80 / ERROR_ALREADY_EXISTS 183; on Unix the check is all there is).
+            // TODO A holder's DeleteOnClose lock in delete-pending state makes CreateNew throw UnauthorizedAccessException (not IOException), which escapes as a crash instead of lock contention (GitCasCommitTests.TwoInProcessCommittersRacing_LoseNothing_FsckClean, full run at e013154e).
             catch (IOException ex) when (File.Exists(path) || (ex.HResult & 0xFFFF) is 80 or 183)
             {
                 throw new NotSupportedException("index.lock exists (another git process holds it); git reports that in its own words.", ex);
