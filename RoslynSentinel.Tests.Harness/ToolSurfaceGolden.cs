@@ -1,4 +1,4 @@
-// Golden-file helper for the tool-surface parity tests (plan_tool_surface_controller_stage_f.md Steps 3a, 3b, 4, 8, 20).
+// Golden-file helper for the tool-surface parity tests.
 // ListToolsAsync serves a registration through an in-process MCP host and returns the protocol tools exactly as a client
 // sees them; AssertMatchesGolden pins that list against files that sit beside the calling test's source file.
 using System.IO.Pipelines;
@@ -27,11 +27,16 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// <c>name TAB sha256hex(canonical JSON)</c>, served order, LF line ends, final newline) and one
 /// <c>ToolSurfaceGolden/_catalog.json</c> mapping each hash to its canonical tool JSON. Goldens are never copied to the
 /// output directory: they are read from, and in update mode written to, the source tree that
-/// <see cref="CallerFilePathAttribute"/> names.
+/// <see cref="CallerFilePathAttribute"/> names. The catalog holds only hashes some case file in its folder references:
+/// each update-mode write adds the case's tools and prunes every entry no case file references any more.
 /// </summary>
 public static class ToolSurfaceGolden
 {
-    /// <summary>Environment variable; when it equals "1", <see cref="AssertMatchesGolden"/> writes the golden files and passes.</summary>
+    /// <summary>
+    /// Environment variable; when it equals "1", <see cref="AssertMatchesGolden"/> writes the golden files and then fails the test,
+    /// so a run with the variable left set can never come out green. A fixture that clears <c>ROSLYNSENTINEL_*</c> variables in its
+    /// SetUp must not clear this one, or update mode could not be switched on.
+    /// </summary>
     public const string UpdateEnvironmentVariable = "ROSLYNSENTINEL_UPDATE_TOOL_SURFACE_GOLDEN";
 
     /// <summary>Folder name, beside the calling test's source file, that holds the golden files.</summary>
@@ -118,7 +123,7 @@ public static class ToolSurfaceGolden
 
     /// <summary>
     /// Compares <paramref name="tools"/> (in served order) with the golden of <paramref name="caseName"/>, or writes the golden
-    /// when <see cref="UpdateEnvironmentVariable"/> is "1". A missing golden or any difference fails the test with the first
+    /// and fails with a "regenerated" message when <see cref="UpdateEnvironmentVariable"/> is "1". A missing golden or any difference fails the test with the first
     /// differing line and, for a changed tool, the golden and current JSON (each clipped). A case name must be unique per golden
     /// folder: two cases whose sanitized names are equal overwrite one file (this is not detected). Characters other than letters,
     /// digits, '.', '_', '+' and '-' in the name become '_' in the file name.
@@ -149,16 +154,25 @@ public static class ToolSurfaceGolden
         if (Environment.GetEnvironmentVariable(UpdateEnvironmentVariable) == "1")
         {
             Directory.CreateDirectory(folder);
+            var utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+            File.WriteAllText(caseFile, currentText, utf8);
+
+            // Prune against the case files as they are now (this one already rewritten), so a run of one case is safe: the other
+            // cases' files keep their own hashes alive. A case file whose case no longer exists keeps its entries until it is deleted.
             var catalog = new SortedDictionary<string, string>(ReadCatalog(catalogFile), StringComparer.Ordinal);
             foreach (var row in rows)
             {
                 catalog[row.Hash] = row.Json;
             }
 
-            var utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
-            File.WriteAllText(caseFile, currentText, utf8);
+            var referenced = ReferencedHashes(folder);
+            foreach (var unreferenced in catalog.Keys.Where(hash => !referenced.Contains(hash)).ToList())
+            {
+                catalog.Remove(unreferenced);
+            }
+
             File.WriteAllText(catalogFile, JsonSerializer.Serialize(catalog, CatalogOptions) + "\n", utf8);
-            return;
+            Assert.Fail($"Golden for case '{caseName}' regenerated at {caseFile} because {UpdateEnvironmentVariable}=1. This run verified nothing: unset the variable and rerun.");
         }
 
         if (!File.Exists(caseFile))
@@ -226,6 +240,25 @@ public static class ToolSurfaceGolden
 
     private static List<string> SplitLines(string text) =>
         text.Split('\n').Where(l => l.Length > 0).ToList();
+
+    /// <summary>The hashes (second tab-separated column) of every case file in <paramref name="folder"/>.</summary>
+    private static HashSet<string> ReferencedHashes(string folder)
+    {
+        var hashes = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var file in Directory.EnumerateFiles(folder, "*.txt"))
+        {
+            foreach (var line in SplitLines(File.ReadAllText(file).Replace("\r\n", "\n")))
+            {
+                var tab = line.IndexOf('\t');
+                if (tab >= 0)
+                {
+                    hashes.Add(line[(tab + 1)..]);
+                }
+            }
+        }
+
+        return hashes;
+    }
 
     private static string Clip(string text) =>
         text.Length <= ClipLength ? text : text[..ClipLength] + "...(" + (text.Length - ClipLength) + " more chars)";
