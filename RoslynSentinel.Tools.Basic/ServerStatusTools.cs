@@ -17,11 +17,13 @@ public class ServerStatusTools
     private readonly ToolTelemetry? _toolTelemetry;
     private readonly GitBackendWarmup _gitBackend;
     private readonly ToolLoopLatch? _loopLatch;
+    private readonly ToolSurfaceController? _surface;
 
     /// <param name="toolsets">Present only in claude-lean, where McpToolsetControlTool can switch tools on at runtime.</param>
     /// <param name="toolTelemetry">Per-tool call counters; null (tests, hosts without the telemetry filter) omits the toolTelemetry field.</param>
     /// <param name="gitBackend">Source of the gitBackend block; null uses the process-wide <see cref="GitBackendWarmup.Shared"/> (tests inject one). Not DI-registered, so the optional default applies.</param>
     /// <param name="loopLatch">Per-agent loop latch state (proposal_loop_latch.md); reported as loopLatch only while --loop-latch is on. Null (tests, hosts without it) omits the field.</param>
+    /// <param name="surface">Live tool collection snapshot; null (tests, modes without it) keeps the declared-versus-allowed answer.</param>
     public ServerStatusTools(
         IWorkspaceManager workspaceManager,
         ActiveToolSurface activeToolSurface,
@@ -30,9 +32,11 @@ public class ServerStatusTools
         SentinelHostOptions? hostOptions = null,
         ToolTelemetry? toolTelemetry = null,
         GitBackendWarmup? gitBackend = null,
-        ToolLoopLatch? loopLatch = null)
+        ToolLoopLatch? loopLatch = null,
+        ToolSurfaceController? surface = null)
     {
         _loopLatch = loopLatch;
+        _surface = surface;
         _gitBackend = gitBackend ?? GitBackendWarmup.Shared;
         _toolTelemetry = toolTelemetry;
         _hostOptions = hostOptions;
@@ -52,7 +56,8 @@ public class ServerStatusTools
         " lastLaunch = the launcher's last build of source HEAD (buildFailed = it fell back to the older servedSha; firstErrors and hint say why)." +
         " operatingMode/operatingModeSource = SingleAgent or MultiAgent and why; callerAgentId = agent id of this call (null if none)." +
         " eolMode = line-ending policy for writes (--eol / ROSLYNSENTINEL_EOL): auto keeps each file's existing endings (else .editorconfig), crlf or lf forces that ending." +
-        " clientProtocolVersion = this session's negotiated MCP version; toolListChangedRaised = tool-list changes applied (not proof of delivery); toolListSubscriptionRequests = tool-list subscriptions (2026-07-28 clients).")]
+        " clientProtocolVersion = this session's negotiated MCP version; toolListChangedRaised = tool-list changes applied (not proof of delivery); toolListSubscriptionRequests = tool-list subscriptions (2026-07-28 clients)." +
+        " toolSurface.surfaceVersion counts changes to the live tool surface (surfaceTrigger and schemaPatches say why).")]
     public SentinelCallToolResult<McpServerStatusResult> McpServerStatusTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("inactive: declared tools not active in this mode, with an enabledBy hint. all: every declared tool.")]
@@ -63,6 +68,10 @@ public class ServerStatusTools
         RequestContext<CallToolRequestParams>? requestContext = null)
     {
         _ = cancellationToken;
+
+        // One snapshot per response: activeForThisMode, the declared-tool rows and toolSurface all read the same build.
+        var surfaceSnapshot = _surface?.Current;
+        var useSnapshot = surfaceSnapshot is { Version: > 0 };
 
         var manual = (IManualCircuitBreaker)_workspaceManager;
         var automatic = (IAutomaticCircuitBreaker)_workspaceManager;
@@ -77,18 +86,33 @@ public class ServerStatusTools
         // its name is on it too.
         // A tool McpToolsetControlTool switched on is active too, whatever its class or the allow-list say.
         var dynamicToolNames = _toolsets?.DynamicToolNames.ToHashSet(StringComparer.Ordinal) ?? [];
+        // With a live snapshot, active means exposed in it (startup registration plus runtime toolsets).
+        // Without one, the class and allow-list check applies as before.
         bool IsActive(string className, string toolName) =>
-            dynamicToolNames.Contains(toolName)
-            || ((className == nameof(ServerStatusTools) || _activeToolSurface.ActiveToolClasses.Contains(className))
-                && _activeToolSurface.IsToolAllowed(toolName));
+            useSnapshot
+                ? surfaceSnapshot!.IsExposed(toolName)
+                : (dynamicToolNames.Contains(toolName)
+                    || ((className == nameof(ServerStatusTools) || _activeToolSurface.ActiveToolClasses.Contains(className))
+                        && _activeToolSurface.IsToolAllowed(toolName)));
 
         // Each tool name is declared by exactly one class (guarded by McpServerStatusToolListingTests.EveryToolName_IsDeclaredByExactlyOneClass).
         var declaredTools = McpToolSchemaPatcher.DiscoverAllDeclaredTools(declaredToolAssemblies)
-            .Select(t => new McpServerStatusDeclaredTool(
-                Name: t.ToolName,
-                ClassName: t.ClassName,
-                ActiveForThisMode: IsActive(t.ClassName, t.ToolName),
-                EnabledBy: IsActive(t.ClassName, t.ToolName) ? null : DescribeHowToEnable(t.ClassName, t.ToolName)))
+            .Select(t =>
+            {
+                var row = useSnapshot ? surfaceSnapshot!.Find(t.ToolName) : null;
+                return new McpServerStatusDeclaredTool(
+                    Name: t.ToolName,
+                    ClassName: t.ClassName,
+                    ActiveForThisMode: IsActive(t.ClassName, t.ToolName),
+                    EnabledBy: IsActive(t.ClassName, t.ToolName) ? null : DescribeHowToEnable(t.ClassName, t.ToolName, useSnapshot),
+                    ExposedBy: row?.Origin switch
+                    {
+                        ToolSurfaceOrigin.Startup => "startup",
+                        ToolSurfaceOrigin.RuntimeToolset => "toolset:" + row!.ToolSet,
+                        _ => null,
+                    },
+                    HiddenParameters: row is { HiddenParameters.Count: > 0 } ? row.HiddenParameters : null);
+            })
             .OrderBy(t => t.Name, StringComparer.Ordinal)
             .ToArray();
         var allDeclaredTools = declaredTools
@@ -140,7 +164,11 @@ public class ServerStatusTools
                 IncludeTools: _activeToolSurface.IncludeTools,
                 ExcludeTools: _activeToolSurface.ExcludeTools,
                 ActiveToolClassCount: _activeToolSurface.ActiveToolClasses.Count,
-                ActiveToolClasses: _activeToolSurface.ActiveToolClasses
+                ActiveToolClasses: _activeToolSurface.ActiveToolClasses,
+                SurfaceVersion: useSnapshot ? surfaceSnapshot!.Version : null,
+                SurfaceBuiltUtc: useSnapshot ? surfaceSnapshot!.BuiltUtc : null,
+                SurfaceTrigger: useSnapshot ? surfaceSnapshot!.Trigger : null,
+                SchemaPatches: useSnapshot ? surfaceSnapshot!.SchemaPatches : null
             ),
             StoppedByScript: new McpServerStatusStoppedByScript(
                 WasFound: _stoppedByScriptMarker.WasFound,
@@ -192,8 +220,16 @@ public class ServerStatusTools
         };
     }
 
-    private string DescribeHowToEnable(string className, string toolName)
+    private string DescribeHowToEnable(string className, string toolName, bool useSnapshot)
     {
+        // Snapshot does not expose the tool although its class is active and the allow-list passes: registration is missing.
+        if (useSnapshot
+            && (className == nameof(ServerStatusTools) || _activeToolSurface.ActiveToolClasses.Contains(className))
+            && _activeToolSurface.IsToolAllowed(toolName))
+        {
+            return "declared and in an active class, but not registered with the server (ToolClassRegistry entry or DI block missing)";
+        }
+
         if (_activeToolSurface.ExcludeTools.Contains(className))
         {
             return $"excluded by --exclude-tools {className}; remove it from --exclude-tools";
@@ -247,7 +283,12 @@ public sealed record McpServerStatusToolSurface(
     IReadOnlyCollection<string> IncludeTools,
     IReadOnlyCollection<string> ExcludeTools,
     int ActiveToolClassCount,
-    IReadOnlyCollection<string> ActiveToolClasses);
+    IReadOnlyCollection<string> ActiveToolClasses,
+    // Live snapshot fields: null without a ToolSurfaceController (tests, modes without one).
+    long? SurfaceVersion = null,
+    DateTime? SurfaceBuiltUtc = null,
+    string? SurfaceTrigger = null,
+    IReadOnlyList<string>? SchemaPatches = null);
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>Whether this instance's predecessor was deliberately stopped by
 /// roslynsentinel-vscode-control.ps1's stopallstdio/stopallhttp/stopalltypes actions, as reported by
@@ -318,4 +359,5 @@ public sealed record McpServerStatusResult(
 /// by McpServerStatusTool's <c>AllDeclaredTools</c>. Ground truth for "does this tool exist in this
 /// process" independent of whether its class is currently active for this session's mode.
 /// </summary>
-public sealed record McpServerStatusDeclaredTool(string Name, string ClassName, bool ActiveForThisMode, string? EnabledBy = null);
+// ExposedBy (startup | toolset:<name>) and HiddenParameters come from the live snapshot row; null when not exposed or no snapshot.
+public sealed record McpServerStatusDeclaredTool(string Name, string ClassName, bool ActiveForThisMode, string? EnabledBy = null, string? ExposedBy = null, IReadOnlyList<string>? HiddenParameters = null);
