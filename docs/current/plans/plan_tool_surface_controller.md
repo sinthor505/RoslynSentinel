@@ -1,6 +1,6 @@
 # Plan: Tool-surface controller - phase A read-only snapshot, phase B pluggable schema patches
 
-**Status:** APPROVED 2026-11-23. Phase A read-only snapshot and phase B patch seam, with the 2026-11-23 review fixes (stale toolset state, hosted-service startup refresh, instance registration of default patches). Implements stage 1 of [proposal_tool_surface_controller.md](../proposals/proposal_tool_surface_controller.md) (phase A) plus the schema-patch seam (phase B); later stages are outlined at the end and get detailed steps here before they start.
+**Status:** IN PROGRESS 2026-11-23. Steps A1-A4, B1-B2 done (ad3b5879, 3ce6f373, f7f9c00f, c3974c36, 1e57e2da, 5a95aab7, 33e9e00f). Approved 2026-11-23: Phase A read-only snapshot and phase B patch seam, with the 2026-11-23 review fixes (stale toolset state, hosted-service startup refresh, instance registration of default patches). Implements stage 1 of [proposal_tool_surface_controller.md](../proposals/proposal_tool_surface_controller.md) (phase A) plus the schema-patch seam (phase B); later stages are outlined at the end and get detailed steps here before they start.
 
 ## Problem
 
@@ -77,6 +77,7 @@ Slice map (review 2026-11-23): A1 || B1; A2 || B2; A3 || A4 (after B2 commits); 
 ### Phase A - read-only snapshot
 
 ### Step A1 - Contract skeleton
+- Done: ad3b5879
 - Files: `RoslynSentinel.Common/ToolSurface/ToolSurfaceSnapshot.cs` (new), `RoslynSentinel.Common/ToolSurface/ToolSurfaceController.cs` (new), `RoslynSentinel.Common/HiddenSchemaParams.cs`
 - Depends on: none
 - Effect: text-neutral (no callers)
@@ -121,6 +122,7 @@ Slice map (review 2026-11-23): A1 || B1; A2 || B2; A3 || A4 (after B2 commits); 
 - Done when: `Build` 0 errors.
 
 ### Step A2 - Implement the snapshot build
+- Done: f7f9c00f (A2a), 1e57e2da (A2b)
 - Files: the three A1 files, `RoslynSentinel.Common/ToolsetService.cs`, `RoslynSentinel.Common/ActiveToolSurface.cs`
 - Depends on: A1
 - Effect: text-neutral (no callers; the `ToolsetService` reorder changes no observable result)
@@ -155,6 +157,7 @@ Slice map (review 2026-11-23): A1 || B1; A2 || B2; A3 || A4 (after B2 commits); 
 - Done when: `Build` 0 errors.
 
 ### Step A3 - Controller tests
+- Done: 5a95aab7
 - Files: `RoslynSentinel.Tests.Server/ToolSurfaceControllerTests.cs` (new)
 - Depends on: A2
 - Pairs with: B1
@@ -174,6 +177,7 @@ Slice map (review 2026-11-23): A1 || B1; A2 || B2; A3 || A4 (after B2 commits); 
 - Done when: dispatcher runs `ToolSurfaceControllerTests`: all pass.
 
 ### Step A4 - Register and refresh at startup
+- Done: 33e9e00f
 - Files: `RoslynSentinel.Server.Advanced/ServiceRegistrationExtensionsBasic.cs`, `RoslynSentinel.Server.Advanced/ToolSurfaceStartup.cs` (new)
 - Depends on: A2, B2 (same registration file)
 - Effect: text-neutral
@@ -242,6 +246,7 @@ Slice map (review 2026-11-23): A1 || B1; A2 || B2; A3 || A4 (after B2 commits); 
 ### Phase B - pluggable schema patches
 
 ### Step B1 - Patch contract and default patches
+- Done: 3ce6f373
 - Files: `RoslynSentinel.Common/ToolSurface/IToolSchemaPatch.cs` (new), `RoslynSentinel.Common/ToolSurface/DefaultToolSchemaPatches.cs` (new), `RoslynSentinel.Common/McpToolSchemaPatcher.cs`
 - Depends on: none
 - Effect: text-neutral (no callers)
@@ -264,6 +269,7 @@ Slice map (review 2026-11-23): A1 || B1; A2 || B2; A3 || A4 (after B2 commits); 
 - Done when: `Build` 0 errors.
 
 ### Step B2 - CreateSentinelTool runs the pipeline
+- Done: c3974c36
 - Files: `RoslynSentinel.Common/McpToolSchemaPatcher.cs`, `RoslynSentinel.Server.Advanced/ServiceRegistrationExtensionsBasic.cs`
 - Depends on: B1
 - Effect: text-neutral (same four patches, same order, so every schema is byte-identical)
