@@ -1875,6 +1875,7 @@ public class AsyncifyTools
                     FilePath = u.FilePath,
                     MethodName = u.CallerMethod,
                     Outcome = ItemRecordOutcome.Succeeded,
+                    BeforeSource = FirstBeforeSource(items, u.FilePath, u.BeforeSource),
                     AfterSource = u.AfterSource,
                 });
                 succeeded++;
@@ -2895,6 +2896,22 @@ public class AsyncifyTools
         return false;
     }
 
+    // First-wins: a multi-item file must revert to its pre-operation text, because UndoChange is
+    // last-write-wins per file (it restores the BeforeSource of the last item for that file).
+    // Returns the BeforeSource of the first earlier item for the same file, else the caller's own value.
+    private static string? FirstBeforeSource(IEnumerable<OperationItemRecord> items, string filePath, string? own)
+    {
+        foreach (var item in items)
+        {
+            if (item.BeforeSource is not null
+                && string.Equals(item.FilePath, filePath, StringComparison.OrdinalIgnoreCase))
+            {
+                return item.BeforeSource;
+            }
+        }
+        return own;
+    }
+
     // ── Phase 2: Bridge ─────────────────────────────────────────────────────
     private async Task<BridgeBatchResult> RunBridgePhaseAsync(
         AsyncifyInput input, AsyncifyRunState state, IProgress<EngineProgress>? progress)
@@ -2929,7 +2946,7 @@ public class AsyncifyTools
                 MethodName = a.MethodName,
                 Outcome = ItemRecordOutcome.Succeeded,
                 Reason = "phase:bridge",
-                // TODO BridgeAppliedInfo.BeforeSource / UpliftCallerInfo.BeforeSource are never copied into these items (only AfterSource is), so UndoChange cannot revert bridge/uplift-phase items
+                BeforeSource = FirstBeforeSource(items, a.FilePath, a.BeforeSource),
                 AfterSource = a.AfterSource,
             });
             state.P2Succeeded++; state.Succeeded++;
@@ -3054,6 +3071,7 @@ public class AsyncifyTools
                         MethodName = u.CallerMethod,
                         Outcome = ItemRecordOutcome.Succeeded,
                         Reason = "phase:uplift",
+                        BeforeSource = FirstBeforeSource(items, u.FilePath, u.BeforeSource),
                         AfterSource = u.AfterSource,
                     });
                     state.P3Succeeded++; state.Succeeded++;

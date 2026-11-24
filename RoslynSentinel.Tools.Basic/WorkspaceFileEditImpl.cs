@@ -449,6 +449,7 @@ public class WorkspaceFileEditImpl
                     continue;
                 }
 
+                // TODO UndoChange reverts multi-item files last-write-wins (the last item's BeforeSource is restored); AsyncifyTools makes every item of a file carry the first BeforeSource to compensate
                 revertChanges[item.FilePath] = item.BeforeSource!;
             }
 

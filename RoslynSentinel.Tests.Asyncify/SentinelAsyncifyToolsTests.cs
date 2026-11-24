@@ -1342,4 +1342,34 @@ public static class DataHelper
         Assert.That(written.Select(i => i.AfterSource), Has.All.Not.Null);
         Assert.That(written.Last().AfterSource, Is.EqualTo(File.ReadAllText(PathOf("RegionForm.cs"))).NoClip);
     }
+
+    // Bridge and uplift items must each carry the file's FIRST (pre-operation) BeforeSource: UndoChange restores one
+    // text per file and the last item for a file wins, so every item of a multi-item file shares the first BeforeSource.
+    [Test, CancelAfter(60000)]
+    public async Task T36_Asyncify_BridgeAndUpliftPhases_BlobItemsCarryTheFirstBeforeSource()
+    {
+        SetSource(LoadListHighScoreWithCallerSource);
+        var preOperationRegionForm = File.ReadAllText(PathOf("RegionForm.cs"));
+
+        var result = await _asyncifyTools.AsyncifyTool(reason: "test message");
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.ToString());
+        var written = ReadBlobItems(result.SuccessData!.ChangeId)
+            .Where(i => i.Outcome == ItemRecordOutcome.Succeeded
+                && ((i.Reason ?? "").StartsWith("phase:bridge", StringComparison.Ordinal)
+                    || (i.Reason ?? "").StartsWith("phase:uplift", StringComparison.Ordinal)))
+            .ToList();
+        Assert.That(written, Has.Count.GreaterThanOrEqualTo(2), "Bridge (loadList) and uplift (DoWork) must both be recorded.");
+        Assert.That(written.Select(i => i.BeforeSource), Has.All.Not.Null);
+
+        foreach (var group in written.GroupBy(i => i.FilePath, StringComparer.OrdinalIgnoreCase))
+        {
+            var distinct = group.Select(i => i.BeforeSource).Distinct(StringComparer.Ordinal).ToList();
+            Assert.That(distinct, Has.Count.EqualTo(1), $"Every item for {group.Key} must carry the same (first) BeforeSource.");
+        }
+
+        var regionFormItems = written.Where(i => Path.GetFileName(i.FilePath) == "RegionForm.cs").ToList();
+        Assert.That(regionFormItems, Has.Count.GreaterThanOrEqualTo(2), "The bridge and the uplift both rewrite RegionForm.cs.");
+        Assert.That(regionFormItems.Select(i => i.BeforeSource), Has.All.EqualTo(preOperationRegionForm).NoClip);
+    }
 }

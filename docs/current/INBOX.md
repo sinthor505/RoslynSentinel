@@ -10,3 +10,4 @@ close it with a reason in [CLOSED.md](./CLOSED.md), then delete the line here. C
 [todo_markers.md](../generated/todo_markers.md) (regenerate with `pwsh -NoProfile -File scripts/Get-TodoMarkers.ps1`).
 
 ## Untriaged
+- 2026-11-24 00:10 UndoChange reverts a multi-item file last-write-wins (restores the last item's BeforeSource), so AsyncifyTools must stamp the first BeforeSource on every item of a file - RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs ~:452 - // TODO UndoChange reverts multi-item files last-write-wins (punchlist #5)
