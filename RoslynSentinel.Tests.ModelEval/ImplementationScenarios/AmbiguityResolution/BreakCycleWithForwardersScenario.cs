@@ -1,5 +1,8 @@
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using RoslynSentinel.Common.AgentLoop;
+using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Graders;
 
 namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.AmbiguityResolution;
 
@@ -15,6 +18,11 @@ internal static class BreakCycleWithForwardersScenario
     private const string PolicyPath = CoreFolder + "ReplayPolicy.cs";
     private const string ClientPath = CoreFolder + "AgentClient.cs";
     private const string ClientTestsPath = TestFolder + "ClientTests.cs";
+    private const string CycleBreakTestsPath = TestFolder + "CycleBreakTests.cs";
+
+    private const string PolicyTypeName = "ContosoOrders.Evals.BreakCycleWithForwarders.ReplayPolicy";
+
+    private const string ClientTypeName = "ContosoOrders.Evals.BreakCycleWithForwarders.AgentClient";
 
     private const string SeedPolicySource = """
 using static ContosoOrders.Evals.BreakCycleWithForwarders.AgentClient;
@@ -222,14 +230,14 @@ public class ClientTests
 }
 """;
 
-    private const string HiddenTestSource = """
+    private const string CycleBreakTestsSource = """
 using System.Reflection;
 using ContosoOrders.Evals.BreakCycleWithForwarders;
 using Xunit;
 
 namespace ContosoOrders.Tests.Evals.BreakCycleWithForwarders;
 
-public class BreakCycleWithForwardersStep1Tests
+public class CycleBreakTests
 {
     private const BindingFlags Declared = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.DeclaredOnly;
 
@@ -276,16 +284,22 @@ public class BreakCycleWithForwardersStep1Tests
 }
 """;
 
-    private const string StepPrompt = """
-In ContosoOrders.Core/Evals/BreakCycleWithForwarders, ReplayPolicy.cs and AgentClient.cs use each other. Make the dependency
-one-way: AgentClient may depend on ReplayPolicy, but ReplayPolicy must not mention AgentClient anywhere (not even in a using
-directive). Find every AgentClient member that ReplayPolicy uses, move the definitions of those members into ReplayPolicy
-(ReplayPolicy already has members of its own, so pick names that do not clash), and leave in AgentClient a one-line forwarder
-for each moved member with the same name, signature and accessibility (a constant forwards to the constant). The overload that
-only calls another AgentClient overload stays as it is. Do not edit the test file or any other file; the tests keep using the
-AgentClient names and must pass unchanged, and behaviour must not change.
-""";
+    private const string CannedReport = "DONE: moved the parsing, the two constants and the two-argument drop count into ReplayPolicy; AgentClient forwards to them with its names unchanged and ReplayPolicy no longer uses AgentClient.";
 
+    private static string StepPrompt => EvalContractOptions.Render(new ScenarioTask(
+        Goal: "In ContosoOrders.Core/Evals/BreakCycleWithForwarders, ReplayPolicy.cs and AgentClient.cs use each other. " +
+            "Make the dependency one-way: AgentClient may depend on ReplayPolicy, but ReplayPolicy must not depend on AgentClient. " +
+            "Find every AgentClient member that ReplayPolicy uses, move the definitions of those members into ReplayPolicy " +
+            "(it already has members of its own, so pick names that do not clash), and leave in AgentClient a one-line forwarder " +
+            "for each moved member with the same name, signature and accessibility (a constant forwards to the constant). " +
+            "The overload that only calls another AgentClient overload stays as it is.",
+        Files: "ReplayPolicy.cs and AgentClient.cs in ContosoOrders.Core/Evals/BreakCycleWithForwarders. No test file, no other file.",
+        Conditions: "Nothing in ReplayPolicy.cs (code, `<see cref>` or using directive) may resolve to a member of AgentClient. " +
+            "The tests keep using the AgentClient names and pass unchanged; behaviour does not change.",
+        IfFails: EvalContractOptions.PlainIfFails,
+        DoneWhen: "The solution builds with 0 errors; all tests in ContosoOrders.Tests pass, including ClientTests and CycleBreakTests."));
+
+    // The contract placement is read once per process, when this Definition initialises (StepPrompt renders then); one process runs one arm.
     public static ImplementationScenario Definition { get; } = new ImplementationScenario(
         "BreakCycleWithForwarders",
         "Break a two-file reference cycle by moving definitions and leaving forwarders",
@@ -296,6 +310,7 @@ AgentClient names and must pass unchanged, and behaviour must not change.
             [PolicyPath] = SeedPolicySource,
             [ClientPath] = SeedClientSource,
             [ClientTestsPath] = ClientTestsSource,
+            [CycleBreakTestsPath] = CycleBreakTestsSource,
         },
         new[]
         {
@@ -307,52 +322,59 @@ AgentClient names and must pass unchanged, and behaviour must not change.
                     [ClientPath] = GoldenClientSource,
                 },
                 AllowedPaths: new List<string> { PolicyPath, ClientPath },
-                HiddenTestSource: HiddenTestSource,
+                HiddenTestSource: null,
                 ExtraCheck: static ctx => Task.FromResult<string?>(CheckCycleBroken(ctx)),
-                CannedFinalMessage: null),
+                CannedFinalMessage: CannedReport,
+                Variants: BuildVariants(),
+                DoneWhenTests: new[] { "ClientTests", "CycleBreakTests" }),
         },
-        PreferredHost: "113");
+        PreferredHost: "113",
+        PrimaryAxis: EvalAxis.AmbiguityResolution);
 
-    /// <summary>ReplayPolicy no longer names AgentClient; the definitions moved; AgentClient only forwards; the seed tests are untouched.</summary>
+    /// <summary>
+    /// ReplayPolicy.cs has no name, cref or using directive that binds to AgentClient or one of its members (an unqualified use
+    /// through `using static` binds too, so it fails; a plain comment naming AgentClient is invisible to the compiler and passes).
+    /// Each AgentClient forwarder is one expression (or one return) whose symbol is a ReplayPolicy member, whatever the spelling
+    /// (qualified, `using static` or alias); the two constants are initialised from a ReplayPolicy member. Behaviour, names and
+    /// signatures are decided by ClientTests and CycleBreakTests, the scope by the shared check, not here.
+    /// </summary>
     private static string? CheckCycleBroken(ImplementationScenarioCheckContext ctx)
     {
-        if (!ctx.IsUnchanged(ClientTestsPath))
+        var compilation = ctx.Compile(CoreFolder.TrimEnd('/'));
+        var policy = compilation.Type(PolicyTypeName);
+        var client = compilation.Type(ClientTypeName);
+        if (policy is null || client is null)
         {
-            return "ClientTests.cs changed but must stay as it was";
+            return "ReplayPolicy or AgentClient is missing from ContosoOrders.Core/Evals/BreakCycleWithForwarders";
         }
 
-        var policyRoot = ctx.Syntax(PolicyPath).GetRoot();
-        var mentions = policyRoot.DescendantTokens()
-            .Where(token => token.Kind() == SyntaxKind.IdentifierToken && token.ValueText == "AgentClient")
-            .ToList();
-        if (mentions.Count > 0)
+        var policyModel = compilation.ModelFor(PolicyPath);
+        var policyRoot = policyModel.SyntaxTree.GetRoot();
+        foreach (var name in policyRoot.DescendantNodes().OfType<SimpleNameSyntax>())
         {
-            var line = mentions[0].GetLocation().GetLineSpan().StartLinePosition.Line + 1;
-            return $"ReplayPolicy.cs still mentions AgentClient ({mentions.Count} identifier(s), first on line {line})";
-        }
-
-        if (!policyRoot.DescendantNodes().OfType<PropertyDeclarationSyntax>().Any(p => p.Identifier.ValueText == "DroppedTurns"))
-        {
-            return "the DroppedTurns property of ReplayPolicy is gone";
-        }
-
-        if (!ctx.ReadText(PolicyPath).Contains("int.TryParse"))
-        {
-            return "the parsing code (int.TryParse) is not in ReplayPolicy.cs: the definition was not moved there";
-        }
-
-        if (ctx.ReadText(ClientPath).Contains("int.TryParse"))
-        {
-            return "AgentClient.cs still contains the parsing code; it should only forward";
-        }
-
-        var clientRoot = ctx.Syntax(ClientPath).GetRoot();
-        foreach (var name in new[] { "ReasoningReplayTurns", "ReasoningWindowVariable" })
-        {
-            var variable = clientRoot.DescendantNodes().OfType<VariableDeclaratorSyntax>().FirstOrDefault(v => v.Identifier.ValueText == name);
-            if (variable?.Initializer is null || !variable.Initializer.Value.ToString().Contains("ReplayPolicy"))
+            if (BindsToClient(policyModel.GetSymbolInfo(name), client))
             {
-                return $"AgentClient.{name} must be a constant initialised from ReplayPolicy";
+                return $"ReplayPolicy.cs still depends on AgentClient ({DescribeUse(name)})";
+            }
+        }
+
+        // Crefs live in doc-comment trivia, so they are visited separately; the cref symbol is the member it names.
+        foreach (var cref in policyRoot.DescendantNodes(descendIntoTrivia: true).OfType<CrefSyntax>())
+        {
+            if (BindsToClient(policyModel.GetSymbolInfo(cref), client))
+            {
+                return $"ReplayPolicy.cs still depends on AgentClient ({DescribeUse(cref)})";
+            }
+        }
+
+        var clientModel = compilation.ModelFor(ClientPath);
+        var clientRoot = clientModel.SyntaxTree.GetRoot();
+        foreach (var constant in new[] { "ReasoningReplayTurns", "ReasoningWindowVariable" })
+        {
+            var variable = clientRoot.DescendantNodes().OfType<VariableDeclaratorSyntax>().FirstOrDefault(v => v.Identifier.ValueText == constant);
+            if (variable?.Initializer is null || !IsPolicyMember(clientModel.GetSymbolInfo(variable.Initializer.Value).Symbol, policy))
+            {
+                return $"AgentClient.{constant} must be a constant initialised from a ReplayPolicy member";
             }
         }
 
@@ -368,17 +390,114 @@ AgentClient names and must pass unchanged, and behaviour must not change.
         foreach (var method in forwarders)
         {
             ExpressionSyntax? expression = method.ExpressionBody?.Expression;
-            if (expression is null && method.Body is not null && method.Body.Statements.Count == 1 && method.Body.Statements[0] is ReturnStatementSyntax returned)
+            if (expression is null && method.Body is { Statements: [ReturnStatementSyntax returned] })
             {
                 expression = returned.Expression;
             }
 
-            if (expression is not InvocationExpressionSyntax || !expression.ToString().StartsWith("ReplayPolicy.", StringComparison.Ordinal))
+            if (expression is null || !IsPolicyMember(clientModel.GetSymbolInfo(expression).Symbol, policy))
             {
-                return $"AgentClient.{method.Identifier.ValueText} must be a one-expression forwarder that calls ReplayPolicy";
+                return $"AgentClient.{method.Identifier.ValueText} must be a one-expression forwarder whose call or member access is a ReplayPolicy member";
             }
         }
 
         return null;
+    }
+
+    // True when the binding (or any candidate of a failed overload resolution) is AgentClient itself, a member of it, or an alias of it.
+    private static bool BindsToClient(SymbolInfo info, INamedTypeSymbol client) =>
+        (info.Symbol is null ? info.CandidateSymbols : info.CandidateSymbols.Add(info.Symbol))
+            .Any(symbol => IsClientSymbol(symbol is IAliasSymbol alias ? alias.Target : symbol, client));
+
+    private static bool IsClientSymbol(ISymbol symbol, INamedTypeSymbol client) =>
+        SymbolEqualityComparer.Default.Equals(symbol, client) || SymbolEqualityComparer.Default.Equals(symbol.ContainingType, client);
+
+    private static bool IsPolicyMember(ISymbol? symbol, INamedTypeSymbol policy) =>
+        symbol is not null && SymbolEqualityComparer.Default.Equals(symbol.ContainingType, policy);
+
+    private static string DescribeUse(SyntaxNode node) =>
+        $"'{node}' on line {node.GetLocation().GetLineSpan().StartLinePosition.Line + 1}";
+
+    /// <summary>
+    /// The executable outcome table (Spec S12): each variant is an overlay of ReplayPolicy.cs and/or AgentClient.cs (the golden
+    /// plus one edit) on step 1 (golden) with a DONE: final message. Every non-passing row claims DONE, so its class is SilentIncomplete.
+    /// </summary>
+    private static IReadOnlyList<ScenarioVariant> BuildVariants()
+    {
+        // Edits are written with \n; the template's line endings are kept. Throws when a template no longer contains the text to
+        // edit, so a template change cannot silently turn a variant into the golden.
+        static string Edited(string text, params (string OldText, string NewText)[] edits)
+        {
+            var eol = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+            var normalized = text.Replace("\r\n", "\n", StringComparison.Ordinal);
+            foreach (var (oldText, newText) in edits)
+            {
+                if (!normalized.Contains(oldText, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException($"BreakCycleWithForwarders variant edit: '{oldText}' is not in the template.");
+                }
+
+                normalized = normalized.Replace(oldText, newText, StringComparison.Ordinal);
+            }
+
+            return normalized.Replace("\n", eol, StringComparison.Ordinal);
+        }
+
+        const string Done = "DONE: ReplayPolicy no longer depends on AgentClient.";
+
+        // AgentClient forwards through `using static ...ReplayPolicy;` instead of qualifying each call.
+        var usingStaticClient = Edited(
+            GoldenClientSource,
+            ("namespace ContosoOrders.Evals.BreakCycleWithForwarders;\n", "using static ContosoOrders.Evals.BreakCycleWithForwarders.ReplayPolicy;\n\nnamespace ContosoOrders.Evals.BreakCycleWithForwarders;\n"),
+            ("= ReplayPolicy.ReplayTurns;", "= ReplayTurns;"),
+            ("= ReplayPolicy.WindowVariable;", "= WindowVariable;"),
+            ("=> ReplayPolicy.ParseWindowOverride(text);", "=> ParseWindowOverride(text);"),
+            ("=> ReplayPolicy.DroppedTurnsForWindow(assistantTurns, window);", "=> DroppedTurnsForWindow(assistantTurns, window);"));
+
+        // The doc comment of ReplayPolicy points at AgentClient with a cref (it binds, so it is a dependency).
+        var crefKept = Edited(
+            GoldenPolicySource,
+            ("/// <summary>Decides how many of the oldest assistant turns lose their reasoning text.</summary>\n",
+             "/// <summary>Decides how many of the oldest assistant turns lose their reasoning text for <see cref=\"AgentClient\"/>.</summary>\n"));
+
+        // A plain comment naming AgentClient: no symbol, so no dependency.
+        var commentOnly = Edited(
+            GoldenPolicySource,
+            ("    private readonly int _window;\n", "    // AgentClient forwards to the members below.\n    private readonly int _window;\n"));
+
+        return new[]
+        {
+            new ScenarioVariant(
+                Name: "UsingStaticForwarder",
+                BaseStep: 1,
+                Files: new Dictionary<string, string> { [ClientPath] = usingStaticClient },
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.CorrectDone,
+                ExpectedOutcome: ImplementationScenarioOutcome.Pass),
+            new ScenarioVariant(
+                Name: "CrefKept",
+                BaseStep: 1,
+                Files: new Dictionary<string, string> { [PolicyPath] = crefKept },
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "still depends on AgentClient"),
+            // The definitions are in ReplayPolicy (golden) but AgentClient keeps its own copies (seed) instead of forwarding.
+            new ScenarioVariant(
+                Name: "DefinitionsCopied",
+                BaseStep: 1,
+                Files: new Dictionary<string, string> { [ClientPath] = SeedClientSource },
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "must be a constant initialised from a ReplayPolicy member"),
+            new ScenarioVariant(
+                Name: "CommentOnly",
+                BaseStep: 1,
+                Files: new Dictionary<string, string> { [PolicyPath] = commentOnly },
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.CorrectDone,
+                ExpectedOutcome: ImplementationScenarioOutcome.Pass),
+        };
     }
 }
