@@ -1,6 +1,6 @@
 # Plan: rework the 18 first-slice eval scenarios into realistic briefs with behavioural acceptance tests (proposal Phasing step 3)
 
-**Status:** IN PROGRESS 2026-11-23. Steps 54-59 done (7d94a62c..76df6d43). Approved 2c34a882; review amendments and the owner's answers are Decision 13 (overrides step text); Batched mode, owner present. Phasing step 3 of [proposal_modeleval_standing_workflow_contract.md](../proposals/proposal_modeleval_standing_workflow_contract.md), written from [finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md](../findings/finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md). Depends on [plan_modeleval_workflow_contract_phase1.md](./closed/plan_modeleval_workflow_contract_phase1.md) (called "P1" below).
+**Status:** IN PROGRESS 2026-11-23. Steps 54-59 done (7d94a62c..76df6d43); Steps 1-11 done (2b578dea..5765c966). Approved 2c34a882; review amendments and the owner's answers are Decision 13 (overrides step text); Batched mode, owner present. Phasing step 3 of [proposal_modeleval_standing_workflow_contract.md](../proposals/proposal_modeleval_standing_workflow_contract.md), written from [finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md](../findings/finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md). Depends on [plan_modeleval_workflow_contract_phase1.md](./closed/plan_modeleval_workflow_contract_phase1.md) (called "P1" below).
 
 ## Problem
 
@@ -442,6 +442,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 ### Batch A - shared harness (Steps 1-11)
 
 ### Step 1 - Contract skeleton, part 1 (AgentLoop and Harness)
+- Done: 2b578dea
 - Files: RoslynSentinel.AgentLoop/FinalOutcomeToken.cs (new), RoslynSentinel.Tests.Harness/EvalAxis.cs (new), RoslynSentinel.Tests.Harness/ScenarioReport.cs (new)
 - Depends on: P1 Steps 1 and 3 (for the later steps; this step needs none)
 - Effect: text-neutral (new members, no callers).
@@ -450,6 +451,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (3 new files). Pairs with: Step 2.
 
 ### Step 2 - Contract skeleton, part 2 (verdict, variant, step and context members)
+- Done: a23a6511
 - Files: RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Graders/ScenarioVerdict.cs (new), RoslynSentinel.Tests.ModelEval/ImplementationScenarios/ScenarioVariant.cs (new), RoslynSentinel.Tests.ModelEval/ImplementationScenarios/ImplementationScenario.cs
 - Depends on: 1, 58 (the `Graders/` layout); P1 Step 12 (it appends a property to the same record, this step appends after it)
 - Effect: text-neutral for prompts and gradings; the `Budget_FitsContextWindow` count changes (visible tests excluded, Decision 10), which can only lower it.
@@ -458,6 +460,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (3 files, ~11 edits). Pairs with: Step 3.
 
 ### Step 3 - Contract skeleton, part 3 (compilation, mutation grading, failed-test names)
+- Done: b08643e2
 - Files: RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Graders/ScenarioCompilation.cs (new), RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Graders/MutationGrader.cs (new), RoslynSentinel.Tests.Harness/DotnetTestRunner.cs
 - Depends on: 2 (for the context type), none otherwise
 - Effect: text-neutral.
@@ -466,6 +469,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (3 files, ~6 edits). Pairs with: Step 2.
 
 ### Step 4 - Bodies: outcome token, report parser, classifier
+- Done: 36a8c023
 - Files: RoslynSentinel.AgentLoop/FinalOutcomeToken.cs, RoslynSentinel.Tests.Harness/ScenarioReport.cs, RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Graders/ScenarioVerdict.cs
 - Depends on: 1, 2
 - Effect: text-neutral (no caller yet).
@@ -474,6 +478,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (3 files, ~6 edits). Pairs with: Step 5.
 
 ### Step 5 - Bodies: compilation helper and failed-test names
+- Done: 5a81c3f6
 - Files: RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Graders/ScenarioCompilation.cs, RoslynSentinel.Tests.Harness/DotnetTestRunner.cs, RoslynSentinel.Tests.ModelEval/ImplementationScenarios/ImplementationScenario.cs
 - Depends on: 3
 - Effect: text-neutral.
@@ -482,6 +487,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (3 files, ~6 edits). Pairs with: Step 4.
 
 ### Step 6 - Body: mutation grader
+- Done: 1cd7d077
 - Files: RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Graders/MutationGrader.cs
 - Depends on: 3
 - Effect: text-neutral.
@@ -490,6 +496,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~3 edits). Pairs with: Step 7 only if Step 7 touches other files (it does not; run alone after Step 5).
 
 ### Step 7 - Wire the check pipeline and the agent tests
+- Done: 0e914e98
 - Files: RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Graders/ImplementationScenarioChecks.cs, RoslynSentinel.Tests.ModelEval/ImplementationScenarioAgentTests.cs
 - Depends on: 2, 4, 5, 58 (checks now live in `Graders/`); P1 Steps 8 and 13 (the same agent-test file; locate the sites with `Search`, line numbers have moved)
 - Effect: behaviour-changing for result text: `step-<k>.outcome.txt` gains `outcomeClass=<x> variant=<y>`; the pass condition changes only for a step that sets `ExpectedRedTests` (none yet) and the `Blocked` relabel is replaced by the class.
@@ -498,6 +505,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (2 files, ~9 edits; depth tier 1).
 
 ### Step 8 - Model-free scenario tests: variants, seed build, files vs scope
+- Done: d8753d17
 - Files: RoslynSentinel.Tests.ModelEval/ImplementationScenarioGoldenTests.cs
 - Depends on: 2, 7
 - Effect: text-neutral (tests; no scenario carries variants yet, so the new cases have no rows).
@@ -506,6 +514,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~8 edits). Pairs with: Step 9.
 
 ### Step 9 - Tests: token, report parser, classifier
+- Done: a373df0e
 - Files: RoslynSentinel.Tests.Harness/FinalOutcomeTokenTests.cs (new), RoslynSentinel.Tests.Harness/ScenarioReportTests.cs (new), RoslynSentinel.Tests.ModelEval/ScenarioClassifierTests.cs (new)
 - Depends on: 4
 - Effect: text-neutral (tests). Namespace `RoslynSentinel.Tests.ModelEval`, model-free, never in `.LiveModel` (P1 execution rules).
@@ -514,6 +523,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: test-writer (3 new files). Pairs with: Step 8.
 
 ### Step 10 - Tests: compilation helper, mutation grader, failed-test names, RunTest on a fixture
+- Done: 5765c966
 - Files: RoslynSentinel.Tests.ModelEval/ScenarioCompilationTests.cs (new), RoslynSentinel.Tests.ModelEval/MutationGraderTests.cs (new), RoslynSentinel.Tests.ModelEval/RunTestOnFixtureTests.cs (new)
 - Depends on: 5, 6; P1 Step 12 (the world builder)
 - Effect: text-neutral (tests).
@@ -522,6 +532,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: test-writer (3 new files). Pairs with: none (the mutation test builds a solution; one `dotnet` at a time).
 
 ### Step 11 - Batch A gate
+- Done: gate passed at 5765c966 (fullBuildThrowaway 0 errors, no step stubs left, old goldens pass)
 - Files: none edited
 - Depends on: 1-10
 - Effect: text-neutral.
