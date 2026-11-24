@@ -2,6 +2,17 @@
 
 **Status:** DRAFT 2026-11-23. Implements [proposal_json_toolset_definitions.md](../proposals/proposal_json_toolset_definitions.md); owner decisions settled 2026-11-22/23 (below). Not started.
 
+> **Note 2026-11-23 - review against the tool-surface controller before running.**
+> [proposal_tool_surface_controller.md](../proposals/proposal_tool_surface_controller.md) makes every surface input a
+> layer applied through one front door; a toolset file becomes one layer source (its migration stage 6) rather than
+> the startup resolver this plan builds. The file format, loader and composition rules here carry over; where the
+> resolved surface is applied (registration-time `ToolAllowList` and DI blocks) is what changes.
+> **HTTP fold dropped (owner, 2026-11-23).** [plan_stateless_http_toolset_enablement.md](plan_stateless_http_toolset_enablement.md)
+> lands first and keeps runtime groups live over HTTP (one shared tool collection). The HTTP-specific text of this plan
+> (Decision, Steps 9, 10, 13, 22, live case D, Out of scope) was updated to match. Both transports now pass
+> `runtimeGroupsSupported: true`, so the fold branch in Step 5 (`FoldedGroups`) has no caller; remove it, and the
+> parameter if nothing else needs it, when this plan is reshaped under the controller proposal.
+
 ## Problem
 
 Four inputs combine to build the active tool surface: modes, `--include-tools`, `--exclude-tools`
@@ -65,10 +76,10 @@ The decisions come from the proposal plus the owner rulings of 2026-11-23:
   `{"description": "<one line>", "tools": [...]}`, with no `enabledAtStart` field.
   `McpToolsetControl`'s `toolSet` enum and description are generated from the active groups. Groups are
   enabled at start by `--toolsets` and by the per-tab saved state, unchanged.
-- **HTTP folds groups at startup** (owner, 2026-11-23). Stateless HTTP has no per-request toolset state.
-  `ServerHttp` resolves with runtime switching off: groups named in `--toolsets` become core tools,
-  `McpToolsetControl` and `ToolsetService` are not registered, and `McpServerStatus` says so. Runtime
-  switching over HTTP is a follow-up, not this plan.
+- **HTTP keeps runtime groups** (owner, 2026-11-23, replacing the earlier same-day "HTTP folds groups at
+  startup" ruling). `plan_stateless_http_toolset_enablement.md` lands first and gives every HTTP session the
+  one shared tool collection, so `ToolsetService` and `McpToolsetControl` work on HTTP as on stdio and
+  `ServerHttp` resolves with `runtimeGroupsSupported: true`. This plan depends on that plan's Step 2 for HTTP.
 - **Validation.** An unknown name on the new flags fails startup with closest-match hints from
   `NameCandidates` (`RoslynSentinel.Common/NameCandidates.cs:8`) and exit code 2, the existing code from
   `HandleNoActiveTools`.
@@ -382,8 +393,8 @@ and the `Toolset1` alias.
 - Depends on: 5, 7, 8.
 - Effect: behaviour-changing. `--toolset`, `--toolset-file` and `--tools` exist. Using more than one, or
   an unknown name, fails with exit code 2. `--mode`, `--include-tools`, `--exclude-tools` and
-  `--hide-tools` print a deprecation warning and resolve as today. On HTTP, `--toolsets` folds groups
-  into the core.
+  `--hide-tools` print a deprecation warning and resolve as today. `--toolsets` enables startup groups on
+  both transports.
 - Change:
   - **`ResolveFromArgs`:**
     `public static ToolsetResolveResult ResolveFromArgs(string[] args, IDeclaredToolCatalog catalog, bool runtimeGroupsSupported, Action<string> warn)`.
@@ -396,14 +407,15 @@ and the `Toolset1` alias.
       the other modes add no tools;
     - otherwise it builds an unnamed `ToolsetDefinition` with the classes from `ResolveActiveToolClasses`
       and `exclude` = `hide`.
-  - **Wiring:** `ServerStdio.cs:41` and `ServerHttp.cs:26` call `ResolveFromArgs` (HTTP with
-    `runtimeGroupsSupported: false`) and pass the result to the new registration overloads.
+  - **Wiring:** `ServerStdio.cs:41` and `ServerHttp.cs:26` call `ResolveFromArgs` (both with
+    `runtimeGroupsSupported: true`; HTTP needs `plan_stateless_http_toolset_enablement.md` Step 2 landed) and
+    pass the result to the new registration overloads.
     `HandleNoActiveTools`, `HandleListTools` (`ServerStartupHelpers.cs:460`) and `ConsoleMode.WriteStartupDump`
     (it uses the toolset name in the file name) take the resolved surface.
   - **Exit code:** catch `ToolsetValidationException`, write its `Errors` to stderr, and set
     `Environment.ExitCode = 2`.
-  - **HTTP follow-up:** runtime groups over stateless HTTP are covered by
-    `plan_stateless_http_toolset_enablement.md` (Out of scope); no INBOX line is needed.
+  - **HTTP:** runtime groups over HTTP come from `plan_stateless_http_toolset_enablement.md`, which lands
+    first; no INBOX line is needed.
 - Done when:
   - `Build` 0 errors.
   - The dispatcher runs Tests.Server `FullyQualifiedName~ToolsetSurfaceSnapshot|FullyQualifiedName~NoActiveToolsStartupTests|FullyQualifiedName~ClaudeLeanModeTests|FullyQualifiedName~ToolClassNameResolutionTests|FullyQualifiedName~ExperimentalModeTests`.
@@ -420,8 +432,8 @@ and the `Toolset1` alias.
   - two surface flags at once, which fails;
   - `--toolset-file` with `extends` and `exclude`;
   - `--mode=claude-lean,subagenteval`, which warns and serves the `claude-lean` surface;
-  - HTTP `--toolsets=git` with `runtimeGroupsSupported: false`, which puts `GitRemote` in the core with no
-    `McpToolsetControl`;
+  - HTTP `--toolsets=git`, which enables the `git` group at start (`GitRemote` listed) with
+    `McpToolsetControl` present;
   - an unknown `--toolsets` group, which fails.
 - Done when: `Build` 0 errors. The dispatcher runs `ToolSurfaceArgsTests` and it is all green.
 - Lane: `test-writer` (pairs with Step 11).
@@ -468,8 +480,8 @@ and the `Toolset1` alias.
 - Files: `RoslynSentinel.Server.Advanced/ServiceRegistrationExtensionsBasic.cs`,
   `RoslynSentinel.Server.Advanced/ServerStartupHelpers.cs`.
 - Depends on: 9, 12.
-- Effect: behaviour-changing. Any toolset with groups gets `McpToolsetControl`. On HTTP the server has no
-  `ToolsetService`, so `McpToolsetControl` is gone there; today it is offered there and does nothing.
+- Effect: behaviour-changing. Any toolset with groups gets `McpToolsetControl`, on stdio and HTTP alike (HTTP
+  through the stateless plan's shared collection).
 - Change:
   - **Registration:** register `ToolsetService` with the group ctor from `surface.OnDemandGroups`,
     replacing the claude-lean-only block at `ExtBasic:334-386`. `TabToolsetStateStore` stays conditional
@@ -659,8 +671,8 @@ and the `Toolset1` alias.
   in slice 22b.
 - Depends on: 9, 16.
 - Effect: behaviour-changing (wire).
-  - `McpServerStatus.toolSurface` gains `toolsetName` and `toolsetSource`, plus `runtimeToolsets` (for
-    example "not available on stateless HTTP; groups named by --toolsets are folded into the core").
+  - `McpServerStatus.toolSurface` gains `toolsetName` and `toolsetSource`, plus `runtimeToolsets` (the
+    groups and which are enabled).
   - `enabledBy` hints name a toolset or `--tools` where they named `--mode X or --include-tools Y`.
   - `McpServerControl` gains `toolset` and `tools` parameters. `includeTools` is deprecated, and a child
     with no `toolset` inherits the parent's toolset name.
@@ -750,8 +762,8 @@ and the `Toolset1` alias.
     - **B.** `-Tools "ReadFiel"`: exit code 2 with a "ReadFile" hint (`fails-with-hint` | `starts`).
     - **C.** A stdio session with `--toolset=claude-lean`: `McpToolsetControl`'s schema enum lists the 6
       groups, and enabling `git` works (`generated` | `stale-enum`).
-    - **D.** HTTP with `--toolsets=git`: `GitRemote` is in `tools/list` and `McpToolsetControl` is not
-      (`folded` | `missing`).
+    - **D.** HTTP with `--toolsets=git`: `GitRemote` and `McpToolsetControl` are in `tools/list`, and
+      enabling another group shows its tools on the next `tools/list` (`live` | `startup-only` | `missing`).
     - **E.** The owner's `--mode=claude-lean, subagenteval`: starts with a deprecation warning and serves
       the `claude-lean` surface (`alias-ok` | `broken`).
 - Done when: every case has an outcome class recorded in this plan's Status. A non-ideal class gets a
@@ -760,12 +772,10 @@ and the `Toolset1` alias.
 
 ## Out of scope
 
-- **Runtime group switching over stateless HTTP.** It needs an `IConfigureOptions<McpServerOptions>`
-  (or `ConfigureSessionOptions`) hook that adds `ToolsetService`'s enabled tools to each per-request
-  options copy. That would make the enable process-wide. Clients would still see the change only after
-  re-listing, through a `/mcp` reconnect, because stateless sends no `tools/list_changed`. This is the
-  approach of [plan_stateless_http_toolset_enablement.md](plan_stateless_http_toolset_enablement.md), a
-  never-run DRAFT that was reopened from `closed/` on 2026-11-23.
+- **Runtime group switching over HTTP itself.** Delivered by
+  [plan_stateless_http_toolset_enablement.md](plan_stateless_http_toolset_enablement.md) (APPROVED 2026-11-23:
+  one shared tool collection via `ConfigureSessionOptions`, `StatefulForInitializeClients`), which lands
+  before this plan.
 - **Removing the `--mode` alias and `ModeToToolClasses`.** That waits for the owner's `~/.mcp.json` to
   move to `--toolset`, and is a TODO from Step 23.
 - **Replacing the hard-coded per-class DI blocks.** Registration by reflection over the active classes is

@@ -1,7 +1,7 @@
 # Named JSON toolset files replace mode + include + exclude + hide as the one way to choose a tool surface
 
 **Status:** PROPOSED 2026-11-22. Design decisions settled with the owner on 2026-11-22. Prerequisite
-[plan_tab_scoped_toolset_persistence.md](../plans/closed/plan_tab_scoped_toolset_persistence.md) closed 2026-11-23. Plan: [plan_json_toolset_definitions.md](../plans/plan_json_toolset_definitions.md) (DRAFT 2026-11-23; adds the owner rulings on group shape, HTTP fold and flag removal).
+[plan_tab_scoped_toolset_persistence.md](../plans/closed/plan_tab_scoped_toolset_persistence.md) closed 2026-11-23. Plan: [plan_json_toolset_definitions.md](../plans/plan_json_toolset_definitions.md) (DRAFT 2026-11-23; adds the owner rulings on group shape, HTTP fold and flag removal; the HTTP fold was dropped later the same day in favour of plan_stateless_http_toolset_enablement.md, and the plan is to be reviewed against proposal_tool_surface_controller.md).
 
 ## Motivation
 

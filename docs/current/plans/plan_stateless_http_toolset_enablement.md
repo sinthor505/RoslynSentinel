@@ -3,6 +3,11 @@
 **Status:** APPROVED 2026-11-23 (design rewritten; owner accepted shared toolset state). Not started. Diagnostics landed
 first: 014e4110 (protocol log lines, `McpServerStatus.toolListSubscriptionRequests`), a86b5afd (schema budget).
 Supersedes the 2026-10-11 draft of this plan (per-request TryAdd hook, plain `Stateless = true`).
+Review fixes applied 2026-11-23 (read-only review against SDK v2.4.0 and source): Step 1 answered from the SDK, Step 6
+names the test it flips, Step 4 delivery table reordered, test-impact and Risk corrections; the cross-plan conflict
+with `plan_json_toolset_definitions.md` is decided: this plan lands first (Risks). Long-term home of the delivery logic:
+[proposal_tool_surface_controller.md](../proposals/proposal_tool_surface_controller.md) (its "Deliver" stage); this plan
+is independent of it and can land first.
 
 ## Problem
 
@@ -62,17 +67,21 @@ A toolset enabled mid-session must show up in the client's tool list without a `
 
 ## Steps
 
-Text-neutral first: Steps 1 and 2 change no wire text; Steps 3-6 are behaviour-changing.
+Order: Step 1 (done) and Step 3 add no wire text; Steps 2, 4, 5 and 6 are behaviour-changing.
 
-### Step 1 - Spike: the raw HTTP shape of a 2026-07-28 request
+### Step 1 - Spike: the raw HTTP shape of a 2026-07-28 request (DONE 2026-11-23, answered in review)
 - Files: none edited.
 - Depends on: none.
 - Effect: none.
-- Change: from SDK v2.4.0 source (`git -C C:\Users\Administrator\source\repos\csharp-sdk show v2.4.0:<path>`, read-only)
-  find what a session-less `tools/list`/`tools/call` POST needs to be served statelessly under
-  `StatefulForInitializeClients` (`StreamableHttpHandler.cs` ~line 472: the `MCP-Protocol-Version` header, any `_meta`
-  protocol field, or `server/discover` first). Record the answer under "Risks and open decisions".
-- Done when: the request shape is recorded with file:line; lane: main session or `explore-tier2`.
+- Answer (SDK v2.4.0, `StreamableHttpHandler.cs` unless noted): a session-less 2026-07-28 POST to
+  `StatefulForInitializeClients` is served statelessly (`:477-478`) only if it carries all of:
+  - header `MCP-Protocol-Version: 2026-07-28`; without it a non-initialize request gets 400 (`:486-495`);
+  - header `Mcp-Method: <method>` (`ValidateMcpHeaders`, `:1019-1042`);
+  - header `Mcp-Name: <tool>` on `tools/call` (`:1061-1107`);
+  - a body `params` object whose `_meta["io.modelcontextprotocol/protocolVersion"]` equals the header (`:956-978`, `:939`)
+    and whose `_meta["io.modelcontextprotocol/clientCapabilities"]` is a JSON object (`:786-796`); keys in
+    `MetaKeys.cs:16`, `:45`.
+  Today's `tools/list` snippet sends no `params` at all, so it would get 400 on 2026-07-28.
 
 ### Step 2 - Shared tool collection and session mode on the HTTP host
 - Files: `RoslynSentinel.Server.Advanced/McpHttpTransportSetup.cs` (new), `RoslynSentinel.Server.Advanced/ServerHttp.cs`.
@@ -94,8 +103,10 @@ Text-neutral first: Steps 1 and 2 change no wire text; Steps 3-6 are behaviour-c
 - Depends on: 2. Pairs with: Step 4 (disjoint projects' files).
 - Effect: text-neutral.
 - Change: an in-process `WebApplication` on a loopback ephemeral port, configured like `ServerHttp` (claude-lean mode,
+  `AddRoslynSentinelHostOptions(..., HostTransport.Http, ...)` - without it `AddRoslynSentinelEnginesBasic` TryAdds the
+  default `Transport = Stdio` (`EngineServiceCollectionExtensionsBasic.cs:32`) and Step 4's "none" branch goes untested -
   `AddRoslynSentinelToolsAdvanced`, `WithHttpTransport(McpHttpTransportSetup.Configure)`, `MapMcp("/mcp")`), client
-  `HttpClientTransport`. Tests:
+  `HttpClientTransport` (the first HTTP MCP client in the repo). Tests:
   - `LegacyClient_GetsSessionAndListChanged_AfterEnable`: client `ProtocolVersion = "2025-11-25"`; enable `declarations`;
     one `tools/list_changed` arrives; `ListToolsAsync` contains `TypedMember`.
   - `PerRequestClient_SeesEnabledToolsOnNextList`: client on the SDK default (2026-07-28); enable `declarations`, then a
@@ -103,8 +114,8 @@ Text-neutral first: Steps 1 and 2 change no wire text; Steps 3-6 are behaviour-c
   - `StartupToolsets_AppearForPerRequestClient`: host started with `--toolsets=declarations`
     (`ServerStartupHelpers.ApplyStartupToolsets`); first `ListToolsAsync` contains `TypedMember`.
   Reuse fixture helpers from `McpToolsetControlTests.LiveServer` where they fit; do not change that class.
-- Done when: the dispatcher's run shows the three tests green on Step 2's commit (and red on a86b5afd for the last two,
-  if run there). Lane: `test-writer` (new fixture design: escalate to `test-writer-senior` at once if ASP.NET Core
+- Done when: the dispatcher's run shows the three tests green on Step 2's commit (and all three red on a86b5afd, if run
+  there: under `Stateless` the legacy client gets no `list_changed` either). Lane: `test-writer` (new fixture design: escalate to `test-writer-senior` at once if ASP.NET Core
   hosting from Tests.Server does not compile).
 
 ### Step 4 - Direct notification for unsubscribed 2026-07-28 clients, and delivery-path status text
@@ -121,13 +132,18 @@ Text-neutral first: Steps 1 and 2 change no wire text; Steps 3-6 are behaviour-c
     bool enabled, CancellationToken cancellationToken = default)`. No direct callers in source or tests (calls go through MCP).
   - After a change with added+removed > 0: `version = requestContext?.JsonRpcRequest.Context?.ProtocolVersion ??
     requestContext?.Server.NegotiatedProtocolVersion`; `perRequest = version is not null &&
-    string.CompareOrdinal(version, "2026-07-28") >= 0`. Delivery path:
+    string.CompareOrdinal(version, "2026-07-28") >= 0`. Delivery path, evaluated in this order (transport first: on
+    HTTP per-request `HasStatefulTransport` is false and the SDK does not fan out, `McpServerImpl.cs:2103`):
     - not `perRequest`: "sdk" (the SDK broadcast already went out on a stateful transport).
-    - `perRequest` and `hostOptions.Transport == HostTransport.Stdio` and `ToolListSubscriptionRequests == 0`: send
-      `NotificationMethods.ToolListChangedNotification` via `requestContext.Server.SendNotificationAsync`, catch and log
-      a failure (never fail the tool); "direct". Comment the SEP-2575 deviation and why.
-    - `perRequest` and subscribed: "sdk" (the SDK fans out to the subscription).
-    - `perRequest` and HTTP: "none" (a per-request HTTP exchange cannot carry an unsolicited notification).
+    - `perRequest` and `hostOptions.Transport == HostTransport.Http`: "none" (a per-request HTTP exchange cannot carry an
+      unsolicited notification), whatever the subscription counter says.
+    - `perRequest`, stdio, `ToolListSubscriptionRequests > 0`: "sdk" (the SDK fans out to the subscription).
+    - `perRequest`, stdio, `ToolListSubscriptionRequests == 0`: send `NotificationMethods.ToolListChangedNotification`
+      via `requestContext.Server.SendNotificationAsync` (declared on `McpSession`, `McpSession.Methods.cs:98`); "direct"
+      on success, "none" if it throws (catch and log; never fail the tool, never report "Sent" for a failed send).
+      Comment the SEP-2575 deviation and why.
+    - Known limit, state it in a code comment: `ToolListSubscriptionRequests` only increments
+      (`RecordToolListSubscriptionRequest`), so after a client's subscription stream closes neither path notifies.
   - Replace the unconditional sentence ("A server started by the launcher saves ... needs a /mcp reconnect ...") with
     facts per path, roughly: sdk/direct - "Sent notifications/tools/list_changed; a client that does not re-list on it
     still sees the change after a /mcp reconnect."; none - "This connection cannot receive notifications/tools/list_changed;
@@ -135,7 +151,11 @@ Text-neutral first: Steps 1 and 2 change no wire text; Steps 3-6 are behaviour-c
     (`reference_tool_error_text_facts_options_policy.md`). Status text is not schema text (no budget impact).
   - Tests in `McpToolsetControlTests`: `Lean_ClientOn20260728_GetsListChangedOnlyOverASubscription` (line 557) asserts
     no notification without a subscription; split it into `Lean_ClientOn20260728_WithoutSubscription_GetsOneDirectListChanged`
-    and `Lean_ClientOn20260728_WithSubscription_GetsExactlyOneListChanged` (no duplicate from the direct path).
+    and `Lean_ClientOn20260728_WithSubscription_GetsExactlyOneListChanged` (no duplicate from the direct path; it must
+    open the subscription before the first toggle, unlike the current test at its l.563, or it sees a direct send).
+    Update the doc comments that name the old test (`McpToolsetControlTests.cs` ~:330 and :406), and rename or re-scope
+    `Enable_StatusMessage_TellsNonRefreshingClientsToReconnect` (:610): it pins `Does.Contain("/mcp")`, which holds only
+    for the sdk/direct text.
 - Done when: `Build` 0 errors; dispatcher runs `McpToolsetControlTests`. Lane: `implementer` D1 (2 files).
 
 ### Step 5 - LaunchTestInstance snippets work against the session mode
@@ -144,8 +164,10 @@ Text-neutral first: Steps 1 and 2 change no wire text; Steps 3-6 are behaviour-c
 - Effect: behaviour-changing: `BuildHowToCall` (line 735) snippets carry the request shape from Step 1, so a session-less
   `tools/list`/`tools/call` is served statelessly instead of refused for a missing session. `InitializeBody` (line 297,
   readiness probe, protocol `2025-06-18`) keeps working: it now opens a session, which is harmless.
-- Change: add the Step 1 header/fields to both snippets; update the `BuildHowToCall` doc comment ("stateless Streamable
-  HTTP") and `BuildHowToCall_CarriesUrlBothAcceptValuesContentTypeSseRecipeAndStopHint` (TestInstanceLauncherTests.cs:271).
+- Change: add the Step 1 headers (`MCP-Protocol-Version`, `Mcp-Method`, and `Mcp-Name` on the call snippet) and body
+  changes (a `params` object with the two `_meta` keys) to both snippets; single-quoted PowerShell keys keep the existing
+  "no double quotes or backslashes" test rule satisfiable. Update the `BuildHowToCall` doc comment ("stateless Streamable
+  HTTP") and `BuildHowToCall_CarriesUrlBothAcceptValuesContentTypeSseRecipeAndStopHint` (TestInstanceLauncherTests.cs:267).
 - Done when: `Build` 0 errors; dispatcher runs `TestInstanceLauncherTests`. Lane: `implementer` D1.
 
 ### Step 6 - list_changed after every launcher start (closes TODO.md case D)
@@ -155,20 +177,30 @@ Text-neutral first: Steps 1 and 2 change no wire text; Steps 3-6 are behaviour-c
 - Change: in `AddRestoredToolsetListChangedMessageFilter`, replace the `RestoredAtStartup != true` condition with "a
   `TabToolsetStateStore` is registered" (launcher start; verify it is absent for non-launcher starts), resolve the
   `// TODO Send after every launcher-started ...` marker, and rename the method to `AddLauncherStartListChangedMessageFilter`
-  (one caller, line 93). Update `RestoredStart_SendsOneToolListChangedAfterInitialized` or add a non-restored
-  launcher-start case.
-- Done when: `Build` 0 errors; dispatcher runs `McpToolsetControlTests`. Lane: `implementer` D1.
+  (one caller, line 94). Flip `PlainStart_SendsNone` (McpToolsetControlTests.cs ~:535-555: registers a
+  `TabToolsetStateStore` with `RestoredAtStartup = false` and asserts zero `list_changed`; under the new condition it
+  gets one) into a launcher-start case that expects exactly one, and keep a non-launcher start (no store) asserting none.
+  Update `RestoredStart_SendsOneToolListChangedAfterInitialized` if its wording assumes restore. Remove the duplicate
+  READY item at `docs/current/TODO.md:43` when this lands.
+  - Known limit, state it in a code comment: the filter fires on the `initialized` notification, which the SDK rejects on
+    2026-07-28 (`ValidateNotificationBoundary`, `McpServerImpl.cs:435-443`), so a stdio client that stays on 2026-07-28
+    gets no post-start `list_changed` from this filter.
+- Done when: `Build` 0 errors; dispatcher runs `McpToolsetControlTests` including the flipped `PlainStart_*` case.
+  Lane: `implementer` D1.
 
 ### Step 7 - Guidance and records
 - Files: `CLAUDE.md` ("Gated tools" paragraph), `docs/current/blockers/blocking_error_gitremote_not_callable_after_toolset_enable.md`
-  (close with the 2026-11-23 probe evidence, move to `closed/`), `docs/current/TODO.md` (case D line),
-  `docs/current/INBOX.md` (remove lines this plan closes).
+  (close with the 2026-11-23 probe evidence, move to `closed/`), `docs/current/TODO.md` (case D line at :43; the
+  plan's label at :39 still says "DRAFT, reopened" - update it to this plan's state). INBOX.md has no toolset or
+  `list_changed` lines today, so it needs no change unless one is added meanwhile.
 - Depends on: 4, 6.
 - Effect: none (docs).
 - Change: CLAUDE.md: after `McpToolsetControl`, the tool appears through ToolSearch; if it does not, report
   `McpServerStatus` `clientProtocolVersion` and `toolListSubscriptionRequests`, then `/mcp` reconnect. Note that custom
-  subagents with an explicit `tools:` list never see toolset tools.
-- Done when: `scripts/Test-GuidanceHygiene.ps1` passes. Lane: main session.
+  subagents with an explicit `tools:` list never see toolset tools. CLAUDE.md is already over its 15 KB budget (15,791
+  bytes on 2026-11-23): the edit must not grow it net; trim or move text to a reference doc to pay for it.
+- Done when: CLAUDE.md byte size is not larger than before the step (`scripts/Test-GuidanceHygiene.ps1` only prints
+  sizes; it does not fail on them). Lane: main session.
 
 ### Step 8 - LIVE verification
 - Files: none.
@@ -183,7 +215,9 @@ Text-neutral first: Steps 1 and 2 change no wire text; Steps 3-6 are behaviour-c
   - **E. howToCall snippets as returned by LaunchTestInstance:** `work` | `fail`.
   - **F. stdio on 2026-07-28 (only if a client can be made to stay on it, e.g. an SDK client):** `direct-received` |
     `subscribed-received` | `none`.
-- Done when: A-E recorded (F if reachable).
+  - **G. A real Claude Code client over HTTP:** `session` (it used initialize and gets pushes) | `per-request-no-push`
+    (it stayed on 2026-07-28; see the Decision 2 Risk).
+- Done when: A-E and G recorded (F if reachable).
 
 ## Out of scope
 
@@ -195,14 +229,33 @@ Text-neutral first: Steps 1 and 2 change no wire text; Steps 3-6 are behaviour-c
 
 ## Risks and open decisions
 
-- **Step 1 unknown:** the exact session-less 2026-07-28 request shape. If the SDK needs more than a header (e.g. a
-  per-request `_meta` block), Step 5's PowerShell snippets grow; if it is impractical, the fallback is snippets that
-  initialize first and replay `Mcp-Session-Id`.
+- **Cross-plan conflict: DECIDED (owner, 2026-11-23): this plan lands first; the JSON toolsets plan dropped its HTTP
+  fold and now depends on this plan's Step 2.** Background: `plan_json_toolset_definitions.md` recorded an owner ruling of the same
+  day that HTTP folds groups at startup and registers no `McpToolsetControl`/`ToolsetService` (its Decision bullet
+  "HTTP folds groups at startup", a step stating "On HTTP the server has no `ToolsetService`", live case D), and its
+  "Out of scope" describes this plan as the old 2026-10-11 design. A note at the top of that plan now flags this. This plan keeps
+  runtime toolsets live over HTTP. Both also edit `ServerHttp.cs`, `ServiceRegistrationExtensionsBasic.cs` and
+  `ToolsetControlTools.cs`. Today `ToolsetService` is registered on HTTP in claude-lean
+  (`ServiceRegistrationExtensionsBasic.cs:414-420`), so this plan's assumptions hold now. Recommendation (2026-11-23):
+  this plan lands first and the JSON plan drops "HTTP folds"; `proposal_tool_surface_controller.md` also assumes the
+  shared live collection.
+- **Decision 2 may miss the target client over HTTP.** `StatefulForInitializeClients` serves a 2026-07-28 request
+  statelessly (`StreamableHttpHandler.cs:477-478`), so a client that probes 2026-07-28 first gets no session and no
+  push. `HttpServerSessionMode.Stateful` refuses 2026-07-28 instead, so a dual-path client falls back to `initialize`
+  (`:469-474`). The fallback evidence in Problem is stdio only. Live case G decides; if it records
+  `per-request-no-push`, switch to `Stateful`.
+- **Step 1 answered:** the request shape needs headers and a `params._meta` body (Step 1), so Step 5's snippets grow
+  by both; the fallback, if that proves impractical, is snippets that initialize first and replay `Mcp-Session-Id`.
 - **Direct notification acceptance:** whether Claude Code acts on an unsolicited `tools/list_changed` while on
   2026-07-28 is unverified (case F). The send is harmless if ignored.
-- **ASP.NET Core in Tests.Server (Step 3):** hosting Kestrel in-process may need a `FrameworkReference` to
-  `Microsoft.AspNetCore.App` in the test project; that `.csproj` edit is in Step 3's scope if needed.
+- **ASP.NET Core in Tests.Server (Step 3):** Tests.Server already references Server.Advanced, which carries
+  `ModelContextProtocol.AspNetCore`, so the framework reference probably flows transitively (hypothesis, unbuilt); a
+  `FrameworkReference` to `Microsoft.AspNetCore.App` in the test `.csproj` is in Step 3's scope if it does not.
+- **"Sent" on the stateful-HTTP sdk path** is true only if the client holds a GET SSE stream; the SDK fires
+  `SendListChangedNotificationAsync` without confirming delivery (`McpServerImpl.cs:128`).
 - **SDK coupling:** sharing the collection relies on `ConfigureSessionOptions` running after `McpServerOptionsSetup`
   (it does in v2.4.0: the factory runs first, the hook second, `StreamableHttpHandler.cs:588-602`). Re-check on SDK upgrades.
-- **Other HTTP clients:** AgentLoop/ModelEval clients use the SDK client (default 2026-07-28, served statelessly), so
-  their behaviour is unchanged apart from toggles now taking effect.
+- **Other HTTP clients:** none exist. AgentLoop, PlanStepRunner and SubAgent use `StdioClientTransport`
+  (`SubAgentChildServerLauncher.cs:130`, PlanStepRunner `Program.cs:196`); no `HttpClientTransport` appears anywhere in
+  the repo, tests included. Step 3 adds the first, so the HTTP change affects only external clients and
+  `LaunchTestInstance` snippets.
