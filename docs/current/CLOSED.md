@@ -8,6 +8,16 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Stale docs/generated/modeleval_scenarios.md (INBOX 2026-11-24 04:30) - resolved (2026-11-24)
+
+ScenarioCatalogFreshness_WhenCommittedFileExists_MatchesRegeneratedContent failed "Scenario catalog is stale" since before stage E; the worktree test script skips Tests.ModelEval, so filtered runs never saw it.
+
+Evidence: regenerated via RunTest with ROSLYNSENTINEL_UPDATE_GENERATED_DOCS=1 (778327fa); freshness test green without the env var.
+
+## launchSettings.json still named the removed RefactoringTools umbrella (INBOX 2026-11-24 06:53) - resolved (2026-11-24)
+
+Untracked local Server.Advanced/Properties/launchSettings.json lines 31 and 36 now pass RefactoringSignatureTools,RefactoringStructuralTools,RefactoringExtractionDocsTools (local file, no commit).
+
 ## ReplaceSnippet batchEdits friction for weak models (punchlist #20) - resolved (2026-11-24)
 
 ReplaceSnippet batchEdits friction for weak models (2026-11-22) - build all four targets (todo review 2026-11-23; state: (3) top-level `filePath` default already built, top-level `oldContent`/`newContent` as an extra item not; (4) confirmed: `ComposeCompileRejectionAsync` `WorkspaceFileEditImpl.cs:1431-1467` gives file:line only, code TODO `:1443`, map each new diagnostic to the `batchEdits[n]` edited span); Medium overall; measured 2026-11-23 with `scripts/Get-EditToolFriction.ps1` over 165 transcripts (112/113, 2026-11-21/22): 116 batch calls, 63 ok, rejects = 18 anchor, 16 compile, 5 disabled, 5 shape, 9 other. The batch is validated as a whole (order is irrelevant); every batch CS1501/CS7036 (ThreadOptionalParameter 113 runs 111754 T4 and 122626 T2, MigrateOntoEnvironmentHelper 113 T4/T7) left the callee's declaration out of the batch, so the rejection was correct. Targets: (1) a batch CS1501/CS7036 error names the callee's current signature and says no batch item edits its declaration (today the CS0103 hint suggests a typo); (2) `batchEdits[n]: filePath is required` and `not both` errors name the fix (MigrateOntoEnvironmentHelper 113 T6; ResumeFromTranscript 113 2026-11-21, 2 distinct calls replayed 22x); `action: "batchEdits"` (Widen 112 T6) already self-corrects; (3) accept a mixed call instead of rejecting it: a top-level `filePath` is the default for items without one, and a top-level `oldContent`/`newContent` beside `batchEdits` becomes one more item unless it conflicts (kills both shape classes). Batch-only (dropping the single form) rejected: 86% of calls are single edits, batch shape-error rate 4% vs 0.1% single, and ReplaceRange has no batch form; (4, INBOX 2026-11-23) one site that legitimately must stay (CS0266 'changes = plan.Changes' in the Renamer.cs:35 fixture) rejects the whole per-file batch and models do not drop just that item (Ornith SweepConstructionSites converted 3/14 twice, 113 runs 20261123-103024-036, -110250-571); whether the gate error names the failing batch item is unverified
