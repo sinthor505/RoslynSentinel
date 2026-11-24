@@ -14,6 +14,8 @@ Fix: `BuildIsolation.MsBuildPinnedVariables` and `BuildIsolation.RemoveInherited
 
 Live check: `RunTest(repoPath)` in a worktree without global.json passed on the restarted server at 6b3f492b.
 
+End-to-end test: `RunTestMsBuildPinStripTests` (Tests.Tools.Basic, OutOfProcess) runs the real `TestRunEngine` with nonexistent `MSBUILD_EXE_PATH`/`MSBuildSDKsPath`/`MSBuildExtensionsPath` in the process environment (green: tests counted) and the same values through the caller `environment` (red control: no-TRX error); with the strip disabled the green test fails.
+
 Follow-ups, both done: the other private copies of the pin list now use `BuildIsolation` (d8ea2319), and `TestRunEngine.NoTrxDetail` puts the exit code and, for a silent exit, the known cause and options into the no-TRX message (809c5c50).
 
 ## What was being attempted
