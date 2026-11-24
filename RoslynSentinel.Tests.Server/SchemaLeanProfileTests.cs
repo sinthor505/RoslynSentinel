@@ -1,6 +1,6 @@
 // Coverage for proposal_reduce_tool_schema_token_cost.md Step 2 (slice 2a): the "lean" schema profile
 // hides autoStage/returnDiff/validateOnApply/lineBefore/lineAfter from the top level of tools/list
-// input schemas, while the server still accepts those names at call time (HiddenSchemaParams) and the
+// input schemas, while the server still accepts those names at call time (the snapshot's HiddenParameters) and the
 // ambiguous-target errors still name lineBefore/lineAfter. Same in-process MCP host shape as
 // SchemaDataTagOptionTests.cs; no solution load is needed.
 using System.IO.Pipelines;
@@ -20,7 +20,7 @@ using RoslynSentinel.Server.Advanced;
 namespace RoslynSentinel.Tests.Server;
 
 [TestFixture]
-[NonParallelizable] // mutates the process-wide SchemaOptions, HiddenSchemaParams and the validator schema cache
+[NonParallelizable] // mutates the process-wide SchemaOptions
 public class SchemaLeanProfileTests
 {
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase) { "Workspace", "Refactor" };
@@ -35,11 +35,8 @@ public class SchemaLeanProfileTests
 
     private static void ResetStatics()
     {
-        // All three are process-static: the profile, the hidden-name registry, and the validator's
-        // per-tool schema cache (which would otherwise keep validating against a stale schema).
+        // The profile is process-static; reset it so each test starts from Full.
         SchemaOptions.Configure([]);
-        HiddenSchemaParams.Clear();
-        ToolArgumentValidator.ClearSchemaCacheForTests();
     }
 
     private static async Task<T> WithClientAsync<T>(string[] startupArgs, Func<McpClient, Task<T>> action)
@@ -85,6 +82,47 @@ public class SchemaLeanProfileTests
             // Clone so the elements outlive the client/host disposal.
             return tools.Select(t => (t.Name, t.ProtocolTool.InputSchema.Clone())).ToList();
         });
+
+    // Same host as ListInputSchemasAsync, but also returns the host's ToolSurfaceController snapshot. The controller's
+    // first read forces the snapshot build, so it is read after the client has listed tools and before the host is disposed.
+    private static async Task<(List<(string Name, JsonElement InputSchema)> Schemas, RoslynSentinel.Common.ToolSurfaceSnapshot Snapshot)> ListInputSchemasWithSnapshotAsync(params string[] startupArgs)
+    {
+        SchemaOptions.Configure(startupArgs);
+
+        var clientToServer = new Pipe();
+        var serverToClient = new Pipe();
+
+        var services = new ServiceCollection();
+        services.AddRoslynSentinelEnginesBasic();
+
+        var mcpBuilder = services.AddMcpServer();
+        mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
+        mcpBuilder.AddRoslynSentinelToolsBasic(services, ActiveModes);
+
+        var hostBuilder = Host.CreateApplicationBuilder();
+        foreach (var descriptor in services)
+        {
+            hostBuilder.Services.Add(descriptor);
+        }
+
+        using var host = hostBuilder.Build();
+        var hostRun = host.RunAsync();
+
+        var clientTransport = new StreamClientTransport(
+            serverInput: clientToServer.Writer.AsStream(),
+            serverOutput: serverToClient.Reader.AsStream(),
+            loggerFactory: NullLoggerFactory.Instance);
+
+        await using var client = await McpClient.CreateAsync(clientTransport, cancellationToken: TestContext.CurrentContext.CancellationToken);
+        var tools = await client.ListToolsAsync(cancellationToken: TestContext.CurrentContext.CancellationToken);
+
+        // Clone so the elements outlive the client/host disposal.
+        var schemas = tools.Select(t => (t.Name, t.ProtocolTool.InputSchema.Clone())).ToList();
+        var snapshot = host.Services.GetRequiredService<RoslynSentinel.Common.ToolSurfaceController>().Current;
+        await host.StopAsync();
+        await hostRun;
+        return (schemas, snapshot);
+    }
 
     private static List<JsonElement> SchemasFor(List<(string Name, JsonElement InputSchema)> schemas, string toolName)
     {
@@ -186,33 +224,34 @@ public class SchemaLeanProfileTests
         }
     }
 
-    // ---- HiddenSchemaParams + call-time acceptance ----
+    // ---- snapshot HiddenParameters + call-time acceptance ----
 
     [Test]
     public async Task Full_RegistersNoHiddenParams()
     {
-        await ListInputSchemasAsync("--schema-profile=full");
+        var (_, snapshot) = await ListInputSchemasWithSnapshotAsync("--schema-profile=full");
 
-        foreach (var name in LeanHidden)
+        foreach (var row in snapshot.Tools)
         {
-            Assert.That(HiddenSchemaParams.IsHidden("ReplaceSnippet", name), Is.False, $"Full must not register '{name}'.");
-            Assert.That(HiddenSchemaParams.IsHidden("Member", name), Is.False, $"Full must not register '{name}'.");
+            Assert.That(row.HiddenParameters, Is.Empty, $"Full must not hide any parameter on {row.Name}.");
         }
     }
 
     [Test]
     public async Task Lean_RegistersExactlyTheStrippedNames()
     {
-        await ListInputSchemasAsync("--schema-profile=lean");
+        var (_, snapshot) = await ListInputSchemasWithSnapshotAsync("--schema-profile=lean");
 
-        Assert.That(HiddenSchemaParams.IsHidden("ReplaceSnippet", "returnDiff"), Is.True);
-        Assert.That(HiddenSchemaParams.IsHidden("replacesnippet", "validateOnApply"), Is.True, "Tool names match case-insensitively.");
-        // ReplaceSnippetTool has no autoStage parameter, so it must not be registered for it.
-        Assert.That(HiddenSchemaParams.IsHidden("ReplaceSnippet", "autoStage"), Is.False);
-        Assert.That(HiddenSchemaParams.IsHidden("Member", "returnDiff"), Is.True);
-        // Never registers names that stay in the schema.
-        Assert.That(HiddenSchemaParams.IsHidden("ReplaceSnippet", "dryRun"), Is.False);
-        Assert.That(HiddenSchemaParams.IsHidden("ReplaceSnippet", "reason"), Is.False);
+        // Snapshot and validator match tool names ordinally, so no case-insensitive lookup is pinned here.
+        var replaceSnippetHidden = snapshot.Find("ReplaceSnippet")!.HiddenParameters;
+        Assert.That(replaceSnippetHidden.Contains("returnDiff"), Is.True);
+        Assert.That(replaceSnippetHidden.Contains("validateOnApply"), Is.True);
+        // ReplaceSnippetTool has no autoStage parameter, so it must not be hidden for it.
+        Assert.That(replaceSnippetHidden.Contains("autoStage"), Is.False);
+        Assert.That(snapshot.Find("Member")!.HiddenParameters.Contains("returnDiff"), Is.True);
+        // Never hides names that stay in the schema.
+        Assert.That(replaceSnippetHidden.Contains("dryRun"), Is.False);
+        Assert.That(replaceSnippetHidden.Contains("reason"), Is.False);
     }
 
     [Test]
