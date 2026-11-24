@@ -1,6 +1,6 @@
 # One front door for the server's tool surface: layered inputs, one composed spec, one atomic apply
 
-**Status:** PROPOSED 2026-11-23. Owner endorsed the direction and the shape below on 2026-11-23; recommended decisions given. Plan: [plan_tool_surface_controller.md](../plans/closed/plan_tool_surface_controller.md) (stage 1 plus the schema-patch seam), IMPLEMENTED 2026-11-24. Stage 2: [plan_tool_surface_controller_stage_c.md](../plans/closed/plan_tool_surface_controller_stage_c.md), IMPLEMENTED 2026-11-24. Stages 3-6 open: one plan per stage (`plans/plan_tool_surface_controller_stage_<c|d|e|f>.md`), TODO.md "Tool-surface controller stages 2-6".
+**Status:** PROPOSED 2026-11-23. Owner endorsed the direction and the shape below on 2026-11-23; recommended decisions given. Plan: [plan_tool_surface_controller.md](../plans/closed/plan_tool_surface_controller.md) (stage 1 plus the schema-patch seam), IMPLEMENTED 2026-11-24. Stage 2: [plan_tool_surface_controller_stage_c.md](../plans/closed/plan_tool_surface_controller_stage_c.md), IMPLEMENTED 2026-11-24. Stage 3: [plan_tool_surface_controller_stage_d.md](../plans/closed/plan_tool_surface_controller_stage_d.md), IMPLEMENTED 2026-11-24 (its Steps 14-15, status provenance fields, deferred for the owner). Stages 4-6 open: one plan per stage (`plans/plan_tool_surface_controller_stage_<c|d|e|f>.md`), TODO.md "Tool-surface controller stages 2-6".
 
 ## Motivation
 
@@ -202,7 +202,7 @@ problem by elimination.
 ## Related
 
 - [proposal_tool_parameter_surface_options.md](proposal_tool_parameter_surface_options.md) and
-  [plan_tool_parameter_surface_options.md](../plans/plan_tool_parameter_surface_options.md) - parameter rules;
+  [plan_tool_parameter_surface_options.md](../plans/closed/plan_tool_parameter_surface_options.md) - parameter rules;
   the plan is paused after Step 3 pending this proposal.
 - [plan_stateless_http_toolset_enablement.md](../plans/plan_stateless_http_toolset_enablement.md) - shared
   collection and delivery routes; independent and can land first.

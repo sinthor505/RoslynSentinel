@@ -1,6 +1,6 @@
 # One options DTO for tool parameter hiding and aliasing, fed by code, env/flag, toolset files and harnesses
 
-**Status:** PROPOSED 2026-11-23. Owner accepted the recommendations; plan drafted in [plan_tool_parameter_surface_options.md](../plans/plan_tool_parameter_surface_options.md), which supersedes the open questions below where they differ. Folded into [proposal_tool_surface_controller.md](proposal_tool_surface_controller.md) the same day: the rule model below stands, the standalone DI wiring does not.
+**Status:** IMPLEMENTED 2026-11-24 through [plan_tool_surface_controller_stage_d.md](../plans/closed/plan_tool_surface_controller_stage_d.md) (rule model, per-host surface, Tool.param scoping); aliases and status provenance fields deferred (INBOX). Was PROPOSED 2026-11-23. Owner accepted the recommendations; plan drafted in [plan_tool_parameter_surface_options.md](../plans/closed/plan_tool_parameter_surface_options.md), which supersedes the open questions below where they differ. Folded into [proposal_tool_surface_controller.md](proposal_tool_surface_controller.md) the same day: the rule model below stands, the standalone DI wiring does not.
 
 ## Motivation
 

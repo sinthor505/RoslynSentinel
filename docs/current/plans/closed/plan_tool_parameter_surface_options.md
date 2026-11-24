@@ -10,7 +10,7 @@
 
 ## Problem
 
-See [proposal_tool_parameter_surface_options.md](../proposals/proposal_tool_parameter_surface_options.md).
+See [proposal_tool_parameter_surface_options.md](../../proposals/proposal_tool_parameter_surface_options.md).
 In short: hiding has three ad hoc sources (Lean constant, `--hide-params`, harness
 `SchemaOptions.ConfigureHiddenParameters`), merged into a flat name list
 (`SchemaOptions.EffectiveHiddenParameters`, `RoslynSentinel.Common/SchemaOptions.cs:62`) that hides a name
@@ -295,7 +295,7 @@ three code dictionaries in `ToolArgumentValidator` (`:612`, `:728`, `:741`) with
 ## Out of scope
 
 - `hideParams` (and file-added aliases) in the JSON toolset files: added to
-  [plan_json_toolset_definitions.md](plan_json_toolset_definitions.md) as a step that maps a startup
+  [plan_json_toolset_definitions.md](../plan_json_toolset_definitions.md) as a step that maps a startup
   toolset's `hideParams` through `ToolParameterSurfaceOptions.ParseHideList(raw, ParameterRuleSource.ToolsetFile, <file>)`.
   Depends on this plan's Step 5.
 - `ToolCallHint` reading `ParameterSurface` (static, 452 callers) and with it removing the `HiddenSchemaParams`

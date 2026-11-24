@@ -1,8 +1,8 @@
 # Plan: Tool-surface controller stage D - parameter rules become a controller input; the snapshot owns hidden parameters
 
-**Status:** IN PROGRESS 2026-11-24. Steps 1-13, 16-17 done (1df39603..99a2b7ca); Steps 14-15 deferred (HOLD, R3); Step 18 full run pending. Approved 2026-11-24: Stage D: parameter rules as a ParameterSurface input of the controller; HiddenParametersPatch, snapshot and validator read it; Steps 14-15 on HOLD for the owner (R3). Review fixes applied; other decisions taken at recommendation (owner away).
+**Status:** IMPLEMENTED 2026-11-24 (Steps 14-15 DEFERRED for the owner, R3; INBOX line). 1df39603, 0acb22ec, 40d0eb26, 8511eda7, 779ddd51, 7f25720f, 056fabaf, b775ae9d, 1c585b6c, e3227a76, d23875b0, 197c56d9, 290eaa9d, 68d0bf23, 99a2b7ca, 3299ae3c; full run green at 99a2b7ca (1,346 s, 0 failures). Approved 2026-11-24: Stage D: parameter rules as a ParameterSurface input of the controller; HiddenParametersPatch, snapshot and validator read it; Steps 14-15 on HOLD for the owner (R3). Review fixes applied; other decisions taken at recommendation (owner away).
 
-Stage 3 of [proposal_tool_surface_controller.md](../proposals/proposal_tool_surface_controller.md); follows phase A/B ([closed/plan_tool_surface_controller.md](closed/plan_tool_surface_controller.md)) and stage C ([plan_tool_surface_controller_stage_c.md](closed/plan_tool_surface_controller_stage_c.md), aadefa7c..309e94c1); reshapes the paused [plan_tool_parameter_surface_options.md](plan_tool_parameter_surface_options.md) Steps 4-15 (see "What happened to the paused plan").
+Stage 3 of [proposal_tool_surface_controller.md](../../proposals/proposal_tool_surface_controller.md); follows phase A/B ([closed/plan_tool_surface_controller.md](plan_tool_surface_controller.md)) and stage C ([plan_tool_surface_controller_stage_c.md](plan_tool_surface_controller_stage_c.md), aadefa7c..309e94c1); reshapes the paused [plan_tool_parameter_surface_options.md](plan_tool_parameter_surface_options.md) Steps 4-15 (see "What happened to the paused plan").
 
 ## Problem
 
@@ -26,7 +26,7 @@ Parameter hiding is the last piece of tool-surface state that the snapshot repor
   tool name"). Proposal properties 1 (one source of truth) and 6 (provenance) do not hold for parameters.
 - **The paused plan's code never landed.** `Search(mode: text, query: "ParameterSurface|ParameterVisibilityRule|ToolParameterSurfaceOptions|ParameterRuleSource", includeTests: true)`
   returns 0 matches and no `*ParameterSurface*` file exists (2026-11-24). Its Steps 1-3 ("may run") were not run, so this
-  plan starts from the rule model in [proposal_tool_parameter_surface_options.md](../proposals/proposal_tool_parameter_surface_options.md),
+  plan starts from the rule model in [proposal_tool_parameter_surface_options.md](../../proposals/proposal_tool_parameter_surface_options.md),
   not from existing code.
 - **Phase B moved the hook the paused plan relied on.** Paused Step 5 resolved the surface from `services` at the patcher's
   call site. Since phase B the call goes through `IToolSchemaPatch.Apply(McpServerTool tool, MethodInfo toolMethod)`
@@ -588,7 +588,7 @@ Batches for the run:
 - Done when: both docs match the code; links resolve.
 
 ### Step 18 - No stubs left, full run, close
-- Done: sweep 0 matches in plan files, HiddenFor gone; INBOX lines added; full run pending
+- Done: sweep 0 matches in plan files, HiddenFor gone; INBOX lines added; full run green at 99a2b7ca (c:\tmp\rs-testtrees\_results\99a2b7ca-20261124-030715-34992)
 - Files: `docs/current/INBOX.md` (two lines), this plan and the paused plan (via `ProjectDoc close`), `docs/current/TODO.md` (the
   stages line)
 - Depends on: all above (14-15 excepted while on HOLD)
