@@ -2133,8 +2133,14 @@ public class WorkspaceFileEditImpl
                 }
             }
 
+            // Same indent pass as ReplaceSnippet: the splice is the whole range (terminators included) with the adjusted replacement.
+            // A deletion has no inserted lines to indent, so it keeps the plain splice.
+            IReadOnlyList<TextChange> spliceEdits = [new TextChange(new TextSpan(rangeStart, rangeEnd - rangeStart), replacement)];
+            var reindent = document is null || replacement.Length == 0
+                ? NewContentIndenter.SplicePlain(oldText, spliceEdits)
+                : await NewContentIndenter.ReindentAsync(document, spliceEdits, cancellationToken);
+            var newFileContent = reindent.Text;
             var oldTextString = oldText.ToString();
-            var newFileContent = string.Concat(oldTextString.AsSpan(0, rangeStart), replacement, oldTextString.AsSpan(rangeEnd));
             var noTypeLeft = DescribeNoTypeLeft(DisplayPath(filePathResolved), oldTextString, newFileContent, batch: false, toolName: "ReplaceRange");
             if (noTypeLeft is not null)
             {
@@ -2148,10 +2154,10 @@ public class WorkspaceFileEditImpl
             // The replaced span in the baseline text and its replacement, for impact attribution (same key instance as rangeChanges).
             IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>> editedSpans = new Dictionary<FilePathWrapper, IReadOnlyList<TextChange>>
             {
-                [rangeChanges.Keys.Single()] = [new TextChange(new TextSpan(rangeStart, rangeEnd - rangeStart), replacement)]
+                [rangeChanges.Keys.Single()] = [new TextChange(new TextSpan(rangeStart, rangeEnd - rangeStart), reindent.InsertedTexts[0])]
             };
             // Visible to parallel calls' impact analysis until this call ends (see InFlightEditMemory).
-            using var inFlight = _inFlightEdits.Register([((string)targetPath, newContent)]);
+            using var inFlight = _inFlightEdits.Register([((string)targetPath, reindent.InsertedTexts[0])]);
 
             var lineCount = lastLine - firstLine + 1;
             var rangeText = firstLine == lastLine ? $"line {firstLine + 1}" : $"lines {firstLine + 1}-{lastLine + 1}";
@@ -2159,11 +2165,13 @@ public class WorkspaceFileEditImpl
             var rangeNote = replacement.Length == 0
                 ? $"ReplaceRange deleted {rangeText} ({lineCount} line(s))."
                 : $"ReplaceRange replaced {rangeText} ({lineCount} line(s)) with {replacementLines} line(s).";
+            // Same wording as ReplaceSnippet's note; ReplaceRange does not honour returnDiff, so that clause is left out.
+            var indentNote = reindent.LinesAdjusted > 0 ? $"newContent indentation was adjusted to the file's on {reindent.LinesAdjusted} line(s)." : null;
             // Near-miss correction and rename lift are tied to oldContent text and stay off; no edit memory (nothing to key on without oldContent).
             return await ApplyEditTailAsync(
                 "ReplaceRange", "replace_range", (string)targetPath, rangeChanges, editedSpans,
                 StandardCompileRejectionHeadline("ReplaceRange", "the anchors still match the file as it is now; fix newContent and send it again. "),
-                [rangeNote], validateOnApply: true, returnDiff: false,
+                [rangeNote, indentNote], validateOnApply: true, returnDiff: false,
                 enableNearMissCorrection: false, enableRenameLift: false, editMemory: null, cancellationToken);
         }
         catch (Exception ex)

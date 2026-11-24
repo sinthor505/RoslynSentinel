@@ -136,6 +136,33 @@ public class ReplaceRangeTests
     }
 
     [Test]
+    public async Task ReplaceRange_UnindentedNewContent_IsReindentedToBlockAsync()
+    {
+        const string relativePath = "ContosoOrders.Core/IndentTarget.cs";
+        var lines = new[]
+        {
+            "namespace ContosoOrders.Core;",
+            "",
+            "public class IndentTarget",
+            "{",
+            "    public int Compute(int weightGrams, int zone)",
+            "    {",
+            "        var total = 0;",
+            "        total += weightGrams;",
+            "        return total;",
+            "    }",
+            "}",
+        };
+        using var workspace = InMemoryWorkspace.Create((relativePath, Join(lines)));
+
+        var result = await RangeAsync(workspace, "total += weightGrams;", "total += weightGrams;", "total += weightGrams * zone;", relativePath);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(Normalize(workspace.ReadText(relativePath)), Does.Contain("\n        total += weightGrams * zone;\n"),
+            "the column-0 newContent must be re-indented to the 8-space block it replaces");
+    }
+
+    [Test]
     public async Task ReplaceRange_AnchorMatchesNoLine_IsRefusedWithCountZeroAndNearbyLinesAndWritesNothingAsync()
     {
         using var workspace = CreateWorkspace();
