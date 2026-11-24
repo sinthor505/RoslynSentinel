@@ -591,40 +591,6 @@ public static class RoslynSentinelServiceExtensionsBasic
             services.AddSingleton<RefactoringExtractionDocsTools>();
             mcpBuilder.WithSentinelTools<RefactoringExtractionDocsTools>();
         }
-        // Fine-grained Refactor sub-modes (Decision 7 step 4, Decision 4) - independently
-        // opt-in-able via --include-tools=<ClassName> even without "RefactoringTools"/"Refactor"
-        // itself; TryAddSingleton/TryAdd-equivalent here would be cleaner, but AddSingleton is
-        // consistent with every other block in this method, so a class named in both the mode's
-        // umbrella gate above and its own explicit --include-tools entry gets a harmless duplicate
-        // registration (last one wins for GetRequiredService<T>, per DI container semantics).
-        if (activeToolClasses.Contains("RefactoringSignatureTools"))
-        {
-            services.AddSingleton<RefactoringSignatureTools>();
-            mcpBuilder.WithSentinelTools<RefactoringSignatureTools>();
-        }
-        if (activeToolClasses.Contains("RefactoringStructuralTools"))
-        {
-            services.AddSingleton<RefactoringStructuralTools>();
-            mcpBuilder.WithSentinelTools<RefactoringStructuralTools>();
-        }
-        if (activeToolClasses.Contains("TypedMemberTools"))
-        {
-            services.AddSingleton<TypedMemberTools>();
-            mcpBuilder.WithSentinelTools<TypedMemberTools>();
-        }
-        if (activeToolClasses.Contains("RefactoringExtractionDocsTools"))
-        {
-            services.AddSingleton<RefactoringExtractionDocsTools>();
-            mcpBuilder.WithSentinelTools<RefactoringExtractionDocsTools>();
-        }
-        if (activeToolClasses.Contains("CoreRefactoringTools"))
-        {
-            // ChangeSignature, MoveMember and MoveAllTypesToFiles. claude-lean makes the first two core and the third on demand
-            // (ToolClassRegistry.ClaudeLeanToolNames); the claude-lean widening above registers the class's dependencies.
-            services.AddSingleton<CoreRefactoringTools>();
-            mcpBuilder.WithSentinelTools<CoreRefactoringTools>();
-        }
-
         // Sees the claude-lean widened set, so this stays after the activeToolClasses rebinding in the claude-lean block above.
         AddStartupToolClasses(services, "Basic", ToolClassRegistry.SelectStartupToolTypes(ToolClassRegistry.BasicToolClassTypes, activeToolClasses, activeModes.Contains(ToolClassRegistry.ClaudeLeanMode)));
     }

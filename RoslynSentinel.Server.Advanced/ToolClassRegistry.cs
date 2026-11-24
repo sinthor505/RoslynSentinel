@@ -1,4 +1,5 @@
 using RoslynSentinel.Tools.Advanced;
+using RoslynSentinel.Tools.Basic;
 using RoslynSentinel.Tools.Experimental;
 
 namespace RoslynSentinel.Server.Advanced;
@@ -94,7 +95,7 @@ public static class ToolClassRegistry
     /// <summary>
     /// Tool-class types in tools/list order (the order of the per-class DI blocks before stage F). Filled tail-first by the migration slices (Steps 9-13); a new tool class needs a row.
     /// </summary>
-    public static readonly IReadOnlyList<Type> BasicToolClassTypes = [];
+    public static readonly IReadOnlyList<Type> BasicToolClassTypes = [typeof(RefactoringSignatureTools), typeof(RefactoringStructuralTools), typeof(TypedMemberTools), typeof(RefactoringExtractionDocsTools), typeof(CoreRefactoringTools)];
 
     /// <summary>
     /// Tool-class types in tools/list order (the order of the per-class DI blocks before stage F). Filled tail-first by the migration slices (Steps 9-13); a new tool class needs a row.
