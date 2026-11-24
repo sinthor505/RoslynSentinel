@@ -1,6 +1,6 @@
 # Plan: rework the 18 first-slice eval scenarios into realistic briefs with behavioural acceptance tests (proposal Phasing step 3)
 
-**Status:** IN PROGRESS 2026-11-23. Steps 54-59 done (7d94a62c..76df6d43); Steps 1-11 done (2b578dea..5765c966); Steps 12-21 done (7cbfc4d9..3db4c7c0); Steps 22-26 done (b5d6d45d..0d6ee1e0); 13(o)+(q) slice and Steps 27-30, 60-63 done (5dd5a5a8..5ebf3f29); Steps 31-39 done (ab3a1976..86f825b2). Approved 2c34a882; review amendments and the owner's answers are Decision 13 (overrides step text); Batched mode, owner present. Phasing step 3 of [proposal_modeleval_standing_workflow_contract.md](../proposals/proposal_modeleval_standing_workflow_contract.md), written from [finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md](../findings/finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md). Depends on [plan_modeleval_workflow_contract_phase1.md](./closed/plan_modeleval_workflow_contract_phase1.md) (called "P1" below).
+**Status:** IN PROGRESS 2026-11-23. Steps 54-59 done (7d94a62c..76df6d43); Steps 1-11 done (2b578dea..5765c966); Steps 12-21 done (7cbfc4d9..3db4c7c0); Steps 22-26 done (b5d6d45d..0d6ee1e0); 13(o)+(q) slice and Steps 27-30, 60-63 done (5dd5a5a8..5ebf3f29); Steps 31-39 done (ab3a1976..86f825b2); Steps 40-49 done (5d5b632e..86428879). Approved 2c34a882; review amendments and the owner's answers are Decision 13 (overrides step text); Batched mode, owner present. Phasing step 3 of [proposal_modeleval_standing_workflow_contract.md](../proposals/proposal_modeleval_standing_workflow_contract.md), written from [finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md](../findings/finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md). Depends on [plan_modeleval_workflow_contract_phase1.md](./closed/plan_modeleval_workflow_contract_phase1.md) (called "P1" below).
 
 ## Problem
 
@@ -37,6 +37,7 @@ The audit of the 18 first-slice prompts found 41 of 117 outcome rows mismatched:
     - (o) Variant tag asserted (owner, after Batch B): `ScenarioVariant` gains an optional trailing `ExpectedVariantTag` (string?, default null) and `Variant_OutcomeMatchesTable` asserts it against the verdict's `variant=` value when set; the existing tagged variants (S3 `overload`, `report`, and any other tag a Batch B grader emits) set it. One slice, first in Batch D (before Step 27), files `Graders/ScenarioVariant.cs` (or wherever the record lives), `ImplementationScenarioGoldenTests.cs`, `InstructionAdherence/WideningRejectedByGateScenario.cs`; later scenario slices set the tag on their tagged variants.
     - (p) S1 (owner, after Batch C): the review grader has no "ChangedPaths > 0 fails" rule (Step 23 text); the empty `AllowedPaths` scope check already grades an edit Bypass, and that variant passes.
     - (q) `PlainIfFails` (owner, after Batch C): one shared `public const string PlainIfFails` in `EvalContractOptions` (Tests.Harness) beside `Render`; S7's private copy is replaced by it; every later brief uses it. Lands in the Decision 13 (o) slice, first in Batch D.
+    - (r) S13 deviation comment (owner, after Batch E; refines R15): the DoneWhen ends "where a caller's rule differs from the helper's, a comment starting `// Deviation:` says how."; the grader accepts a non-doc comment (`//` or `/* */`, not `///`) whose text starts with `Deviation:` in either caller file, at any location; new variants `DocCommentOnly` and `NoPrefix`, both CheckFailed. One slice, first in Batch F (before Step 50).
     - (l) "Left for the owner" items 1 (RenameSymbol), 2 (narrow budget exclusion) and 4 (control restore per sample) accepted as recommended; item 3 replaced by (e).
 
 NEW-DTO blocks (test-harness records; give them in the `reason` if the hook asks, the paths are test projects):
@@ -842,6 +843,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 ### Batch E - remaining scenarios (Steps 40-49)
 
 ### Step 40 - S9 ThreadOptionalParameter: brief, fixture, tests
+- Done: 5d5b632e (with Step 41)
 - Files: RoslynSentinel.Tests.ModelEval/ImplementationScenarios/MultiStepState/ThreadOptionalParameterScenario.cs
 - Depends on: 2; P1 Steps 1, 3, 5
 - Effect: behaviour-changing.
@@ -850,6 +852,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~7 edits).
 
 ### Step 41 - S9: grader and variants
+- Done: 5d5b632e
 - Files: ThreadOptionalParameterScenario.cs
 - Depends on: 40, 5, 6, 8
 - Effect: behaviour-changing.
@@ -858,6 +861,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~7 edits).
 
 ### Step 42 - S13 ShareHelperDifferingRules: brief, fixture, tests
+- Done: 0439f406 (with Step 43)
 - Files: RoslynSentinel.Tests.ModelEval/ImplementationScenarios/AmbiguityResolution/ShareHelperDifferingRulesScenario.cs
 - Depends on: 2; P1 Steps 1, 3, 5
 - Effect: behaviour-changing.
@@ -866,6 +870,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~6 edits).
 
 ### Step 43 - S13: grader and variants
+- Done: 0439f406 (comment check refined by Decision 13 (r))
 - Files: ShareHelperDifferingRulesScenario.cs
 - Depends on: 42, 5, 8
 - Effect: behaviour-changing.
@@ -874,6 +879,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~6 edits).
 
 ### Step 44 - S14 ObsoleteNamespaceCopy: brief, tests, grader, variants
+- Done: 00f41e6e, gate fix 680538fc (attribute stripping kept the doc-comment trivia)
 - Files: RoslynSentinel.Tests.ModelEval/ImplementationScenarios/InstructionAdherence/ObsoleteNamespaceCopyScenario.cs
 - Depends on: 2, 5, 8; P1 Steps 1, 3, 5
 - Effect: behaviour-changing.
@@ -882,6 +888,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~12 edits).
 
 ### Step 45 - S12 BreakCycleWithForwarders: brief, fixture, tests
+- Done: ee3a5b9a (with Step 46)
 - Files: RoslynSentinel.Tests.ModelEval/ImplementationScenarios/AmbiguityResolution/BreakCycleWithForwardersScenario.cs
 - Depends on: 2; P1 Steps 1, 3, 5
 - Effect: behaviour-changing.
@@ -890,6 +897,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~5 edits).
 
 ### Step 46 - S12: grader and variants
+- Done: ee3a5b9a
 - Files: BreakCycleWithForwardersScenario.cs
 - Depends on: 45, 5, 8
 - Effect: behaviour-changing.
@@ -898,6 +906,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~8 edits).
 
 ### Step 47 - S16 LargeBlockRewrite: golden fix, brief, tests, grader
+- Done: 204fd50e
 - Files: RoslynSentinel.Tests.ModelEval/ImplementationScenarios/ToolUse/LargeBlockRewriteScenario.cs
 - Depends on: 2, 8; P1 Steps 1, 3, 5
 - Effect: behaviour-changing.
@@ -906,6 +915,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~9 edits).
 
 ### Step 48 - S8 RemovePinnedSentence: brief and behavioural test
+- Done: 86428879 (LfEndings variant table-only: overlays are CRLF-normalised; code TODO + INBOX)
 - Files: RoslynSentinel.Tests.ModelEval/ImplementationScenarios/InstructionAdherence/RemovePinnedSentenceScenario.cs
 - Depends on: 2, 8; P1 Steps 1, 3, 5
 - Effect: behaviour-changing (prompt gains the CRLF Condition and a DoneWhen test).
@@ -914,6 +924,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~6 edits).
 
 ### Step 49 - Batch E gate
+- Done: gate passed after fix 680538fc (S9 9/9, S13 8/8, S14 9/9, S12 9/9, S16 8/8, S8 7/7)
 - Files: none edited
 - Depends on: 40-48
 - Effect: text-neutral.
