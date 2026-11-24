@@ -40,7 +40,6 @@ public sealed record ToolParameterSurfaceOptions(IReadOnlyList<ParameterVisibili
     /// <summary>
     /// Builds options from startup state: the lean list as Profile rules when SchemaOptions.Profile is Lean, then each
     /// SchemaOptions.HiddenParameters name as an unscoped EnvOrFlag rule (ordinal order). Reads the statics when called.
-    /// Implemented in Step 3a.
     /// </summary>
     /// <returns>The startup parameter surface options.</returns>
     public static ToolParameterSurfaceOptions FromStartup()
@@ -66,7 +65,6 @@ public sealed record ToolParameterSurfaceOptions(IReadOnlyList<ParameterVisibili
     /// <summary>
     /// Parses a hide list. Splits on ',' and ';', trims, and drops empties. "Tool.param" (exactly one '.', both sides
     /// non-empty) scopes the rule to a tool; anything else is an unscoped Hide rule for the literal text. Never throws.
-    /// Implemented in Step 3a.
     /// </summary>
     /// <param name="raw">The raw hide list text, or null.</param>
     /// <param name="source">The layer the parsed rules belong to.</param>

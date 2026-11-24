@@ -7,11 +7,10 @@ namespace RoslynSentinel.Common;
 
 /// <summary>
 /// Resolves parameter visibility rules against tools. Constructed from immutable <see cref="ToolParameterSurfaceOptions"/>.
-/// Stub members are implemented in the step named on each member.
 /// </summary>
 public sealed class ParameterSurface
 {
-    /// <summary>Creates a surface over the given options. Implemented in Step 3a.</summary>
+    /// <summary>Creates a surface over the given options.</summary>
     /// <param name="options">The immutable rules to resolve against.</param>
     public ParameterSurface(ToolParameterSurfaceOptions options)
     {
@@ -24,7 +23,7 @@ public sealed class ParameterSurface
         HidesAnything = _ordered.Any(rule => rule.Action == ParameterVisibility.Hide);
     }
 
-    /// <summary>Creates a surface from startup state. Implemented in Step 3a.</summary>
+    /// <summary>Creates a surface from startup state.</summary>
     /// <returns>A surface over <see cref="ToolParameterSurfaceOptions.FromStartup"/>.</returns>
     public static ParameterSurface FromStartup() => new ParameterSurface(ToolParameterSurfaceOptions.FromStartup());
 
@@ -38,7 +37,6 @@ public sealed class ParameterSurface
 
     /// <summary>
     /// Returns the winning Hide rule for a tool's parameter, or null when the parameter is not hidden.
-    /// Implemented in Step 3a.
     /// </summary>
     /// <param name="toolName">The MCP tool name.</param>
     /// <param name="parameterName">The parameter name on that tool.</param>
@@ -90,7 +88,7 @@ public sealed class ParameterSurface
             .OrderBy(group => group.Parameter, StringComparer.Ordinal)
             .ThenBy(group => group.Source)
             .ToList();
-    } // TODO implement (Step 3b)
+    }
 
     /// <summary>
     /// Returns the Hide rules that are the winning rule for no parameter of the given tools, in list order.
@@ -109,7 +107,7 @@ public sealed class ParameterSurface
         return _ordered
             .Where(rule => rule.Action == ParameterVisibility.Hide && !winners.Contains(rule))
             .ToList();
-    } // TODO implement (Step 3b)
+    }
 
     /// <summary>
     /// Yields each (tool, winning Hide rule) pair for the hidden parameter names of the given tools.
@@ -135,14 +133,13 @@ public sealed class ParameterSurface
 
 /// <summary>
 /// Records which parameters were stripped from an MCP tool's schema, keyed by tool instance.
-/// Stub members are implemented in Step 3a.
 /// </summary>
 public static class StrippedToolParameters
 {
     // Keyed by instance identity, so a host never sees another host's strips and nothing needs clearing.
     private static readonly ConditionalWeakTable<McpServerTool, string[]> Table = new();
 
-    /// <summary>Records the parameter names stripped from a tool. Implemented in Step 3a.</summary>
+    /// <summary>Records the parameter names stripped from a tool.</summary>
     /// <param name="tool">The tool whose schema was patched.</param>
     /// <param name="parameterNames">The parameter names removed from its schema.</param>
     public static void Record(McpServerTool tool, IReadOnlyList<string> parameterNames)
@@ -150,7 +147,7 @@ public static class StrippedToolParameters
         Table.AddOrUpdate(tool, parameterNames.OrderBy(name => name, StringComparer.Ordinal).ToArray());
     }
 
-    /// <summary>Returns the parameter names recorded as stripped from a tool. Implemented in Step 3a.</summary>
+    /// <summary>Returns the parameter names recorded as stripped from a tool.</summary>
     /// <param name="tool">The tool to look up.</param>
     /// <returns>The stripped parameter names, or an empty list.</returns>
     public static IReadOnlyList<string> For(McpServerTool tool)
