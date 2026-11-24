@@ -75,71 +75,14 @@ public static class RoslynSentinelServiceExtensionsAdvanced
             resolvedExcludeTools);
 
         // claude-lean: AdvancedRefactoringTools is on demand for all its tools (ChangeSignature and MoveMember are core
-        // in CoreRefactoringTools, ToolClassRegistry.ClaudeLeanToolNames), which McpToolsetControlTool may add later. The per-tool allow-list
-        // that WithSentinelTools reads keeps those tools out of the startup surface. See the same widening
-        // in AddRoslynSentinelToolsBasic.
+        // in CoreRefactoringTools, ToolClassRegistry.ClaudeLeanToolNames), which McpToolsetControlTool may add later.
+        // ToolSurfaceStartupPopulation applies the per-tool allow-list to the startup tools, keeping those tools out of
+        // the startup surface. See the same widening in AddRoslynSentinelToolsBasic.
         if (activeModes.Contains(ToolClassRegistry.ClaudeLeanMode)
             && ToolClassRegistry.ClaudeLeanOnDemandToolClasses.Contains("AdvancedRefactoringTools")
             && !resolvedExcludeTools.Contains("AdvancedRefactoringTools"))
         {
             activeToolClasses.Add("AdvancedRefactoringTools");
-        }
-
-        if (activeToolClasses.Contains("IntelligenceTools"))
-        {
-            services.AddSingleton<IntelligenceTools>();
-            mcpBuilder.WithSentinelTools<IntelligenceTools>();
-        }
-        if (activeToolClasses.Contains("ScanTools"))
-        {
-            services.AddSingleton<ScanTools>();
-            mcpBuilder.WithSentinelTools<ScanTools>();
-        }
-        if (activeToolClasses.Contains("AdvancedRefactoringTools"))
-        {
-            // RefactoringStructuralTools already registered above via Basic.
-            services.AddSingleton<AdvancedRefactoringTools>();
-            mcpBuilder.WithSentinelTools<AdvancedRefactoringTools>();
-        }
-        if (activeToolClasses.Contains("ModernizationTools"))
-        {
-            services.AddSingleton<ModernizationTools>();
-            mcpBuilder.WithSentinelTools<ModernizationTools>();
-        }
-        if (activeToolClasses.Contains("QualityTools"))
-        {
-            services.AddSingleton<QualityTools>();
-            mcpBuilder.WithSentinelTools<QualityTools>();
-        }
-        if (activeToolClasses.Contains("GenerationTools"))
-        {
-            services.AddSingleton<GenerationTools>();
-            mcpBuilder.WithSentinelTools<GenerationTools>();
-        }
-        if (activeToolClasses.Contains("CommentingTools"))
-        {
-            services.AddSingleton<CommentingTools>();
-            mcpBuilder.WithSentinelTools<CommentingTools>();
-        }
-        if (activeToolClasses.Contains("CodeTransformTools"))
-        {
-            services.AddSingleton<CodeTransformTools>();
-            mcpBuilder.WithSentinelTools<CodeTransformTools>();
-        }
-        if (activeToolClasses.Contains("AsyncifyTools"))
-        {
-            services.AddSingleton<AsyncifyTools>();
-            mcpBuilder.WithSentinelTools<AsyncifyTools>();
-        }
-        if (activeToolClasses.Contains("SubAgentEvalTools"))
-        {
-            services.AddSingleton<SubAgentEvalTools>();
-            mcpBuilder.WithSentinelTools<SubAgentEvalTools>();
-        }
-        if (activeToolClasses.Contains("SubAgentTools"))
-        {
-            services.AddSingleton<SubAgentTools>();
-            mcpBuilder.WithSentinelTools<SubAgentTools>();
         }
 
         // Sees the claude-lean widening above, so it stays after that block.

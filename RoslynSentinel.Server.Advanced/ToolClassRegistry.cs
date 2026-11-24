@@ -1,3 +1,6 @@
+using RoslynSentinel.Tools.Advanced;
+using RoslynSentinel.Tools.Experimental;
+
 namespace RoslynSentinel.Server.Advanced;
 
 /// <summary>
@@ -96,7 +99,10 @@ public static class ToolClassRegistry
     /// <summary>
     /// Tool-class types in tools/list order (the order of the per-class DI blocks before stage F). Filled tail-first by the migration slices (Steps 9-13); a new tool class needs a row.
     /// </summary>
-    public static readonly IReadOnlyList<Type> AdvancedToolClassTypes = [];
+    public static readonly IReadOnlyList<Type> AdvancedToolClassTypes =
+    [
+        typeof(IntelligenceTools), typeof(ScanTools), typeof(AdvancedRefactoringTools), typeof(ModernizationTools), typeof(QualityTools), typeof(GenerationTools), typeof(CommentingTools), typeof(CodeTransformTools), typeof(AsyncifyTools), typeof(SubAgentEvalTools), typeof(SubAgentTools),
+    ];
 
     /// <summary>
     /// Tool classes registered only while claude-lean is active (their registration blocks sat inside the claude-lean branch).
