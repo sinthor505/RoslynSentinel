@@ -2,7 +2,7 @@ using System.Text.RegularExpressions;
 
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Scenarios;
+namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.InstructionAdherence;
 
 /// <summary>
 /// Retype only the public property of OperationSummary (a class with a primary constructor; a positional record would force the

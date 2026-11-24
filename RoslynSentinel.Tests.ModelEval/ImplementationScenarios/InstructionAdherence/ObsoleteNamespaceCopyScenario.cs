@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Scenarios;
+namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.InstructionAdherence;
 
 /// <summary>
 /// Byte-exact scenario: copy a file with a UTF-8 BOM and CRLF line endings into a new namespace, and mark every top-level type of

@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Scenarios;
+namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.InstructionAdherence;
 
 /// <summary>
 /// Two steps. Step 1: two engines report a missing class through a result code; make them throw the typed exception the way a

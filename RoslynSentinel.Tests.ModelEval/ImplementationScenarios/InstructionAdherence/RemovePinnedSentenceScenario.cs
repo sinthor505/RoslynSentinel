@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Scenarios;
+namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.InstructionAdherence;
 
 /// <summary>
 /// Remove one trailing sentence from two bodies of a markdown policy held in a C# raw string literal (PolicyDocument.cs) and from the
