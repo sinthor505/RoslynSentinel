@@ -222,6 +222,35 @@ public class SchemaHiddenParametersTests
     }
 
     [Test]
+    public async Task HideParams_ToolScoped_HidesOnlyOnThatTool()
+    {
+        var full = await ListInputSchemasAsync();
+        var scoped = await ListInputSchemasAsync("--hide-params=ReplaceSnippet.validateOnApply");
+
+        var replaceFull = TopLevelProperties(SchemasFor(full, "ReplaceSnippet").Single());
+        var replaceScoped = TopLevelProperties(SchemasFor(scoped, "ReplaceSnippet").Single());
+        var applyDiffScoped = TopLevelProperties(SchemasFor(scoped, "ApplyDiff").Single());
+
+        Assert.That(replaceFull, Does.Contain("validateOnApply"), "Full keeps validateOnApply on ReplaceSnippet.");
+        Assert.That(replaceScoped, Does.Not.Contain("validateOnApply"),
+            "ReplaceSnippet.validateOnApply is hidden, so ReplaceSnippet's top level must not list it.");
+        Assert.That(applyDiffScoped, Does.Contain("validateOnApply"),
+            "A Tool.param entry is scoped to that tool, so ApplyDiff must still list validateOnApply.");
+    }
+
+    [Test]
+    public async Task HideParams_ToolScoped_HiddenArgumentStillAccepted()
+    {
+        var text = await CallReplaceSnippetAsync(
+            ["--hide-params=ReplaceSnippet.validateOnApply"],
+            "Verify tool-scoped hidden validateOnApply true is accepted",
+            new Dictionary<string, object?> { ["validateOnApply"] = true });
+
+        Assert.That(text, Does.Not.Contain("Unknown parameter"), text);
+        Assert.That(text, Does.Not.Contain("is not available for tool"), text);
+    }
+
+    [Test]
     public async Task NoHideParams_ValidateOnApplyFalse_IsNotRefused()
     {
         var text = await CallReplaceSnippetAsync(
