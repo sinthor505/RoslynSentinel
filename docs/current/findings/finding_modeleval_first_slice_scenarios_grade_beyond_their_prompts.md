@@ -16,7 +16,7 @@ Inputs (scratch, not in the repo):
 - What the model sees: `...\scenario_audit_20261123\model_view.md`
 
 Source read for this audit (all at HEAD 8eb4d97b): `S/` below means
-`RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Scenarios/`; `ImplementationScenarioChecks.cs`, `ImplementationScenarioAgentTests.cs`,
+`RoslynSentinel.Tests.ModelEval/ImplementationScenarios/<PrimaryAxis>/` (one folder per axis since Batch M; the audited files sat in `Scenarios/`); `ImplementationScenarioChecks.cs` (now in `ImplementationScenarios/Graders/`), `ImplementationScenarioAgentTests.cs`,
 `StopAdherenceScenarios.cs` (RoslynSentinel.Tests.Harness), `ScenarioScorer.cs` (Harness), `ScenarioAgentTests.cs`, `AgentToolAllowLists.cs`,
 `ChainEvalToolSurface.cs`, `AgentSystemPrompts.cs`. Line numbers are 1-based. Every concrete defect claim of the cold reader was re-checked
 against source (section "Cold-reader defect claims").
