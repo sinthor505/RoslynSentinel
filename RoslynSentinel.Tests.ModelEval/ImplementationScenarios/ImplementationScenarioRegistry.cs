@@ -5,7 +5,7 @@ namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios;
 /// <summary>The 15 implementation scenarios: the 14 of the plan's scenario table in its order, then LargeBlockRewrite (edit-tool comparison).</summary>
 internal static class ImplementationScenarioRegistry
 {
-    private const string ScenarioNamespace = "RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Scenarios";
+    private const string ScenarioRoot = "RoslynSentinel.Tests.ModelEval.ImplementationScenarios";
 
     public static IReadOnlyList<ImplementationScenario> All { get; } =
     [
@@ -35,7 +35,10 @@ internal static class ImplementationScenarioRegistry
             nameof(id));
     }
 
-    /// <summary>The scenario's definition class <c>&lt;Id&gt;Scenario</c> in the Scenarios namespace, or null when it does not exist.</summary>
+    /// <summary>The scenario's definition class <c>&lt;Id&gt;Scenario</c> in any folder under the scenarios namespace, or null when it does not exist.</summary>
     public static Type? FindScenarioClass(string id) =>
-        typeof(ImplementationScenarioRegistry).Assembly.GetType($"{ScenarioNamespace}.{id}Scenario");
+        typeof(ImplementationScenarioRegistry).Assembly.GetTypes()
+            .FirstOrDefault(type => type.Name == $"{id}Scenario"
+                && type.Namespace is { } ns
+                && (ns == ScenarioRoot || ns.StartsWith(ScenarioRoot + ".", StringComparison.Ordinal)));
 }
