@@ -44,7 +44,11 @@ param(
     [string]$Model,
     [int]$Samples = 1,
     [switch]$Clean,
-    [string]$ResumeTranscript
+    [string]$ResumeTranscript,
+    [double]$Temperature,
+    [double]$TopP,
+    [string]$HostSampler,
+    [switch]$AcceptUnverifiedSampler
 )
 $root = Split-Path $PSScriptRoot -Parent
 $name = $Test[0]
@@ -56,6 +60,9 @@ $dir = Join-Path $resultsBase "$HostAddress\$name\$([datetime]::UtcNow.ToString(
 New-Item -ItemType Directory -Force -Path $dir | Out-Null
 $marker = ([IO.File]::ReadAllText((Join-Path $root 'Lib.cs'))).Replace("`r`n", "`n").Trim()
 Set-Content -LiteralPath (Join-Path $dir 'results.txt') -Value "flag=$env:ROSLYNSENTINEL_TEST_FLAG job=$env:ROSLYNSENTINEL_EVALQUEUE_JOB samples=$Samples model=$Model marker=$marker"
+# Echo what arrived as parameters, as the real script does with its sampler parameters (bound ones only).
+$sampler = @('Temperature', 'TopP', 'HostSampler', 'AcceptUnverifiedSampler' | Where-Object { $PSBoundParameters.ContainsKey($_) } | ForEach-Object { "$_=$($PSBoundParameters[$_])" }) -join '|'
+Add-Content -LiteralPath (Join-Path $dir 'results.txt') -Value "sampler=[$sampler]"
 if ($name -eq 'Fail') { exit 1 }
 exit 0
 '@
@@ -192,6 +199,24 @@ try {
     Assert-That ($script:lastExit -eq 0 -and @("$out" | Select-String -Pattern 'results: ' -AllMatches).Matches.Count -eq 2) 'Wait: a comma-joined -Id string is split into job ids'
     $out = Invoke-Queue 'wait' @{ Id = 'no-such-job' }
     Assert-That ($script:lastExit -eq 2 -and "$out" -match "evalqueue error: No job id contains 'no-such-job'") 'Wait: an unknown id prints the error instead of exiting 2 silently'
+
+    # --- recorded sampler variables reach the eval script as parameters --------------------------------
+    New-Queue
+    $env:ROSLYNSENTINEL_LLM_TEMPERATURE = '0.7'
+    $env:ROSLYNSENTINEL_LLM_TOP_P = '0.95'
+    $env:ROSLYNSENTINEL_LLM_HOST_SAMPLER = 'topK=20;minP=0.1;repeatPenalty=1.0'
+    $env:ROSLYNSENTINEL_LLM_ACCEPT_UNVERIFIED_SAMPLER = 'true'
+    $samplerJob = @((Submit @{ Test = 'Quick' }).queued)[0]
+    $overrideJob = @((Submit @{ Test = 'Quick'; EvalArgs = '-Temperature 0.2'; Force = $true }).queued)[0]
+    foreach ($samplerVar in 'TEMPERATURE', 'TOP_P', 'HOST_SAMPLER', 'ACCEPT_UNVERIFIED_SAMPLER') { Remove-Item "Env:\ROSLYNSENTINEL_LLM_$samplerVar" }
+    $plainJob = @((Submit @{ Test = 'Quick' }).queued)[0]
+    Run-Worker
+    $samplerText = Get-Content -LiteralPath (Join-Path @((Get-JobById $samplerJob.id).runFolders)[0] 'results.txt') -Raw
+    Assert-That ($samplerText -match [regex]::Escape('sampler=[Temperature=0.7|TopP=0.95|HostSampler=topK=20;minP=0.1;repeatPenalty=1.0|AcceptUnverifiedSampler=True]')) 'Sampler: recorded sampler variables arrive at the eval script as parameters'
+    $overrideText = Get-Content -LiteralPath (Join-Path @((Get-JobById $overrideJob.id).runFolders)[0] 'results.txt') -Raw
+    Assert-That ($overrideText -match 'Temperature=0\.2\|' -and $overrideText -notmatch 'Temperature=0\.7') 'Sampler: a parameter in -EvalArgs wins over the recorded variable'
+    $plainText = Get-Content -LiteralPath (Join-Path @((Get-JobById $plainJob.id).runFolders)[0] 'results.txt') -Raw
+    Assert-That ($plainText -match [regex]::Escape('sampler=[]')) 'Sampler: no recorded variables means no sampler parameters'
 
     # --- orphaned job ----------------------------------------------------------------------------------
     New-Queue

@@ -245,6 +245,10 @@ runs jobs one at a time per machine and shows every session what is running and 
 - `ROSLYNSENTINEL_*` variables set in the submitting shell (for example `ROSLYNSENTINEL_LIFT_RENAMES`)
   are recorded with the job and applied to its run. `ROSLYNSENTINEL_RESULTS_ROOT` (absolute path; overrides
   the scratch default `<scratch>\ModelTestingResults`) and `ROSLYNSENTINEL_EVALQUEUE_*` are never recorded.
+  The sampler variables `ROSLYNSENTINEL_LLM_TEMPERATURE`, `_TOP_P`, `_HOST_SAMPLER` and
+  `_ACCEPT_UNVERIFIED_SAMPLER` are forwarded at submit as `-Temperature`, `-TopP`, `-HostSampler` and
+  `-AcceptUnverifiedSampler` in the job's arguments, because `roslynsentinel-modeleval.ps1` reads them only as
+  parameters; a parameter given in `-EvalArgs` wins, and the run's transcript Settings show the recorded values.
 - `-Priority 1..9` (default 5) orders the queue; a running job is never interrupted.
 - States: `Queued`, `Building` (the worker pre-builds the checkout before the time limit starts; cancellable),
   `Running`, `Finished` (`passed` true/false), `Cancelled`, `TimedOut` (`-TimeLimitMinutes`, default 40;

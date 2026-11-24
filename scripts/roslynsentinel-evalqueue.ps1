@@ -118,6 +118,9 @@
 .PARAMETER EvalArgs
     Extra roslynsentinel-modeleval.ps1 parameters as one string. Checked against that script's parameters
     at submit. Paths must be absolute. -HostAddress, -Test, -Repeats, -Model and -Clean are not allowed here.
+    The submitting shell's ROSLYNSENTINEL_LLM_TEMPERATURE, _TOP_P, _HOST_SAMPLER and
+    _ACCEPT_UNVERIFIED_SAMPLER become -Temperature, -TopP, -HostSampler and -AcceptUnverifiedSampler in
+    the job's arguments (the eval script reads these only as parameters); a parameter given here wins.
 
 .PARAMETER TimeLimitMinutes
     Stop the run after this long (default 40).
@@ -485,6 +488,51 @@ function Get-EvalScriptInfo([string]$Path) {
     return Get-Command -Name $Path -CommandType ExternalScript
 }
 
+# roslynsentinel-modeleval.ps1 sets or clears its sampler variables from its own parameters on every run (a stale
+# shell value must not leak into transcript Settings), so a recorded ROSLYNSENTINEL_LLM_* sampler variable only
+# reaches the run as an explicit parameter. Returns the parameter text to append to the job's -EvalArgs for the
+# variables in $EnvMap; a parameter the script does not have (an older pinned commit reads the variable) or that
+# -EvalArgs already gives is left out.
+function Get-SamplerEvalArgs([string]$Text, $ScriptInfo, $EnvMap) {
+    $given = @()
+    if ($Text.Trim()) {
+        $tokens = $null
+        $parseErrors = $null
+        [void][System.Management.Automation.Language.Parser]::ParseInput("x $Text", [ref]$tokens, [ref]$parseErrors)
+        $names = @($ScriptInfo.Parameters.Keys)
+        foreach ($token in $tokens | Where-Object { "$($_.Kind)" -eq 'Parameter' }) {
+            $hit = @($names | Where-Object { $_ -eq $token.ParameterName })
+            if ($hit.Count -eq 0) { $hit = @($names | Where-Object { $_ -like "$($token.ParameterName)*" }) }
+            if ($hit.Count -eq 1) { $given += $hit[0] }
+        }
+    }
+    $parts = @()
+    $invariant = [System.Globalization.CultureInfo]::InvariantCulture
+    foreach ($pair in @(
+            @{ Param = 'Temperature'; Var = 'ROSLYNSENTINEL_LLM_TEMPERATURE'; Kind = 'Number' },
+            @{ Param = 'TopP'; Var = 'ROSLYNSENTINEL_LLM_TOP_P'; Kind = 'Number' },
+            @{ Param = 'HostSampler'; Var = 'ROSLYNSENTINEL_LLM_HOST_SAMPLER'; Kind = 'Text' },
+            @{ Param = 'AcceptUnverifiedSampler'; Var = 'ROSLYNSENTINEL_LLM_ACCEPT_UNVERIFIED_SAMPLER'; Kind = 'Switch' })) {
+        $value = $EnvMap[$pair.Var]
+        if ([string]::IsNullOrWhiteSpace($value)) { continue }
+        if (-not $ScriptInfo.Parameters.ContainsKey($pair.Param) -or $pair.Param -in $given) { continue }
+        switch ($pair.Kind) {
+            'Number' {
+                $number = 0.0
+                # The variable holds the submitting shell's text (the eval script stores a double with the current culture).
+                if ([double]::TryParse($value, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::CurrentCulture, [ref]$number) -or
+                    [double]::TryParse($value, [System.Globalization.NumberStyles]::Float, $invariant, [ref]$number)) {
+                    $parts += "-$($pair.Param) $($number.ToString('R', $invariant))"
+                }
+                else { Write-Warning "$($pair.Var)='$value' is not a number; it is not passed to the run." }
+            }
+            'Text' { $parts += "-$($pair.Param) $(ConvertTo-Quoted $value)" }
+            'Switch' { if ($value -eq 'true') { $parts += "-$($pair.Param)" } }
+        }
+    }
+    return ($parts -join ' ')
+}
+
 function Test-EvalArgs([string]$Text, $ScriptInfo) {
     if (-not $Text.Trim()) { return }
     $tokens = $null
@@ -651,6 +699,8 @@ function Invoke-Submit {
     Get-ChildItem Env: | Where-Object {
         $_.Name -like 'ROSLYNSENTINEL_*' -and $_.Name -notlike 'ROSLYNSENTINEL_EVALQUEUE_*' -and $_.Name -notin $envNeverCaptured
     } | Sort-Object Name | ForEach-Object { $envMap[$_.Name] = $_.Value }
+    $samplerArgs = Get-SamplerEvalArgs $argsText $scriptInfo $envMap
+    if ($samplerArgs) { $argsText = "$argsText $samplerArgs".Trim() }
     $envText = ($envMap.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join ';'
 
     $outcome = Invoke-WithQueueLock $hostDir {
