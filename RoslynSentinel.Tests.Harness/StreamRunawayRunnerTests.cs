@@ -97,6 +97,98 @@ public class StreamRunawayRunnerTests
     }
 
     [Test]
+    public async Task StreamEndingWithoutResponseCompleted_AfterStreamingTheTokenCap_IsNotRetried()
+    {
+        // The attempt streams ~33k chars (~8.2k estimated tokens, over 90% of the 8192-token cap) and closes without
+        // response.completed: the retry would stream the same amount again, so the client must throw once and not retry.
+        var longText = string.Concat(Enumerable.Range(1, 1100).Select(n => $"Distinct sentence number {n} carries its own words. "));
+        var handler = new ScriptedStreamHandler(SseDelta("response.output_text.delta", longText));
+        var runner = NewRunner(handler: handler);
+
+        var result = await runner.RunAsync("system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.StopReason, Is.EqualTo(AgentStopReason.StreamTruncated));
+            Assert.That(result.Converged, Is.False);
+            Assert.That(handler.ResponsesRequests, Is.EqualTo(1));
+            Assert.That(result.Transcript.StopReason, Is.EqualTo(AgentStopReason.StreamTruncated));
+            Assert.That(result.Transcript.Turns, Is.Empty);
+        });
+    }
+
+    [Test]
+    public async Task ContentChannelPhraseLoop_AbortsAfterTheTwentiethRepeat_NotRetried()
+    {
+        // Thirty one-sentence deltas; the detector trips on the 20th occurrence, so the client aborts with one request.
+        var body = string.Concat(Enumerable.Repeat(SseDelta("response.output_text.delta", "The tests will fail. "), 30));
+        var handler = new ScriptedStreamHandler(body);
+        var runner = NewRunner(handler: handler);
+
+        var result = await runner.RunAsync("system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.StopReason, Is.EqualTo(AgentStopReason.ReasoningLoopDetected));
+            Assert.That(result.Converged, Is.False);
+            Assert.That(handler.ResponsesRequests, Is.EqualTo(1));
+            Assert.That(result.Transcript, Is.Not.Null);
+            Assert.That(result.Transcript.StopReason, Is.EqualTo(AgentStopReason.ReasoningLoopDetected));
+            Assert.That(result.Transcript.Turns, Is.Empty);
+        });
+    }
+
+    [Test]
+    public async Task ReasoningChannelPhraseLoop_AbortsAfterTheTwentiethRepeat_NotRetried()
+    {
+        var body = string.Concat(Enumerable.Repeat(SseDelta("response.reasoning_text.delta", "The tests will fail. "), 30));
+        var handler = new ScriptedStreamHandler(body);
+        var runner = NewRunner(handler: handler);
+
+        var result = await runner.RunAsync("system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.StopReason, Is.EqualTo(AgentStopReason.ReasoningLoopDetected));
+            Assert.That(handler.ResponsesRequests, Is.EqualTo(1));
+            Assert.That(result.Transcript.StopReason, Is.EqualTo(AgentStopReason.ReasoningLoopDetected));
+            Assert.That(result.Transcript.Turns, Is.Empty);
+        });
+    }
+
+    private static string SseDelta(string eventType, string text)
+    {
+        var payload = JsonSerializer.Serialize(new { item_id = "item_1", delta = text });
+        return $"event: {eventType}\ndata: {payload}\n\n";
+    }
+
+    /// <summary>
+    /// Every /responses POST answers the same fixed SSE body (no response.completed unless the body includes one). The models
+    /// endpoint answers 404. Counts the /responses POSTs so a test can assert how many attempts the client made.
+    /// </summary>
+    private sealed class ScriptedStreamHandler(string sseBody) : HttpMessageHandler
+    {
+        public int ResponsesRequests
+        {
+            get; private set;
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (!request.RequestUri!.AbsolutePath.EndsWith("/responses", StringComparison.Ordinal))
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+            }
+
+            ResponsesRequests++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(sseBody, Encoding.UTF8, "text/event-stream"),
+            });
+        }
+    }
+
+    [Test]
     public async Task SamplerValueEchoedDifferently_StopsWithSamplerMismatch_NoException()
     {
         // The run sends temperature 0.7; the host echoes 0.3 in response.completed. LmStudioAgentClient throws SamplerMismatchException,

@@ -593,6 +593,13 @@ public enum AgentStopReason
     /// as numbers in transcript.json, so inserting a member earlier would renumber the stored ones.
     /// </summary>
     SamplerMismatch,
+
+    /// <summary>
+    /// The model's streamed text or reasoning repeated one sentence K times (see StreamPhraseLoopDetector), so the stream was aborted
+    /// and not retried; nothing from the turn was recorded or executed; not a genuine finish. Declared last on purpose: stop reasons
+    /// are persisted as numbers in transcript.json, so inserting a member earlier would renumber the stored ones.
+    /// </summary>
+    ReasoningLoopDetected,
 }
 
 /// <summary>

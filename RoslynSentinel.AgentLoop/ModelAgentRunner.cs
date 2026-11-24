@@ -409,12 +409,19 @@ public sealed class ModelAgentRunner
             catch (StreamTruncatedException ex)
             {
                 // The client already retried once; the discarded response is not added to messages or transcript turns; no tool was executed.
-                // TODO a truncated turn that streamed a phrase loop (~16k tokens, 16-19 min) is retried and loops again; detect repetition mid-stream or skip the retry (INBOX 2026-11-23 08:20 StreamTruncated)
+                // A spent attempt (>= 90% of the token cap streamed) is not retried, so "twice" in the log holds only for a short truncation.
                 stopReason = AgentStopReason.StreamTruncated;
                 _logger.LogWarning(
                     ex,
-                    "Turn {Turn}: the model's streamed response ended without response.completed twice (connection closed early); no call was executed, stopping.",
+                    "Turn {Turn}: the model's streamed response ended without response.completed (connection closed early; retried once unless it had streamed ~the token cap); no call was executed, stopping.",
                     turnNumber);
+                break;
+            }
+            catch (StreamPhraseLoopException ex)
+            {
+                // The stream was aborted when one sentence repeated K times; not retried (the same prompt loops again). Nothing from the model was recorded or executed.
+                stopReason = AgentStopReason.ReasoningLoopDetected;
+                _logger.LogWarning(ex, "Turn {Turn}: {Message}; no call was executed, stopping.", turnNumber, ex.Message);
                 break;
             }
             catch (SamplerMismatchException ex)

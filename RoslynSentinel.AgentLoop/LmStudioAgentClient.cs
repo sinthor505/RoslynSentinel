@@ -202,7 +202,10 @@ public sealed class LmStudioAgentClient
             return await CompleteOnceAsync(messages, tools, maxTokens, replayPolicy, cancellationToken);
         }
         // ContextSizeExceededException is deliberately excluded from this filter: the same prompt overflows again on retry.
-        catch (Exception ex) when (ex is StreamIdleTimeoutException or InvalidOperationException or IOException)
+        // A StreamTruncatedException whose attempt already streamed ~the whole token cap (Spent) is excluded too: the retry would
+        // stream the same ~cap of text again (phrase loops observed live), doubling the wasted time. A short truncation is still retried.
+        catch (Exception ex) when (ex is not StreamTruncatedException { Spent: true }
+            && ex is StreamIdleTimeoutException or InvalidOperationException or IOException)
         {
             // One retry for transient LM Studio flakiness observed live: the SSE connection going
             // silent forever with no server-side error logged, the connection being forcibly reset
@@ -220,6 +223,16 @@ public sealed class LmStudioAgentClient
             _logger.LogWarning(ex, "LM Studio stream ran away ({Reason}); retrying once before giving up.", ex.Message);
             return await CompleteOnceAsync(messages, tools, maxTokens, replayPolicy, cancellationToken);
         }
+    }
+
+    /// <summary>Builds the exception for a tripped phrase-loop detector and logs it; the repeated sentence is truncated to ~80 characters.</summary>
+    private StreamPhraseLoopException NewPhraseLoopException(string channel, string sentence)
+    {
+        const int MaxSentenceChars = 80;
+        var shown = sentence.Length > MaxSentenceChars ? sentence[..MaxSentenceChars] + "..." : sentence;
+        var message = $"Streamed {channel} degenerated into a phrase loop: \"{shown}\" repeated {StreamPhraseLoopDetector.RepeatLimit} times; stream aborted.";
+        _logger.LogWarning("LM Studio phrase loop: {Reason}", message);
+        return new StreamPhraseLoopException(message);
     }
 
     private async Task<AgentChatMessage> CompleteOnceAsync(
@@ -278,6 +291,10 @@ public sealed class LmStudioAgentClient
         var toolCallCount = 0;
         var identicalCallStreak = 0;
         string? previousCallKey = null;
+        // Phrase-loop detectors, one per text channel; function-call text feeds only the spent-truncation estimate below.
+        var reasoningLoopDetector = new StreamPhraseLoopDetector();
+        var contentLoopDetector = new StreamPhraseLoopDetector();
+        var functionCallText = new StringBuilder();
 
         await foreach (var (eventType, data) in ReadServerSentEventsAsync(reader, cancellationToken))
         {
@@ -297,6 +314,10 @@ public sealed class LmStudioAgentClient
                         sb.Append(evt.Delta);
                         // One line per delta (normally one token), as for the content channel: scripts/Find-TypoTokenStream.ps1 reads both.
                         _logger.LogInformation("LM Studio reasoning: {Delta}", evt.Delta);
+                        if (reasoningLoopDetector.Append(evt.Delta) is { } reasoningLoop)
+                        {
+                            throw NewPhraseLoopException("reasoning", reasoningLoop);
+                        }
                         break;
                     }
                 case "response.output_text.delta":
@@ -307,6 +328,10 @@ public sealed class LmStudioAgentClient
                             : messageBuilders[evt.ItemId] = new StringBuilder();
                         sb.Append(evt.Delta);
                         _logger.LogInformation("{Backend} streaming: {Delta}", Backend, evt.Delta);
+                        if (contentLoopDetector.Append(evt.Delta) is { } contentLoop)
+                        {
+                            throw NewPhraseLoopException("content", contentLoop);
+                        }
                         break;
                     }
                 case "response.output_item.done":
@@ -317,6 +342,7 @@ public sealed class LmStudioAgentClient
                             _logger.LogInformation(
                                 "{Backend} streaming: tool call {Tool}({Args})", Backend, evt.Item.Name, evt.Item.Arguments);
 
+                            functionCallText.Append(evt.Item.Name).Append(evt.Item.Arguments);
                             toolCallCount++;
                             var callKey = evt.Item.Name + "\n" + evt.Item.Arguments;
                             identicalCallStreak = callKey == previousCallKey ? identicalCallStreak + 1 : 1;
@@ -362,7 +388,19 @@ public sealed class LmStudioAgentClient
 
         if (completedResponse is null)
         {
-            throw new StreamTruncatedException("LM Studio stream ended without a response.completed event.");
+            // No backend reports an output token count mid-stream (output_tokens only arrives in response.completed), so the
+            // streamed text is estimated with the shared chars-based estimator. >= 90% of the cap means the host most likely closed
+            // the stream at max_output_tokens, and a retry would only stream the same amount again.
+            var streamedText = string.Concat(
+                reasoningBuilders.Values.Select(sb => sb.ToString())
+                    .Concat(messageBuilders.Values.Select(sb => sb.ToString()))
+                    .Append(functionCallText.ToString()));
+            var estimatedTokens = PromptTokenEstimator.EstimateTokens(Model, streamedText);
+            var spent = (long)estimatedTokens * 10 >= (long)maxTokens * 9;
+            throw new StreamTruncatedException(
+                "LM Studio stream ended without a response.completed event" +
+                (spent ? $" after streaming ~{estimatedTokens} of {maxTokens} tokens (the cap); not retried." : "."),
+                spent);
         }
 
         // A response can arrive via response.completed yet still be truncated -> the Responses API
@@ -402,7 +440,6 @@ public sealed class LmStudioAgentClient
         }
         if (samplerMismatches.Count > 0)
         {
-            // TODO the refusal propagates as an exception out of ModelAgentRunner, so the run's transcript is not written; consider an AgentStopReason for it
             throw new SamplerMismatchException(
                 "The model host did not use the sampler value(s) this run sent: " +
                 string.Join("; ", samplerMismatches) + ". " +
@@ -1139,9 +1176,26 @@ public sealed class SamplerMismatchException(string message) : Exception(message
 /// Thrown when an SSE stream ends without a <c>response.completed</c> event (the connection closed early, e.g. the host
 /// dropped it mid-generation). Deliberately an <see cref="InvalidOperationException"/>, so <c>CompleteAsync</c>'s generic
 /// retry filter keeps its single retry; only a second consecutive truncation reaches <c>ModelAgentRunner</c>, which ends
-/// the run as <see cref="AgentStopReason.StreamTruncated"/>.
+/// the run as <see cref="AgentStopReason.StreamTruncated"/>. An attempt that had already streamed ~the whole token cap is
+/// <see cref="Spent"/> and is excluded from that retry filter by a <c>when</c> condition.
 /// </summary>
-public sealed class StreamTruncatedException(string message) : InvalidOperationException(message);
+public sealed class StreamTruncatedException(string message, bool spent = false) : InvalidOperationException(message)
+{
+    /// <summary>True when the attempt streamed at least 90% of the turn's token cap before the stream ended, so a retry is skipped.</summary>
+    public bool Spent
+    {
+        get;
+    } = spent;
+}
+
+/// <summary>
+/// Thrown when a streamed text or reasoning channel repeats one sentence <see cref="StreamPhraseLoopDetector.RepeatLimit"/> times
+/// (a phrase loop), so the stream is aborted early. Deliberately plain <see cref="Exception"/>: not an
+/// <see cref="InvalidOperationException"/> or <see cref="IOException"/> (the generic retry filter in <c>CompleteAsync</c> would retry
+/// it) and not a <see cref="StreamRunawayException"/>; the same prompt loops again. <c>ModelAgentRunner</c> ends the run as
+/// <see cref="AgentStopReason.ReasoningLoopDetected"/>.
+/// </summary>
+public sealed class StreamPhraseLoopException(string message) : Exception(message);
 
 /// <summary>One message in the running conversation the harness maintains itself (not tied to the wire format).</summary>
 public sealed class AgentChatMessage

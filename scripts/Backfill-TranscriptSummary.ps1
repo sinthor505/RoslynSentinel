@@ -59,7 +59,7 @@ $ErrorActionPreference = 'Stop'
 $StopReasonNames = @(
     'ModelFinished', 'TurnCapExceeded', 'WallClockCapExceeded', 'UnknownToolRequested', 'RepeatedToolFailure',
     'LoopLatchIgnored', 'ContextExhausted', 'StreamRunaway', 'MalformedToolCall', 'RepeatedIdenticalCall', 'TargetReached',
-    'Cancelled', 'Exception', 'StreamTruncated')
+    'Cancelled', 'Exception', 'StreamTruncated', 'SamplerMismatch', 'ReasoningLoopDetected')
 
 $Invariant = [System.Globalization.CultureInfo]::InvariantCulture
 $JsonObjectType = [System.Text.Json.Nodes.JsonObject]
