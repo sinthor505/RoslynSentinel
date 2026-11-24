@@ -43,7 +43,6 @@ public class CoerceStringToStructuredTests
     [SetUp]
     public async Task SetUp()
     {
-        ToolArgumentValidator.ClearSchemaCacheForTests();
 
         var clientToServer = new Pipe();
         var serverToClient = new Pipe();
@@ -86,7 +85,6 @@ public class CoerceStringToStructuredTests
         await _host.StopAsync();
         _host.Dispose();
         FieldMapStringProbeTool.LastServer = null;
-        ToolArgumentValidator.ClearSchemaCacheForTests();
     }
 
     [Test]

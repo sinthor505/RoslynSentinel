@@ -44,8 +44,6 @@ public class ToolSchemaPatchPipelineTests
         // Process-static: the profile and explicit hidden list, the hidden-name registry, and the validator's schema cache.
         SchemaOptions.Configure([]);
         SchemaOptions.ConfigureHiddenParameters([]);
-        HiddenSchemaParams.Clear();
-        ToolArgumentValidator.ClearSchemaCacheForTests();
     }
 
     // Builds a host (not started) with the Basic tools registered. startupArgs are applied before tool creation.

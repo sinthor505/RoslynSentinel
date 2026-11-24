@@ -34,8 +34,6 @@ public class ToolSurfaceControllerWiringTests
         // Process-static: the profile and explicit hidden list, the hidden-name registry, and the validator's schema cache.
         SchemaOptions.Configure([]);
         SchemaOptions.ConfigureHiddenParameters([]);
-        HiddenSchemaParams.Clear();
-        ToolArgumentValidator.ClearSchemaCacheForTests();
     }
 
     // Builds a host for the given mode (not started), the same way ToolSurfaceControllerTests.BuildHarness does.

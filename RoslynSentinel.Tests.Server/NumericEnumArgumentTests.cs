@@ -37,7 +37,6 @@ public class NumericEnumArgumentTests
     [SetUp]
     public async Task SetUp()
     {
-        ToolArgumentValidator.ClearSchemaCacheForTests();
 
         var clientToServer = new Pipe();
         var serverToClient = new Pipe();
@@ -81,7 +80,6 @@ public class NumericEnumArgumentTests
         _host.Dispose();
         EnumNumberProbeTool.LastServer = null;
         EnumNumberProbeTool.Invocations = 0;
-        ToolArgumentValidator.ClearSchemaCacheForTests();
     }
 
     [Test]

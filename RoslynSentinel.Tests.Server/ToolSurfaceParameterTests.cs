@@ -40,8 +40,6 @@ public class ToolSurfaceParameterTests
         // Process-static: the profile and explicit hidden list, the hidden-name registry, and the validator's schema cache.
         SchemaOptions.Configure([]);
         SchemaOptions.ConfigureHiddenParameters([]);
-        HiddenSchemaParams.Clear();
-        ToolArgumentValidator.ClearSchemaCacheForTests();
     }
 
     private sealed class Harness : IDisposable
@@ -219,9 +217,6 @@ public class ToolSurfaceParameterTests
 
         var current = harness.Host.Services.GetRequiredService<ToolSurfaceController>().Current;
         Assert.That(current.Parameters, Is.SameAs(surface));
-
-        // Clear the process-wide registry so acceptance below can only come from the snapshot.
-        HiddenSchemaParams.Clear();
 
         // One client session for both checks: WithClientAsync stops the host and closes the pipes, so a harness can
         // connect only once (a second WithClientAsync on the same harness times out in McpClient.CreateAsync).

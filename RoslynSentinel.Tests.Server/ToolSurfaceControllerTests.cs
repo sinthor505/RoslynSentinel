@@ -32,8 +32,6 @@ public class ToolSurfaceControllerTests
         // Process-static: the profile and explicit hidden list, the hidden-name registry, and the validator's schema cache.
         SchemaOptions.Configure([]);
         SchemaOptions.ConfigureHiddenParameters([]);
-        HiddenSchemaParams.Clear();
-        ToolArgumentValidator.ClearSchemaCacheForTests();
     }
 
     private sealed class Harness : IDisposable

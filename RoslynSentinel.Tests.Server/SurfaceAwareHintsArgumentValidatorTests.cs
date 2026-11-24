@@ -33,7 +33,6 @@ public class SurfaceAwareHintsArgumentValidatorTests
     [SetUp]
     public async Task SetUp()
     {
-        ToolArgumentValidator.ClearSchemaCacheForTests();
 
         var clientToServer = new Pipe();
         var serverToClient = new Pipe();
@@ -82,7 +81,6 @@ public class SurfaceAwareHintsArgumentValidatorTests
         await _host.StopAsync();
         _host.Dispose();
         HintSurfaceProbeTool.LastServer = null;
-        ToolArgumentValidator.ClearSchemaCacheForTests();
     }
 
     private static Dictionary<string, JsonElement> ArgsOmitting(string omitted)

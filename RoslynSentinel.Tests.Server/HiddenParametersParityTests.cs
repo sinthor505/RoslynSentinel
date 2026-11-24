@@ -36,8 +36,6 @@ public class HiddenParametersParityTests
         // Same reset as ToolSchemaPatchPipelineTests: profile and explicit hidden list, hidden-name registry, validator schema cache.
         SchemaOptions.Configure(Array.Empty<string>());
         SchemaOptions.ConfigureHiddenParameters(Array.Empty<string>());
-        HiddenSchemaParams.Clear();
-        ToolArgumentValidator.ClearSchemaCacheForTests();
     }
 
     // Startup configs x host flavor x mode set. The last config's "validateOnAply" is kept verbatim from the stage D brief.
