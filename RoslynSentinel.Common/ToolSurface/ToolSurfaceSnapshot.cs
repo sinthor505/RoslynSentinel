@@ -38,8 +38,19 @@ public sealed record ToolSurfaceSnapshot(long Version, DateTime BuiltUtc, string
     public static ToolSurfaceSnapshot Empty { get; } = new(0, DateTime.MinValue, "none", "", [], [], []);
 
     /// <summary>True when <paramref name="toolName"/> is exposed in this snapshot.</summary>
-    public bool IsExposed(string toolName) => throw new NotImplementedException(); // TODO implement (Step A2)
+    public bool IsExposed(string toolName) => Find(toolName) is not null;
 
     /// <summary>Returns the row for <paramref name="toolName"/>, or null when it is not exposed.</summary>
-    public ToolSurfaceTool? Find(string toolName) => throw new NotImplementedException(); // TODO implement (Step A2)
+    public ToolSurfaceTool? Find(string toolName)
+    {
+        foreach (var tool in Tools)
+        {
+            if (string.Equals(tool.Name, toolName, StringComparison.Ordinal))
+            {
+                return tool;
+            }
+        }
+
+        return null;
+    }
 }
