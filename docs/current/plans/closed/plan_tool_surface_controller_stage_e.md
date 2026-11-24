@@ -1,11 +1,11 @@
 # Plan: Tool-surface controller stage E - caches keyed by snapshot, one captured snapshot per call, runtime-toolset tools callable
 
-**Status:** IN PROGRESS 2026-11-24. Steps 1-16, 19-20 done (07a48893..615805a8); Steps 17-18 deferred (HOLD, R8); Step 21 full run pending. Approved 2026-11-24: Stage E: validator and hints read the snapshot, schema cache keyed per snapshot, HiddenSchemaParams deleted; Steps 17-18 (runtime-toolset tools callable) on HOLD for the owner (R8, SubAgent children are eval surfaces). Review fixes applied; other decisions taken at recommendation (owner away).
+**Status:** IMPLEMENTED 2026-11-24 (Steps 17-18 DEFERRED for the owner, R8; INBOX line). 07a48893, ef86f1c9, 16863873, b91f9439, c5594d85, b1dda85a, d2c8a06a, 5413d71b, eee9c423, 91bd37d6, 0971300a, d3ef14ae, 53f95fa8, 8484a2b4, 95ec7e20, 86b74f2a, 615805a8, 99331b10; full run green at 615805a8 (1,331 s, 0 failures). Approved 2026-11-24: Stage E: validator and hints read the snapshot, schema cache keyed per snapshot, HiddenSchemaParams deleted; Steps 17-18 (runtime-toolset tools callable) on HOLD for the owner (R8, SubAgent children are eval surfaces). Review fixes applied; other decisions taken at recommendation (owner away).
 
-Stage 4 of [proposal_tool_surface_controller.md](../proposals/proposal_tool_surface_controller.md). Follows phase A/B
-([closed/plan_tool_surface_controller.md](closed/plan_tool_surface_controller.md)), stage C
-([closed/plan_tool_surface_controller_stage_c.md](closed/plan_tool_surface_controller_stage_c.md)) and stage D
-([closed/plan_tool_surface_controller_stage_d.md](closed/plan_tool_surface_controller_stage_d.md), 1df39603..fa12d989), whose
+Stage 4 of [proposal_tool_surface_controller.md](../../proposals/proposal_tool_surface_controller.md). Follows phase A/B
+([closed/plan_tool_surface_controller.md](plan_tool_surface_controller.md)), stage C
+([closed/plan_tool_surface_controller_stage_c.md](plan_tool_surface_controller_stage_c.md)) and stage D
+([closed/plan_tool_surface_controller_stage_d.md](plan_tool_surface_controller_stage_d.md), 1df39603..fa12d989), whose
 "Out of scope" lists the validator `SchemaCache`, one captured snapshot per call, and `ToolCallHint` plus the `HiddenSchemaParams`
 deletion as stage E work.
 
@@ -562,7 +562,7 @@ Suggested orchestrator batches:
 - Done when: the section matches the code; links resolve.
 
 ### Step 21 - No stubs left, full run, close
-- Done: both sweeps 0 matches (non-test); INBOX lines added; full run pending
+- Done: both sweeps 0 matches (non-test); INBOX lines added; full run green at 615805a8 (c:\tmp\rs-testtrees\_results\615805a8-20261124-045616-16476)
 - Files: `docs/current/INBOX.md` (lines below), `docs/current/TODO.md` (the stages line), this plan (via `ProjectDoc close`)
 - Depends on: all above except the held Steps 17-18
 - Effect: none
