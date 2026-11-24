@@ -62,19 +62,75 @@ public sealed class ParameterSurface
 
     /// <summary>
     /// Groups the Hide rules that strip parameters from the given tools, one group per winning Hide rule.
-    /// Implemented in Step 3b.
+    /// Rules are grouped by reference, so two equal rules from different layers or origins stay separate.
     /// </summary>
     /// <param name="tools">The tools to attribute against.</param>
-    /// <returns>The hidden parameter groups.</returns>
-    public IReadOnlyList<HiddenParameterGroup> AttributeHidden(IReadOnlyList<ToolSurfaceTool> tools) => throw new NotImplementedException(); // TODO implement (Step 3b)
+    /// <returns>The hidden parameter groups, ordered by parameter then source.</returns>
+    public IReadOnlyList<HiddenParameterGroup> AttributeHidden(IReadOnlyList<ToolSurfaceTool> tools)
+    {
+        ArgumentNullException.ThrowIfNull(tools);
+        var toolsByRule = new Dictionary<ParameterVisibilityRule, List<string>>(ReferenceEqualityComparer.Instance);
+        foreach (var (tool, rule) in WinningHideRules(tools))
+        {
+            if (!toolsByRule.TryGetValue(rule, out var toolNames))
+            {
+                toolNames = new List<string>();
+                toolsByRule[rule] = toolNames;
+            }
+
+            toolNames.Add(tool.Name);
+        }
+
+        return toolsByRule
+            .Select(pair => new HiddenParameterGroup(
+                pair.Key.Parameter,
+                pair.Key.Source,
+                pair.Key.Origin,
+                pair.Value.Distinct(StringComparer.Ordinal).OrderBy(name => name, StringComparer.Ordinal).ToList()))
+            .OrderBy(group => group.Parameter, StringComparer.Ordinal)
+            .ThenBy(group => group.Source)
+            .ToList();
+    } // TODO implement (Step 3b)
 
     /// <summary>
-    /// Returns the Hide rules that matched no parameter of the given tools.
-    /// Implemented in Step 3b.
+    /// Returns the Hide rules that are the winning rule for no parameter of the given tools, in list order.
     /// </summary>
     /// <param name="tools">The tools to check rules against.</param>
     /// <returns>The unmatched Hide rules.</returns>
-    public IReadOnlyList<ParameterVisibilityRule> UnmatchedHideRules(IReadOnlyList<ToolSurfaceTool> tools) => throw new NotImplementedException(); // TODO implement (Step 3b)
+    public IReadOnlyList<ParameterVisibilityRule> UnmatchedHideRules(IReadOnlyList<ToolSurfaceTool> tools)
+    {
+        ArgumentNullException.ThrowIfNull(tools);
+        var winners = new HashSet<ParameterVisibilityRule>(ReferenceEqualityComparer.Instance);
+        foreach (var (_, rule) in WinningHideRules(tools))
+        {
+            winners.Add(rule);
+        }
+
+        return _ordered
+            .Where(rule => rule.Action == ParameterVisibility.Hide && !winners.Contains(rule))
+            .ToList();
+    } // TODO implement (Step 3b)
+
+    /// <summary>
+    /// Yields each (tool, winning Hide rule) pair for the hidden parameter names of the given tools.
+    /// Names whose ResolveHidden returns null are skipped; that happens only when a tool was built by another surface than this one.
+    /// </summary>
+    /// <param name="tools">The tools whose hidden parameter names are resolved.</param>
+    /// <returns>The winning Hide rule per hidden parameter name.</returns>
+    private IEnumerable<(ToolSurfaceTool Tool, ParameterVisibilityRule Rule)> WinningHideRules(IReadOnlyList<ToolSurfaceTool> tools)
+    {
+        foreach (var tool in tools)
+        {
+            foreach (var name in tool.HiddenParameters)
+            {
+                var rule = ResolveHidden(tool.Name, name);
+                if (rule is not null)
+                {
+                    yield return (tool, rule);
+                }
+            }
+        }
+    }
 }
 
 /// <summary>
