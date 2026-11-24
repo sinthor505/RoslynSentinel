@@ -8,6 +8,42 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Git commit on a foreign index.lock reports GitNothingToCommit (punchlist #3) - resolved (2026-11-23)
+
+Git commit on a foreign `.git/index.lock` reports GitNothingToCommit (2026-11-23) - new `GitErrorCodes.IndexLocked` detected structurally in `GitImpl.CommitAsync` (`GitImpl.cs:3819-3830`): exit 128 + `<git dir>/index.lock` exists (per-worktree git dir), hint names the lock path; also record why the index looked "nothing staged"; acceptance: `GitCommitUntrackedParityTests.Commit_IndexLockHeldByAnotherProcess_...` asserts the new code (todo review 2026-11-23); Small
+
+Evidence: 93619301, f8f3a6eb; GitCommit* + UndoChange + Asyncify run at a8572cfe: 0 failures
+
+## Comment UndoChange BOM mixed-EOL test as load-sensitive (punchlist #1) - resolved (2026-11-23)
+
+Comment `UndoChange_AfterApplyOnBomMixedEolFile_RestoresBomBytesAsync` as load-sensitive (2026-11-23) - failed once in a parallel worktree run at 9681fcd5 ("BuildHost process is not responding" on ContosoOrders.sln reload), passed alone; results `c:\tmp\rs-testtrees\_results\9681fcd5-20261123-192808-40840`; Quick
+
+Evidence: a34b3847
+
+## SubAgentChildServerLauncher.RestoreSolutionAsync duplicates SolutionRestore.RestoreAsync (punchlist #6) - resolved (2026-11-23)
+
+`SubAgentChildServerLauncher.RestoreSolutionAsync` duplicates `SolutionRestore.RestoreAsync` (Engines.Basic) (2026-11-22) - switch it over and run a worktree launch test; code TODO there; Small
+
+Evidence: be800753; SubAgentLaunchTests pass with a fake delegate (live SubAgent smoke pending, morning checklist)
+
+## Bridge/uplift-phase blob items never receive BeforeSource (punchlist #5) - resolved (2026-11-23)
+
+Bridge/uplift-phase blob items never receive BeforeSource (2026-11-22) - backfill `BeforeSource` from `PreImages` at `RunBridgePhaseAsync` (`AsyncifyTools.cs:2933`), `RunUpliftPhaseAsync` (`:3057`) and `UpliftCallersCore` (`:1878`) as the Flag phase does (`:2874-2882`); a file touched by two phases reverts to its pre-operation text (todo review 2026-11-23); acceptance: UndoChange reverts a bridge item and an uplift item; Small
+
+Evidence: a8572cfe; T36 + AsyncifyToolsTests pass (40/40); first-wins in AsyncifyTools, UndoChange last-write-wins left as TODO + INBOX
+
+## Measure the GetDiagnostics suppressor-pass cost (punchlist #2) - resolved (2026-11-23)
+
+Measure the GetDiagnostics suppressor-pass cost (2026-11-23) - since 3daad2ab every call builds a fresh `compilation.WithAnalyzers(...)` (`DiagnosticEngine.cs:78-112`), so a file-scope call on a project with a suppressor (all 13 test projects via NUnit.Analyzers) probably computes the whole project; time file and project scope on a test project vs a similar non-test project plus one solution-scope run (telemetry `durationMs`) and build a per-project `CompilationWithAnalyzers` cache only if file scope is slow (todo review 2026-11-23); Small
+
+Evidence: finding_diagnostic_suppressor_pass_file_scope_cost.md; borderline (~2x), no cache built, follow-up entry added
+
+## Evalqueue drops recorded sampler variables (punchlist #14) - resolved (2026-11-23)
+
+Evalqueue drops recorded sampler variables (2026-11-23) - `roslynsentinel-modeleval.ps1:625-650` deliberately clears `ROSLYNSENTINEL_LLM_HOST_SAMPLER`, `_TEMPERATURE`, `_TOP_P` and `_ACCEPT_UNVERIFIED_SAMPLER` unless passed as args (08055e85, stale-shell leak; the refusal gate reads only `-HostSampler`); fix: at submit `roslynsentinel-evalqueue.ps1` (~:649-654) translates those recorded variables into explicit `-HostSampler`/`-Temperature`/`-TopP`/`-AcceptUnverifiedSampler` evalArgs, and the evalqueue help and reference_model_eval_procedure.md:241-243 say so (todo review 2026-11-23); acceptance: a queued job with HOST_SAMPLER set shows the declared sampler in transcript.json Settings instead of `{}`; Small-Medium
+
+Evidence: c81d441c; roslynsentinel-evalqueue.Tests.ps1 all passed (live transcript Settings check pending)
+
 ## WideningRejectedByGate prompt does not say the tree must stay unchanged (punchlist #8) - resolved (2026-11-23)
 
 WideningRejectedByGate prompt does not say the tree must stay unchanged (2026-11-23) - Ornith (112, f16f4458) resent the gate-rejected edits with `validateOnApply:false`, wrote them and reported the 9 breaks -> BuildBroken (run 20261123-155817-336 T5); fix the prompt text in `WideningRejectedByGateScenario.cs` (and/or whether eval models see `validateOnApply`); Small
