@@ -102,10 +102,19 @@ public static class SymbolNotFoundDetail
     /// </summary>
     public static string RenderCandidates(
         string wantedName, string symbolKind, string scopeDescription, IReadOnlyList<SymbolCandidate> candidates,
-        Func<string, bool>? isCallable = null, Func<SymbolCandidate, string>? nextCall = null, Func<string, string?>? retryCall = null)
+        Func<string, bool>? isCallable = null, Func<SymbolCandidate, string>? nextCall = null, Func<string, string?>? retryCall = null,
+        bool wholeSolution = false, string? containingType = null, int omittedCount = 0)
     {
         var text = new StringBuilder();
-        text.Append($"Symbol '{wantedName}' ({symbolKind}) was not found in {scopeDescription}. Did you mean one of these?");
+        var exact = candidates.Any(c => c.Distance == 0);
+        text.Append($"Symbol '{wantedName}' ({symbolKind})");
+        if (containingType is not null)
+        {
+            text.Append($" in type '{containingType}'");
+        }
+
+        text.Append($" was not found in {scopeDescription}.");
+        text.Append(exact ? $" '{wantedName}' is declared in:" : " Did you mean one of these?");
         foreach (var candidate in candidates)
         {
             text.Append($"\n  - {candidate.Name} ({candidate.Kind})");
@@ -134,8 +143,25 @@ public static class SymbolNotFoundDetail
             }
         }
 
-        text.Append("\nRetry with the exact symbol you meant. ");
-        text.Append(SpeculativeAdvice.Resolve("If none of these is the symbol you meant, it does not exist in this solution."));
+        if (omittedCount > 0)
+        {
+            text.Append($"\n  (+{omittedCount} more not listed)");
+        }
+
+        text.Append("\nRetry with the exact symbol you meant.");
+        if (wholeSolution && omittedCount == 0 && !exact)
+        {
+            text.Append(' ');
+            text.Append(SpeculativeAdvice.Resolve("If none of these is the symbol you meant, it does not exist in this solution."));
+        }
+        else
+        {
+            var effectFact = SpeculativeAdvice.Resolve(string.Empty);
+            if (effectFact.Length > 0)
+            {
+                text.Append(' ').Append(effectFact);
+            }
+        }
         return text.ToString();
     }
 
@@ -232,10 +258,21 @@ public static class SymbolNotFoundDetail
     {
         // TODO split ignores generic arguments: Ns.Box<int>.Foo splits at a dot inside <...>; scan for the last '.' outside angle brackets
         var (container, name) = SplitQuery(query);
-        var candidates = await FindCandidatesAsync(searchedProjects, name, symbolKind, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var candidates = await FindCandidatesAsync(searchedProjects, name, symbolKind, cap: int.MaxValue, cancellationToken: cancellationToken).ConfigureAwait(false);
         if (candidates.Count > 0)
         {
-            return RenderCandidates(name, symbolKind, scopeDescription, candidates, isCallable, nextCall, retryCall);
+            // Container proximity: candidates declared in the named container's file are listed first.
+            var knownContainer = containingType ?? container;
+            var preferredFile = knownContainer is null
+                ? null
+                : await FindContainerFileAsync(searchedProjects, knownContainer, cancellationToken).ConfigureAwait(false);
+            var ordered = preferredFile is null
+                ? candidates
+                : candidates.OrderBy(c => string.Equals(c.FilePath, preferredFile, StringComparison.Ordinal) ? 0 : 1).ToList();
+            // Up to 10 exact-name ties; when fewer than 3 are exact, fill with the nearest near names up to 3 shown in total.
+            var exact = ordered.Where(c => c.Distance == 0).Take(10).ToList();
+            var shown = exact.Count >= 3 ? exact : exact.Concat(ordered.Where(c => c.Distance > 0).Take(3 - exact.Count)).ToList();
+            return RenderCandidates(name, symbolKind, scopeDescription, shown, isCallable, nextCall, retryCall, wholeSolution, knownContainer, candidates.Count - shown.Count);
         }
 
         var containerFile = container is null
@@ -251,6 +288,10 @@ public static class SymbolNotFoundDetail
     private static string DefaultSearchCall(SymbolCandidate candidate)
     {
         var pairs = new List<(string Name, string Value)> { ("mode", "symbol"), ("query", candidate.Name) };
+        if (!string.IsNullOrEmpty(candidate.Container) && candidate.Kind != "type")
+        {
+            pairs.Add(("containingType", candidate.Container));
+        }
         if (!string.IsNullOrEmpty(candidate.FilePath))
         {
             pairs.Add(("filePath", candidate.FilePath));

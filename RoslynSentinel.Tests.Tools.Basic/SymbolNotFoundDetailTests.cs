@@ -213,7 +213,7 @@ public class SymbolNotFoundDetailTests
     {
         var projects = Projects(BuildSolution());
 
-        var text = await SymbolNotFoundDetail.BuildAsync(projects, "CalcDsc", "method", ScopeDescription, ProjectName);
+        var text = await SymbolNotFoundDetail.BuildAsync(projects, "CalcDsc", "method", ScopeDescription, ProjectName, wholeSolution: true);
 
         Assert.That(text, Does.Contain("Symbol 'CalcDsc' (method) was not found in " + ScopeDescription));
         Assert.That(text, Does.Contain("Did you mean one of these?"));
@@ -222,6 +222,55 @@ public class SymbolNotFoundDetailTests
         Assert.That(text, Does.Contain("does not exist in this solution"));
         Assert.That(text, Does.Not.Contain("tell the user"));
         Assert.That(text, Does.Not.Contain("You MUST"));
+    }
+
+    [Test]
+    public async Task BuildAsync_ManyExactNameTies_ListsUpToTenAndCountsTheRest()
+    {
+        var classes = "namespace Fixture;\n" + string.Concat(Enumerable.Range(1, 12).Select(i => $"public class Holder{i:D2} {{ public void Classify() {{ }} }}\n"));
+        var projects = Projects(BuildSolution(("Ties.cs", classes)));
+
+        var text = await SymbolNotFoundDetail.BuildAsync(projects, "Classify", "method", ScopeDescription, ProjectName);
+
+        Assert.That(text.Split('\n').Count(line => line.StartsWith("  - Classify (method)", StringComparison.Ordinal)), Is.EqualTo(10));
+        Assert.That(text, Does.Contain("(+2 more not listed)"));
+        Assert.That(text, Does.Contain("'Classify' is declared in:"));
+        Assert.That(text, Does.Not.Contain("does not exist in this solution"));
+    }
+
+    [Test]
+    public async Task BuildAsync_ContainingTypeGiven_HeaderNamesTypeAndRetryCarriesContainingType()
+    {
+        const string holder = "namespace Fixture; public class Holder { public void Classify() { } }";
+        var projects = Projects(BuildSolution(("Holder.cs", holder)));
+
+        var text = await SymbolNotFoundDetail.BuildAsync(projects, "Classify", "method", ScopeDescription, ProjectName, containingType: "Holder");
+
+        Assert.That(text, Does.Contain("Symbol 'Classify' (method) in type 'Holder' was not found in " + ScopeDescription));
+        Assert.That(text, Does.Contain("containingType:"));
+    }
+
+    [Test]
+    public async Task BuildAsync_CandidateInContainerFile_ListedFirst()
+    {
+        const string others = "namespace Fixture; public class Alpha { public void Classify() { } } public class Beta { public void Classify() { } }";
+        const string holder = "namespace Fixture; public class Holder { public void Classify() { } }";
+        var projects = Projects(BuildSolution(("Others.cs", others), ("Holder.cs", holder)));
+
+        var text = await SymbolNotFoundDetail.BuildAsync(projects, "Holder.Classify", "method", ScopeDescription, ProjectName);
+
+        Assert.That(text.Split('\n')[1], Does.StartWith("  - Classify (method) in Holder"));
+    }
+
+    [Test]
+    public async Task BuildAsync_WholeSolutionNearNamesOnly_KeepsAbsenceSentence()
+    {
+        var projects = Projects(BuildSolution());
+
+        var text = await SymbolNotFoundDetail.BuildAsync(projects, "CalcDsc", "method", ScopeDescription, ProjectName, wholeSolution: true);
+
+        Assert.That(text, Does.Contain("Did you mean one of these?"));
+        Assert.That(text, Does.Contain("does not exist in this solution"));
     }
 
     [Test]
