@@ -379,8 +379,10 @@ public class ObsoleteMigrationTests
             }
         }
 
-        // Legacy without the attribute lists is the seed; Modern is the seed with the other namespace.
-        var legacyWithoutAttributes = legacyRoot.RemoveNodes(legacyTypes.SelectMany(type => type.AttributeLists), SyntaxRemoveOptions.KeepNoTrivia);
+        // Legacy without the attribute lists is the seed; Modern is the seed with the other namespace. The doc comment is the leading
+        // trivia of the attribute list's first token, so KeepLeadingTrivia moves it onto the declaration's first token, where the
+        // seed has it (KeepNoTrivia would delete the doc comment with the list and break the equivalence).
+        var legacyWithoutAttributes = legacyRoot.RemoveNodes(legacyTypes.SelectMany(type => type.AttributeLists), SyntaxRemoveOptions.KeepLeadingTrivia);
         if (legacyWithoutAttributes is null || !legacyWithoutAttributes.IsEquivalentTo(seedLegacyRoot))
         {
             return "Legacy/Orders.cs differs from the original in more than the added [System.Obsolete] attribute lists";
