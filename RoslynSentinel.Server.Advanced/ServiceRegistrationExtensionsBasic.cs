@@ -1543,16 +1543,19 @@ public static class RoslynSentinelServiceExtensionsBasic
                 System.Collections.Generic.IReadOnlyList<string>? aliasNotes = null;
                 try
                 {
+                    // proposal decision 3: a call is validated against the surface it started under; the schema itself is still read live from the tool collection; a throwing read is caught by the outer catch below and skips validation (the call runs unvalidated, as for any other validator exception).
+                    var surface = context.Server.Services?.GetService<ToolSurfaceController>()?.Current;
+
                     ToolArgumentValidator.NormalizeParameterCase(
-                        context.Server, context.Params?.Name, context.Params?.Arguments);
+                        context.Server, context.Params?.Name, context.Params?.Arguments, surface: surface);
 
                     var enumNotes = ToolArgumentValidator.NormalizeEnumCase(
-                        context.Server, context.Params?.Name, context.Params?.Arguments);
+                        context.Server, context.Params?.Name, context.Params?.Arguments, surface: surface);
                     if (enumNotes is not null)
                         aliasNotes = enumNotes;
 
                     var aliasRenameNotes = ToolArgumentValidator.ApplyParameterAliases(
-                        context.Server, context.Params?.Name, context.Params?.Arguments);
+                        context.Server, context.Params?.Name, context.Params?.Arguments, surface: surface);
                     if (aliasRenameNotes is not null)
                         aliasNotes = enumNotes is null ? aliasRenameNotes : [.. (enumNotes ?? System.Array.Empty<string>()), .. aliasRenameNotes];
 
@@ -1565,24 +1568,24 @@ public static class RoslynSentinelServiceExtensionsBasic
                     // and before the wrap/coerce passes. The solution root lets a text-mode Search path become a fileGlob.
                     var solutionRoot = context.Server.Services?.GetService<PersistentWorkspaceManager>()?.GetSolutionRoot();
                     var rewriteNotes = ToolArgumentValidator.ApplyArgumentRewrites(
-                        context.Server, context.Params?.Name, context.Params?.Arguments, solutionRoot);
+                        context.Server, context.Params?.Name, context.Params?.Arguments, solutionRoot, surface: surface);
                     if (rewriteNotes is not null)
                         aliasNotes = aliasNotes is null ? rewriteNotes : [.. aliasNotes, .. rewriteNotes];
 
                     var wrapNotes = ToolArgumentValidator.WrapFlatBatchParameters(
-                        context.Server, context.Params?.Name, context.Params?.Arguments);
+                        context.Server, context.Params?.Name, context.Params?.Arguments, surface: surface);
                     if (wrapNotes is not null)
                         aliasNotes = aliasNotes is null ? wrapNotes : [.. aliasNotes, .. wrapNotes];
 
                     var coerceNotes = ToolArgumentValidator.CoerceStringToStructured(
-                        context.Server, context.Params?.Name, context.Params?.Arguments);
+                        context.Server, context.Params?.Name, context.Params?.Arguments, surface: surface);
                     if (coerceNotes is not null)
                         aliasNotes = aliasNotes is null ? coerceNotes : [.. aliasNotes, .. coerceNotes];
 
                     var validationSurface = context.Server.Services?.GetService<ActiveToolSurface>();
                     Func<string, bool>? validationIsCallable = validationSurface is null ? null : validationSurface.IsCallable;
                     var validationError = ToolArgumentValidator.Validate(
-                        context.Server, context.Params?.Name, context.Params?.Arguments, validationIsCallable);
+                        context.Server, context.Params?.Name, context.Params?.Arguments, validationIsCallable, surface: surface);
 
                     if (validationError is not null)
                     {
