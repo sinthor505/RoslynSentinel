@@ -19,7 +19,7 @@ public static class FinalOutcomeToken
         @"^\s*(?:#+\s*)?[*_`]*DONE[*_`]*:",
         RegexOptions.CultureInvariant);
 
-    /// <summary>Done or Blocked when the first or last non-blank line starts with that token; when both carry one, the first line wins. Otherwise None (a null or blank message is None).</summary>
+    /// <summary>Done or Blocked when a line starts with that token: the first non-blank line wins, otherwise the last line that starts with a token (report lines may follow it). A token inside a sentence does not count. Otherwise None (a null or blank message is None).</summary>
     public static FinalOutcome Parse(string? message)
     {
         if (string.IsNullOrWhiteSpace(message))
@@ -37,6 +37,7 @@ public static class FinalOutcomeToken
             return FinalOutcome.Done;
         }
 
+        // Scan from the end so the last token line wins; models sometimes write the token line and then a few report lines after it.
         string[] lines = message.Split('\n');
         for (int i = lines.Length - 1; i >= 0; i--)
         {
@@ -51,7 +52,10 @@ public static class FinalOutcomeToken
                 return FinalOutcome.Blocked;
             }
 
-            return LeadingDoneRegex.IsMatch(line) ? FinalOutcome.Done : FinalOutcome.None;
+            if (LeadingDoneRegex.IsMatch(line))
+            {
+                return FinalOutcome.Done;
+            }
         }
 
         return FinalOutcome.None;
