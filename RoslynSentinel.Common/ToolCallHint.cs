@@ -65,7 +65,7 @@ public static class ToolCallHint
     /// Renders a complete call, <c>Tool(p1: v1, p2: v2)</c>, in schema order. A parameter appears when the caller supplied
     /// a valid value or the schema marks it required (then a placeholder). Unknown tools render as the bare name; a null or
     /// empty tool name renders as an empty string. Invalid or unknown pairs are dropped, except a pair stripped from the schema by
-    /// the lean profile (<see cref="HiddenSchemaParams"/>), which is kept after the schema parameters.
+    /// the lean profile, recorded in the catalog's hidden-parameter map, which is kept after the schema parameters.
     /// </summary>
     public static string Call(ToolSignatureCatalog catalog, string toolName, params (string Name, string Value)[] known)
     {
@@ -93,8 +93,7 @@ public static class ToolCallHint
             var spec = FindSpec(parameters, pair.Name);
             if (spec is null)
             {
-                // TODO read hidden parameters from the snapshot's hint catalog (stage E), then delete HiddenSchemaParams
-                if (pair.Value is not null && HiddenSchemaParams.IsHidden(toolName, pair.Name) && !hidden.Exists(entry => entry.Name == pair.Name))
+                if (pair.Value is not null && catalog.IsHidden(toolName, pair.Name) && !hidden.Exists(entry => entry.Name == pair.Name))
                 {
                     hidden.Add((pair.Name, RenderHidden(pair.Value)));
                 }

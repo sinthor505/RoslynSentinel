@@ -75,48 +75,53 @@ public class ToolCallHintTests
     }
 
     [Test]
-    [NonParallelizable] // HiddenSchemaParams is process-wide static state, so this test cannot overlap other tests that touch it.
-    public void Call_HiddenParameter_IsRenderedOnlyWhenRegistered()
+    public void Call_HiddenParameter_IsRenderedOnlyWhenTheCatalogMarksItHidden()
     {
         using var probe = JsonDocument.Parse("""{"type":"object","properties":{"reason":{"type":"string"}},"required":["reason"]}""");
-        var catalog = ToolSignatureCatalog.FromSchemas(new[]
-        {
-            KeyValuePair.Create("HiddenParamProbe", probe.RootElement.Clone()),
-        });
+        var schemas = new[] { KeyValuePair.Create("HiddenParamProbe", probe.RootElement.Clone()) };
+        var marked = ToolSignatureCatalog.FromSchemas(schemas, new Dictionary<string, IReadOnlyCollection<string>> { ["HiddenParamProbe"] = new[] { "lineBefore" } });
+        var unmarked = ToolSignatureCatalog.FromSchemas(schemas, null);
 
-        try
-        {
-            HiddenSchemaParams.Register("HiddenParamProbe", new[] { "lineBefore" });
-
-            Assert.That(ToolCallHint.Call(catalog, "HiddenParamProbe", ("reason", "a reason that is long"), ("lineBefore", "foo()")), Is.EqualTo("HiddenParamProbe(reason: \"a reason that is long\", lineBefore: \"foo()\")"));
-        }
-        finally
-        {
-            HiddenSchemaParams.Clear();
-        }
-
-        Assert.That(ToolCallHint.Call(catalog, "HiddenParamProbe", ("reason", "a reason that is long"), ("lineBefore", "foo()")), Is.EqualTo("HiddenParamProbe(reason: \"a reason that is long\")"));
+        Assert.That(ToolCallHint.Call(marked, "HiddenParamProbe", ("reason", "a reason that is long"), ("lineBefore", "foo()")), Is.EqualTo("HiddenParamProbe(reason: \"a reason that is long\", lineBefore: \"foo()\")"));
+        Assert.That(ToolCallHint.Call(unmarked, "HiddenParamProbe", ("reason", "a reason that is long"), ("lineBefore", "foo()")), Is.EqualTo("HiddenParamProbe(reason: \"a reason that is long\")"));
     }
 
     [Test]
-    [NonParallelizable] // HiddenSchemaParams is process-wide static state, so this test cannot overlap other tests that touch it.
     public void Call_HiddenStringValue_IsQuotedEvenWhenNumeric()
     {
         using var probe = JsonDocument.Parse("""{"type":"object","properties":{"reason":{"type":"string"}},"required":["reason"]}""");
-        var catalog = ToolSignatureCatalog.FromSchemas(new[]
-        {
-            KeyValuePair.Create("HiddenParamProbe", probe.RootElement.Clone()),
-        });
+        var catalog = ToolSignatureCatalog.FromSchemas(new[] { KeyValuePair.Create("HiddenParamProbe", probe.RootElement.Clone()) }, new Dictionary<string, IReadOnlyCollection<string>> { ["HiddenParamProbe"] = new[] { "lineBefore" } });
 
+        Assert.That(ToolCallHint.Call(catalog, "HiddenParamProbe", ("reason", "a reason that is long"), ("lineBefore", "42")), Is.EqualTo("HiddenParamProbe(reason: \"a reason that is long\", lineBefore: \"42\")"));
+    }
+
+    [Test]
+    public void Call_HiddenPair_DependsOnlyOnTheCatalogPassed()
+    {
+        using var probe = JsonDocument.Parse("""{"type":"object","properties":{"reason":{"type":"string"}},"required":["reason"]}""");
+        var schemas = new[] { KeyValuePair.Create("HiddenPairProbe", probe.RootElement.Clone()) };
+        var withMap = ToolSignatureCatalog.FromSchemas(schemas, new Dictionary<string, IReadOnlyCollection<string>> { ["HiddenPairProbe"] = new[] { "lineAfter" } });
+        var withoutMap = ToolSignatureCatalog.FromSchemas(schemas, null);
+
+        Assert.That(ToolCallHint.Call(withMap, "HiddenPairProbe", ("reason", "a reason that is long"), ("lineAfter", "bar()")), Is.EqualTo("HiddenPairProbe(reason: \"a reason that is long\", lineAfter: \"bar()\")"));
+        Assert.That(ToolCallHint.Call(withoutMap, "HiddenPairProbe", ("reason", "a reason that is long"), ("lineAfter", "bar()")), Is.EqualTo("HiddenPairProbe(reason: \"a reason that is long\")"));
+    }
+
+    [Test]
+    [NonParallelizable] // SchemaOptions is process-wide static state, so this test cannot overlap other tests that read the schema profile.
+    public void FromLoadedAssemblies_UnderLeanProfile_MarksStrippedParametersHidden()
+    {
         try
         {
-            HiddenSchemaParams.Register("HiddenParamProbe", new[] { "lineBefore" });
+            SchemaOptions.Configure(["--schema-profile=lean"]);
+            var catalog = ToolSignatureCatalogReflection.FromLoadedAssemblies();
 
-            Assert.That(ToolCallHint.Call(catalog, "HiddenParamProbe", ("reason", "a reason that is long"), ("lineBefore", "42")), Is.EqualTo("HiddenParamProbe(reason: \"a reason that is long\", lineBefore: \"42\")"));
+            Assert.That(catalog.IsHidden("ReplaceSnippet", "returnDiff"), Is.True);
+            Assert.That(catalog.IsHidden("ReplaceSnippet", "reason"), Is.False);
         }
         finally
         {
-            HiddenSchemaParams.Clear();
+            SchemaOptions.Configure([]);
         }
     }
 
