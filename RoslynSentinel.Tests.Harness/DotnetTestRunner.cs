@@ -7,7 +7,11 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// Result of a single `dotnet test` invocation, parsed from the console summary line
 /// (e.g. "Passed!  - Failed:     0, Passed:     2, Skipped:     0, Total:     2, Duration: 20 ms").
 /// </summary>
-public sealed record DotnetTestResult(int Passed, int Failed, int Skipped, int Total, int ExitCode, string RawOutput);
+public sealed record DotnetTestResult(int Passed, int Failed, int Skipped, int Total, int ExitCode, string RawOutput)
+{
+    /// <summary>Names of the failed tests, parsed from <see cref="RawOutput"/>.</summary>
+    public IReadOnlyList<string> FailedTests => DotnetTestRunner.ParseFailedTests(RawOutput);
+}
 
 /// <summary>
 /// Runs `dotnet test` against a real test project (e.g. ContosoOrders.Tests) and parses its
@@ -67,5 +71,11 @@ public static class DotnetTestRunner
             Total: int.Parse(match.Groups["total"].Value),
             ExitCode: process.ExitCode,
             RawOutput: output);
+    }
+
+    // internal, not private as the plan text says: DotnetTestResult (a separate type) calls it from FailedTests.
+    internal static IReadOnlyList<string> ParseFailedTests(string rawOutput)
+    {
+        throw new NotImplementedException(); // TODO implement (Step 5)
     }
 }
