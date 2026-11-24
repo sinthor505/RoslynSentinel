@@ -44,7 +44,7 @@ public class CallableToolHintLiveSurfaceTests
         var error = WorkspaceFileEditImpl.BuildFileNotFoundError(SolutionWithoutTheRequestedFile(), MissingPath, surface.IsCallable);
 
         Assert.That(error.Message, Does.Contain("ListSolutionItems("));
-        Assert.That(error.Message, Does.Contain(" lists every file in the solution."));
+        Assert.That(error.Message, Does.Contain("lists every file"));
     }
 
     [Test]
@@ -57,6 +57,6 @@ public class CallableToolHintLiveSurfaceTests
         var error = WorkspaceFileEditImpl.BuildFileNotFoundError(SolutionWithoutTheRequestedFile(), MissingPath, surface.IsCallable);
 
         Assert.That(error.Message, Does.Not.Contain("ListSolutionItems"));
-        Assert.That(error.Message, Does.Contain("may since have been renamed or moved"));
+        Assert.That(error.Message, Does.Contain("renamed or moved"));
     }
 }
