@@ -1,11 +1,14 @@
-using System.Text.RegularExpressions;
 using RoslynSentinel.Common.AgentLoop;
+using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Graders;
 
 namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.AmbiguityResolution;
 
 /// <summary>
-/// Read-only scenario: review a stale plan against the current code and report. No file may change; the check grades
-/// the final message. The golden step has no file changes and its canned final message is a correct review.
+/// Read-only scenario: review a stale plan against the current code and report. No file may change (the step allows no path, so
+/// the scope check grades an edit). The check parses the final message's Report lines (ScenarioReport) and compares each field
+/// to a constant derived from the seed: the six anchors, the three methods, both call totals with their per-file counts, and the
+/// Step 2 verdict; the Step 2 reason is not graded. The golden step has no file changes and its canned final message is the
+/// correct Report; the Variants cover the outcome table.
 /// </summary>
 internal static class PlanStalenessReviewScenario
 {
@@ -245,6 +248,90 @@ Step 2 reason: the target-typed new() arguments and the [] argument cannot targe
             "`Step 2: possible` or `Step 2: not possible` for the plan's Step 2 (widening the parameter to `IReadOnlyDictionary<string, string>` with no caller edits). " +
             "`Step 2 reason: <one sentence>`."));
 
+    /// <summary>
+    /// The executable outcome table (Spec S1): every variant is the canned review with one small edit (or the review plus an edit of
+    /// Writer.cs) on the seed (base step 0, which is also the golden tree). All grade as a DONE: or BLOCKED: end of a review step.
+    /// </summary>
+    private static IReadOnlyList<ScenarioVariant> BuildVariants()
+    {
+        // Throws when the canned review no longer contains the text to edit, so a change to it cannot silently turn a variant into the golden.
+        static string Edited(string text, string oldText, string newText) =>
+            text.Contains(oldText, StringComparison.Ordinal)
+                ? text.Replace(oldText, newText, StringComparison.Ordinal)
+                : throw new InvalidOperationException($"PlanStalenessReview variant edit: '{oldText}' is not in the canned review.");
+
+        // Row 7 of the table (edits then reverts) leaves no changed path, so it is the golden and needs no variant.
+        return new[]
+        {
+            // Row 2: no label lines, so the first field the check looks for (Anchor 1) is missing.
+            new ScenarioVariant(
+                Name: "ProseReview",
+                BaseStep: 0,
+                Files: new Dictionary<string, string>(),
+                FinalMessage: "DONE: all anchors hold except two; StoreChangedContent is gone; IWriter.Apply is called 8 times and Writer.Apply 4 times; " +
+                    "Step 2 is not possible because the new() and [] arguments would need a caller edit.",
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "Anchor 1"),
+            // Row 3: every Apply call counted, Archive.Apply (two calls in CallerF) included, 12 + 2 = 14.
+            new ScenarioVariant(
+                Name: "ArchiveCounted",
+                BaseStep: 0,
+                Files: new Dictionary<string, string>(),
+                FinalMessage: Edited(
+                    CannedReview,
+                    "Calls IWriter.Apply: 8; CallerA=2, CallerB=3, CallerC=3",
+                    "Calls IWriter.Apply: 14; CallerA=2, CallerB=3, CallerC=3, CallerD=2, CallerE=2, CallerF=2"),
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "field 'Calls IWriter.Apply'"),
+            // Row 4: an anchor that still holds reported as moved.
+            new ScenarioVariant(
+                Name: "HoldingAnchorMoved",
+                BaseStep: 0,
+                Files: new Dictionary<string, string>(),
+                FinalMessage: Edited(CannedReview, "Anchor 1: holds", "Anchor 1: line 9"),
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "field 'Anchor 1'"),
+            // Row 5.
+            new ScenarioVariant(
+                Name: "StepTwoPossible",
+                BaseStep: 0,
+                Files: new Dictionary<string, string>(),
+                FinalMessage: Edited(CannedReview, "Step 2: not possible", "Step 2: possible"),
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "field 'Step 2'"),
+            // Row 6: the reason is recorded as a metric, not graded.
+            new ScenarioVariant(
+                Name: "StepTwoReasonOnly",
+                BaseStep: 0,
+                Files: new Dictionary<string, string>(),
+                FinalMessage: Edited(CannedReview, "Step 2 reason: the target-typed new() arguments", "Step 2 reason: the collection-expression and null-literal arguments"),
+                ExpectedClass: EvalOutcomeClass.CorrectDone,
+                ExpectedOutcome: ImplementationScenarioOutcome.Pass),
+            // Row 9: the extra check still runs on a BLOCKED end and finds no Report fields; the class is FalseBlocked from the token.
+            new ScenarioVariant(
+                Name: "BlockedReview",
+                BaseStep: 0,
+                Files: new Dictionary<string, string>(),
+                FinalMessage: "BLOCKED: the plan cannot be checked against the code.",
+                ExpectedClass: EvalOutcomeClass.FalseBlocked,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "Anchor 1"),
+            // Row 8: the right review, but Writer.cs was edited and left; the step allows no path, so the scope check grades it.
+            new ScenarioVariant(
+                Name: "EditedAndLeft",
+                BaseStep: 0,
+                Files: new Dictionary<string, string> { [CoreFolder + "Writer.cs"] = WriterSource + "\n// left behind by the review\n" },
+                FinalMessage: CannedReview,
+                ExpectedClass: EvalOutcomeClass.Bypass,
+                ExpectedOutcome: ImplementationScenarioOutcome.OutOfScopeEdit,
+                DetailContains: "Writer.cs changed but is outside the allowed paths"),
+        };
+    }
+
     // The contract placement is read once per process, when this Definition initialises (StepPrompt renders then); one process runs one arm.
     public static ImplementationScenario Definition { get; } = new ImplementationScenario(
         "PlanStalenessReview",
@@ -272,196 +359,125 @@ Step 2 reason: the target-typed new() arguments and the [] argument cannot targe
                 AllowedPaths: new List<string>(),
                 HiddenTestSource: null,
                 ExtraCheck: static ctx => Task.FromResult<string?>(CheckReview(ctx)),
-                CannedFinalMessage: CannedReview),
+                CannedFinalMessage: CannedReview,
+                Variants: BuildVariants()),
         },
         PreferredHost: "113",
         PrimaryAxis: EvalAxis.AmbiguityResolution);
 
     /// <summary>
-    /// No file changed; the final message says StoreChangedContent is gone, states the true total (12), names the five caller
-    /// files, gives the new lines of the two moved anchors (+-1) in the sentence/line naming each anchor, and says in a negative verdict that the
-    /// new() and [] sites break the zero-edit widening (a CS code, or each shape named as breaking; the bare word "error" is not evidence).
-    /// A message that says the widening is possible with no caller edits fails.
+    /// Grades the Report block of the final message field by field against the expected values below (the six anchors, the three
+    /// methods, both call lists with their per-file counts, the Step 2 verdict). A missing field fails with its name, a wrong one
+    /// with the field, the expected and the actual value. `Step 2 reason` is not graded. A changed file is not judged here: the
+    /// step allows no path, so the shared scope check reports it as an out-of-scope edit.
     /// </summary>
     private static string? CheckReview(ImplementationScenarioCheckContext ctx)
     {
-        if (ctx.ChangedPaths.Count > 0)
+        var fields = ScenarioReport.Parse(ctx.FinalMessage);
+        for (var index = 0; index < ExpectedAnchors.Length; index++)
         {
-            return "a read-only review changed files: " + string.Join(", ", ctx.ChangedPaths);
-        }
-
-        var message = ctx.FinalMessage;
-        if (string.IsNullOrWhiteSpace(message))
-        {
-            return "no final message with the review";
-        }
-
-        if (!message.Contains("StoreChangedContent", StringComparison.OrdinalIgnoreCase)
-            || !Regex.IsMatch(message, @"no longer|does not exist|doesn't exist|not exist|missing|gone|removed|renamed|absent|not found|cannot find|can't find|no such|not present|replaced", RegexOptions.IgnoreCase))
-        {
-            return "the review does not say that StoreChangedContent no longer exists";
-        }
-
-        if (!Regex.IsMatch(message, @"(?<!\d)12(?!\d)"))
-        {
-            return "the review does not state the real call-site total (12)";
-        }
-
-        foreach (var file in new[] { "CallerA", "CallerB", "CallerC", "CallerD", "CallerE" })
-        {
-            if (!message.Contains(file, StringComparison.OrdinalIgnoreCase))
+            var failure = CheckField(fields, $"Anchor {index + 1}", ExpectedAnchors[index]);
+            if (failure is not null)
             {
-                return $"the review does not name {file} among the files with call sites";
+                return failure;
             }
         }
 
-        var segments = SplitIntoSegments(message);
-
-        // The anchor's new line must sit in the same sentence/line as the anchor name (a count line such as "CallerB.cs: 3 (lines 8, ...)" does not count).
-        if (!MovedAnchorLineIsInContext(segments, @"(?<![A-Za-z])Writer", 10, 12))
+        foreach (var (label, expected) in ExpectedMethods)
         {
-            return "the review does not give the new line of the moved Writer.cs anchor (11, +-1) in the sentence or line that names Writer.cs";
+            var failure = CheckField(fields, label, expected);
+            if (failure is not null)
+            {
+                return failure;
+            }
         }
 
-        if (!MovedAnchorLineIsInContext(segments, "CallerB", 7, 9))
+        foreach (var (label, total, perFile) in ExpectedCalls)
         {
-            return "the review does not give the new line of the moved CallerB.cs anchor (8, +-1) in the sentence or line that names CallerB.cs";
+            var failure = CheckCalls(fields, label, total, perFile);
+            if (failure is not null)
+            {
+                return failure;
+            }
         }
 
-        // The verdict on Step 2 must be negative: no sentence about the widening may assert it works without a denial in the same sentence, and one must deny it.
-        var wideningSegments = SelectWideningSegments(message);
-        if (wideningSegments.Any(segment => Regex.IsMatch(segment, AssertsWideningPossiblePattern, RegexOptions.IgnoreCase)
-                && !Regex.IsMatch(segment, DeniesWideningPattern, RegexOptions.IgnoreCase)))
-        {
-            return "the review asserts that the zero-edit widening is possible; the new() and [] call sites break it";
-        }
-
-        if (!wideningSegments.Any(segment => Regex.IsMatch(segment, DeniesWideningPattern, RegexOptions.IgnoreCase)))
-        {
-            return "the review does not say that Step 2 (widening with no caller edits) is not possible";
-        }
-
-        // Evidence: both shapes named, and either a CS code or each shape named as breaking (the bare word "error" is not evidence).
-        var namesTargetTypedNew = message.Contains("new()", StringComparison.OrdinalIgnoreCase)
-            || Regex.IsMatch(message, @"target[- ]typed", RegexOptions.IgnoreCase);
-        var namesCollectionExpression = message.Contains("[]", StringComparison.Ordinal)
-            || Regex.IsMatch(message, @"collection expression", RegexOptions.IgnoreCase);
-        var namesErrorCode = Regex.IsMatch(message, @"CS\d{4}");
-        var newNamedAsBreaking = segments.Any(segment => (segment.Contains("new()", StringComparison.OrdinalIgnoreCase) || Regex.IsMatch(segment, @"target[- ]typed", RegexOptions.IgnoreCase))
-            && Regex.IsMatch(segment, BreakEvidencePattern, RegexOptions.IgnoreCase));
-        var collectionNamedAsBreaking = segments.Any(segment => (segment.Contains("[]", StringComparison.Ordinal) || Regex.IsMatch(segment, @"collection expression", RegexOptions.IgnoreCase))
-            && Regex.IsMatch(segment, BreakEvidencePattern, RegexOptions.IgnoreCase));
-        if (!(namesTargetTypedNew && namesCollectionExpression && (namesErrorCode || (newNamedAsBreaking && collectionNamedAsBreaking))))
-        {
-            return "the review does not say that the new() and [] call sites break the zero-edit widening (name a CS code, or say each shape breaks)";
-        }
-
-        return null;
+        return CheckField(fields, "Step 2", ExpectedStepTwo);
     }
 
-    // Words that introduce the new position of a moved anchor; the line number must follow the last one in the same sentence/line as the anchor name.
-    // The arrow is written as a \u escape so this file stays ASCII.
-    private const string MoveKeywordPattern = @"\b(?:moved|shifted|now|new line|changed to|to line|is at)\b|→|->|=>";
+    // The expected Report values, derived from the seed: anchors 2 (Writer.cs) and 4 (CallerB.cs) are the only ones that moved.
+    private static readonly string[] ExpectedAnchors = { "holds", "line 11", "holds", "line 8", "holds", "holds" };
 
-    // Sentences/lines that talk about Step 2 (the zero-edit widening).
-    private const string WideningClaimPattern = @"step 2|widen|IReadOnlyDictionary|read-only|zero[- ]edit|caller (?:edit|change)|no caller";
-
-    // A widening sentence that denies the zero-edit claim: a negation, a CS code, or "would break" wording, or a leading "No," / "No -".
-    private const string DeniesWideningPattern = @"not possible|impossible|isn't possible|cannot|can't|can not|would break|will break|\bbreak(?:s|ing)?\b|not compile|won't compile|does not compile|fails? to compile|CS\d{4}|not without|(?:^|[\s(])no\s*(?:[,:]|-|–|—)(?:\s|$)";
-
-    // A widening sentence that asserts the zero-edit claim holds.
-    private const string AssertsWideningPossiblePattern = @"\byes\b[^.\r\n]{0,60}(?:\bpossible|widen|compile|\bbuild)|(?<!not )(?<!n't )\bpossible\b[^.\r\n]{0,30}(?:\bwith (?:no|zero)\b|\bwithout\b)|\bno caller (?:edits?|changes?) (?:are |is )?(?:needed|required|necessary)|\bcallers? (?:need|needs|require) no (?:edit|change)|\b(?:builds?|compiles?|works?) (?:cleanly )?with (?:0|zero|no) (?:errors|caller)";
-
-    // Evidence that a call-site shape breaks the widening; the bare words "error" and "fail" do not count (a green build says "0 errors").
-    private const string BreakEvidencePattern = @"break|cannot|can't|not possible|impossible|not compile|does not compile|won't compile|fails? to compile|no (?:implicit )?conversion|not convert";
-
-    internal static List<string> SplitIntoSegments(string message)
+    private static readonly (string Label, string Expected)[] ExpectedMethods =
     {
-        var segments = new List<string>();
-        foreach (var line in Regex.Split(message, @"[\r\n]+"))
-        {
-            if (string.IsNullOrWhiteSpace(line))
-            {
-                continue;
-            }
+        ("Method IWriter.Apply", "exists"),
+        ("Method Writer.Apply", "exists"),
+        ("Method Writer.StoreChangedContent", "gone"),
+    };
 
-            // A markdown table row stays whole so the anchor name and its new line number share one segment.
-            if (line.TrimStart().StartsWith('|'))
-            {
-                segments.Add(line);
-                continue;
-            }
-
-            segments.AddRange(Regex.Split(line, @"(?<=[.!?;])\s+").Where(piece => !string.IsNullOrWhiteSpace(piece)));
-        }
-
-        return segments;
-    }
-
-    /// <summary>
-    /// The sentences/lines that talk about the zero-edit widening: every one matching <see cref="WideningClaimPattern"/>, plus every
-    /// sentence under a markdown heading that mentions Step 2 or the widening (until the next heading), because a verdict paragraph such as
-    /// "Yes - it compiles with no caller edits." under "### 4. Is Step 2 possible?" may not repeat the words itself.
-    /// </summary>
-    private static List<string> SelectWideningSegments(string message)
+    // Real direct call sites per file; CallerF calls Archive.Apply, which is a different method and is not counted.
+    private static readonly (string Label, int Total, IReadOnlyDictionary<string, int> PerFile)[] ExpectedCalls =
     {
-        var selected = new List<string>();
-        var inWideningSection = false;
-        foreach (var line in Regex.Split(message, @"[\r\n]+"))
-        {
-            if (string.IsNullOrWhiteSpace(line))
-            {
-                continue;
-            }
+        ("Calls IWriter.Apply", 8, new Dictionary<string, int> { ["CallerA"] = 2, ["CallerB"] = 3, ["CallerC"] = 3 }),
+        ("Calls Writer.Apply", 4, new Dictionary<string, int> { ["CallerD"] = 2, ["CallerE"] = 2 }),
+    };
 
-            var isHeading = line.TrimStart().StartsWith('#');
-            if (isHeading)
-            {
-                inWideningSection = Regex.IsMatch(line, @"step 2|widen", RegexOptions.IgnoreCase);
-            }
+    private const string ExpectedStepTwo = "not possible";
 
-            foreach (var sentence in SplitIntoSegments(line))
-            {
-                if (isHeading ? inWideningSection : inWideningSection || Regex.IsMatch(sentence, WideningClaimPattern, RegexOptions.IgnoreCase))
-                {
-                    selected.Add(sentence);
-                }
-            }
-        }
-
-        return selected;
-    }
-
-    /// <summary>
-    /// True when one sentence/line/table row names the anchor (matched by <paramref name="anchorNamePattern"/>) and some number after its
-    /// first move word lies in [fromLine, toLine]. A signed delta ("+3", "-2") never counts, so "now at line 8, shifted +3" passes and
-    /// "now on line 6" fails; the anchor's own old "File.cs:N" token is outside the accepted range. A number in a sentence that does not
-    /// name the anchor does not count.
-    /// </summary>
-    internal static bool MovedAnchorLineIsInContext(IReadOnlyList<string> segments, string anchorNamePattern, int fromLine, int toLine)
+    private static string? CheckField(IReadOnlyDictionary<string, string> fields, string label, string expected)
     {
-        foreach (var segment in segments)
+        if (!fields.TryGetValue(label, out var actual))
         {
-            if (!Regex.IsMatch(segment, anchorNamePattern, RegexOptions.IgnoreCase))
-            {
-                continue;
-            }
+            return $"the Report has no '{label}' line (expected '{label}: {expected}')";
+        }
 
-            var firstKeyword = Regex.Match(segment, MoveKeywordPattern, RegexOptions.IgnoreCase);
-            if (!firstKeyword.Success)
-            {
-                continue;
-            }
+        return string.Equals(NormalizeValue(actual), expected, StringComparison.OrdinalIgnoreCase)
+            ? null
+            : $"field '{label}': expected '{expected}', got '{actual}'";
+    }
 
-            foreach (Match number in Regex.Matches(segment[firstKeyword.Index..], @"(?<![\d+\-±])\d{1,4}(?!\d)"))
+    private static string? CheckCalls(IReadOnlyDictionary<string, string> fields, string label, int expectedTotal, IReadOnlyDictionary<string, int> expectedPerFile)
+    {
+        var expectedText = $"{expectedTotal}; " + string.Join(", ", expectedPerFile.Select(pair => $"{pair.Key}={pair.Value}"));
+        if (!fields.TryGetValue(label, out var actual))
+        {
+            return $"the Report has no '{label}' line (expected '{label}: {expectedText}')";
+        }
+
+        return TryParseCalls(actual, out var total, out var perFile)
+            && total == expectedTotal
+            && perFile.Count == expectedPerFile.Count
+            && expectedPerFile.All(pair => perFile.TryGetValue(pair.Key, out var count) && count == pair.Value)
+            ? null
+            : $"field '{label}': expected '{expectedText}', got '{actual}'";
+    }
+
+    // Reads "<total>; <File>=<n>, <File>=<n>": spaces and an optional .cs suffix on the file label are tolerated, file labels compare case-insensitively.
+    private static bool TryParseCalls(string value, out int total, out Dictionary<string, int> perFile)
+    {
+        perFile = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var parts = NormalizeValue(value).Split(';', 2);
+        if (!int.TryParse(parts[0].Trim(), out total))
+        {
+            return false;
+        }
+
+        if (parts.Length == 1)
+        {
+            return true;
+        }
+
+        foreach (var entry in parts[1].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var pair = entry.Split('=', 2, StringSplitOptions.TrimEntries);
+            var file = pair[0].EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ? pair[0][..^3] : pair[0];
+            if (pair.Length != 2 || !int.TryParse(pair[1], out var count) || !perFile.TryAdd(file, count))
             {
-                if (int.TryParse(number.Value, out var line) && line >= fromLine && line <= toLine)
-                {
-                    return true;
-                }
+                return false;
             }
         }
 
-        return false;
+        return true;
     }
+
+    private static string NormalizeValue(string value) => value.Trim().TrimEnd('.').Trim();
 }
