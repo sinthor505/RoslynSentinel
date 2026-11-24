@@ -1,4 +1,4 @@
-// Zero-tool host pin for plan_tool_surface_controller_stage_f.md Step 20: a registration that serves no tools still has a
+// Zero-tool host pin: a registration that serves no tools still has a
 // tool collection, a controller at snapshot version 1 with no rows, a working runtime apply, and advertises the tools
 // capability. ToolSurfaceGolden.ListToolsAsync disposes its host before returning, so this file builds its own host that
 // stays alive for the assertions (same steps as ListToolsAsync).

@@ -23,7 +23,7 @@ CLAUDE.md applies throughout.
   the plan against the current source. Per step, at most 6 lines:
   - status: done already (`Git` log for `Plan: <id>` trailers, and the code), stale anchors, or not started;
   - well-formed: concrete "Done when", definitions before call sites, one-way layering;
-  - rules it touches: DTO conventions (`dto-conventions` skill), the three things a new MCP tool needs,
+  - rules it touches: DTO conventions (`dto-conventions` skill), the two things a new MCP tool needs (the class and its `ToolClassRegistry` entries),
     a new `[McpServerToolType]` (live check only via `LaunchTestInstance` this session), live-window steps;
   - size: fits implementer tier D1 or S0 (`.claude/implementer-tiers.json`), or needs `implementer-senior`;
   - parallel-ready (the "Steps" comment in `templates/plan.md`): real prerequisites, disjoint files for

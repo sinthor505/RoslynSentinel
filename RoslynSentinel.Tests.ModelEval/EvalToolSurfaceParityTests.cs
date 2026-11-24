@@ -1,4 +1,4 @@
-// Parity goldens for the in-process eval registrations (plan_tool_surface_controller_stage_f.md Step 4).
+// Parity goldens for the in-process eval registrations.
 // The cases are the surfaces of EvalSurfaceCallabilityTests.SurfaceCases() plus the EditSnippets arm of WholeFileRewriteAgentTests.
 // Each case replicates the registration path of ModelEvalMcpEnvironment.InitializeAsync (the harness ParameterSurface first, then
 // the tool registration). The test pins that registration path, not the whole eval world (the world also has a chain host, a

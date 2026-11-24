@@ -1,6 +1,5 @@
-// Stage F Step 8 (plan_tool_surface_controller_stage_f.md): --list-tools must write exactly the names the real server serves
-// for the same registration. Lives in Tests.Harness beside ToolSurfaceGolden (the plan named Tests.Server, which cannot see
-// the golden helper; recorded deviation).
+// --list-tools must write exactly the names the real server serves for the same registration. Lives in Tests.Harness
+// beside ToolSurfaceGolden, which Tests.Server cannot see.
 using System.Text.Json;
 
 using Microsoft.Extensions.DependencyInjection;

@@ -1,6 +1,6 @@
-// Parity oracle for plan_tool_surface_controller_stage_f.md: the tool surface a registration serves, pinned in golden files
-// (ToolSurfaceGolden/ beside this file) so the registration rewrite of stage F cannot change what a client sees.
-// Update the goldens with ROSLYNSENTINEL_UPDATE_TOOL_SURFACE_GOLDEN=1 (see ToolSurfaceGolden).
+// Parity oracle: the tool surface a registration serves, pinned in golden files (ToolSurfaceGolden/ beside this file) so a
+// change to tool registration cannot silently change what a client sees.
+// Update the goldens with ROSLYNSENTINEL_UPDATE_TOOL_SURFACE_GOLDEN=1 (see ToolSurfaceGolden); that run writes them and fails.
 using Microsoft.Extensions.DependencyInjection;
 
 using ModelContextProtocol.Protocol;
@@ -111,7 +111,7 @@ public class ToolSurfaceParityTests
     }
 
     // Pins today's behaviour of the registration: --mode=WholeFileWrite alone fails host validation (ValidateOnBuild) because
-    // WholeFileWriteTools needs WorkspaceTools, which that mode does not register. Stage F keeps the class singletons, so the failure stays.
+    // WholeFileWriteTools needs WorkspaceTools, which that mode does not register: every selected class is a singleton.
     // TODO --mode=WholeFileWrite alone cannot start with ValidateOnBuild: WholeFileWriteTools needs WorkspaceTools, which that mode does not register (found while pinning stage F parity goldens)
     [Test]
     public async Task Mode_WholeFileWrite_Alone_FailsHostValidation_Today()
@@ -121,7 +121,7 @@ public class ToolSurfaceParityTests
     }
 
     /// <summary>
-    /// The case matrix of plan_tool_surface_controller_stage_f.md Step 3b. Each case name is also the golden file name.
+    /// The case matrix. Each case name is also the golden file name.
     /// One case per <see cref="ToolClassRegistry.ModeToToolClasses"/> key (ordinal order), then the Basic, child,
     /// PlanStepRunner, edge and transcript-replay surfaces. <c>--include-tools=RefactoringTools</c> is deliberately absent.
     /// </summary>

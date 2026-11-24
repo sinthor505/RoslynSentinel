@@ -35,10 +35,10 @@ Behaviour changes go in the shared impl or engine (for MethodSignature: `Tools.B
 1. Add the tool name to `ClaudeLeanToolNames`.
 2. Add the same name to `ClaudeLeanModeTests.CoreTools`, the one explicit oracle list. Counts are derived from it.
 3. Make sure its class is in the claude-lean class set (`ClaudeLeanToolClasses` in `ToolClassRegistry`, referenced by `ModeToToolClasses[claude-lean]`). There is one server project and one map, so a class from `Tools.Basic`, `Tools.Advanced` or `Tools.Experimental` is added the same way.
-4. No DI edit is needed when the class's existing `if (activeToolClasses.Contains(...))` block already exists. Other tools on the same class stay hidden by the allow-list (`McpToolSchemaPatcher.WithSentinelTools`).
+4. No registration edit is needed when the class already has its `BasicToolClassTypes`/`AdvancedToolClassTypes` row. Other tools on the same class stay hidden by the allow-list (`ToolAllowList`, applied when `ToolSurfaceStartupPopulation` builds the startup tools).
 5. Regenerate the docs, check `ClaudeLeanSchemaBudgetTests`.
 
-**D. Add a brand-new tool.** Do the three registration steps in CLAUDE.md (tool class, `ToolClassRegistry` map entry, DI block), then C above.
+**D. Add a brand-new tool.** Do the two registration steps in CLAUDE.md (the tool class, and its `ToolClassRegistry` entries: a mode plus a table row), then C above.
 
 **E. Move a tool to or from an on-demand toolset.** Edit `ToolsetCatalog` (`ToolsBySet`, `Summaries`) and the hand-listed names in the `McpToolsetControl` `[Description]` (`ToolsetControlTools.cs`), then the toolset tests in section 3.
 

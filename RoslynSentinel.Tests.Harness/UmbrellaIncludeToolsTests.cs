@@ -1,4 +1,4 @@
-// Umbrella-include pin for plan_tool_surface_controller_stage_f.md Step 20: --include-tools naming a mode (tool-set) rather
+// Umbrella-include pin: --include-tools naming a mode (tool-set) rather
 // than a tool class is ignored, and the startup warning names it. The served surface is compared through the parity argv
 // helper, which goes through ToolSurfaceGolden.ListToolsAsync.
 using RoslynSentinel.Server.Advanced;

@@ -95,12 +95,14 @@ public static class ToolClassRegistry
         StringComparer.Ordinal);
 
     /// <summary>
-    /// Tool-class types in tools/list order (the order of the per-class DI blocks before stage F). A new tool class needs a row here.
+    /// Tool classes registered by the Basic registration, in tools/list order. A new Tools.Basic tool class needs a row here
+    /// (and a mode entry in <see cref="ModeToToolClasses"/>).
     /// </summary>
     public static readonly IReadOnlyList<Type> BasicToolClassTypes = [typeof(ServerStatusTools), typeof(ToolsetControlTools), typeof(DeclarationTools), typeof(ParameterEditTools), typeof(SemanticFindReplaceTools), typeof(NamedArgumentsTools), typeof(TestCategoryTaggingTools), typeof(QualifyCrefsTools), typeof(WorkspaceTools), typeof(EditSnippetsTools), typeof(WorkspaceReadNavigationTools), typeof(DocumentationTools), typeof(SymbolNavigationTools), typeof(SymbolRelationshipTools), typeof(GitTools), typeof(GitRemoteTools), typeof(AdminTools), typeof(WholeFileWriteTools), typeof(RefactoringSignatureTools), typeof(RefactoringStructuralTools), typeof(TypedMemberTools), typeof(RefactoringExtractionDocsTools), typeof(CoreRefactoringTools)];
 
     /// <summary>
-    /// Tool-class types in tools/list order (the order of the per-class DI blocks before stage F). A new tool class needs a row here.
+    /// Tool classes registered by the Advanced registration, in tools/list order (after the Basic ones). A new Tools.Advanced or
+    /// Tools.Experimental tool class needs a row here (and a mode entry in <see cref="ModeToToolClasses"/>).
     /// </summary>
     public static readonly IReadOnlyList<Type> AdvancedToolClassTypes =
     [
@@ -108,7 +110,8 @@ public static class ToolClassRegistry
     ];
 
     /// <summary>
-    /// Tool classes registered only while claude-lean is active (their registration blocks sat inside the claude-lean branch).
+    /// Tool classes selected only while claude-lean is active: outside it they are dropped from the startup surface even when
+    /// named by --include-tools (see <see cref="SelectStartupToolTypes"/>).
     /// </summary>
     public static readonly IReadOnlySet<string> ClaudeLeanOnlyToolClasses = new HashSet<string>(["ToolsetControlTools", "DeclarationTools", "ParameterEditTools"], StringComparer.OrdinalIgnoreCase);
 
