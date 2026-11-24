@@ -1,6 +1,6 @@
 # Plan: one ParameterSurface for tool parameter hiding (phase 1) and aliasing (phase 2)
 
-**Status:** PAUSED 2026-11-23 after Step 3. Steps 1-3 (rules, resolver, tests) may run; Steps 4-15 wait for a reshape under [proposal_tool_surface_controller.md](../proposals/proposal_tool_surface_controller.md), where parameter rules become one part of the composed tool-surface spec (its migration stage 3).
+**Status:** SUPERSEDED 2026-11-24. Reshaped into [plan_tool_surface_controller_stage_d.md](plan_tool_surface_controller_stage_d.md) (stage 3 of the controller proposal); Steps 1-3 never landed, Steps 4-15 are mapped in that plan's "What happened to the paused plan" table.
 
 > **Why paused.** Steps 4-10 wire a standalone `ParameterSurface` DI singleton into the patcher, validator, eval
 > harness and status. Under the controller proposal that wiring is replaced: the controller builds a
