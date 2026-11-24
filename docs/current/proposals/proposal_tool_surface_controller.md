@@ -1,6 +1,6 @@
 # One front door for the server's tool surface: layered inputs, one composed spec, one atomic apply
 
-**Status:** PROPOSED 2026-11-23. Owner endorsed the direction and the shape below on 2026-11-23; recommended decisions given, no plan yet.
+**Status:** PROPOSED 2026-11-23. Owner endorsed the direction and the shape below on 2026-11-23; recommended decisions given. Plan: [plan_tool_surface_controller.md](../plans/plan_tool_surface_controller.md) (stage 1 plus the schema-patch seam).
 
 ## Motivation
 
@@ -146,6 +146,11 @@ problem by elimination.
 2. **Wrap first, own later.** Stage 1 wraps the existing startup; stage 5 replaces it. Nothing lands at once.
 3. **Per-call snapshot.** A call is validated against the snapshot it started under.
 4. **Mutate the shared collection.** Never swap the collection object (see Commit).
+5. **Interfaces only where behaviour varies** (owner question, 2026-11-23). Schema patches (`IToolSchemaPatch`,
+   an ordered DI collection), layer sources, validators and delivery are seams a test or eval host can add to or
+   replace in its own service collection without production edits. The composer, controller and snapshot stay
+   concrete: they are the single source of truth. Most A/B variants should be data in a harness layer, not code; the
+   snapshot records the ordered patch names and layer origins so every eval result names the surface it ran against.
 
 ## Alternatives considered, not pursued
 
