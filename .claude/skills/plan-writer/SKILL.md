@@ -31,7 +31,7 @@ order and in parallel lanes, with no co-dependent edit ordering.
   one), definitions before users. Name that call in the step.
 - Signatures in the skeleton are the contract the later slices rely on. A signature you are unsure of
   goes in "Risks and open decisions" with the slices that depend on it.
-- A new `[McpServerTool]` stays out of `ToolClassRegistry.cs` and the DI blocks until its body is
+- A new `[McpServerTool]` stays out of `ToolClassRegistry.cs` (its mode and table entries) until its body is
   implemented; registration is its own later step.
 - The last step searches for leftover stubs (`Search(mode: text, query: "NotImplementedException")`
   over the plan's files) and fails if any remain. Stubs compile and build clean, so nothing else
@@ -58,4 +58,4 @@ implementers never run tests.
 - Every step has Files, Depends on (the real prerequisite), Effect, Change, Done when, lane.
 - Open questions are in "Risks and open decisions" with options and a recommendation, not routed around.
 - DTO additions follow the `dto-conventions` skill (reuse or a NEW-DTO justification in the step).
-- A new MCP tool step lists all three registration points (CLAUDE.md, Architecture).
+- A new MCP tool step lists both registration points (CLAUDE.md, Architecture): the class and its `ToolClassRegistry` entries.

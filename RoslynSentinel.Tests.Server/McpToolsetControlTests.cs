@@ -290,7 +290,7 @@ public class McpToolsetControlTests
     [Test]
     public void DynamicTools_AreIdenticalToTheSameToolsRegisteredAtStartup()
     {
-        // --mode claude registers every set tool at startup through WithSentinelTools; the service must
+        // --mode claude registers every set tool at startup through the startup population (ToolClassRegistry tables); the service must
         // produce byte-identical protocol tools (schema patching, x-tags, limits, lean profile).
         using var host = BuildHost(advanced: true, mode: "Claude", includeTools: null);
         var startup = host.Services.GetRequiredService<IOptions<McpServerOptions>>().Value.ToolCollection!;

@@ -6,8 +6,11 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 using ModelContextProtocol.Server;
+
+using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Server.Advanced;
 
@@ -46,19 +49,36 @@ public static class ConsoleMode
     }
 
     /// <summary>
-    /// Reads <see cref="McpServerTool.ProtocolTool"/> from every registered DI instance. Falls back
-    /// to constructing tools directly via <see cref="McpServerTool.Create"/> over all loaded
-    /// RoslynSentinel.Server.* assemblies when DI registration returns zero (e.g. singleton factory
-    /// delay or scope mismatch at startup time) -> mirrors what <c>WithSentinelTools<T>()</c> does.
+    /// Reads the startup tools from the options' tool collection (the SDK adds the DI-registered tools, the startup
+    /// population adds the table-driven ones) minus the controller's runtime-toolset tools, so the output stays the
+    /// startup surface. Falls back to the DI <see cref="McpServerTool"/> instances when no collection exists, and to
+    /// constructing tools directly via <see cref="McpServerTool.Create"/> over all loaded RoslynSentinel.Server.*
+    /// assemblies when that yields zero (e.g. singleton factory delay or scope mismatch at startup time) -> a last-resort fallback that reads tool types straight from those assemblies.
     /// Shared by <see cref="BuildToolManifestFor"/> and <see cref="WriteStartupDump"/> so the two
     /// can never independently drift.
     /// </summary>
     private static List<ModelContextProtocol.Protocol.Tool> ExtractToolManifest(IServiceProvider services)
     {
-        var tools = services.GetServices<McpServerTool>()
-            .Select(t => t.ProtocolTool)
-            .OrderBy(t => t.Name)
-            .ToList();
+        var collection = services.GetService<IOptions<McpServerOptions>>()?.Value.ToolCollection;
+        List<ModelContextProtocol.Protocol.Tool> tools;
+        if (collection is not null)
+        {
+            var runtimeNames = new HashSet<string>(
+                services.GetService<ToolSurfaceController>()?.RuntimeToolNames ?? Array.Empty<string>(),
+                StringComparer.Ordinal);
+            tools = collection
+                .Select(t => t.ProtocolTool)
+                .Where(t => !runtimeNames.Contains(t.Name))
+                .OrderBy(t => t.Name)
+                .ToList();
+        }
+        else
+        {
+            tools = services.GetServices<McpServerTool>()
+                .Select(t => t.ProtocolTool)
+                .OrderBy(t => t.Name)
+                .ToList();
+        }
 
         if (tools.Count == 0)
         {

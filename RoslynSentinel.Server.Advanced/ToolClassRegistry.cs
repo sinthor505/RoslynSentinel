@@ -1,3 +1,9 @@
+using System.Reflection;
+using ModelContextProtocol.Server;
+using RoslynSentinel.Tools.Advanced;
+using RoslynSentinel.Tools.Basic;
+using RoslynSentinel.Tools.Experimental;
+
 namespace RoslynSentinel.Server.Advanced;
 
 /// <summary>
@@ -89,13 +95,155 @@ public static class ToolClassRegistry
         StringComparer.Ordinal);
 
     /// <summary>
+    /// Tool classes registered by the Basic registration, in tools/list order. A new Tools.Basic tool class needs a row here
+    /// (and a mode entry in <see cref="ModeToToolClasses"/>).
+    /// </summary>
+    public static readonly IReadOnlyList<Type> BasicToolClassTypes = [typeof(ServerStatusTools), typeof(ToolsetControlTools), typeof(DeclarationTools), typeof(ParameterEditTools), typeof(SemanticFindReplaceTools), typeof(NamedArgumentsTools), typeof(TestCategoryTaggingTools), typeof(QualifyCrefsTools), typeof(WorkspaceTools), typeof(EditSnippetsTools), typeof(WorkspaceReadNavigationTools), typeof(DocumentationTools), typeof(SymbolNavigationTools), typeof(SymbolRelationshipTools), typeof(GitTools), typeof(GitRemoteTools), typeof(AdminTools), typeof(WholeFileWriteTools), typeof(RefactoringSignatureTools), typeof(RefactoringStructuralTools), typeof(TypedMemberTools), typeof(RefactoringExtractionDocsTools), typeof(CoreRefactoringTools)];
+
+    /// <summary>
+    /// Tool classes registered by the Advanced registration, in tools/list order (after the Basic ones). A new Tools.Advanced or
+    /// Tools.Experimental tool class needs a row here (and a mode entry in <see cref="ModeToToolClasses"/>).
+    /// </summary>
+    public static readonly IReadOnlyList<Type> AdvancedToolClassTypes =
+    [
+        typeof(IntelligenceTools), typeof(ScanTools), typeof(AdvancedRefactoringTools), typeof(ModernizationTools), typeof(QualityTools), typeof(GenerationTools), typeof(CommentingTools), typeof(CodeTransformTools), typeof(AsyncifyTools), typeof(SubAgentEvalTools), typeof(SubAgentTools),
+    ];
+
+    /// <summary>
+    /// Tool classes selected only while claude-lean is active: outside it they are dropped from the startup surface even when
+    /// named by --include-tools (see <see cref="SelectStartupToolTypes"/>).
+    /// </summary>
+    public static readonly IReadOnlySet<string> ClaudeLeanOnlyToolClasses = new HashSet<string>(["ToolsetControlTools", "DeclarationTools", "ParameterEditTools"], StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Tool classes selected in every launch; not registry classes, so never counted or excludable.
+    /// </summary>
+    public static readonly IReadOnlySet<string> AlwaysOnToolClasses = new HashSet<string>(["ServerStatusTools"], StringComparer.Ordinal);
+
+    /// <summary>
+    /// Returns the types of <paramref name="table"/>, in table order, whose name is in <see cref="AlwaysOnToolClasses"/>, or is in
+    /// <paramref name="activeToolClasses"/> and is either not in <see cref="ClaudeLeanOnlyToolClasses"/> or <paramref name="claudeLean"/> is true.
+    /// </summary>
+    public static IReadOnlyList<Type> SelectStartupToolTypes(IReadOnlyList<Type> table, IReadOnlySet<string> activeToolClasses, bool claudeLean)
+    {
+        var selected = new List<Type>();
+        foreach (var type in table)
+        {
+            if (AlwaysOnToolClasses.Contains(type.Name)
+                || (activeToolClasses.Contains(type.Name) && (!ClaudeLeanOnlyToolClasses.Contains(type.Name) || claudeLean)))
+            {
+                selected.Add(type);
+            }
+        }
+
+        return selected;
+    }
+
+    /// <summary>
+    /// Reports problems in the mode table and the tool-class type tables, one line per problem, each naming the
+    /// class and the fix. Empty when the tables agree. It does not detect a class in the wrong table (an Advanced
+    /// class in BasicToolClassTypes would register in Basic hosts); the parity goldens catch that for the covered cases.
+    /// </summary>
+    public static IReadOnlyList<string> DescribeToolClassTableProblems(IReadOnlyDictionary<string, string[]> modeToToolClasses, IReadOnlyList<Type> basicTypes, IReadOnlyList<Type> advancedTypes)
+    {
+        var problems = new List<string>();
+
+        var registryNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var classes in modeToToolClasses.Values)
+        {
+            foreach (var className in classes)
+            {
+                registryNames.Add(className);
+            }
+        }
+
+        var allTypes = new List<Type>(basicTypes);
+        allTypes.AddRange(advancedTypes);
+
+        var tableNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var type in allTypes)
+        {
+            tableNames.Add(type.Name);
+        }
+
+        var registryNameList = new List<string>(registryNames);
+        registryNameList.Sort(StringComparer.Ordinal);
+        foreach (var className in registryNameList)
+        {
+            if (!tableNames.Contains(className))
+            {
+                problems.Add($"Tool class '{className}' is in ModeToToolClasses but has no row: add typeof({className}) to BasicToolClassTypes or AdvancedToolClassTypes in ToolClassRegistry.cs.");
+            }
+        }
+
+        var rowCounts = new Dictionary<Type, int>();
+        foreach (var type in allTypes)
+        {
+            rowCounts[type] = rowCounts.TryGetValue(type, out var count) ? count + 1 : 1;
+        }
+
+        var duplicateTypes = new List<Type>();
+        foreach (var pair in rowCounts)
+        {
+            if (pair.Value > 1)
+            {
+                duplicateTypes.Add(pair.Key);
+            }
+        }
+
+        duplicateTypes.Sort((left, right) => string.CompareOrdinal(left.Name, right.Name));
+        foreach (var type in duplicateTypes)
+        {
+            problems.Add($"Tool class '{type.Name}' has {rowCounts[type]} rows across BasicToolClassTypes and AdvancedToolClassTypes: keep exactly one.");
+        }
+
+        var distinctTypes = new List<Type>();
+        var seenTypes = new HashSet<Type>();
+        foreach (var type in allTypes)
+        {
+            if (seenTypes.Add(type))
+            {
+                distinctTypes.Add(type);
+            }
+        }
+
+        foreach (var type in distinctTypes)
+        {
+            if (!registryNames.Contains(type.Name) && !AlwaysOnToolClasses.Contains(type.Name))
+            {
+                problems.Add($"Table type '{type.Name}' is not a ModeToToolClasses class and not always-on: add it to a mode in ModeToToolClasses or remove its row.");
+            }
+        }
+
+        foreach (var type in distinctTypes)
+        {
+            var hasToolMethod = false;
+            foreach (var method in type.GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
+            {
+                if (method.GetCustomAttribute<McpServerToolAttribute>() is not null)
+                {
+                    hasToolMethod = true;
+                    break;
+                }
+            }
+
+            if (!hasToolMethod)
+            {
+                problems.Add($"Table type '{type.Name}' declares no [McpServerTool] method: remove its row or add the tool method.");
+            }
+        }
+
+        return problems;
+    }
+
+    /// <summary>
     /// The one mode-name -> tool-class-name map, registered by <c>AddRoslynSentinelToolsAdvanced</c>
     /// (which delegates the Basic tool classes to <c>AddRoslynSentinelToolsBasic</c>). It is the union of
     /// the former separate Basic and Advanced maps: the Basic-only sub-modes (WorkspaceReadNav, ...)
     /// are kept, "Workspace" includes SymbolRelationshipTools, and "Refactor"
     /// includes the Advanced-only AdvancedRefactoringTools. A class name whose tool class a given
-    /// registration method does not register is inert there (each registration block is guarded by
-    /// <c>activeToolClasses.Contains(...)</c>).
+    /// registration method does not register is inert there because the registration method selects only the types of its own
+    /// table (BasicToolClassTypes / AdvancedToolClassTypes) that are in the active set.
     /// </summary>
     public static readonly IReadOnlyDictionary<string, string[]> ModeToToolClasses =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)

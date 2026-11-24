@@ -29,6 +29,12 @@ publish/
 !RoslynSentinel.Tests.ErrorVariants/TestData/
 !RoslynSentinel.Tests.ErrorVariants/TestData/*.json
 
+# Tool-surface parity goldens (plan_tool_surface_controller_stage_f steps 3a-4): per-case name/hash lists plus a hash -> JSON _catalog.json; tracked so a pinned -Ref run compares against them.
+!RoslynSentinel.Tests.Harness/ToolSurfaceGolden/
+!RoslynSentinel.Tests.Harness/ToolSurfaceGolden/*.json
+!RoslynSentinel.Tests.ModelEval/ToolSurfaceGolden/
+!RoslynSentinel.Tests.ModelEval/ToolSurfaceGolden/*.json
+
 # The eval host table (plan_eval_host_table_and_liveness); tracked so every checkout and pinned queue run reads its own copy.
 !scripts/eval-hosts.json
 
