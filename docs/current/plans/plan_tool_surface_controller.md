@@ -1,6 +1,6 @@
 # Plan: Tool-surface controller - phase A read-only snapshot, phase B pluggable schema patches
 
-**Status:** DRAFT 2026-11-23. Implements stage 1 of [proposal_tool_surface_controller.md](../proposals/proposal_tool_surface_controller.md) (phase A) plus the schema-patch seam (phase B); later stages are outlined at the end and get detailed steps here before they start. Not started.
+**Status:** APPROVED 2026-11-23. Phase A read-only snapshot and phase B patch seam, with the 2026-11-23 review fixes (stale toolset state, hosted-service startup refresh, instance registration of default patches). Implements stage 1 of [proposal_tool_surface_controller.md](../proposals/proposal_tool_surface_controller.md) (phase A) plus the schema-patch seam (phase B); later stages are outlined at the end and get detailed steps here before they start.
 
 ## Problem
 
@@ -30,7 +30,33 @@ in the architecture map) is reported active. Schema patches are four hard-wired 
   (`EngineServiceCollectionExtensionsBasic.cs:60`) and `EditImpactGate`, and switching it to the live surface makes
   runtime-toolset tools callable there - a behaviour change that gets its own step in a later phase.
 - **No new status DTO:** `McpServerStatusToolSurface` (`ServerStatusTools.cs:244`) and
-  `McpServerStatusDeclaredTool` (`:322`) gain optional trailing fields (reuse-first).
+  `McpServerStatusDeclaredTool` (`:321`) gain optional trailing fields (reuse-first).
+
+Owner decisions, 2026-11-23 (plan review):
+- **Stale toolset state in `Changed` (review defect 1): reorder and gather outside the lock.** `ToolsetService.SetEnabled`
+  raises `Changed` when its `DeferChangedEvents` scope ends, before it updates `_enabled`, so a snapshot built in the
+  handler would label a just-enabled tool `Startup` and keep a just-disabled set listed. Fix in A2: set `_enabled` inside
+  the scope, before it is disposed. `Refresh` reads the collection and toolset state before taking its own lock and only
+  compares and swaps `Current` under it, so the toolset lock and the controller lock are never taken in opposite orders.
+- **First snapshot (review defect 2): hosted service plus lazy guard.** Test hosts (`McpToolsetControlTests.LiveServer`)
+  share only the DI registration and `host.RunAsync()` with `ServerStdio.Run`/`ServerHttp`, so an explicit call in those
+  files never runs in tests. A4 registers a `ToolSurfaceStartup : IHostedService` beside the controller whose `StartAsync`
+  calls `Refresh("startup")` (it runs after `ApplyStartupToolsets` in both paths). `Current` also builds once on first read
+  while it is still `Empty` (trigger `"firstRead"`), for hosts that never start. `McpServerStatus` keeps today's rule
+  while `Current.Version == 0` (no collection yet).
+- **A5 description clause: raise the claude-lean budget** in `ClaudeLeanSchemaBudgetTests` by what the clause costs,
+  with the reason in the commit message.
+- **Order versus `plan_stateless_http_toolset_enablement.md`: controller first.** Temporary HTTP inaccuracy (runtime
+  toolset tools reported active over stateless HTTP) is accepted until that plan's Step 2 lands.
+- **Default patches stay in `Common`** (owner asked whether they could move to `Server.Advanced`: no, `Common` itself
+  calls `CreateSentinelTool` from `ToolsetService.SetEnabled` and `ToolSignatureCatalogReflection`, which need the
+  defaults with no `Server.Advanced` in sight). The four classes stay `internal`; `Server.Advanced` registers the
+  instances from `DefaultToolSchemaPatches.All` (review defect 3: `ServiceDescriptor.Singleton<IToolSchemaPatch, X>()`
+  with an internal `X` is CS0122 there).
+- **Taken at the recommendation (owner away for the run):** `ActiveToolSurface.DeclaringClassByTool` becomes
+  `internal static` and A2 reuses it; "remove every patch" is not expressible (an empty registration falls back to the
+  defaults) and B5 documents it.
+- **Run:** Batched mode; owner away (mid-run decisions deferred to the tracker).
 
 ## Execution rules
 
@@ -45,7 +71,8 @@ in the architecture map) is reported active. Schema patches are four hard-wired 
 ## Steps
 
 Order: text-neutral first (A1-A4, B1-B3), then the behaviour-changing A5. Phase B's B1-B2 do not depend on phase A
-and can run beside it (disjoint files).
+and can run beside it, except that B2 and A4 both edit `ServiceRegistrationExtensionsBasic.cs` (A4 after B2).
+Slice map (review 2026-11-23): A1 || B1; A2 || B2; A3 || A4 (after B2 commits); B3 || A5; B4 || A6; then A7, B5, B6.
 
 ### Phase A - read-only snapshot
 
@@ -94,27 +121,36 @@ and can run beside it (disjoint files).
 - Done when: `Build` 0 errors.
 
 ### Step A2 - Implement the snapshot build
-- Files: the three A1 files
+- Files: the three A1 files, `RoslynSentinel.Common/ToolsetService.cs`, `RoslynSentinel.Common/ActiveToolSurface.cs`
 - Depends on: A1
-- Effect: text-neutral (no callers)
-- Lane: implementer
+- Effect: text-neutral (no callers; the `ToolsetService` reorder changes no observable result)
+- Lane: implementer (D1 by count, but the `Refresh` logic is dense: brief it in full or use `implementer-senior`)
 - Change:
-  - `Refresh(trigger)` under a private lock: read `serverOptions.Value.ToolCollection` (null = no tools: keep
-    `Current` as is unless it was `Empty`); for each tool build a `ToolSurfaceTool`: `ClassName` from a map built from
-    `McpToolSchemaPatcher.DiscoverAllDeclaredTools(...)` over the loaded `RoslynSentinel*` assemblies (the same
-    filter as `ServerStatusTools.cs:76-77`; rebuild the map when the assembly count changes, as
-    `ActiveToolSurface.DeclaringClassByTool` does); `Origin`/`ToolSet` = `RuntimeToolset` and
-    `ToolsetCatalog.FindSet(name)` when `toolsets?.DynamicToolNames` contains the name, else `Startup`;
+  - `ToolsetService.SetEnabled`: move each `_enabled[...]` update (enable: `_enabled[toolSet] = ...`; disable:
+    `_enabled.Remove(toolSet)`) inside its `using (collection.DeferChangedEvents())` block, after the add/remove loop, so
+    `Changed` (raised when the scope is disposed) sees the new state. Comment why (the controller's `Changed` handler).
+  - `ActiveToolSurface.DeclaringClassByTool`: `private static` -> `internal static` (same assembly), reused below.
+  - `Refresh(trigger)`: gather first, outside any controller lock: read `serverOptions.Value.ToolCollection` (null = no
+    tools: return `Current` unchanged); for each tool build a `ToolSurfaceTool`: `ClassName` from
+    `ActiveToolSurface.DeclaringClassByTool` (empty string when the tool has no declaring class there, e.g. a test
+    fixture tool); `Origin`/`ToolSet` = `RuntimeToolset` and `ToolsetCatalog.FindSet(name)` (as a string) when
+    `toolsets?.DynamicToolNames` contains the name, else `Startup`;
     `ListedParameters` = top-level `properties` names of `tool.ProtocolTool.InputSchema`; `HiddenParameters` =
-    `HiddenSchemaParams.HiddenFor(name)`. Sort tools by name. `EnabledToolSets` from `toolsets?.EnabledToolSets`.
+    `HiddenSchemaParams.HiddenFor(name)`. Sort tools by name. `EnabledToolSets` = `toolsets?.EnabledToolSets` mapped with
+    `ToString()` (they are `ToolSetName` values). Then, under a private lock, compare with `Current` and swap. Comment why
+    the gather runs outside the lock (`SetEnabled` raises `Changed` while holding the toolset lock).
     `SchemaPatches` = the fixed list `["ConsumesTags", "BatchItemFields", "ReplaceSnippetLimits", "HiddenParameters"]`
     with `// TODO read from the IToolSchemaPatch pipeline (Step B3)`.
+  - `Current`: if no `Refresh` has run yet, the getter runs `Refresh("firstRead")` once (lazy guard for hosts that never
+    start; the hosted service from A4 is the normal path).
   - `Fingerprint`: SHA-256 hex over each tool's name and raw `InputSchema` text in name order. `Version` increments
     only when the fingerprint or enabled sets differ from `Current`; otherwise `Refresh` returns `Current` unchanged.
   - On the first `Refresh` that finds a non-null collection, subscribe to its `Changed` event:
     `(_, _) => Refresh("toolCollectionChanged")`. Swallow and log nothing from the handler's exceptions
     (comment why: the SDK raises `Changed` on the mutating thread, `McpServerPrimitiveCollection.cs:92-122`).
-  - `HiddenFor`: copy of the registered set for the tool (case-insensitive tool key), sorted; empty if none.
+  - `HiddenFor`: copy of the registered set for the tool (case-insensitive tool key), sorted; empty if none. The
+    registry is `ConcurrentDictionary<string, HashSet<string>>` (`HiddenSchemaParams.cs:14`): copy the set under
+    `lock (set)` the way the existing readers do (check them first).
   - `IsExposed`/`Find`: ordinal lookup on `Tools`.
 - Done when: `Build` 0 errors.
 
@@ -125,29 +161,34 @@ and can run beside it (disjoint files).
 - Effect: text-neutral
 - Lane: test-writer
 - Change: build hosts the way `ClaudeLeanSchemaBudgetTests.Measure` does (`ClaudeLeanSchemaBudgetTests.cs:73-87`,
-  reads `IOptions<McpServerOptions>` from `host.Services`); construct the controller from the host's services.
+  reads `IOptions<McpServerOptions>` from `host.Services`); construct the controller with
+  `ActivatorUtilities.CreateInstance<ToolSurfaceController>(host.Services)` (A4's DI registration is not a prerequisite).
   Tests: `Snapshot_ListsExactlyTheLiveCollection` (names equal the collection's), `Snapshot_ClassNameMatchesDeclaringClass`,
-  `ToolsetEnable_BumpsVersion_AndMarksRuntimeOrigin` (claude-lean; `ToolsetService.SetEnabled(ToolSetName.Declarations, true)`
-  from the host's services; new version; `TypedMember` has `Origin == RuntimeToolset`, `ToolSet == "Declarations"`
-  or the catalog's name for it), `RefreshWithoutChange_KeepsVersion`, `HiddenParameters_ReportedPerTool`
+  `ToolsetEnable_BumpsVersion_AndMarksRuntimeOrigin` (claude-lean; `ToolsetService.SetEnabled(ToolSetName.declarations, true)`
+  from the host's services, with no explicit `Refresh` afterwards, so the `Changed` path is what updates it; new version;
+  `TypedMember` has `Origin == RuntimeToolset`, `ToolSet == "declarations"`; `EnabledToolSets` contains `"declarations"`),
+  `ToolsetDisable_DropsSetAndTools`, `RefreshWithoutChange_KeepsVersion`, `FirstRead_BuildsWithoutRefresh`,
+  `HiddenParameters_ReportedPerTool`
   (`--hide-params=validateOnApply`; mark `[NonParallelizable]` and reset statics in TearDown as
   `SchemaHiddenParametersTests.cs:43-46` does).
 - Done when: dispatcher runs `ToolSurfaceControllerTests`: all pass.
 
 ### Step A4 - Register and refresh at startup
-- Files: `RoslynSentinel.Server.Advanced/ServiceRegistrationExtensionsBasic.cs`, `RoslynSentinel.Server.Advanced/ServerStdio.cs`, `RoslynSentinel.Server.Advanced/ServerHttp.cs`
-- Depends on: A2
+- Files: `RoslynSentinel.Server.Advanced/ServiceRegistrationExtensionsBasic.cs`, `RoslynSentinel.Server.Advanced/ToolSurfaceStartup.cs` (new)
+- Depends on: A2, B2 (same registration file)
 - Effect: text-neutral
 - Lane: implementer
-- Change: `services.AddSingleton<ToolSurfaceController>();` right after `services.AddSingleton(activeToolSurface);`
-  (`ServiceRegistrationExtensionsBasic.cs:386`; `ToolsetService` is optional in the constructor, so modes without it
-  resolve). After `ApplyStartupToolsets` (`ServerStdio.cs:141`, `ServerHttp.cs:104`) and before `WriteStartupDump`, add
-  `host.Services.GetRequiredService<ToolSurfaceController>().Refresh("startup");` (`app.Services` in `ServerHttp`), with a
-  comment that this is the first point where startup tools and startup toolsets are both in place.
+- Change: `services.AddSingleton<ToolSurfaceController>();` and `services.AddHostedService<ToolSurfaceStartup>();` right
+  after `services.AddSingleton(activeToolSurface);` (`ServiceRegistrationExtensionsBasic.cs:386`; `ToolsetService` is
+  optional in the constructor, so modes without it resolve). New `internal sealed class ToolSurfaceStartup(ToolSurfaceController surface) : IHostedService`
+  whose `StartAsync` calls `surface.Refresh("startup")` and whose `StopAsync` does nothing (`DTO-EXEMPT: service`).
+  Doc comment: hosted services start in `host.RunAsync()`, which production (`ServerStdio.Run`, `ServerHttp`) and the
+  test hosts (`McpToolsetControlTests.LiveServer`) share, after `ApplyStartupToolsets` in both, so this is the first
+  point where startup tools and startup toolsets are both in place. `ServerStdio.cs`/`ServerHttp.cs` are not edited.
 - Done when: `Build` 0 errors; dispatcher runs `McpToolsetControlTests` and `NoActiveToolsStartupTests`: all pass.
 
 ### Step A5 - McpServerStatus reads the snapshot
-- Files: `RoslynSentinel.Tools.Basic/ServerStatusTools.cs`
+- Files: `RoslynSentinel.Tools.Basic/ServerStatusTools.cs`, `RoslynSentinel.Tests.Server/ClaudeLeanSchemaBudgetTests.cs`
 - Depends on: A4
 - Effect: behaviour-changing (wire). `activeForThisMode` now means "in the live collection" when a controller is
   present; a declared tool that is allowed and in an active class but not registered is reported inactive with an
@@ -156,15 +197,18 @@ and can run beside it (disjoint files).
 - Lane: implementer
 - Change:
   - Constructor (`:25-34`) gains a trailing `ToolSurfaceController? surface = null`.
-  - `IsActive` (`:80-83`): when `surface` is present, `surface.Current.IsExposed(toolName)`; else today's expression.
+  - `IsActive` (`:80-83`): when `surface` is present and `surface.Current.Version > 0`, `surface.Current.IsExposed(toolName)`;
+    else today's expression.
   - `DescribeHowToEnable` (`:195-224`): new first case when the class is active, the tool is allowed, and it is not
     exposed: "declared and in an active class, but not registered with the server (ToolClassRegistry entry or DI block
     missing)". Facts only (`reference_tool_error_text_facts_options_policy.md`).
   - `McpServerStatusToolSurface` (`:244`): optional trailing `long? SurfaceVersion = null, DateTime? SurfaceBuiltUtc = null,
     string? SurfaceTrigger = null, IReadOnlyList<string>? SchemaPatches = null`; fill at `:137-144`.
-  - `McpServerStatusDeclaredTool` (`:322`): optional trailing `string? ExposedBy = null` ("startup" or
+  - `McpServerStatusDeclaredTool` (`:321`): optional trailing `string? ExposedBy = null` ("startup" or
     "toolset:<name>") and `IReadOnlyList<string>? HiddenParameters = null` (null when empty); fill at `:88-91`.
-  - Tool `[Description]`: one short clause for `surfaceVersion` (see the budget rule).
+  - Tool `[Description]`: one short clause for `surfaceVersion`. Raise the claude-lean total budget constant in
+    `ClaudeLeanSchemaBudgetTests` by the measured overrun rounded up to the next 50 (owner decision 2026-11-23); the
+    commit message states the old and new budget and why.
 - Done when: `Build` 0 errors; dispatcher runs `McpServerStatusToolListingTests`, `McpServerStatusToolsetCountTests`,
   `McpToolsetControlTests.McpServerStatus_PointsInactiveToolsAtTheToolset_AndReportsEnabledOnesActive`,
   `ClaudeLeanSchemaBudgetTests`: all pass.
@@ -175,7 +219,9 @@ and can run beside it (disjoint files).
 - Effect: text-neutral
 - Lane: test-writer
 - Change: construct `ToolSurfaceController` over `Options.Create(new McpServerOptions { ToolCollection = ... })` with a
-  hand-built collection. Tests: `Listing_WithController_RuntimeToolsetToolIsActive_WithExposedBy` (closes the gap that
+  hand-built collection, then call `Refresh("test")` explicitly. `ToolsetService` is sealed: for the runtime-toolset case
+  build a real one over the same options; if its constructor needs more than this test project can supply, move that one
+  test to A3's `ToolSurfaceControllerTests` host pattern and say so in the report. Tests: `Listing_WithController_RuntimeToolsetToolIsActive_WithExposedBy` (closes the gap that
   only a text-level live test covers the `DynamicToolNames` branch today),
   `Listing_WithController_AllowedButUnregisteredTool_ReportsMissingRegistration`,
   `Listing_WithController_ReportsSurfaceVersionAndTrigger`, `Listing_WithoutController_KeepsLegacyAnswer`.
@@ -212,7 +258,7 @@ and can run beside it (disjoint files).
   Four `internal sealed` classes in `DefaultToolSchemaPatches.cs` (`ConsumesTagsPatch` 100, `BatchItemFieldsPatch` 200,
   `ReplaceSnippetLimitsPatch` 300, `HiddenParametersPatch` 400), each delegating to the existing method, plus
   `public static class DefaultToolSchemaPatches { public static IReadOnlyList<IToolSchemaPatch> All { get; } }` in that
-  order. In `McpToolSchemaPatcher.cs` change `ApplyConsumesTags` (`:406`), `ApplyBatchItemFields` (`:290`),
+  order (the classes stay `internal`: hosts reach the defaults only through `All`). In `McpToolSchemaPatcher.cs` change `ApplyConsumesTags` (`:406`), `ApplyBatchItemFields` (`:290`),
   `ApplyReplaceSnippetLimits` (`:475`) and `ApplyHiddenParameters` (`:625`) from `private static` to `internal static`;
   no logic moves. `IToolSchemaPatch` and the defaults: `DTO-EXEMPT: behaviour seam, not data`.
 - Done when: `Build` 0 errors.
@@ -226,9 +272,12 @@ and can run beside it (disjoint files).
   `services?.GetService<IEnumerable<IToolSchemaPatch>>()`; if null or empty use `DefaultToolSchemaPatches.All`
   (`services` is `null!` from `ToolSignatureCatalogReflection.cs:77`, and test hosts build tools directly); apply in
   `Order`, then `Name` order. Fix the stale "three Apply* patches" doc comment (`:177-181`). In
-  `RegisterRoslynSentinelToolsBasic` register each default with `services.TryAddEnumerable(ServiceDescriptor.Singleton<IToolSchemaPatch, X>())`
-  beside `services.AddSingleton(toolAllowList);` (`:364`), with a comment: a host adds a patch by registering it before
-  or after this call, and replaces one with `RemoveAll<IToolSchemaPatch>()` plus its own list.
+  `RegisterRoslynSentinelToolsBasic` register each default instance with
+  `foreach (var patch in DefaultToolSchemaPatches.All) services.TryAddEnumerable(ServiceDescriptor.Singleton(typeof(IToolSchemaPatch), patch));`
+  beside `services.AddSingleton(toolAllowList);` (`:364`; the classes are internal to `Common`, so the generic
+  `Singleton<IToolSchemaPatch, X>()` form is CS0122 here), with a comment: a host adds a patch by registering it before
+  or after this call, and replaces one with `RemoveAll<IToolSchemaPatch>()` plus its own list; an empty registration
+  falls back to the defaults, so "no patches" is not expressible.
 - Done when: `Build` 0 errors; dispatcher runs `ReplaceSnippetSchemaTests`, `BatchItemSchemaTests`,
   `SchemaHiddenParametersTests`, `SchemaLeanProfileTests`, `SchemaDataTagOptionTests`, `ClaudeLeanSchemaBudgetTests`: all pass.
 
@@ -270,7 +319,7 @@ and can run beside it (disjoint files).
 - Depends on: all above
 - Effect: none
 - Lane: dispatcher
-- Change: `Search(mode: "text", query: "NotImplementedException", fileGlob: "RoslynSentinel.Common/ToolSurface/*.cs")`
+- Change: `Search(mode: "text", query: "NotImplementedException|TODO implement \(Step A2\)|TODO read from the IToolSchemaPatch pipeline", fileGlob: "RoslynSentinel.Common/ToolSurface/*.cs")`
   plus `RoslynSentinel.Common/HiddenSchemaParams.cs`.
 - Done when: zero matches; full `RunTest` with 0 failures.
 
