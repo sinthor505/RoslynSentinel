@@ -287,7 +287,7 @@ public static class McpToolSchemaPatcher
     /// property marked <see cref="BatchItemFieldAttribute"/> gets its description and, when required, a slot in
     /// the item's <c>required</c> array. Reparses by parameter name, as <see cref="ApplyConsumesTags"/> does.
     /// </summary>
-    private static void ApplyBatchItemFields(McpServerTool tool, MethodInfo toolMethod)
+    internal static void ApplyBatchItemFields(McpServerTool tool, MethodInfo toolMethod)
     {
         // Generic successor of PatchBatchEditItems' oldContent rule: any List/IEnumerable/array parameter whose element type has attributed properties.
         JsonNode? schemaNode = JsonNode.Parse(tool.ProtocolTool.InputSchema.GetRawText());
@@ -403,7 +403,7 @@ public static class McpToolSchemaPatcher
     /// look up each parameter by its schema name (ParameterInfo.Name; the SDK only overrides this via
     /// AIParameterNameAttribute, unused in this codebase), inject the vendor key, reassign.
     /// </remarks>
-    private static void ApplyConsumesTags(McpServerTool tool, MethodInfo toolMethod)
+    internal static void ApplyConsumesTags(McpServerTool tool, MethodInfo toolMethod)
     {
         if (!SchemaOptions.EmitDataTags)
         {
@@ -472,7 +472,7 @@ public static class McpToolSchemaPatcher
     /// before AddRoslynSentinelTools*/WithSentinelTools runs), so they can't be baked into the
     /// [Description] const strings in ToolParams - only a post-build patch like this can surface them.
     /// </remarks>
-    private static void ApplyReplaceSnippetLimits(McpServerTool tool, MethodInfo toolMethod)
+    internal static void ApplyReplaceSnippetLimits(McpServerTool tool, MethodInfo toolMethod)
     {
         if (toolMethod.Name is not ("ReplaceSnippetTool" or "EditSnippetsTool"))
         {
@@ -622,7 +622,7 @@ public static class McpToolSchemaPatcher
     /// actually stripped are registered in <see cref="HiddenSchemaParams"/> so the argument validator,
     /// which treats the emitted schema as its allow-list, still accepts them at call time.
     /// </remarks>
-    private static void ApplyHiddenParameters(McpServerTool tool, MethodInfo toolMethod)
+    internal static void ApplyHiddenParameters(McpServerTool tool, MethodInfo toolMethod)
     {
         var hidden = SchemaOptions.EffectiveHiddenParameters();
         if (hidden.Count == 0)
