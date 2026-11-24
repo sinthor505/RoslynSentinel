@@ -179,7 +179,7 @@ public class ScenarioAgentTests
         var userPrompt = string.Format(
             scenario.PromptTemplate,
             Path.Combine(environment.SolutionDirectory, "ContosoOrders.Core").Replace('\\', '/'));
-        var result = await runner.RunAsync(EvalContractOptions.ComposeSystemPrompt(), userPrompt, sampleDirectory, cancellationToken);
+        var result = await runner.RunAsync(EvalContractOptions.ComposeSystemPrompt(), userPrompt, sampleDirectory, cancellationToken, scenarioId: scenario.Id);
 
         var verdict = await ComputeFinalStateAsync(scenario, sampleIndex, environment.SolutionDirectory, sampleDirectory, cancellationToken, treeBefore);
         return (result, verdict, false, 0, "");
@@ -296,7 +296,7 @@ public class ScenarioAgentTests
             wallClockCap: TimeSpan.FromMinutes(10),
             logger: environment.Host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
         // Early exit: scenarios flagged EndOnCorrectFinalState stop the live loop once CheckFinalState is Correct (null = run to finish or cap).
-        var result = await runner.RunAsync(systemPrompt, userPrompt, sampleDirectory, cancellationToken, seedTurns: seed, targetReached: scenario.BuildTargetReached(directory));
+        var result = await runner.RunAsync(systemPrompt, userPrompt, sampleDirectory, cancellationToken, seedTurns: seed, targetReached: scenario.BuildTargetReached(directory), scenarioId: scenario.Id);
 
         var verdict = await ComputeFinalStateAsync(scenario, sampleIndex, environment.SolutionDirectory, sampleDirectory, cancellationToken);
         return (result, verdict, schemaDrift, resultDrift, "");

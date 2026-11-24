@@ -99,6 +99,17 @@ public sealed class AgentTranscript
     }
 
     /// <summary>
+    /// Id of the scenario the run executed, passed to <see cref="ModelAgentRunner.RunAsync"/> by the code that runs a scenario
+    /// so a saved transcript can be re-scored against its scenario without results.csv.
+    /// Null means the run had no scenario (or the transcript predates this field), so the property is omitted from the JSON.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ScenarioId
+    {
+        get; set;
+    }
+
+    /// <summary>
     /// LM Studio model key the run used, stamped from the client by <see cref="ModelAgentRunner.RunAsync"/>.
     /// Null means the transcript predates this field, so the property is omitted from the JSON.
     /// </summary>

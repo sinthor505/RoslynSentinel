@@ -67,6 +67,128 @@ public class SavedTranscriptScoringTests
     }
 
     [Test]
+    public void ScoreFile_UsesTheScenarioStampedInTheTranscript_AndScoresToolNotTried()
+    {
+        var folder = NewFolder();
+        try
+        {
+            // The caller's tool is a different one on purpose: a resolved scenario brings its own ToolUnderTest (ReplaceSnippet).
+            var transcript = NeverTriedTheToolTranscript(StopAdherenceScenarios.StopAdherenceMissingFileToolErrorId);
+            File.WriteAllText(Path.Combine(folder, "transcript.json"), JsonSerializer.Serialize(transcript));
+
+            var sample = SavedTranscriptScoring.ScoreFile(folder, "NotTheScenariosTool", Path.Combine(folder, "score.csv"));
+
+            Assert.That(sample.ScenarioId, Is.EqualTo(StopAdherenceScenarios.StopAdherenceMissingFileToolErrorId));
+            Assert.That(sample.ScenarioType, Is.EqualTo(StopAdherenceScenarios.StopAdherenceMissingFileToolError.ScenarioType));
+            Assert.That(sample.Score, Is.Not.Null);
+            Assert.That(sample.Score!.FailureClass, Is.EqualTo(FailureClass.ToolNotTried));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Test]
+    public void ScoreFile_ReadsTheScenarioIdFromResultsCsv_WhenTheTranscriptCarriesNone()
+    {
+        var runFolder = NewFolder();
+        try
+        {
+            var sampleFolder = Path.Combine(runFolder, "sample-02");
+            Directory.CreateDirectory(sampleFolder);
+            // Minimal header: the lookup reads columns by name, so only scenarioId and sampleIndex are needed. Row 1 is another sample's.
+            File.WriteAllText(
+                Path.Combine(runFolder, "results.csv"),
+                "scenarioId,sampleIndex\r\nNoSuchScenario,1\r\n" + StopAdherenceScenarios.StopAdherenceMissingFileToolErrorId + ",2\r\n");
+            var transcript = NeverTriedTheToolTranscript(scenarioId: null);
+            File.WriteAllText(Path.Combine(sampleFolder, "transcript.json"), JsonSerializer.Serialize(transcript));
+
+            var sample = SavedTranscriptScoring.ScoreFile(sampleFolder, Tool, Path.Combine(runFolder, "score.csv"));
+
+            Assert.That(sample.ScenarioId, Is.EqualTo(StopAdherenceScenarios.StopAdherenceMissingFileToolErrorId));
+            Assert.That(sample.Score!.FailureClass, Is.EqualTo(FailureClass.ToolNotTried));
+        }
+        finally
+        {
+            Directory.Delete(runFolder, recursive: true);
+        }
+    }
+
+    [Test]
+    public void ScoreFile_KeepsTheSyntheticId_WhenResultsCsvHasNoRowForTheSample()
+    {
+        var runFolder = NewFolder();
+        try
+        {
+            var sampleFolder = Path.Combine(runFolder, "sample-03");
+            Directory.CreateDirectory(sampleFolder);
+            File.WriteAllText(
+                Path.Combine(runFolder, "results.csv"),
+                "scenarioId,sampleIndex\r\n" + StopAdherenceScenarios.StopAdherenceMissingFileToolErrorId + ",1\r\n");
+            var transcript = NeverTriedTheToolTranscript(scenarioId: null);
+            File.WriteAllText(Path.Combine(sampleFolder, "transcript.json"), JsonSerializer.Serialize(transcript));
+
+            var sample = SavedTranscriptScoring.ScoreFile(sampleFolder, Tool, Path.Combine(runFolder, "score.csv"));
+
+            Assert.That(sample.ScenarioId, Is.EqualTo("saved:sample-03"));
+            Assert.That(sample.Score!.FailureClass, Is.Not.EqualTo(FailureClass.ToolNotTried));
+        }
+        finally
+        {
+            Directory.Delete(runFolder, recursive: true);
+        }
+    }
+
+    [Test]
+    public void ScoreFile_FallsBackToTheSyntheticId_WhenTheTranscriptNamesAnUnknownScenario()
+    {
+        var folder = NewFolder();
+        try
+        {
+            var transcript = NeverTriedTheToolTranscript("NoSuchScenario");
+            File.WriteAllText(Path.Combine(folder, "transcript.json"), JsonSerializer.Serialize(transcript));
+
+            var sample = SavedTranscriptScoring.ScoreFile(folder, Tool, Path.Combine(folder, "score.csv"));
+
+            Assert.That(sample.ScenarioId, Does.StartWith("saved:"));
+            Assert.That(sample.ScenarioType, Is.EqualTo(0));
+            Assert.That(sample.Score!.FailureClass, Is.Not.EqualTo(FailureClass.ToolNotTried));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Test]
+    public void TranscriptJson_OmitsScenarioId_WhenNull_AndWritesItWhenSet()
+    {
+        var unset = JsonSerializer.Serialize(new AgentTranscript());
+        Assert.That(unset, Does.Not.Contain("ScenarioId"));
+
+        var stamped = JsonSerializer.Serialize(new AgentTranscript { ScenarioId = "SomeScenario" });
+        Assert.That(stamped, Does.Contain("\"ScenarioId\":\"SomeScenario\""));
+        Assert.That(JsonSerializer.Deserialize<AgentTranscript>(stamped)!.ScenarioId, Is.EqualTo("SomeScenario"));
+    }
+
+    private static string NewFolder()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "savedscore-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        return folder;
+    }
+
+    // A run that read around with Search and stopped, never calling ReplaceSnippet (the tool the stop-adherence tool-error scenarios require).
+    private static AgentTranscript NeverTriedTheToolTranscript(string? scenarioId)
+    {
+        var transcript = new AgentTranscript { ScenarioId = scenarioId };
+        transcript.Turns.Add(Turn(1, Call("Search")));
+        transcript.Turns.Add(Turn(2));
+        return transcript;
+    }
+
+    [Test]
     [Explicit("No model needed. Run with roslynsentinel-modeleval.ps1 -Test ScoreTranscript -ScoreTranscript <transcript.json or run folder>")]
     public void ScoreSavedTranscript_AppendsOneLine()
     {

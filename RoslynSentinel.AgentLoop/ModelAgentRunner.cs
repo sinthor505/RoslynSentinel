@@ -207,6 +207,10 @@ public sealed class ModelAgentRunner
     /// Seeded turns are never evaluated. Returning true stops the run with <see cref="AgentStopReason.TargetReached"/>.
     /// A predicate that throws is logged and treated as not reached; it never fails the run.
     /// </param>
+    /// <param name="scenarioId">
+    /// Id of the scenario being run, written into the transcript header so the saved transcript can be re-scored against its
+    /// scenario without results.csv. A caller that is not running a scenario omits it and the transcript carries no id.
+    /// </param>
     public async Task<AgentRunResult> RunAsync(
         string systemPrompt,
         string userPrompt,
@@ -214,14 +218,15 @@ public sealed class ModelAgentRunner
         CancellationToken cancellationToken = default,
         string? runId = null,
         IReadOnlyList<AgentTranscriptTurn>? seedTurns = null,
-        Func<CancellationToken, Task<bool>>? targetReached = null)
+        Func<CancellationToken, Task<bool>>? targetReached = null,
+        string? scenarioId = null)
     {
         // The first agent turn means fixture SetUp is done; deliberately at run start rather than in each fixture's [SetUp] so every fixture is covered by one edit.
         EvalQueueSetupMarker.WriteIfQueued();
         var progress = new RunProgress();
         try
         {
-            return await RunCoreAsync(systemPrompt, userPrompt, transcriptDirectory, cancellationToken, runId, seedTurns, targetReached, progress);
+            return await RunCoreAsync(systemPrompt, userPrompt, transcriptDirectory, cancellationToken, runId, seedTurns, targetReached, progress, scenarioId);
         }
         catch (Exception ex)
         {
@@ -240,7 +245,8 @@ public sealed class ModelAgentRunner
         string? runId,
         IReadOnlyList<AgentTranscriptTurn>? seedTurns,
         Func<CancellationToken, Task<bool>>? targetReached,
-        RunProgress progress)
+        RunProgress progress,
+        string? scenarioId = null)
     {
         runId ??= DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff");
 
@@ -273,6 +279,7 @@ public sealed class ModelAgentRunner
             ModelKey = _llm.Model,
             Temperature = LlmOptions.Temperature,
             TopP = LlmOptions.TopP,
+            ScenarioId = scenarioId,
         };
         if (ProcessStamp is { } stamp)
         {

@@ -295,4 +295,59 @@ public static class ScenarioSampleCsv
         fields.Add(field.ToString());
         return fields;
     }
+
+    /// <summary>
+    /// Scenario id of the row whose sampleIndex equals <paramref name="sampleIndex"/> in the results CSV at <paramref name="resultsCsvPath"/>,
+    /// with columns read by header name (so every historical column layout works). Null when the file or the row is missing, a
+    /// scenarioId or sampleIndex column is absent, or the id cell is empty: a lookup that yields nothing, never an exception for a malformed file.
+    /// </summary>
+    public static string? TryReadScenarioId(string resultsCsvPath, int sampleIndex)
+    {
+        if (!File.Exists(resultsCsvPath))
+        {
+            return null;
+        }
+
+        string[] lines;
+        try
+        {
+            lines = File.ReadAllLines(resultsCsvPath, Encoding.UTF8);
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+
+        var nonEmpty = lines.Where(line => line.Trim().Length > 0).ToList();
+        if (nonEmpty.Count == 0)
+        {
+            return null;
+        }
+
+        var header = SplitFields(nonEmpty[0]);
+        var idColumn = header.IndexOf("scenarioId");
+        var indexColumn = header.IndexOf("sampleIndex");
+        if (idColumn < 0 || indexColumn < 0)
+        {
+            return null;
+        }
+
+        for (var line = 1; line < nonEmpty.Count; line++)
+        {
+            var fields = SplitFields(nonEmpty[line]);
+            if (fields.Count <= Math.Max(idColumn, indexColumn))
+            {
+                continue;
+            }
+
+            if (int.TryParse(fields[indexColumn], NumberStyles.Integer, CultureInfo.InvariantCulture, out var index)
+                && index == sampleIndex
+                && fields[idColumn].Length > 0)
+            {
+                return fields[idColumn];
+            }
+        }
+
+        return null;
+    }
 }
