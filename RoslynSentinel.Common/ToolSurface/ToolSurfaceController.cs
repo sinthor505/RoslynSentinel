@@ -19,6 +19,7 @@ public sealed class ToolSurfaceController
 {
     private readonly IOptions<McpServerOptions> _serverOptions;
     private readonly ToolsetService? _toolsets;
+    private readonly IReadOnlyList<string> _schemaPatchNames;
 
     // Guards _current/_built/_subscribed only. It is never held while calling into ToolsetService or the SDK
     // collection: SetEnabled raises Changed on the mutating thread while holding the toolset lock, and our handler
@@ -33,10 +34,19 @@ public sealed class ToolSurfaceController
     /// <summary>Creates the controller from the server options and optional toolset service.</summary>
     /// <param name="serverOptions">Startup MCP server options that list the registered tools.</param>
     /// <param name="toolsets">Toolset service used for runtime enablement, or null when none is wired.</param>
-    public ToolSurfaceController(IOptions<McpServerOptions> serverOptions, ToolsetService? toolsets = null)
+    /// <param name="patches">Schema patches registered with the host; null or empty means the default pipeline.</param>
+    public ToolSurfaceController(IOptions<McpServerOptions> serverOptions, ToolsetService? toolsets = null, IEnumerable<IToolSchemaPatch>? patches = null)
     {
         _serverOptions = serverOptions;
         _toolsets = toolsets;
+
+        // Mirrors the fallback in McpToolSchemaPatcher.CreateSentinelTool (an empty registration falls back to the
+        // defaults), so the snapshot names the pipeline that built the schemas.
+        var registered = patches?.OrderBy(p => p.Order).ThenBy(p => p.Name, StringComparer.Ordinal).Select(p => p.Name).ToList()
+            ?? new List<string>();
+        _schemaPatchNames = registered.Count > 0
+            ? registered
+            : DefaultToolSchemaPatches.All.Select(p => p.Name).ToList();
     }
 
     /// <summary>
@@ -137,12 +147,7 @@ public sealed class ToolSurfaceController
                 fingerprint,
                 tools.Select(t => t.Row).ToList(),
                 enabledToolSets,
-                [
-                    "ConsumesTags",
-                    "BatchItemFields",
-                    "ReplaceSnippetLimits",
-                    "HiddenParameters",
-                ]); // TODO read from the IToolSchemaPatch pipeline (Step B3)
+                _schemaPatchNames);
             _current = next;
             return next;
         }
