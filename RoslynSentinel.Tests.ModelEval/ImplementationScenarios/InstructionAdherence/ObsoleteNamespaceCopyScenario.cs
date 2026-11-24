@@ -1,8 +1,11 @@
 using System.Text;
 using System.Text.RegularExpressions;
 
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using RoslynSentinel.Common.AgentLoop;
+using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Graders;
 
 namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.InstructionAdherence;
 
@@ -18,6 +21,7 @@ internal static class ObsoleteNamespaceCopyScenario
     private const string ModernPath = CoreFolder + "Modern/Orders.cs";
     private const string ConsumerPath = CoreFolder + "Consumer.cs";
     private const string TestsPath = TestFolder + "OrdersTests.cs";
+    private const string MigrationTestsPath = TestFolder + "ObsoleteMigrationTests.cs";
 
     private const string ModernNamespace = "ContosoOrders.Evals.ObsoleteNamespaceCopy.Modern";
 
@@ -166,18 +170,29 @@ public class OrdersTests
 }
 """;
 
-    private const string HiddenTestSource = """
+    // Visible acceptance tests (Spec S14). Reflection by name, so the seed (no Modern namespace yet) builds with 0 errors and these are red until the work is done.
+    private const string MigrationTestsSource = """
 #pragma warning disable CS0618
 using System.Reflection;
+using ContosoOrders.Evals.ObsoleteNamespaceCopy;
 using Xunit;
 using Legacy = ContosoOrders.Evals.ObsoleteNamespaceCopy.Legacy;
-using Modern = ContosoOrders.Evals.ObsoleteNamespaceCopy.Modern;
 
 namespace ContosoOrders.Tests.Evals.ObsoleteNamespaceCopy;
 
-public class ObsoleteNamespaceCopyStep1Tests
+public class ObsoleteMigrationTests
 {
-    private const string Prefix = "Use ContosoOrders.Evals.ObsoleteNamespaceCopy.Modern.";
+    private const string ModernNamespace = "ContosoOrders.Evals.ObsoleteNamespaceCopy.Modern";
+    private const string Prefix = "Use " + ModernNamespace + ".";
+
+    private static readonly Assembly Core = typeof(Consumer).Assembly;
+
+    private static Type ModernType(string name)
+    {
+        var type = Core.GetType(ModernNamespace + "." + name);
+        Assert.True(type is not null, $"The type {ModernNamespace}.{name} does not exist yet.");
+        return type!;
+    }
 
     [Theory]
     [InlineData(typeof(Legacy.Order), "Order")]
@@ -191,40 +206,48 @@ public class ObsoleteNamespaceCopyStep1Tests
     }
 
     [Theory]
-    [InlineData(typeof(Modern.Order))]
-    [InlineData(typeof(Modern.OrderStatus))]
-    [InlineData(typeof(Modern.OrderMath))]
-    public void ModernTypesAreNotObsoleteAndLiveInTheModernNamespace(Type type)
+    [InlineData("Order")]
+    [InlineData("OrderStatus")]
+    [InlineData("OrderMath")]
+    public void ModernTypesAreNotObsoleteAndLiveInTheModernNamespace(string name)
     {
+        var type = ModernType(name);
         Assert.Null(type.GetCustomAttribute<ObsoleteAttribute>());
-        Assert.Equal("ContosoOrders.Evals.ObsoleteNamespaceCopy.Modern", type.Namespace);
+        Assert.Equal(ModernNamespace, type.Namespace);
     }
 
     [Fact]
     public void ModernCopyWorks()
     {
-        var orders = new[] { new Modern.Order("a", 2m), new Modern.Order("b", 3m) };
-        Assert.Equal(5m, Modern.OrderMath.Sum(orders));
+        var orderType = ModernType("Order");
+        var orders = Array.CreateInstance(orderType, 2);
+        orders.SetValue(Activator.CreateInstance(orderType, "a", 2m), 0);
+        orders.SetValue(Activator.CreateInstance(orderType, "b", 3m), 1);
+
+        var sum = ModernType("OrderMath").GetMethod("Sum")!.Invoke(null, new object[] { orders });
+        Assert.Equal(5m, sum);
     }
 }
 """;
 
-    private const string StepPrompt = """
-In ContosoOrders.Core/Evals/ObsoleteNamespaceCopy the file Legacy/Orders.cs declares three top-level types in the namespace
-ContosoOrders.Evals.ObsoleteNamespaceCopy.Legacy. Two files change:
+    private static string StepPrompt => EvalContractOptions.Render(new ScenarioTask(
+        Goal: "In ContosoOrders.Core/Evals/ObsoleteNamespaceCopy the file Legacy/Orders.cs declares three top-level types in the namespace " +
+            "`ContosoOrders.Evals.ObsoleteNamespaceCopy.Legacy`. Two files change. " +
+            "1. New file Modern/Orders.cs (same folder tree): a copy of Legacy/Orders.cs in the namespace `ContosoOrders.Evals.ObsoleteNamespaceCopy.Modern`; " +
+            "it keeps the doc comments and CRLF line endings, has no byte order mark requirement and carries no Obsolete attribute. " +
+            "2. Existing file Legacy/Orders.cs: every top-level type gets the attribute `[System.Obsolete(\"Use ContosoOrders.Evals.ObsoleteNamespaceCopy.Modern.<Type>\")]`, " +
+            "where `<Type>` is that type's name, written fully qualified as `System.Obsolete` and placed below the type's XML doc comment. " +
+            "The attribute points at the Modern type and goes on the Legacy type.",
+        Files: "Legacy/Orders.cs and the new Modern/Orders.cs under ContosoOrders.Core/Evals/ObsoleteNamespaceCopy. No other file.",
+        Conditions: "Legacy/Orders.cs keeps its UTF-8 byte order mark, its CRLF line endings and its doc comments exactly as they are. " +
+            "Add no using directive. Consumer.cs and the tests are not edited.",
+        IfFails: EvalContractOptions.PlainIfFails,
+        DoneWhen: "The solution builds with 0 errors; all tests in ContosoOrders.Tests pass, including OrdersTests and ObsoleteMigrationTests."));
 
-1. New file Modern/Orders.cs (same folder tree): a copy of Legacy/Orders.cs in the namespace
-   ContosoOrders.Evals.ObsoleteNamespaceCopy.Modern. It keeps the doc comments and CRLF line endings, has no byte order mark
-   requirement, and carries no Obsolete attribute.
-2. Existing file Legacy/Orders.cs: every top-level type gets the attribute
-   [System.Obsolete("Use ContosoOrders.Evals.ObsoleteNamespaceCopy.Modern.<Type>")], where <Type> is that type's name, written
-   fully qualified as System.Obsolete and placed below the type's XML doc comment. The attribute points at the Modern type; it
-   goes on the Legacy type. The file keeps its UTF-8 byte order mark, CRLF line endings and doc comments exactly as they are.
-
-Do not add a using directive, and do not edit Consumer.cs or any test.
-""";
-
-    public static ImplementationScenario Definition { get; } = new ImplementationScenario(
+    public static ImplementationScenario Definition
+    {
+        get;
+    } = new ImplementationScenario(
         "ObsoleteNamespaceCopy",
         "Copy a BOM + CRLF file into a new namespace and mark the original types Obsolete, byte-exactly",
         "adherence, byte-exact",
@@ -234,6 +257,7 @@ Do not add a using directive, and do not edit Consumer.cs or any test.
             [LegacyPath] = Bom + LegacyBody,
             [ConsumerPath] = ConsumerSource,
             [TestsPath] = TestsSource,
+            [MigrationTestsPath] = MigrationTestsSource,
         },
         new[]
         {
@@ -245,13 +269,22 @@ Do not add a using directive, and do not edit Consumer.cs or any test.
                     [ModernPath] = Bom + GoldenModernBody,
                 },
                 AllowedPaths: new List<string> { LegacyPath, ModernPath },
-                HiddenTestSource: HiddenTestSource,
+                HiddenTestSource: null,
                 ExtraCheck: static ctx => Task.FromResult<string?>(CheckBytesAndAttributes(ctx)),
-                CannedFinalMessage: null),
+                CannedFinalMessage: CannedReport,
+                Variants: BuildVariants(),
+                DoneWhenTests: new[] { "OrdersTests", "ObsoleteMigrationTests" }),
         },
-        PreferredHost: "113"); // 112 truncated after 42 min (whole-file CreateFile turns are long); 113 passed after the cap
+        PreferredHost: "113", // 112 truncated after 42 min (whole-file CreateFile turns are long); 113 passed after the cap
+        PrimaryAxis: EvalAxis.InstructionAdherence); // 112 truncated after 42 min (whole-file CreateFile turns are long); 113 passed after the cap
 
-    /// <summary>Byte checks (BOM on Legacy, zero or one on Modern, uniform CRLF, no added using), attribute placement and text, copy fidelity, untouched consumer and tests.</summary>
+    /// <summary>
+    /// Byte checks stay (BOM on Legacy, zero or one BOM on Modern, uniform CRLF: the brief states them), then compiled checks: the
+    /// consumer and tests are untouched; both files keep the seed's using directives; each top-level type of Legacy carries exactly
+    /// one attribute list holding one attribute whose symbol is System.ObsoleteAttribute with the message "Use ...Modern.&lt;Type&gt;",
+    /// between the doc comment and the declaration whatever the whitespace; Legacy without those attribute lists is equivalent to the
+    /// seed; Modern is equivalent to the seed apart from the namespace; the doc comments of both equal the seed's.
+    /// </summary>
     private static string? CheckBytesAndAttributes(ImplementationScenarioCheckContext ctx)
     {
         foreach (var path in new[] { ConsumerPath, TestsPath })
@@ -290,32 +323,28 @@ Do not add a using directive, and do not edit Consumer.cs or any test.
             {
                 return $"{path} does not use uniform CRLF line endings ({crlf} CRLF, {lf - crlf} bare LF, {cr - crlf} bare CR)";
             }
+        }
 
-            if (Regex.IsMatch(text, @"^\s*using\s+System\s*;", RegexOptions.Multiline))
+        var compilation = ctx.Compile(CoreFolder.TrimEnd('/'));
+        var legacyModel = compilation.ModelFor(LegacyPath);
+        var legacyRoot = legacyModel.SyntaxTree.GetRoot();
+        var modernRoot = compilation.ModelFor(ModernPath).SyntaxTree.GetRoot();
+        var seedLegacyRoot = CSharpSyntaxTree.ParseText(ImplementationScenario.NormalizeToCrlf(LegacyBody)).GetRoot();
+        var seedModernRoot = CSharpSyntaxTree.ParseText(
+            ImplementationScenario.NormalizeToCrlf(LegacyBody.Replace("ObsoleteNamespaceCopy.Legacy;", "ObsoleteNamespaceCopy.Modern;"))).GetRoot();
+
+        // The using directives of each file equal the seed's set (the seed declares none, so any added using, System or not, fails).
+        var seedUsings = UsingDirectives(seedLegacyRoot);
+        foreach (var (path, root) in new[] { (LegacyPath, legacyRoot), (ModernPath, modernRoot) })
+        {
+            var usings = UsingDirectives(root);
+            if (!usings.SequenceEqual(seedUsings))
             {
-                return $"{path} gained a 'using System;'";
+                return $"{path}: the using directives differ from the original ([{string.Join(", ", usings)}] instead of [{string.Join(", ", seedUsings)}])";
             }
         }
 
-        var legacyText = ctx.ReadText(LegacyPath);
-        var modernText = ctx.ReadText(ModernPath);
-        if (modernText.StartsWith('﻿'))
-        {
-            modernText = modernText.Substring(1);
-        }
-        var seedBody = ImplementationScenario.NormalizeToCrlf(LegacyBody).TrimEnd();
-
-        // Removing the three attribute lines from the legacy file must give back the original text.
-        var withoutAttributes = Regex.Replace(legacyText, @"^\[System\.Obsolete\([^\r\n]*\)\]\r\n", string.Empty, RegexOptions.Multiline).TrimEnd();
-        if (withoutAttributes != seedBody)
-        {
-            return "Legacy/Orders.cs differs from the original in more than the added [System.Obsolete] lines";
-        }
-
-        var legacyRoot = ctx.Syntax(LegacyPath).GetRoot();
-        var legacyTypes = legacyRoot.DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
-            .Where(type => type.Parent is BaseNamespaceDeclarationSyntax or CompilationUnitSyntax)
-            .ToList();
+        var legacyTypes = TopLevelTypes(legacyRoot);
         if (legacyTypes.Count != 3)
         {
             return $"Legacy/Orders.cs has {legacyTypes.Count} top-level types, expected 3";
@@ -323,38 +352,151 @@ Do not add a using directive, and do not edit Consumer.cs or any test.
 
         foreach (var type in legacyTypes)
         {
-            var obsolete = type.AttributeLists.SelectMany(list => list.Attributes)
-                .FirstOrDefault(attribute => attribute.Name.ToString().EndsWith("Obsolete", StringComparison.Ordinal));
-            if (obsolete is null)
+            var name = type.Identifier.ValueText;
+            if (type.AttributeLists.Count != 1 || type.AttributeLists[0].Attributes.Count != 1)
             {
-                return $"{type.Identifier.ValueText} has no Obsolete attribute";
+                return $"{name} must carry exactly one attribute list with one attribute (it has {type.AttributeLists.Count} attribute list(s))";
             }
 
-            if (obsolete.Name.ToString() != "System.Obsolete")
+            var attribute = type.AttributeLists[0].Attributes[0];
+            if (legacyModel.GetSymbolInfo(attribute).Symbol is not IMethodSymbol { ContainingType: { } attributeType }
+                || attributeType.ToDisplayString() != "System.ObsoleteAttribute")
             {
-                return $"{type.Identifier.ValueText}: the attribute must be written as System.Obsolete, found {obsolete.Name}";
+                return $"{name}: the attribute must resolve to System.ObsoleteAttribute, found {attribute.Name}";
             }
 
-            var expected = $"Use {ModernNamespace}.{type.Identifier.ValueText}";
-            if (obsolete.ArgumentList?.Arguments.FirstOrDefault()?.Expression is not LiteralExpressionSyntax literal || literal.Token.ValueText != expected)
+            var expected = $"Use {ModernNamespace}.{name}";
+            var argument = attribute.ArgumentList?.Arguments.FirstOrDefault();
+            if (argument is null || legacyModel.GetConstantValue(argument.Expression).Value as string != expected)
             {
-                return $"{type.Identifier.ValueText}: the Obsolete message must be exactly \"{expected}\"";
+                return $"{name}: the Obsolete message must be exactly \"{expected}\"";
             }
 
-            var docBeforeAttribute = type.AttributeLists[0].GetLeadingTrivia().Any(trivia => trivia.Kind() == SyntaxKind.SingleLineDocumentationCommentTrivia);
-            if (!docBeforeAttribute)
+            // The doc comment is the leading trivia of the attribute list's first token when the attribute sits below it, on its own line or not.
+            if (!type.AttributeLists[0].GetLeadingTrivia().Any(trivia => trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)))
             {
-                return $"{type.Identifier.ValueText}: the XML doc comment must stay above the Obsolete attribute";
+                return $"{name}: the XML doc comment must stay above the Obsolete attribute";
             }
         }
 
-        // The copy is the original with only the namespace changed.
-        var expectedModern = seedBody.Replace("ObsoleteNamespaceCopy.Legacy;", "ObsoleteNamespaceCopy.Modern;");
-        if (modernText.TrimEnd() != expectedModern)
+        // Legacy without the attribute lists is the seed; Modern is the seed with the other namespace.
+        var legacyWithoutAttributes = legacyRoot.RemoveNodes(legacyTypes.SelectMany(type => type.AttributeLists), SyntaxRemoveOptions.KeepNoTrivia);
+        if (legacyWithoutAttributes is null || !legacyWithoutAttributes.IsEquivalentTo(seedLegacyRoot))
         {
-            return "Modern/Orders.cs is not an exact copy of the original apart from the namespace";
+            return "Legacy/Orders.cs differs from the original in more than the added [System.Obsolete] attribute lists";
+        }
+
+        if (!modernRoot.IsEquivalentTo(seedModernRoot))
+        {
+            return "Modern/Orders.cs is not a copy of the original apart from the namespace";
+        }
+
+        var seedDocComments = DocComments(seedLegacyRoot);
+        if (!DocComments(legacyRoot).SequenceEqual(seedDocComments) || !DocComments(modernRoot).SequenceEqual(seedDocComments))
+        {
+            return "a doc comment in Legacy/Orders.cs or Modern/Orders.cs differs from the original";
         }
 
         return null;
+    }
+
+    private static List<string> UsingDirectives(SyntaxNode root) =>
+        root.DescendantNodes().OfType<UsingDirectiveSyntax>().Select(directive => directive.ToString()).Order(StringComparer.Ordinal).ToList();
+
+    private static List<BaseTypeDeclarationSyntax> TopLevelTypes(SyntaxNode root) =>
+        root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
+            .Where(type => type.Parent is BaseNamespaceDeclarationSyntax or CompilationUnitSyntax)
+            .ToList();
+
+    // Doc comment texts in file order (the trailing line break trimmed); the same call on the seed gives the expected list.
+    private static List<string> DocComments(SyntaxNode root) =>
+        root.DescendantTrivia()
+            .Where(trivia => trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) || trivia.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia))
+            .Select(trivia => trivia.ToString().Trim())
+            .ToList();
+
+    private const string CannedReport = "DONE: Modern/Orders.cs is the copy in the Modern namespace; the three Legacy types carry [System.Obsolete] pointing at the Modern types.";
+
+    /// <summary>
+    /// The executable outcome table (Spec S14): each variant is a one-file overlay of Legacy/Orders.cs (the golden plus one edit) on
+    /// step 1 (golden) with a DONE: final message; every non-passing row claims DONE, so its class is SilentIncomplete. The overlay
+    /// writer writes the text it is given (a leading U+FEFF becomes the BOM bytes), so BomDropped is an overlay without the BOM.
+    /// </summary>
+    private static IReadOnlyList<ScenarioVariant> BuildVariants()
+    {
+        // Edits are written with \n; the template's line endings are kept. Throws when a template no longer contains the text to
+        // edit, so a template change cannot silently turn a variant into the golden.
+        static string Edited(string text, string oldText, string newText)
+        {
+            var eol = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+            var normalized = text.Replace("\r\n", "\n", StringComparison.Ordinal);
+            if (!normalized.Contains(oldText, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException($"ObsoleteNamespaceCopy variant edit: '{oldText}' is not in the template.");
+            }
+
+            return normalized.Replace(oldText, newText, StringComparison.Ordinal).Replace("\n", eol, StringComparison.Ordinal);
+        }
+
+        static IReadOnlyDictionary<string, string> Overlay(string legacy) =>
+            new Dictionary<string, string> { [LegacyPath] = legacy };
+
+        const string NamespaceLine = "namespace ContosoOrders.Evals.ObsoleteNamespaceCopy.Legacy;\n";
+
+        // The attribute on the declaration line (below the doc comment, no line break before the declaration).
+        var attributeSameLine = Edited(
+            Edited(
+                Edited(
+                    GoldenLegacyBody,
+                    "Modern.Order\")]\npublic sealed class Order",
+                    "Modern.Order\")] public sealed class Order"),
+                "Modern.OrderStatus\")]\npublic enum OrderStatus",
+                "Modern.OrderStatus\")] public enum OrderStatus"),
+            "Modern.OrderMath\")]\npublic static class OrderMath",
+            "Modern.OrderMath\")] public static class OrderMath");
+
+        // An extra using that the brief forbids.
+        var extraUsing = Edited(GoldenLegacyBody, NamespaceLine, "using System.Linq;\n\n" + NamespaceLine);
+
+        // The other way to satisfy the brief's attribute: add using System and write [Obsolete] instead of [System.Obsolete].
+        var obsoleteWithUsingSystem = Edited(
+            Edited(GoldenLegacyBody, "[System.Obsolete(", "[Obsolete("),
+            NamespaceLine,
+            "using System;\n\n" + NamespaceLine);
+
+        return new[]
+        {
+            new ScenarioVariant(
+                Name: "AttributeSameLine",
+                BaseStep: 1,
+                Files: Overlay(Bom + attributeSameLine),
+                FinalMessage: CannedReport,
+                ExpectedClass: EvalOutcomeClass.CorrectDone,
+                ExpectedOutcome: ImplementationScenarioOutcome.Pass),
+            new ScenarioVariant(
+                Name: "ExtraUsing",
+                BaseStep: 1,
+                Files: Overlay(Bom + extraUsing),
+                FinalMessage: CannedReport,
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "the using directives differ"),
+            new ScenarioVariant(
+                Name: "BomDropped",
+                BaseStep: 1,
+                Files: Overlay(GoldenLegacyBody),
+                FinalMessage: CannedReport,
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "does not start with the UTF-8 BOM"),
+            new ScenarioVariant(
+                Name: "ObsoleteWithUsingSystem",
+                BaseStep: 1,
+                Files: Overlay(Bom + obsoleteWithUsingSystem),
+                FinalMessage: CannedReport,
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "the using directives differ"),
+        };
     }
 }
