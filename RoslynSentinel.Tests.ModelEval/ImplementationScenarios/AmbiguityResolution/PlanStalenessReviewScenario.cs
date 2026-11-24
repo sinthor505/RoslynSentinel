@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using RoslynSentinel.Common.AgentLoop;
 
 namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.AmbiguityResolution;
 
@@ -211,28 +212,40 @@ public static class CallerF
 """;
 
     private const string CannedReview = """
-Anchor review:
-1. IWriter.cs:7 holds.
-2. Writer.cs:9 moved, Apply is now at Writer.cs:11.
-3. CallerA.cs:9 holds.
-4. CallerB.cs:5 moved, the first Apply call is now at CallerB.cs:8.
-5. CallerC.cs:14 holds.
-6. CallerD.cs:9 holds.
-Methods: StoreChangedContent no longer exists in Writer.cs; the private method Store replaced it.
-Call sites of IWriter.Apply / Writer.Apply: 12 in 5 files (CallerA 2, CallerB 3, CallerC 3, CallerD 2, CallerE 2). The plan's 47 call sites in 9 files is wrong. Archive.Apply called from CallerF is an unrelated method and is not counted.
-Step 2 is not possible with zero caller edits: the target-typed new() arguments (CallerB.cs:9, CallerE.cs:8) and the [] argument (CallerC.cs:10) cannot target IReadOnlyDictionary<string, string> (CS0144, CS9174), so those three sites would break.
+DONE: reviewed the plan against the current code; two anchors moved, StoreChangedContent is gone, and Step 2 is not possible.
+Anchor 1: holds
+Anchor 2: line 11
+Anchor 3: holds
+Anchor 4: line 8
+Anchor 5: holds
+Anchor 6: holds
+Method IWriter.Apply: exists
+Method Writer.Apply: exists
+Method Writer.StoreChangedContent: gone
+Calls IWriter.Apply: 8; CallerA=2, CallerB=3, CallerC=3
+Calls Writer.Apply: 4; CallerD=2, CallerE=2
+Step 2: not possible
+Step 2 reason: the target-typed new() arguments and the [] argument cannot target IReadOnlyDictionary<string, string> (CS0144, CS9174), so those sites would need a caller edit.
 """;
 
-    private const string StepPrompt = """
-The file Evals/PlanStalenessReview/plan.md (at the solution root) is a plan drafted some time ago. The code it
-describes is in ContosoOrders.Core/Evals/PlanStalenessReview. Review the plan against the current code and edit
-nothing. For each of the six rows of the plan's Anchors table say whether the anchor still holds or give the new
-line. Say whether each method the plan names still exists. Count the real direct call sites of IWriter.Apply and
-Writer.Apply, in total and per file (count only calls that bind to those methods). Finally say whether the plan's
-Step 2, widening the parameter to IReadOnlyDictionary<string, string> with no caller edits, is possible. Give your
-review as your final message.
-""";
+    // Expression-bodied on purpose: a static readonly field would render before the contract placement is known (initialisation order).
+    private static string StepPrompt => EvalContractOptions.Render(new ScenarioTask(
+        Goal: "The plan Evals/PlanStalenessReview/plan.md (at the solution root) was drafted some time ago. " +
+            "The code it describes is in ContosoOrders.Core/Evals/PlanStalenessReview. " +
+            "Check the plan against the current code and tell the owner what is stale. Implement nothing.",
+        Files: "none: change no file.",
+        Conditions: "",
+        IfFails: "Change no file. If you cannot answer a Report line, write `unknown` and why.",
+        DoneWhen: "Every Report line is answered from the current code, and no file changed. " +
+            "Count only calls that bind to `IWriter.Apply` or `Writer.Apply`, not other methods named Apply.",
+        Report: "One line each, exactly in this form. " +
+            "`Anchor <n>: holds` or `Anchor <n>: line <N>` for each of the six rows of the plan's Anchors table. " +
+            "`Method <Type.Name>: exists` or `Method <Type.Name>: gone` for each method the plan names. " +
+            "`Calls IWriter.Apply: <total>; <File>=<n>, ...` and `Calls Writer.Apply: <total>; <File>=<n>, ...` (real direct call sites, total and per file). " +
+            "`Step 2: possible` or `Step 2: not possible` for the plan's Step 2 (widening the parameter to `IReadOnlyDictionary<string, string>` with no caller edits). " +
+            "`Step 2 reason: <one sentence>`."));
 
+    // The contract placement is read once per process, when this Definition initialises (StepPrompt renders then); one process runs one arm.
     public static ImplementationScenario Definition { get; } = new ImplementationScenario(
         "PlanStalenessReview",
         "Review a stale plan against the current code without editing",
@@ -261,7 +274,8 @@ review as your final message.
                 ExtraCheck: static ctx => Task.FromResult<string?>(CheckReview(ctx)),
                 CannedFinalMessage: CannedReview),
         },
-        PreferredHost: "113");
+        PreferredHost: "113",
+        PrimaryAxis: EvalAxis.AmbiguityResolution);
 
     /// <summary>
     /// No file changed; the final message says StoreChangedContent is gone, states the true total (12), names the five caller
