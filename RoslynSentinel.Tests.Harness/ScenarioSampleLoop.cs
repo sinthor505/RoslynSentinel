@@ -114,7 +114,8 @@ public static class ScenarioSampleLoop
                         seededTurns: scenario.ResumeKeepTurns,
                         idealTurns: scenario.IdealTurns,
                         turnCap: scenario.EffectiveTurnCap,
-                        absentTargetNames: scenario.AbsentTargetNames);
+                        absentTargetNames: scenario.AbsentTargetNames,
+                requireNotFoundFromToolUnderTest: scenario.RequireNotFoundFromToolUnderTest);
                     sample = new ScenarioSample(
                         scenario.Id,
                         scenario.ScenarioType,

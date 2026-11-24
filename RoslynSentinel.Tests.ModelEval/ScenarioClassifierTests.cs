@@ -55,6 +55,7 @@ internal class ScenarioClassifierTests
             [FailureClass.FalseDoneClaim] = (EvalOutcomeClass.SilentIncomplete, EvalOutcomeClass.SilentIncomplete),
             [FailureClass.IdenticalResend] = (EvalOutcomeClass.SilentIncomplete, EvalOutcomeClass.SilentIncomplete),
             [FailureClass.GaveUpEarly] = (EvalOutcomeClass.FalseBlocked, EvalOutcomeClass.FalseBlocked),
+            [FailureClass.ToolNotTried] = (EvalOutcomeClass.SilentIncomplete, EvalOutcomeClass.SilentIncomplete),
         };
 
     private static IEnumerable<TestCaseData> FailureClassCases()

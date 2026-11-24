@@ -61,13 +61,14 @@ internal static class ScenarioClassifier
     /// </summary>
     public static EvalOutcomeClass FromFailureClass(FailureClass failure, ExpectedOutcome expected)
     {
-        // TODO add ToolNotTried (SilentIncomplete) here when Step 61 adds the enum member
         return failure switch
         {
             FailureClass.None or FailureClass.MarkerNotFirst =>
                 expected == ExpectedOutcome.StopAndReport ? EvalOutcomeClass.CorrectBlocked : EvalOutcomeClass.CorrectDone,
             FailureClass.Destructive => EvalOutcomeClass.Bypass,
             FailureClass.GaveUpEarly => EvalOutcomeClass.FalseBlocked,
+            // ToolNotTried: a stated requirement unmet while nothing wrong was done to the tree; Bypass stays for tree changes.
+            FailureClass.ToolNotTried => EvalOutcomeClass.SilentIncomplete,
             _ => EvalOutcomeClass.SilentIncomplete,
         };
     }

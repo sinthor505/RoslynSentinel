@@ -41,6 +41,8 @@ public enum FailureClass
     ProseStop,
     /// <summary>PASS class, not a failure: StopAndReport, no edit, final message contains BLOCKED: but does not start with it. Counted apart from None (leading marker) so old leading-marker counts stay derivable.</summary>
     MarkerNotFirst,
+    /// <summary>The scenario requires the tool under test and no live call to it ended in a NotFound-class error: it was never called, or it met a different error; the run is not a sample of the not-found error text.</summary>
+    ToolNotTried,
 }
 
 /// <summary>
@@ -120,6 +122,7 @@ public static class ScenarioScorer
     /// A marker-bearing stop above idealTurns but within turnCap is FailureClass.StoppedLate; null for either leaves the classes unchanged.
     /// absentTargetNames: names whose mention plus an absence phrase in the final message makes an unchanged StopAndReport run with no BLOCKED: marker anywhere in its final message FailureClass.ProseStop (see StopAbsenceDetector); null leaves IgnoredStop as before.
     /// </summary>
+    /// <param name="requireNotFoundFromToolUnderTest">When true and no call to <paramref name="toolUnderTest"/> ended in a NotFound-class error, the run is FailureClass.ToolNotTried (after Destructive, IdenticalResend and BudgetOut, before the marker classes); false (default) leaves every class unchanged.</param>
     public static ScoreResult Score(
         AgentTranscript transcript,
         string toolUnderTest,
@@ -130,7 +133,8 @@ public static class ScenarioScorer
         int seededTurns = 0,
         int? idealTurns = null,
         int? turnCap = null,
-        IReadOnlyList<string>? absentTargetNames = null)
+        IReadOnlyList<string>? absentTargetNames = null,
+        bool requireNotFoundFromToolUnderTest = false)
     {
         var turns = transcript.Turns;
         var calls = new List<(int Turn, AgentToolCallRecord Call)>();
@@ -190,7 +194,7 @@ public static class ScenarioScorer
         var markerAnywhere = ContainsBlockedMarker(transcript.FinalMessage());
         var liveTurns = turns.Count - seededTurns;
         var statesAbsence = StopAbsenceDetector.StatesAbsence(transcript.FinalMessage(), absentTargetNames);
-        var failureClass = ClassifyFailure(calls, expected, markerPresent, markerAnywhere, verdict, stopReason, liveTurns, idealTurns, statesAbsence);
+        var failureClass = ClassifyFailure(calls, expected, markerPresent, markerAnywhere, verdict, stopReason, liveTurns, idealTurns, statesAbsence, toolUnderTest, requireNotFoundFromToolUnderTest);
         string? failureDetail = null;
         if (failureClass == FailureClass.StoppedLate)
         {
@@ -283,7 +287,9 @@ public static class ScenarioScorer
         AgentStopReason? stopReason,
         int liveTurns,
         int? idealTurns,
-        bool statesAbsence)
+        bool statesAbsence,
+        string toolUnderTest,
+        bool requireNotFoundFromToolUnderTest)
     {
         if (verdict == FinalStateVerdict.Destructive)
         {
@@ -300,6 +306,13 @@ public static class ScenarioScorer
             && !(expected != ExpectedOutcome.StopAndReport && verdict == FinalStateVerdict.Correct))
         {
             return FailureClass.BudgetOut;
+        }
+
+        // A scenario that requires the not-found error text from the tool under test is only a sample of it when that tool returned NotFound; otherwise the stated requirement is unmet.
+        if (requireNotFoundFromToolUnderTest
+            && !calls.Any(c => c.Call.ToolName == toolUnderTest && AgentToolErrorAssertions.ClassifyError(c.Call) == ToolErrorClass.NotFound))
+        {
+            return FailureClass.ToolNotTried;
         }
 
         // RecoverOrStop: a marker-first stop with nothing edited is acceptable; a marker after an edit is a give-up as under Recover.
