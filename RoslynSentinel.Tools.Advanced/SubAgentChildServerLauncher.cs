@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 
 using RoslynSentinel.Common.GitWorktree;
+using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tools.Advanced;
 
@@ -45,6 +46,13 @@ public sealed class SubAgentChildServerLauncher(ILogger logger)
     public const string ChildToolMode = "Claude-Lean";
 
     private const int MaxBuildDetailChars = 4000;
+
+    /// <summary>
+    /// Bound on the worktree's <c>dotnet restore</c>: a cold NuGet restore of the whole solution in a fresh
+    /// worktree. The old private copy had no timeout, so the shared engine now bounds a hung restore; five
+    /// minutes is a deliberate pick.
+    /// </summary>
+    private static readonly TimeSpan RestoreTimeout = TimeSpan.FromMinutes(5);
 
     /// <summary>The command-line arguments the child server is launched with.</summary> 
     public static IReadOnlyList<string> BuildServerArguments(string worktreePath, string model, string logDirectory, string runId, int replaceSnippetMaxOldLines, int replaceSnippetMaxNewLines, int replaceSnippetMaxOldChars, int replaceSnippetMaxNewChars) =>
@@ -124,7 +132,7 @@ public sealed class SubAgentChildServerLauncher(ILogger logger)
             }
 
             await BuildServerAsync(serverProject, buildDirectory, cancellationToken);
-            await RestoreSolutionAsync(Path.Combine(worktreePath, solutionRelativePath), worktreePath, runId, cancellationToken);
+            await RestoreSolutionAsync(Path.Combine(worktreePath, solutionRelativePath), worktreePath, runId, logger, cancellationToken);
 
             var serverExe = Path.Combine(buildDirectory, "RoslynSentinel.Server.Advanced.exe");
             var transport = new StdioClientTransport(new StdioClientTransportOptions
@@ -247,23 +255,34 @@ public sealed class SubAgentChildServerLauncher(ILogger logger)
     /// thousands of CS0246 errors the model did not cause. A failure here is only logged: the server can
     /// still run, and a failed launch would cost the caller more than a noisy Build.
     /// </summary>
-    private async Task RestoreSolutionAsync(string solutionPath, string worktreePath, string runId, CancellationToken cancellationToken)
+    public static async Task RestoreSolutionAsync(
+        string solutionPath,
+        string worktreePath,
+        string runId,
+        ILogger logger,
+        CancellationToken cancellationToken,
+        Func<string, TimeSpan, CancellationToken, Task<SolutionRestoreResult>>? restore = null)
     {
-        // TODO duplicates RoslynSentinel.Engines.Basic SolutionRestore.RestoreAsync (shared helper added for LoadSolution forceReload); switch to it and drop this copy once the worktree launch tests can run
+        // restore is a test seam: a test passes a fake result, or a delegate that throws to simulate a launch failure.
+        SolutionRestoreResult result;
         try
         {
-            var result = await RunProcessAsync(
-                "dotnet", ["restore", solutionPath, "--nologo", "-v", "quiet"], worktreePath, cancellationToken);
-            if (result.ExitCode != 0)
-            {
-                logger.LogWarning(
-                    "SubAgent {RunId}: restoring the worktree solution failed (exit code {ExitCode}); the child's Build may report false errors. {Detail}",
-                    runId, result.ExitCode, Tail($"{result.StdOut}\n{result.StdErr}".Trim(), MaxBuildDetailChars));
-            }
+            result = await (restore ?? SolutionRestore.RestoreAsync)(solutionPath, RestoreTimeout, cancellationToken);
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
-            logger.LogWarning(ex, "SubAgent {RunId}: could not run 'dotnet restore' for the worktree solution; the child's Build may report false errors.", runId);
+            logger.LogWarning(ex, "SubAgent {RunId}: could not run 'dotnet restore' for the worktree solution at {WorktreePath}; the child's Build may report false errors.", runId, worktreePath);
+            return;
+        }
+
+        if (!result.Succeeded)
+        {
+            var outcome = result.TimedOut ? $"timed out after {RestoreTimeout}"
+                : !result.Started ? "could not be started"
+                : $"failed (exit code {result.ExitCode})";
+            logger.LogWarning(
+                "SubAgent {RunId}: restoring the worktree solution at {WorktreePath} {Outcome}; the child's Build may report false errors. {Detail}",
+                runId, worktreePath, outcome, Tail(result.OutputTail, MaxBuildDetailChars));
         }
     }
 

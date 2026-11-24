@@ -1,6 +1,9 @@
+using Microsoft.Extensions.Logging;
+
 using ModelContextProtocol.Protocol;
 
 using RoslynSentinel.Common;
+using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Server.Advanced;
 using RoslynSentinel.Tools.Advanced;
 
@@ -361,5 +364,84 @@ public class SubAgentLaunchTests
             SubAgentChildServerLauncher.BuildServerAsync(
                 @"C:\wt\RoslynSentinel.Server.Advanced\x.csproj", @"C:\out", CancellationToken.None,
                 (_, _, _, _) => Task.FromResult((0, "", ""))));
+    }
+
+    // Restore step
+
+    [Test]
+    [Category("SubAgentChildServerLauncher")] // sentinel:auto-category
+    public async Task RestoreSolutionAsync_WhenTheRestoreSucceeds_LogsNoWarningAndPassesTheSolutionPath()
+    {
+        var logger = new CapturingLogger();
+        var solutionPath = @"C:\wt\RoslynSentinel.sln";
+        string? receivedPath = null;
+        var receivedTimeout = TimeSpan.Zero;
+
+        await SubAgentChildServerLauncher.RestoreSolutionAsync(
+            solutionPath, @"C:\wt", "run-1", logger, CancellationToken.None,
+            (path, timeout, _) =>
+            {
+                receivedPath = path;
+                receivedTimeout = timeout;
+                return Task.FromResult(new SolutionRestoreResult(true, true, false, 0, "", TimeSpan.FromSeconds(1)));
+            });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(receivedPath, Is.EqualTo(solutionPath));
+            Assert.That(receivedTimeout, Is.GreaterThan(TimeSpan.Zero));
+            Assert.That(logger.Entries, Is.Empty);
+        });
+    }
+
+    [Test]
+    [Category("SubAgentChildServerLauncher")] // sentinel:auto-category
+    public async Task RestoreSolutionAsync_WhenTheRestoreFails_LogsAWarningWithTheOutputTailAndDoesNotThrow()
+    {
+        var logger = new CapturingLogger();
+
+        await Assert.DoesNotThrowAsync(() =>
+            SubAgentChildServerLauncher.RestoreSolutionAsync(
+                @"C:\wt\RoslynSentinel.sln", @"C:\wt", "run-1", logger, CancellationToken.None,
+                (_, _, _) => Task.FromResult(new SolutionRestoreResult(false, true, false, 1, "error NU1301 detail", TimeSpan.FromSeconds(1)))));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(logger.Entries, Has.Count.EqualTo(1));
+            Assert.That(logger.Entries[0].Level, Is.EqualTo(LogLevel.Warning));
+            Assert.That(logger.Entries[0].Message, Does.Contain("exit code 1").And.Contain("error NU1301 detail"));
+        });
+    }
+
+    [Test]
+    [Category("SubAgentChildServerLauncher")] // sentinel:auto-category
+    public async Task RestoreSolutionAsync_WhenTheRestoreCannotStart_LogsAWarningAndDoesNotThrow()
+    {
+        var logger = new CapturingLogger();
+
+        await Assert.DoesNotThrowAsync(() =>
+            SubAgentChildServerLauncher.RestoreSolutionAsync(
+                @"C:\wt\RoslynSentinel.sln", @"C:\wt", "run-1", logger, CancellationToken.None,
+                (_, _, _) => throw new InvalidOperationException("no dotnet")));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(logger.Entries, Has.Count.EqualTo(1));
+            Assert.That(logger.Entries[0].Level, Is.EqualTo(LogLevel.Warning));
+            Assert.That(logger.Entries[0].Exception, Is.TypeOf<InvalidOperationException>());
+        });
+    }
+
+    /// <summary>Records every log entry so a test can assert on level, text and exception.</summary>
+    private sealed class CapturingLogger : ILogger
+    {
+        public List<(LogLevel Level, string Message, Exception? Exception)> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Entries.Add((logLevel, formatter(state, exception), exception));
     }
 }
