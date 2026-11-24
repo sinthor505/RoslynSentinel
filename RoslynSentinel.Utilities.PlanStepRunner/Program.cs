@@ -243,7 +243,7 @@ public static class Program
             WriteBlockerDoc(options, step, repeatedFailure, stepDir);
         }
 
-        var lastContent = result.Transcript.FinalMessage();
+        var lastContent = result.Transcript.FinalMessageIfFinished();
         var looksBlocked = BlockedPhrases.Any(p => lastContent.Contains(p, StringComparison.OrdinalIgnoreCase));
 
         // Read what the model touched *before* the Build/RunTest snapshots below, so the runner's

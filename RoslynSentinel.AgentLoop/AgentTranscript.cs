@@ -226,6 +226,13 @@ public sealed class AgentTranscript
         return content.Length > 0 ? content : WithoutThinkTags(last.ReasoningContent);
     }
 
+    /// <summary>
+    /// <see cref="FinalMessage"/> for a run that genuinely finished: StopReason is ModelFinished, or null for a transcript written before StopReason was recorded. Any other stop returns "".
+    /// A run stopped by a cap, a breaker or an error ends on a mid-task message, which is not an answer. Grading sites use this; SubAgent callers keep FinalMessage().
+    /// </summary>
+    public string FinalMessageIfFinished() =>
+        StopReason is null or AgentStopReason.ModelFinished ? FinalMessage() : "";
+
     /// <summary>True when <see cref="FinalMessage"/> came from reasoning because the last turn's Content was blank.</summary>
     public bool FinalMessageIsFromReasoning() =>
         Turns.Count > 0

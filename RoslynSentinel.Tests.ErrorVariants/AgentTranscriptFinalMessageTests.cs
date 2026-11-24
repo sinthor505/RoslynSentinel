@@ -100,6 +100,50 @@ public class AgentTranscriptFinalMessageTests
         Assert.That(transcript.FinalMessageIsFromReasoning(), Is.False);
     }
 
+    [Test]
+    public void FinalMessageIfFinished_ModelFinishedWithContent_ReturnsContent()
+    {
+        var transcript = TranscriptWith(Assistant("answer", null));
+        transcript.StopReason = AgentStopReason.ModelFinished;
+
+        Assert.That(transcript.FinalMessageIfFinished(), Is.EqualTo("answer"));
+    }
+
+    [Test]
+    public void FinalMessageIfFinished_NullStopReason_ReturnsContent()
+    {
+        var transcript = TranscriptWith(Assistant("answer", null));
+
+        Assert.That(transcript.FinalMessageIfFinished(), Is.EqualTo("answer"));
+    }
+
+    [Test]
+    public void FinalMessageIfFinished_TurnCapExceeded_ReturnsEmpty()
+    {
+        var transcript = TranscriptWith(Assistant("mid-task message", null));
+        transcript.StopReason = AgentStopReason.TurnCapExceeded;
+
+        Assert.That(transcript.FinalMessageIfFinished(), Is.EqualTo(""));
+    }
+
+    [Test]
+    public void FinalMessageIfFinished_WallClockCapWithReasoningOnly_ReturnsEmpty()
+    {
+        var transcript = TranscriptWith(Assistant(null, "mid-task reasoning"));
+        transcript.StopReason = AgentStopReason.WallClockCapExceeded;
+
+        Assert.That(transcript.FinalMessageIfFinished(), Is.EqualTo(""));
+    }
+
+    [Test]
+    public void FinalMessageIfFinished_StreamTruncated_ReturnsEmpty()
+    {
+        var transcript = TranscriptWith(Assistant("partial answer", null));
+        transcript.StopReason = AgentStopReason.StreamTruncated;
+
+        Assert.That(transcript.FinalMessageIfFinished(), Is.EqualTo(""));
+    }
+
     private static AgentChatMessage Assistant(string? content, string? reasoning) =>
         new() { Role = "assistant", Content = content, ReasoningContent = reasoning };
 
