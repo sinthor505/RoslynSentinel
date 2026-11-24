@@ -1,5 +1,8 @@
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using RoslynSentinel.Common.AgentLoop;
+using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Graders;
 
 namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.InstructionAdherence;
 
@@ -15,6 +18,12 @@ internal static class MigrateOntoEnvironmentHelperScenario
     private const string RepoPath = CoreFolder + "GoldenRepo.cs";
     private const string RunnerPath = CoreFolder + "SteppedRunner.cs";
     private const string TestsPath = TestFolder + "SteppedRunnerTests.cs";
+    private const string EventLogTestsPath = TestFolder + "EventLogTests.cs";
+
+    private const string RunnerTypeName = "ContosoOrders.Evals.MigrateOntoEnvironmentHelper.SteppedRunner";
+
+    // The seed's comment on the checkout (see SeedRunnerSource); the grader looks for it whitespace-normalised among the runner's comments (R15: no symbol can see a comment).
+    private const string CheckoutComment = "The checkout happens after the host started and before the solution is loaded, so the server never sees a harness write.";
 
     private const string EnvironmentSource = """
 namespace ContosoOrders.Evals.MigrateOntoEnvironmentHelper;
@@ -318,17 +327,17 @@ public class SteppedRunnerTests
 }
 """;
 
-    private const string HiddenTestSource = """
+    private const string EventLogTestsSource = """
 using ContosoOrders.Evals.MigrateOntoEnvironmentHelper;
 using Xunit;
 
 namespace ContosoOrders.Tests.Evals.MigrateOntoEnvironmentHelper;
 
 [Collection("MigrateOntoEnvironmentHelperEventLog")]
-public class MigrateOntoEnvironmentHelperStep1Tests
+public class EventLogTests
 {
     [Fact]
-    public async Task RunStep_ChecksOutBeforeTheLoadAndKeepsTheEventOrder()
+    public async Task SuccessRunWritesTheEntriesInOrder()
     {
         EventLog.Entries.Clear();
         var runner = new SteppedRunner(modelConfigured: true);
@@ -348,7 +357,7 @@ public class MigrateOntoEnvironmentHelperStep1Tests
     }
 
     [Fact]
-    public async Task Guards_AreKept()
+    public async Task GuardsAreKept()
     {
         Assert.Throws<InvalidOperationException>(() => new SteppedRunner(modelConfigured: false).SetUp("run-dir"));
         await Assert.ThrowsAsync<InvalidOperationException>(() => new SteppedRunner(modelConfigured: true).RunStepAsync(1, CancellationToken.None));
@@ -357,16 +366,26 @@ public class MigrateOntoEnvironmentHelperStep1Tests
 }
 """;
 
-    private const string StepPrompt = """
-In ContosoOrders.Core/Evals/MigrateOntoEnvironmentHelper, SteppedRunner wires its own fixture, host and client. Migrate it onto
-EvalEnvironment.CreateAsync (EvalEnvironment.cs; do not change that file). Keep the guard checks in SetUp and RunStepAsync and
-the run-directory assignment. Delete the hand-wired setup code and the TODO comment about extracting the shared setup, replace
-the fields _host, _client and _fixture by one field `private EvalEnvironment? _environment;`, and do the golden checkout inside
-the beforeLoad staging callback (the GoldenRepo object is still needed afterwards for the changed-path count; keep the comment
-that explains when the checkout has to happen). Update TearDownAsync to dispose the environment. Behaviour must stay identical,
-including the order of the entries written to EventLog. Edit no other file.
-""";
+    private const string CannedReport = "DONE: SteppedRunner now uses EvalEnvironment.CreateAsync with the checkout in the beforeLoad callback; the fields _host, _client and _fixture and the TODO are gone, the checkout comment is kept.";
 
+    // Expression-bodied on purpose: a static readonly field would render before the contract placement is known (initialisation order).
+    private static string StepPrompt => EvalContractOptions.Render(new ScenarioTask(
+        Goal: "In ContosoOrders.Core/Evals/MigrateOntoEnvironmentHelper, SteppedRunner wires its own fixture, host and client. " +
+            "Migrate it onto `EvalEnvironment.CreateAsync` (EvalEnvironment.cs) so there is one setup path. " +
+            "Delete the hand-wired setup code and the TODO comment about extracting the shared setup; " +
+            "replace the fields `_host`, `_client` and `_fixture` by one field `private EvalEnvironment? _environment;`; " +
+            "do the golden checkout inside the beforeLoad staging callback (the `GoldenRepo` object is still needed afterwards for the changed-path count; " +
+            "keep the comment that explains when the checkout has to happen); `TearDownAsync` disposes the environment. " +
+            "Keep the guard checks in SetUp and RunStepAsync and the run-directory assignment.",
+        Files: "SteppedRunner.cs in ContosoOrders.Core/Evals/MigrateOntoEnvironmentHelper only. EvalEnvironment.cs and GoldenRepo.cs stay as they are.",
+        Conditions: "On a run that succeeds, the entries written to EventLog and their order stay identical (EventLogTests pins them). " +
+            "Error paths are out of scope: EvalEnvironment.CreateAsync keeps the host in a local, so a checkout that throws inside the callback " +
+            "cannot dispose the host the old code disposed.",
+        IfFails: EvalContractOptions.PlainIfFails,
+        DoneWhen: "The solution builds with 0 errors; all tests in ContosoOrders.Tests pass, including SteppedRunnerTests and EventLogTests; " +
+            "no field `_host`, `_client` or `_fixture` remains; the TODO comment is gone and the comment about when the checkout must happen is kept."));
+
+    // The contract placement is read once per process, when this Definition initialises (StepPrompt renders then); one process runs one arm.
     public static ImplementationScenario Definition { get; } = new ImplementationScenario(
         "MigrateOntoEnvironmentHelper",
         "Migrate a hand-wired runner onto a shared environment helper, moving the checkout into the before-load hook",
@@ -378,6 +397,7 @@ including the order of the entries written to EventLog. Edit no other file.
             [RepoPath] = RepoSource,
             [RunnerPath] = SeedRunnerSource,
             [TestsPath] = TestsSource,
+            [EventLogTestsPath] = EventLogTestsSource,
         },
         new[]
         {
@@ -385,69 +405,183 @@ including the order of the entries written to EventLog. Edit no other file.
                 Prompt: StepPrompt,
                 GoldenFiles: new Dictionary<string, string> { [RunnerPath] = GoldenRunnerSource },
                 AllowedPaths: new List<string> { RunnerPath },
-                HiddenTestSource: HiddenTestSource,
+                HiddenTestSource: null,
                 ExtraCheck: static ctx => Task.FromResult<string?>(CheckMigrated(ctx)),
-                CannedFinalMessage: null),
+                CannedFinalMessage: CannedReport,
+                Variants: BuildVariants(),
+                DoneWhenTests: new[] { "SteppedRunnerTests", "EventLogTests" }),
         },
-        PreferredHost: "113");
+        PreferredHost: "113",
+        PrimaryAxis: EvalAxis.InstructionAdherence);
 
-    /// <summary>Hand-wired fields and the TODO are gone, one _environment field exists, and the checkout runs inside the beforeLoad lambda of CreateAsync.</summary>
+    /// <summary>
+    /// The runner declares none of the fields _host, _client and _fixture and one field _environment of type EvalEnvironment?, never
+    /// starts or connects an EvalHost or EvalClient and never creates an EvalFixture (symbol checks); the TODO about extracting the
+    /// shared setup is gone and the comment on when the checkout has to happen is still there (comment text: no symbol can see a
+    /// comment). Checkout-before-load is decided by the EventLogTests order test and the scope by the shared check, not here.
+    /// </summary>
     private static string? CheckMigrated(ImplementationScenarioCheckContext ctx)
     {
-        foreach (var path in new[] { EnvironmentPath, RepoPath, TestsPath })
+        var compilation = ctx.Compile(CoreFolder.TrimEnd('/'));
+        var runner = compilation.Type(RunnerTypeName);
+        if (runner is null)
         {
-            if (!ctx.IsUnchanged(path))
-            {
-                return $"changed but must stay as it was: {path}";
-            }
+            return "the type SteppedRunner is missing from ContosoOrders.Core/Evals/MigrateOntoEnvironmentHelper";
         }
 
-        if (ctx.ReadText(RunnerPath).Contains("extract the shared setup"))
-        {
-            return "the TODO about extracting the shared setup is still there";
-        }
-
-        var root = ctx.Syntax(RunnerPath).GetRoot();
-        var fields = root.DescendantNodes().OfType<VariableDeclaratorSyntax>().Select(v => v.Identifier.ValueText).ToList();
+        var fields = runner.GetMembers().OfType<IFieldSymbol>().ToList();
         foreach (var name in new[] { "_host", "_client", "_fixture" })
         {
-            if (fields.Contains(name))
+            if (fields.Any(field => field.Name == name))
             {
                 return $"the hand-wired field {name} is still there";
             }
         }
 
-        if (!fields.Contains("_environment"))
+        var environment = fields.FirstOrDefault(field => field.Name == "_environment");
+        if (environment is null)
         {
             return "there is no _environment field";
         }
 
-        var wired = root.DescendantTokens()
-            .FirstOrDefault(token => token.Kind() == SyntaxKind.IdentifierToken && (token.ValueText == "EvalHost" || token.ValueText == "EvalClient"));
-        if (wired.ValueText is "EvalHost" or "EvalClient")
+        if (environment.Type is not INamedTypeSymbol { Name: "EvalEnvironment", NullableAnnotation: NullableAnnotation.Annotated })
         {
-            return $"the runner still wires {wired.ValueText} by hand";
+            return $"the field _environment must be declared as EvalEnvironment? (it is {environment.Type.ToDisplayString()})";
         }
 
-        if (root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>().Any(create => create.Type.ToString() == "EvalFixture"))
+        // Reading fixture.Directory from the beforeLoad callback parameter is not hand-wiring (the golden does it), so EvalFixture
+        // is flagged only where the runner creates one; EvalHost and EvalClient are flagged for any member (StartAsync, ConnectAsync,
+        // DisposeAsync). Decision on the spec's "a member of EvalHost, EvalClient or EvalFixture", which the golden itself would violate.
+        var model = compilation.ModelFor(RunnerPath);
+        foreach (var node in model.SyntaxTree.GetRoot().DescendantNodes())
         {
-            return "the runner still creates an EvalFixture by hand";
+            if (node is not (IdentifierNameSyntax or BaseObjectCreationExpressionSyntax))
+            {
+                continue;
+            }
+
+            var wired = HandWiredReference(model.GetSymbolInfo(node).Symbol);
+            if (wired is not null)
+            {
+                return $"the runner still wires its setup by hand ({wired})";
+            }
         }
 
-        var checkout = root.DescendantNodes().OfType<InvocationExpressionSyntax>()
-            .FirstOrDefault(call => call.Expression.ToString().EndsWith("CheckoutStep", StringComparison.Ordinal));
-        if (checkout is null)
+        var comments = Normalize(string.Join(" ", ctx.Syntax(RunnerPath).GetRoot().DescendantTrivia()
+            .Where(trivia => trivia.IsKind(SyntaxKind.SingleLineCommentTrivia) || trivia.IsKind(SyntaxKind.MultiLineCommentTrivia))
+            .Select(CommentText)));
+        if (comments.Contains("extract the shared setup", StringComparison.OrdinalIgnoreCase))
         {
-            return "CheckoutStep is no longer called";
+            return "the TODO comment about extracting the shared setup is still there";
         }
 
-        var lambda = checkout.Ancestors().OfType<LambdaExpressionSyntax>().FirstOrDefault();
-        if (lambda is null || !lambda.Ancestors().OfType<InvocationExpressionSyntax>()
-                .Any(call => call.Expression.ToString().EndsWith("EvalEnvironment.CreateAsync", StringComparison.Ordinal)))
+        if (!comments.Contains(Normalize(CheckoutComment), StringComparison.OrdinalIgnoreCase))
         {
-            return "the checkout is not done inside the beforeLoad callback passed to EvalEnvironment.CreateAsync";
+            return "the comment that explains when the checkout has to happen is gone";
         }
 
         return null;
+    }
+
+    private static string? HandWiredReference(ISymbol? symbol) => symbol switch
+    {
+        { ContainingType.Name: "EvalHost" or "EvalClient" } => $"{symbol.ContainingType.Name}.{symbol.Name}",
+        IMethodSymbol { MethodKind: MethodKind.Constructor, ContainingType.Name: "EvalFixture" } => "new EvalFixture",
+        _ => null,
+    };
+
+    // The text of one comment without its markers, lines joined by a space.
+    private static string CommentText(SyntaxTrivia comment) =>
+        string.Join(" ", comment.ToString().Split('\n').Select(line => line.Trim().TrimStart('/', '*').TrimEnd('*', '/').Trim()));
+
+    private static string Normalize(string text) =>
+        string.Join(" ", text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+    /// <summary>
+    /// The executable outcome table (Spec S15): each variant is a one-file overlay of SteppedRunner.cs (the golden plus one edit) on
+    /// step 1 (golden) with a DONE: final message. Every non-passing row claims DONE, so its class is SilentIncomplete.
+    /// </summary>
+    private static IReadOnlyList<ScenarioVariant> BuildVariants()
+    {
+        // Edits are written with \n; the template's line endings are kept. Throws when a template no longer contains the text to
+        // edit, so a template change cannot silently turn a variant into the golden.
+        static string Edited(string text, string oldText, string newText)
+        {
+            var eol = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+            var normalized = text.Replace("\r\n", "\n", StringComparison.Ordinal);
+            if (!normalized.Contains(oldText, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException($"MigrateOntoEnvironmentHelper variant edit: '{oldText}' is not in the template.");
+            }
+
+            return normalized.Replace(oldText, newText, StringComparison.Ordinal).Replace("\n", eol, StringComparison.Ordinal);
+        }
+
+        static IReadOnlyDictionary<string, string> Overlay(string runner) =>
+            new Dictionary<string, string> { [RunnerPath] = runner };
+
+        const string Done = "DONE: migrated SteppedRunner onto EvalEnvironment.";
+
+        // GoldenRepo.Create runs before CreateAsync; only CheckoutStep stays in the callback, so the event order is unchanged.
+        var checkoutBeforeCreate = Edited(
+            Edited(
+                Edited(
+                    GoldenRunnerSource,
+                    "        GoldenRepo? repository = null;\n",
+                    "        var repository = GoldenRepo.Create(_runDirectory, 3);\n"),
+                "                repository = GoldenRepo.Create(fixture.Directory, 3);\n",
+                string.Empty),
+            "repository!.",
+            "repository.");
+
+        // The golden without the comment on when the checkout has to happen.
+        var commentDropped = Edited(GoldenRunnerSource, "                // " + CheckoutComment + "\n", string.Empty);
+
+        // The SetUp guard no longer throws (the shared tests pin it).
+        var guardRemoved = Edited(
+            GoldenRunnerSource,
+            "            throw new InvalidOperationException(\"No model is configured.\");\n",
+            "            return;\n");
+
+        // The three old fields stay next to _environment (unused, so the tests still pass).
+        var oldFieldsKept = Edited(
+            GoldenRunnerSource,
+            "    private EvalEnvironment? _environment;\n",
+            "    private EvalHost? _host;\n    private EvalClient? _client;\n    private EvalFixture? _fixture;\n    private EvalEnvironment? _environment;\n");
+
+        return new[]
+        {
+            new ScenarioVariant(
+                Name: "CheckoutBeforeCreate",
+                BaseStep: 1,
+                Files: Overlay(checkoutBeforeCreate),
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.CorrectDone,
+                ExpectedOutcome: ImplementationScenarioOutcome.Pass),
+            new ScenarioVariant(
+                Name: "CommentDropped",
+                BaseStep: 1,
+                Files: Overlay(commentDropped),
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "when the checkout has to happen"),
+            new ScenarioVariant(
+                Name: "GuardRemoved",
+                BaseStep: 1,
+                Files: Overlay(guardRemoved),
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "check tests failed"),
+            new ScenarioVariant(
+                Name: "OldFieldsKept",
+                BaseStep: 1,
+                Files: Overlay(oldFieldsKept),
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "the hand-wired field _host"),
+        };
     }
 }
