@@ -235,6 +235,7 @@ public class SymbolNotFoundDetailTests
         Assert.That(text.Split('\n').Count(line => line.StartsWith("  - Classify (method)", StringComparison.Ordinal)), Is.EqualTo(10));
         Assert.That(text, Does.Contain("(+2 more not listed)"));
         Assert.That(text, Does.Contain("'Classify' is declared in:"));
+        Assert.That(text.Split(" -> ").Length - 1, Is.EqualTo(3), "only the first three listed candidates carry a call");
         Assert.That(text, Does.Not.Contain("does not exist in this solution"));
     }
 

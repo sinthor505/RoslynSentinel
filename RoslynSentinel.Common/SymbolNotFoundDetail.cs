@@ -22,6 +22,9 @@ public static class SymbolNotFoundDetail
 {
     private const string DoesNotExistSentence = "the symbol does not exist in this solution.";
 
+    // Only the first candidates get a next call: each call builds a ToolCallHint, which records it as issued, and a long list of them is noise.
+    private const int CandidatesWithCall = 3;
+
     /// <summary>
     /// Collects declared named types, ordinary methods, properties (not indexers), fields (including constants and enum
     /// members) and events of the source symbols of <paramref name="searchedProjects"/> whose name is similar to
@@ -115,7 +118,7 @@ public static class SymbolNotFoundDetail
 
         text.Append($" was not found in {scopeDescription}.");
         text.Append(exact ? $" '{wantedName}' is declared in:" : " Did you mean one of these?");
-        foreach (var candidate in candidates)
+        foreach (var (candidate, index) in candidates.Select((c, i) => (c, i)))
         {
             text.Append($"\n  - {candidate.Name} ({candidate.Kind})");
             if (!string.IsNullOrEmpty(candidate.Container))
@@ -134,9 +137,11 @@ public static class SymbolNotFoundDetail
                 text.Append($", docCommentId '{candidate.DocCommentId}'");
             }
 
-            var call = nextCall is not null
-                ? nextCall(candidate)
-                : (hasId ? retryCall!(candidate.DocCommentId!) : null) ?? (Callable(isCallable, "Search") ? DefaultSearchCall(candidate) : string.Empty);
+            var call = index >= CandidatesWithCall
+                ? null
+                : nextCall is not null
+                    ? nextCall(candidate)
+                    : (hasId ? retryCall!(candidate.DocCommentId!) : null) ?? (Callable(isCallable, "Search") ? DefaultSearchCall(candidate) : string.Empty);
             if (!string.IsNullOrEmpty(call))
             {
                 text.Append($" -> {call}");
