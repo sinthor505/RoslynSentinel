@@ -502,47 +502,6 @@ public static class RoslynSentinelServiceExtensionsBasic
             mcpBuilder.WithSentinelTools<NamedArgumentsTools>();
         }
 
-        // TagTestCategoriesTool: opt-in via --mode=TestCategories, or on demand in claude-lean (the `testCategories` toolset;
-        // the lean on-demand class set above puts the class in activeToolClasses, the allow-list hides the tool).
-        // TestCategoryTaggingEngine, TestCategoryApplyEngine and ValidationEngine come from AddRoslynSentinelEnginesBasic; the Impl takes the plain ILogger registered above.
-        if (activeToolClasses.Contains("TestCategoryTaggingTools"))
-        {
-            services.AddSingleton<TestCategoryTaggingTools>();
-            mcpBuilder.WithSentinelTools<TestCategoryTaggingTools>();
-        }
-
-        // QualifyCrefsTool: opt-in via --mode=QualifyCrefsTool, or on demand in claude-lean (the QualifyCrefsTools class is in the lean lists in ToolClassRegistry).
-        if (activeToolClasses.Contains("QualifyCrefsTools"))
-        {
-            services.AddSingleton<QualifyCrefsTools>();
-            mcpBuilder.WithSentinelTools<QualifyCrefsTools>();
-        }
-
-        if (activeToolClasses.Contains("WorkspaceTools"))
-        {
-            services.AddSingleton<WorkspaceReadNavigationTools>();
-            services.AddSingleton<WorkspaceTools>();
-            mcpBuilder.WithSentinelTools<WorkspaceTools>();
-        }
-        // Experiment-only (proposal_edit_snippets_batch_only_ab_test). Reached only via the opt-in
-        // EditSnippetsExperiment mode; WorkspaceFileEditImpl comes from AddRoslynSentinelToolImplsBasic.
-        if (activeToolClasses.Contains("EditSnippetsTools"))
-        {
-            services.AddSingleton<EditSnippetsTools>();
-            mcpBuilder.WithSentinelTools<EditSnippetsTools>();
-        }
-        // The read/navigation tools (WorkspaceReadNav mode) are opt-in on their own, without "WorkspaceTools";
-        // TryAddSingleton since the WorkspaceTools block above may already have registered the class.
-        if (activeToolClasses.Contains("WorkspaceReadNavigationTools"))
-        {
-            services.TryAddSingleton<WorkspaceReadNavigationTools>();
-            mcpBuilder.WithSentinelTools<WorkspaceReadNavigationTools>();
-        }
-        if (activeToolClasses.Contains("DocumentationTools"))
-        {
-            services.AddSingleton<DocumentationTools>();
-            mcpBuilder.WithSentinelTools<DocumentationTools>();
-        }
         if (activeToolClasses.Contains("RefactoringTools"))
         {
             services.AddSingleton<RefactoringSignatureTools>();

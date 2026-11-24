@@ -95,7 +95,7 @@ public static class ToolClassRegistry
     /// <summary>
     /// Tool-class types in tools/list order (the order of the per-class DI blocks before stage F). Filled tail-first by the migration slices (Steps 9-13); a new tool class needs a row.
     /// </summary>
-    public static readonly IReadOnlyList<Type> BasicToolClassTypes = [typeof(SymbolNavigationTools), typeof(SymbolRelationshipTools), typeof(GitTools), typeof(GitRemoteTools), typeof(AdminTools), typeof(WholeFileWriteTools), typeof(RefactoringSignatureTools), typeof(RefactoringStructuralTools), typeof(TypedMemberTools), typeof(RefactoringExtractionDocsTools), typeof(CoreRefactoringTools)];
+    public static readonly IReadOnlyList<Type> BasicToolClassTypes = [typeof(TestCategoryTaggingTools), typeof(QualifyCrefsTools), typeof(WorkspaceTools), typeof(EditSnippetsTools), typeof(WorkspaceReadNavigationTools), typeof(DocumentationTools), typeof(SymbolNavigationTools), typeof(SymbolRelationshipTools), typeof(GitTools), typeof(GitRemoteTools), typeof(AdminTools), typeof(WholeFileWriteTools), typeof(RefactoringSignatureTools), typeof(RefactoringStructuralTools), typeof(TypedMemberTools), typeof(RefactoringExtractionDocsTools), typeof(CoreRefactoringTools)];
 
     /// <summary>
     /// Tool-class types in tools/list order (the order of the per-class DI blocks before stage F). Filled tail-first by the migration slices (Steps 9-13); a new tool class needs a row.
