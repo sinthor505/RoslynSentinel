@@ -588,6 +588,12 @@ Suggested orchestrator batches:
   `ServiceRegistrationExtensionsBasic.cs:406-411`), so (b) is eval-visible wherever a consumer asks about such a tool: STOP-worthy.
   Step 5 prints the per-surface delta; record it here. (c) keeps the defect. Recommendation: (a) now, (b) with stage F, when
   "registered" equals "exposed" by construction.
+  **Measured 2026-11-24 (Step 5, commit d2c8a06a, run on 5413d71b):** no delta on the Advanced surfaces (harness default lean/full, the
+  four Advanced edit arms). On every Basic surface (four Basic edit arms, `ModelEvalToolSurfaces.Basic`): callable but not exposed =
+  `ConvertAnonymousToNamed`, `ExtractMembers`, `Inline`, `InlineClass`, `Introduce`, `IntroduceParameterObject`, `InvertAssignments`,
+  `MoveType`, `SyncInterface`, `WrapRange`. Exposed but not callable = `McpServerStatus` on every Basic surface and on
+  `WorkspaceAndSymbolNavigation` (the always-on `ServerStatusTools` class, as predicted). So option (b) would change eval-visible text on
+  the Basic surfaces: stays with stage F.
   Consumers and eval-visibility verdict under (a) (36 production lines, 37 calls): compile-rejection text via
   `CompilerErrorLookupHelper.DescribeAsync(isToolActive:)` (15 sites: `CoreRefactoringTools:65`, `AdvancedRefactoringTools:90`,
   `GenerationTools:79`, `RefactoringSignatureImpl:65`, `RefactoringExtractionDocsImpl:60`, `RefactoringStructuralImpl:74`,
