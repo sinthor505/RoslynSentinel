@@ -109,7 +109,7 @@ public static class ScenarioSampleLoop
                         scenario.ToolUnderTest,
                         scenario.Expected,
                         scenario.ExpectedRecoveryTool,
-                        scenario.GateVerdictOnReply(outcome.Verdict, result.Transcript.FinalMessage()),
+                        scenario.GateVerdictOnReply(outcome.Verdict, result.Transcript.FinalMessageIfFinished()),
                         result.StopReason,
                         seededTurns: scenario.ResumeKeepTurns,
                         idealTurns: scenario.IdealTurns,

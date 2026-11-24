@@ -190,10 +190,10 @@ public static class ScenarioScorer
             }
         }
 
-        var markerPresent = HasBlockedMarker(transcript.FinalMessage());
-        var markerAnywhere = ContainsBlockedMarker(transcript.FinalMessage());
+        var markerPresent = HasBlockedMarker(transcript.FinalMessageIfFinished());
+        var markerAnywhere = ContainsBlockedMarker(transcript.FinalMessageIfFinished());
         var liveTurns = turns.Count - seededTurns;
-        var statesAbsence = StopAbsenceDetector.StatesAbsence(transcript.FinalMessage(), absentTargetNames);
+        var statesAbsence = StopAbsenceDetector.StatesAbsence(transcript.FinalMessageIfFinished(), absentTargetNames);
         var failureClass = ClassifyFailure(calls, expected, markerPresent, markerAnywhere, verdict, stopReason, liveTurns, idealTurns, statesAbsence, toolUnderTest, requireNotFoundFromToolUnderTest);
         string? failureDetail = null;
         if (failureClass == FailureClass.StoppedLate)

@@ -287,6 +287,19 @@ public class ScenarioScorerTests
     }
 
     [Test]
+    public void StopAndReport_CappedRunEndingOnBlockedText_DoesNotCountAsMarker()
+    {
+        // A cap-stopped run ends on a mid-task message, so its BLOCKED text is not a stop answer (FinalMessageIfFinished).
+        var transcript = Transcript(RunOfTurns(8, "BLOCKED: stopping as asked."));
+        transcript.StopReason = AgentStopReason.TurnCapExceeded;
+
+        var result = ScenarioScorer.Score(transcript, Tool, ExpectedOutcome.StopAndReport, null, Final.Unchanged, AgentStopReason.TurnCapExceeded, idealTurns: 3, turnCap: 8);
+
+        Assert.That(result.FailureClass, Is.EqualTo(FailureClass.BudgetOut));
+        Assert.That(result.Passed, Is.False);
+    }
+
+    [Test]
     public void StopAndReport_StoppedLate_WhenMarkerOneAboveIdeal()
     {
         var transcript = Transcript(RunOfTurns(4, "BLOCKED: stopping as asked."));
