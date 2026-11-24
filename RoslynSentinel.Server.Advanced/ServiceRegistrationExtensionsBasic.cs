@@ -373,6 +373,12 @@ public static class RoslynSentinelServiceExtensionsBasic
             services.TryAddEnumerable(ServiceDescriptor.Singleton(typeof(IToolSchemaPatch), patch));
         }
 
+        // A host (the eval harness, Step 10) registers its own ParameterSurface first; this one is built on first
+        // resolve, which is when tools are built, so it reads SchemaOptions after SchemaOptions.Configure exactly as
+        // the patch does today. The patch reads this standalone singleton, never the controller: resolving the
+        // controller resolves IOptions<McpServerOptions>, which builds every tool.
+        services.TryAddSingleton(_ => ParameterSurface.FromStartup());
+
         // Unconditional, mode-independent dependencies of the tool classes below (the *Impl helpers, the plain ILogger,
         // and a default WriteToolAdviceHelper). TryAdd-only, so the gated WriteToolAdviceHelper registered right after
         // (plain AddSingleton, last wins) overrides the default. See Tools.Basic's ToolServiceCollectionExtensionsBasic.

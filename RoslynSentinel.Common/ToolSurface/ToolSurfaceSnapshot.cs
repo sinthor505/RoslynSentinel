@@ -31,8 +31,13 @@ public sealed record ToolSurfaceTool(string Name, string ClassName, ToolSurfaceO
 /// <param name="Tools">Exposed tool rows.</param>
 /// <param name="EnabledToolSets">Toolsets enabled when the snapshot was built.</param>
 /// <param name="SchemaPatches">Schema patches applied to emitted tool schemas.</param>
+/// <param name="Parameters">Parameter-visibility rules this surface was built with, or null when not recorded.</param>
+/// <param name="HiddenParameterGroups">Hidden parameters grouped by the winning rule.</param>
+/// <param name="UnmatchedHideRules">Hide rules that hid nothing.</param>
 public sealed record ToolSurfaceSnapshot(long Version, DateTime BuiltUtc, string Trigger, string Fingerprint,
-    IReadOnlyList<ToolSurfaceTool> Tools, IReadOnlyList<string> EnabledToolSets, IReadOnlyList<string> SchemaPatches)
+    IReadOnlyList<ToolSurfaceTool> Tools, IReadOnlyList<string> EnabledToolSets, IReadOnlyList<string> SchemaPatches,
+    ParameterSurface? Parameters = null, IReadOnlyList<HiddenParameterGroup>? HiddenParameterGroups = null,
+    IReadOnlyList<ParameterVisibilityRule>? UnmatchedHideRules = null)
 {
     /// <summary>Snapshot used before the first build.</summary>
     public static ToolSurfaceSnapshot Empty { get; } = new(0, DateTime.MinValue, "none", "", [], [], []);

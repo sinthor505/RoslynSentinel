@@ -41,12 +41,16 @@ public sealed class ToolSurfaceController
     /// <summary>Creates the controller from the server options and optional schema patches.</summary>
     /// <param name="serverOptions">Startup MCP server options that list the registered tools.</param>
     /// <param name="patches">Schema patches registered with the host; null or empty means the default pipeline.</param>
+    /// <param name="parameters">Parameter-visibility rules; null means the startup rules from <see cref="ParameterSurface.FromStartup"/>.</param>
     // Changed in place rather than migration-first: with an old and a new constructor side by side,
     // new ToolSurfaceController(options) is CS0121 (ambiguous), and MS.DI would pick the longer one and form a
-    // cycle controller -> ToolsetService -> controller.
-    public ToolSurfaceController(IOptions<McpServerOptions> serverOptions, IEnumerable<IToolSchemaPatch>? patches = null)
+    // cycle controller -> ToolsetService -> controller. The new parameter is optional and trailing, so the single
+    // constructor rule still holds and existing call sites compile unchanged.
+    public ToolSurfaceController(IOptions<McpServerOptions> serverOptions, IEnumerable<IToolSchemaPatch>? patches = null,
+        ParameterSurface? parameters = null)
     {
         _serverOptions = serverOptions;
+        Parameters = parameters ?? ParameterSurface.FromStartup();
 
         // Mirrors the fallback in McpToolSchemaPatcher.CreateSentinelTool (an empty registration falls back to the
         // defaults), so the snapshot names the pipeline that built the schemas.
@@ -56,6 +60,9 @@ public sealed class ToolSurfaceController
             ? registered
             : DefaultToolSchemaPatches.All.Select(p => p.Name).ToList();
     }
+
+    /// <summary>The parameter-visibility rules this controller applies when it builds a snapshot.</summary>
+    public ParameterSurface Parameters { get; }
 
     /// <summary>
     /// The most recently built snapshot. While no refresh has yet found a tool collection (a host that never
@@ -281,6 +288,11 @@ public sealed class ToolSurfaceController
 
         tools.Sort((a, b) => string.CompareOrdinal(a.Row.Name, b.Row.Name));
 
+        // Computed outside the lock: the rules are pure over the sorted rows.
+        var rows = tools.Select(t => t.Row).ToList();
+        var hiddenGroups = Parameters.AttributeHidden(rows);
+        var unmatched = Parameters.UnmatchedHideRules(rows);
+
         var enabledToolSets = layer.Keys.OrderBy(s => s).Select(s => s.ToString()).ToList();
         var fingerprint = ComputeFingerprint(tools);
 
@@ -300,9 +312,12 @@ public sealed class ToolSurfaceController
                 DateTime.UtcNow,
                 trigger,
                 fingerprint,
-                tools.Select(t => t.Row).ToList(),
+                rows,
                 enabledToolSets,
-                _schemaPatchNames);
+                _schemaPatchNames,
+                Parameters,
+                hiddenGroups,
+                unmatched);
             _current = next;
             return next;
         }
