@@ -37,7 +37,7 @@ Options 1 and 3 are complementary: 1 measures the reaction inside a task, 3 meas
 
 ## Related
 
-- plans/plan_modeleval_first_slice_scenario_rework.md (Decision 11, Decision 13 (s), R20, Steps 60-63)
+- plans/closed/plan_modeleval_first_slice_scenario_rework.md (Decision 11, Decision 13 (s), R20, Steps 60-63)
 - findings/finding_modeleval_first_slice_rework_cold_read.md (owner question 4)
 - plans/closed/plan_error_variant_replay.md, evals/eval_error_variant_replay_validation.md
 - plans/closed/plan_not_found_error_orientation.md

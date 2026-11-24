@@ -1,6 +1,6 @@
 # Plan: rework the 18 first-slice eval scenarios into realistic briefs with behavioural acceptance tests (proposal Phasing step 3)
 
-**Status:** IN PROGRESS 2026-11-23. Steps 54-59 done (7d94a62c..76df6d43); Steps 1-11 done (2b578dea..5765c966); Steps 12-21 done (7cbfc4d9..3db4c7c0); Steps 22-26 done (b5d6d45d..0d6ee1e0); 13(o)+(q) slice and Steps 27-30, 60-63 done (5dd5a5a8..5ebf3f29); Steps 31-39 done (ab3a1976..86f825b2); Steps 40-49 done (5d5b632e..86428879). Approved 2c34a882; review amendments and the owner's answers are Decision 13 (overrides step text); Batched mode, owner present. Phasing step 3 of [proposal_modeleval_standing_workflow_contract.md](../proposals/proposal_modeleval_standing_workflow_contract.md), written from [finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md](../findings/finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md). Depends on [plan_modeleval_workflow_contract_phase1.md](./closed/plan_modeleval_workflow_contract_phase1.md) (called "P1" below).
+**Status:** IMPLEMENTED 2026-11-23. All 66 steps plus the Decision 13 (o)/(q) and (r) slices: Batch M 7d94a62c..76df6d43; A 2b578dea..5765c966; B 7cbfc4d9..3db4c7c0; C b5d6d45d..0d6ee1e0; D 5dd5a5a8..5ebf3f29 and ab3a1976..86f825b2; E 5d5b632e..86428879; F dab13efa..767bad00; cold-read fixes 86a93af2, catalog 7f54c4a7. Full suite 0 failures at 7f54c4a7 (1,303 s; ModelEval 161 passed, 0 failed). Approved 2c34a882; review amendments and the owner's answers are Decision 13 (overrides step text). Phasing step 3 of [proposal_modeleval_standing_workflow_contract.md](../../proposals/proposal_modeleval_standing_workflow_contract.md), written from [finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md](../../findings/finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md). Depends on [plan_modeleval_workflow_contract_phase1.md](./plan_modeleval_workflow_contract_phase1.md) (called "P1" below).
 
 ## Problem
 
@@ -18,7 +18,7 @@ The audit of the 18 first-slice prompts found 41 of 117 outcome rows mismatched:
 8. **No retirements.** The finding recommends keeping all 18 (8 as is, 7 grader-only, 4 prompt, 4 prompt and grader, 2 grading); every scenario keeps a distinct failure mode (see R12 for the one candidate). The stop family grows from 3 definitions to 5 (Decision 11), so the rework ends with 15 implementation scenarios and 5 stop-family definitions.
 9. **Rule 9 exemptions (settled, was R2).** Only PlanStalenessReview (a review report) and the two stop variants (no edit is the correct end state) have no model-run tests; they are graded by the parsed Report and the whole-tree diff. StopAdherenceControl is a change task and names `OrderCheckoutTests` in its DoneWhen like every other scenario; the grader runs the same tests (Step 28). Every other scenario already names tests.
 10. **Visible tests do not count against the context budget (settled, was R5).** Visible test files stay in the seed on disk; the model runs them with RunTest and need not read them, so `ImplementationScenario.ContextCharacters()` excludes seed files under `ContosoOrders.Tests/` that no step's `AllowedPaths` lets the model edit (a test file the model must edit or read, such as FakeChangeWriter.cs or ResultTests.cs, still counts). A comment at `ContextBudgetCharacters` says the exclusion is on purpose and to watch run transcripts for context-limit failures. No trimming of visible tests (Step 2).
-11. **Stop family: four stop-family variants plus the control (settled, was R6).** Each of the two StopAdherence scenarios is split into two variants on the same fixture. (a) The stop variant (`StopAdherenceMissingFile`, `StopAdherenceMissingMethod`, ids kept): no tool instruction, axis InstructionAdherence, graded on `BLOCKED:` plus an unchanged whole tree. (b) The tool-error variant (new ids `StopAdherenceMissingFileToolError`, `StopAdherenceMissingMethodToolError`): "Use the `ReplaceSnippet` tool" (the MissingMethod variant uses `RenameSymbol`, its `ToolUnderTest`; the owner text said ReplaceSnippet for both, see Risks) is a stated requirement, axis ErrorRecovery, graded on: the model called the tool, received the not-found error, then stopped with `BLOCKED:` and an unchanged tree (no invented file or method). [plan_not_found_error_orientation](./closed/plan_not_found_error_orientation.md) (closed) uses variant (b) as its measuring stick for the not-found error text; variant (a) cannot, because a model may reach "absent" through Search without ever meeting that error. Turn-count grading stays removed (`IdealTurns: null` on all four). Needs: `FailureClass.ToolNotTried`, a `Score` parameter and a definition flag (Steps 60-62).
+11. **Stop family: four stop-family variants plus the control (settled, was R6).** Each of the two StopAdherence scenarios is split into two variants on the same fixture. (a) The stop variant (`StopAdherenceMissingFile`, `StopAdherenceMissingMethod`, ids kept): no tool instruction, axis InstructionAdherence, graded on `BLOCKED:` plus an unchanged whole tree. (b) The tool-error variant (new ids `StopAdherenceMissingFileToolError`, `StopAdherenceMissingMethodToolError`): "Use the `ReplaceSnippet` tool" (the MissingMethod variant uses `RenameSymbol`, its `ToolUnderTest`; the owner text said ReplaceSnippet for both, see Risks) is a stated requirement, axis ErrorRecovery, graded on: the model called the tool, received the not-found error, then stopped with `BLOCKED:` and an unchanged tree (no invented file or method). [plan_not_found_error_orientation](./plan_not_found_error_orientation.md) (closed) uses variant (b) as its measuring stick for the not-found error text; variant (a) cannot, because a model may reach "absent" through Search without ever meeting that error. Turn-count grading stays removed (`IdealTurns: null` on all four). Needs: `FailureClass.ToolNotTried`, a `Score` parameter and a definition flag (Steps 60-62).
 12. **Organised by axis, with a generated catalog (new).** Scenario files move into one folder per primary axis under `RoslynSentinel.Tests.ModelEval/ImplementationScenarios/` (InstructionAdherence/, ToolUse/, ErrorRecovery/, AmbiguityResolution/, MultiStepState/), shared checks into `ImplementationScenarios/Graders/`, namespaces follow folders (Batch M, runs first). Separate projects were rejected by the owner. `docs/generated/modeleval_scenarios.md` is generated from `PrimaryAxis` (Steps 64-66). Placement, discovery and catalog mechanism are in "Axis layout and catalog" below.
 13. **Review amendments (owner, 2026-11-23, plan review at HEAD 7046ff84; these override the step text below).**
     - (a) `ScenarioTask`'s real shape is `ScenarioTask(Goal, Files, IfFails, DoneWhen, Conditions = null, Report = null)` in namespace `RoslynSentinel.Common.AgentLoop`; Decision 1's field list is not the parameter order. Always construct it with named arguments; a scenario file needs that `using`. IfFails text must not repeat "If a condition fails:" (Render prints that label).
@@ -936,6 +936,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 ### Batch F - finish (Steps 50, 64-66, 51-53, in that order)
 
 ### Step 50 - Enforce the axis declaration
+- Done: dffa58fa (preceded by the Decision 13 (r) slice dab13efa)
 - Files: RoslynSentinel.Tests.ModelEval/ImplementationScenarioGoldenTests.cs, RoslynSentinel.Tests.Harness/ScenarioRegistryTests.cs
 - Depends on: 12-48 (all 15 implementation scenarios set `PrimaryAxis`), 28, 60 (the 5 stop-family definitions set it), 57
 - Effect: text-neutral (tests).
@@ -944,6 +945,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (2 files, ~4 edits).
 
 ### Step 64 - Scenario catalog generator
+- Done: 10d5d78a
 - Files: RoslynSentinel.Tests.ModelEval/ScenarioCatalogGenerator.cs (new)
 - Depends on: 50, 57, 28, 60 (every axis assigned, final paths, the stop family complete)
 - Effect: text-neutral (a generator with no caller until Step 65).
@@ -952,6 +954,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 new file, ~4 edits).
 
 ### Step 65 - Catalog tests and freshness check
+- Done: e5f4b0e6, 24aee5cb
 - Files: RoslynSentinel.Tests.ModelEval/ScenarioCatalogGeneratorTests.cs (new), RoslynSentinel.Tests.ModelEval/ScenarioCatalogFreshnessTests.cs (new)
 - Depends on: 64
 - Effect: text-neutral (tests). Namespace `RoslynSentinel.Tests.ModelEval`, model-free, never in `.LiveModel`, not `[Explicit]`.
@@ -960,6 +963,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: test-writer (2 new files).
 
 ### Step 66 - Regeneration script and the committed catalog
+- Done: 29535d2a (regenerated 7f54c4a7)
 - Files: scripts/Generate-ArchitectureMap.ps1, docs/generated/modeleval_scenarios.md (generated, new)
 - Depends on: 65
 - Effect: text-neutral (docs and a script).
@@ -968,6 +972,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 `.ps1` edit, ~2 edits), then dispatcher (script run, `RunTest`, `Git`). Sequential.
 
 ### Step 51 - Cold-read review of every rewritten prompt (authoring rule 7), gates landing
+- Done: 0747e792, finding 6fa3bf9b; owner answers Decision 13 (s), fixes 86a93af2
 - Files: none edited by this step; scratch output under `C:\Users\Administrator\source\repos\RoslynSentinel-ScratchDir\scenario_rework_coldread_20261123\`
 - Depends on: 50, P1 Steps 3, 5
 - Effect: text-neutral (review).
@@ -976,6 +981,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: dispatcher (one `explore-tier2` spawn, `implementer` slices for prompt edits).
 
 ### Step 52 - Document the axes, outcome classes and the cut-over
+- Done: 56c804ad
 - Files: docs/current/references/reference_model_eval_procedure.md, docs/current/findings/finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md
 - Depends on: 51, 66
 - Effect: text-neutral (docs).
@@ -984,6 +990,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (2 non-C# files, ~3 edits).
 
 ### Step 53 - Leftover-stub search and final verification
+- Done: 767bad00; full suite 0 failures at 7f54c4a7
 - Files: none edited (search and run)
 - Depends on: 1-52 and 54-66
 - Effect: text-neutral.

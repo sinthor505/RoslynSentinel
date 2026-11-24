@@ -1,6 +1,6 @@
 # One standing workflow contract for model evals, and a fixed shape for scenario prompts
 
-**Status:** PROPOSED 2026-11-23; design decisions settled 2026-11-23 (see "Decisions"). Phasing step 1 built 2026-11-23 ([plan](../plans/closed/plan_modeleval_workflow_contract_phase1.md)); steps 2-7 open (rework plan plan_modeleval_first_slice_scenario_rework.md).
+**Status:** PROPOSED 2026-11-23; design decisions settled 2026-11-23 (see "Decisions"). Phasing step 1 built 2026-11-23 ([plan](../plans/closed/plan_modeleval_workflow_contract_phase1.md)); step 2 done (audit finding); steps 3-4 built 2026-11-23 ([rework plan](../plans/closed/plan_modeleval_first_slice_scenario_rework.md)); steps 5-7 open (next: the A/B).
 
 ## Motivation
 
