@@ -79,6 +79,9 @@ Status values: `TODO` / `WIP` / `DONE (hash)` / `PARTIAL (what is left)` / `DEFE
   - run every child in the foreground (`run_in_background: false`); load `dispatch-implementer`;
     re-verify scoping anchors before briefing; append each dispatch to
     `.claude/journal/implementer-ledger.md`
+  - no `SendMessage` resumes for new work (a resumed child runs in the background and reports to the
+    main session); one `implementer-senior` per multi-step unit in one file, one commit per unit
+    (`dispatch-implementer`, "Briefing an orchestrator")
   - run two slices at once when their files are disjoint (preferably different projects): two
     `Agent` calls in one message, both foreground (`dispatch-implementer`, "Concurrent C# dispatches")
   - per slice: implementers write the tests but only `Build`; the orchestrator commits, then starts a

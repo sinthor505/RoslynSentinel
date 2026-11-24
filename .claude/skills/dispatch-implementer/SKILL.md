@@ -147,7 +147,16 @@ slices comes back as `MULTI-AGENT:` plus the writer named in the error, and you 
 
 When the dispatcher is an `orchestrator`, brief it to run its own subagents in the foreground. Nested
 background reports arrive at the main session, not at the orchestrator that spawned them, and can stall
-it; if that happens, resume the orchestrator with `SendMessage`.
+it; if that happens, resume the orchestrator with `SendMessage` and forward the child's report.
+
+Put two more lines in the brief:
+- **No `SendMessage` resumes for new work.** Resuming a finished child runs it in the background, so its
+  report reaches the main session, not the orchestrator. For the next slice or step it dispatches a fresh
+  foreground `Agent` call with the prior context in the brief; a resume is only for a child that must keep
+  its context (the advice loop), and the orchestrator then waits for the forwarded reply.
+- **One senior per unit.** When several steps rework one unit in the same file (brief, then grader, then
+  variants of one eval scenario), one `implementer-senior` does the whole unit in one foreground dispatch,
+  with one Build and one commit that names every step.
 
 ## Replies and what to do with them
 
