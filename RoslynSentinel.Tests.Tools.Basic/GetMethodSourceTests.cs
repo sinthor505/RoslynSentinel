@@ -141,6 +141,45 @@ public class GetMethodSourceTests
     }
 
     [Test]
+    public async Task GetMethodSource_UniqueLocalFunction_ReturnsItsSourceWithFindingAsync()
+    {
+        var localDocPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "Local.cs");
+        var solution = TestSolutionBuilder.CreateSolutionWithProject(
+            "TestProj",
+            Path.Combine(Path.GetDirectoryName(_documentPath)!, "TestProj.csproj"),
+            new[] { ("Local.cs", "public class Holder\n{\n    public int Outer()\n    {\n        int Inner(int y)\n        {\n            return y * 2;\n        }\n        return Inner(3);\n    }\n}\n", localDocPath) });
+        _workspaceManager.SetTestSolution(solution);
+
+        var result = await _tools.GetMethodSourceTool(reason: "test message", localDocPath, "Inner");
+
+        Assert.That(result.IsError, Is.False);
+        var data = (MethodSourceResult)result.SuccessData!;
+        Assert.That(data.Source, Does.Contain("return y * 2;"));
+        Assert.That(result.Findings!.Any(f => f.Source == "LocalFunctionResolved" && f.Message.Contains("Outer")), Is.True);
+    }
+
+    [Test]
+    public async Task GetMethodSource_LocalFunctionInTwoMethods_ErrorListsBothContainersAsync()
+    {
+        var localDocPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "Twice.cs");
+        var solution = TestSolutionBuilder.CreateSolutionWithProject(
+            "TestProj",
+            Path.Combine(Path.GetDirectoryName(_documentPath)!, "TestProj.csproj"),
+            new[] { ("Twice.cs", "public class Two\n{\n    public int First()\n    {\n        int Helper(int a) { return a; }\n        return Helper(1);\n    }\n\n    public int Second()\n    {\n        int Helper(int b) { return b + 1; }\n        return Helper(2);\n    }\n}\n", localDocPath) });
+        _workspaceManager.SetTestSolution(solution);
+
+        var result = await _tools.GetMethodSourceTool(reason: "test message", localDocPath, "Helper");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("MethodNotFound"));
+        var message = result.ErrorData!.Message;
+        Assert.That(message, Does.Contain("First"));
+        Assert.That(message, Does.Contain("Second"));
+        Assert.That(message, Does.Contain("GetMethodSource("));
+        Assert.That(message, Does.Not.Contain("operation: view"));
+    }
+
+    [Test]
     public async Task GetMethodSource_QualifiedName_MessageAsksForBareNameAsync()
     {
         var result = await _tools.GetMethodSourceTool(reason: "test message", _documentPath, "Foo.Bar");
