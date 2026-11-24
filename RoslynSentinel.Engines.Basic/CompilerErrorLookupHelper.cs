@@ -195,13 +195,15 @@ public static class CompilerErrorLookupHelper
     // TODO pass editedFilePaths to DescribeAsync at the remaining callers
     // isToolActive: whether a tool may be named to the caller (ActiveToolSurface.IsCallable); null names no tool, so existing callers keep today's text.
     // renamedAwayNames: names the edit renamed away; a CS0103 for one of them is explained by the edit-impact attribution, so DescribeCs0103Async drops the typo/closest-name text.
+    // isBatchEdit: the report comes from a batchEdits call; a CS1501/CS7036 then gets the callee-declaration hint (DescribeCallArityAsync), which assumes no batch item edited that declaration.
     public static async Task<string> DescribeAsync(
         DiagnosticReport report,
         SymbolNavigationEngine symbolNavigationEngine,
         CancellationToken cancellationToken = default,
         IReadOnlyCollection<string>? editedFilePaths = null,
         Func<string, bool>? isToolActive = null,
-        IReadOnlyCollection<string>? renamedAwayNames = null)
+        IReadOnlyCollection<string>? renamedAwayNames = null,
+        bool isBatchEdit = false)
     {
         // Identical diagnostics (same Id AND same Message text) collapse into one line: a single
         // root cause repeated at N sites (e.g. 86 identical CS7036s from one bad MoveMember
@@ -229,7 +231,7 @@ public static class CompilerErrorLookupHelper
                 return $"  This follows from '{typeName}' being declared twice (see its CS0101); removing the extra '{typeName}' declaration fixes this too.";
             }
 
-            return await DescribeHintAsync(diagnostic, symbolNavigationEngine, cancellationToken, editedFilePaths, isToolActive, renamedAwayNames);
+            return await DescribeHintAsync(diagnostic, symbolNavigationEngine, cancellationToken, editedFilePaths, isToolActive, renamedAwayNames, isBatchEdit);
         }
         foreach (var group in report.Diagnostics.GroupBy(d => (d.Id, d.Message)))
         {
@@ -273,7 +275,8 @@ public static class CompilerErrorLookupHelper
         CancellationToken cancellationToken,
         IReadOnlyCollection<string>? editedFilePaths,
         Func<string, bool>? isToolActive,
-        IReadOnlyCollection<string>? renamedAwayNames = null)
+        IReadOnlyCollection<string>? renamedAwayNames = null,
+        bool isBatchEdit = false)
     {
         if (diagnostic.Id == "CS0103")
         {
@@ -320,7 +323,83 @@ public static class CompilerErrorLookupHelper
             return await DescribeCs0144Async(diagnostic, symbolNavigationEngine, cancellationToken);
         }
 
+        if (isBatchEdit && diagnostic.Id is "CS1501" or "CS7036")
+        {
+            return await DescribeCallArityAsync(diagnostic, symbolNavigationEngine, cancellationToken);
+        }
+
         return null;
+    }
+
+    private static readonly Regex Cs7036CalleeRegex = new(@"of '([^']+)'", RegexOptions.Compiled);
+    private static readonly Regex Cs1501CalleeRegex = new(@"No overload for method '([^']+)' takes", RegexOptions.Compiled);
+    private const int MaxCalleeCandidates = 3;
+
+    /// <summary>
+    /// CS1501 (no overload takes N arguments) or CS7036 (no argument for a required parameter) in a batchEdits call: the
+    /// batch changed call sites but, by assumption, no item edits the callee's declaration, so the workspace declaration is the
+    /// current one. States that signature and the two ways forward. A callee that cannot be named or located gets a factual line.
+    /// </summary>
+    private static async Task<string> DescribeCallArityAsync(
+        DiagnosticInfo diagnostic,
+        SymbolNavigationEngine symbolNavigationEngine,
+        CancellationToken cancellationToken)
+    {
+        const string Options = "  Options: add a batchEdits item that edits the declaration, or change the call sites to match the current signature.";
+
+        // CS7036 names the overload as 'Ns.Type.Method(int, string)' (a constructor as 'Type.Type(int)'); CS1501 names the method only.
+        string? displayedSignature = null;
+        string? methodName = null;
+        string? typeName = null;
+        if (diagnostic.Id == "CS7036" && Cs7036CalleeRegex.Match(diagnostic.Message) is { Success: true } cs7036)
+        {
+            displayedSignature = cs7036.Groups[1].Value;
+            var qualified = displayedSignature.Split('(')[0].Split('.');
+            methodName = qualified[^1];
+            typeName = qualified.Length > 1 ? qualified[^2] : null;
+        }
+        else if (diagnostic.Id == "CS1501" && Cs1501CalleeRegex.Match(diagnostic.Message) is { Success: true } cs1501)
+        {
+            methodName = cs1501.Groups[1].Value.Split('.').Last();
+        }
+
+        if (string.IsNullOrEmpty(methodName))
+        {
+            return "  The callee could not be read from the diagnostic text, so its current signature is not shown.";
+        }
+
+        var isConstructor = typeName != null && typeName == methodName;
+        List<SymbolLocation> candidates;
+        try
+        {
+            // A constructor is located through its type: LocateSymbolAsync treats '.ctor' as a dotted name.
+            candidates = await symbolNavigationEngine.LocateSymbolAsync(
+                methodName, isConstructor ? "type" : "method", containingType: isConstructor ? null : typeName, includeTests: true, cancellationToken: cancellationToken);
+            if (candidates.Count == 0 && !isConstructor && typeName != null)
+            {
+                candidates = await symbolNavigationEngine.LocateSymbolAsync(
+                    methodName, "method", includeTests: true, cancellationToken: cancellationToken);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            candidates = [];
+        }
+
+        if (displayedSignature != null)
+        {
+            var where = candidates.Count == 1 ? $" ({candidates[0].FilePath}:{candidates[0].Line})" : string.Empty;
+            return $"  The callee is currently declared as '{displayedSignature}'{where}; no batchEdits item edits that declaration.\n{Options}";
+        }
+
+        if (candidates.Count == 0)
+        {
+            return $"  The declaration of method '{methodName}' could not be located, so its current signature is not shown.";
+        }
+
+        var shown = string.Join("; ", candidates.Take(MaxCalleeCandidates).Select(c => $"{c.ContainingType}.{c.Signature} ({c.FilePath}:{c.Line})"));
+        var more = candidates.Count > MaxCalleeCandidates ? $" (+{candidates.Count - MaxCalleeCandidates} more)" : string.Empty;
+        return $"  The callee '{methodName}' is currently declared as: {shown}{more}; no batchEdits item edits that declaration.\n{Options}";
     }
 
     /// <summary>

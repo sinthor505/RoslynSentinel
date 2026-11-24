@@ -1079,4 +1079,87 @@ public class CompilerErrorLookupHelperTests
         await Assert.CatchAsync<OperationCanceledException>(
             async () => await CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, cts.Token));
     }
+
+    private const string GreeterDeclaration = """
+        namespace TestProj;
+
+        public class Greeter
+        {
+            public string Greet(string name) => name;
+        }
+        """;
+
+    /// <summary>
+    /// A batchEdits rejection with CS7036 (call sites changed, callee declaration not edited) names the callee's current
+    /// signature and says no batch item edits its declaration.
+    /// </summary>
+    [Test]
+    public async Task DescribeAsync_BatchEditCs7036_NamesCurrentSignatureAndMissingDeclarationEdit()
+    {
+        var report = await CompileAndGetErrorsAsync(
+            ("Greeter.cs", GreeterDeclaration),
+            ("Caller.cs", """
+            namespace TestProj;
+
+            public class Caller
+            {
+                public string Run(Greeter g) => g.Greet();
+            }
+            """));
+        Assert.That(report.Diagnostics.Select(d => d.Id), Does.Contain("CS7036"));
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, isBatchEdit: true);
+
+        Assert.That(description, Does.Contain("Greeter.Greet(string)"), "the callee's current signature is stated");
+        Assert.That(description, Does.Contain("no batchEdits item edits that declaration"));
+        Assert.That(description, Does.Contain("Greeter.cs"), "the declaring file is named");
+    }
+
+    /// <summary>
+    /// Same as the CS7036 case for CS1501 (no overload takes N arguments), where the compiler message names only the method.
+    /// </summary>
+    [Test]
+    public async Task DescribeAsync_BatchEditCs1501_NamesCurrentSignatureAndMissingDeclarationEdit()
+    {
+        var report = await CompileAndGetErrorsAsync(
+            ("Greeter.cs", GreeterDeclaration),
+            ("Caller.cs", """
+            namespace TestProj;
+
+            public class Caller
+            {
+                public string Run(Greeter g) => g.Greet("a", 2);
+            }
+            """));
+        Assert.That(report.Diagnostics.Select(d => d.Id), Does.Contain("CS1501"));
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, isBatchEdit: true);
+
+        Assert.That(description, Does.Contain("Greeter.Greet(string)"), "the callee's current signature is stated");
+        Assert.That(description, Does.Contain("no batchEdits item edits that declaration"));
+    }
+
+    /// <summary>
+    /// Without isBatchEdit (every existing caller) a CS7036/CS1501 keeps the plain diagnostic with no hint.
+    /// </summary>
+    [Test]
+    public async Task DescribeAsync_NotBatchEditCs7036_HasNoCalleeHint()
+    {
+        var report = await CompileAndGetErrorsAsync(
+            ("Greeter.cs", GreeterDeclaration),
+            ("Caller.cs", """
+            namespace TestProj;
+
+            public class Caller
+            {
+                public string Run(Greeter g) => g.Greet();
+            }
+            """));
+        Assert.That(report.Diagnostics.Select(d => d.Id), Does.Contain("CS7036"));
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine);
+
+        Assert.That(description, Does.Not.Contain("batchEdits"));
+        Assert.That(description, Does.StartWith("CS7036 at "));
+    }
 }
