@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Advanced;
+using RoslynSentinel.Tests.Support;
 
 namespace RoslynSentinel.Tests.Battery.Advanced;
 
@@ -141,8 +142,7 @@ public class Logger
         // The engine throws ToolTargetIneligibleException (ErrorCode TargetIneligible) when there is no nested if to flatten.
         var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
             await TestEnginesAdvanced.LogicSimplificationEngine(_mgr).ReduceBlockDepthAsync("Logger.cs", "Log"));
-        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
-        Assert.That(ex.Message, Does.Contain("cannot have its block depth reduced"));
+        ErrorAssert.Is(ex, ToolErrorCode.TargetIneligible, "block depth reduced");
     }
 }
 

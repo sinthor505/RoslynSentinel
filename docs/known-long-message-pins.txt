@@ -9,7 +9,6 @@ AddMemberManyCallBindingTests.cs | 4
 AddMembersAsyncTests.cs | 3
 AdminToolsLedgerTests.cs | 1
 AdminToolsTests.cs | 1
-BatteryFifteenTests.cs | 1
 BatteryFourTests.cs | 1
 BatteryTwentyTests.cs | 2
 CallBindingCheckTests.cs | 1
@@ -55,7 +54,6 @@ MoveMemberCallBindingTests.cs | 2
 MoveMemberCompanionRefusalTests.cs | 2
 MoveMemberFileMissTests.cs | 1
 MoveMemberOverloadCallSiteIsolationTests.cs | 1
-MoveMemberOverloadFallbackTests.cs | 7
 NotFoundEvidenceTests.cs | 1
 NotRunWireCodeTests.cs | 2
 ReadFileRecordsObservedTests.cs | 1
@@ -67,7 +65,6 @@ ReplaceSnippetCrossFileRejectionTests.cs | 2
 ReplaceSnippetErrorCodeTests.cs | 3
 ReplaceSnippetRenameLiftTests.cs | 1
 SearchModeTests.cs | 1
-SearchSolutionTextIncludeTestsTests.cs | 5
 SemanticReplaceEngineTests.cs | 2
 SequenceLargeResultPagingTests.cs | 3
 SnippetLookupTests.cs | 1

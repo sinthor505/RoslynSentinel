@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tests.Fakes;
+using RoslynSentinel.Tests.Support;
 
 namespace RoslynSentinel.Tests.Battery.Basic;
 
@@ -198,6 +199,8 @@ public class MoveMemberOverloadFallbackTests
     private static int LineOf(string text, string fragment) => text.Split('\n').ToList().FindIndex(l => l.Contains(fragment)) + 1;
 
     [Test]
+    // The hint text is the agent-facing signal under test; the other refusal tests assert code and a short fragment.
+    [Category("MessageTextSubject")]
     public async Task InstanceMove_FallbackCallWithNoReceiver_RefusesWholeMoveAndWritesNothing()
     {
         var (workspace, engine, callerText) = WideningFixture("", "        return a.Save(1);");
@@ -248,7 +251,7 @@ public class MoveMemberOverloadFallbackTests
 
         var refusal = await Assert.ThrowsAsync<ToolInvalidArgumentException>(() => MoveAsync(workspace, engine, ["Save(int)"]));
 
-        Assert.That(refusal!.Message, Does.Contain("would bind to 'Example.Source.Save(long)'"));
+        ErrorAssert.Is(refusal, ToolErrorCode.InvalidArgument, "Example.Source.Save(long)");
         AssertNothingWritten(workspace, callerText);
     }
 
@@ -329,7 +332,7 @@ public class MoveMemberOverloadFallbackTests
         Assert.Multiple(() =>
         {
             Assert.That(row.Status, Is.EqualTo(CallSiteStatus.NoCandidateIntroducible), "The dry-run row is unresolved, as the move treats it.");
-            Assert.That(row.BlockReason, Does.Contain("silently bind to 'Example.Source.Save(long)'"), "The dry run says why.");
+            Assert.That(row.BlockReason, Does.Contain("'Example.Source.Save(long)'"), "The dry run says why.");
             Assert.That(silentFallbacks.Values, Is.EqualTo(new[] { "Example.Source.Save(long)" }));
             Assert.That(refusal!.Message, Does.Contain("Example.Source.Save(long)"));
         });
@@ -442,7 +445,7 @@ public class MoveMemberOverloadFallbackTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(refusal!.Message, Does.Contain($"Source.cs:{LineOf(sourceText, "Save(1)")}"));
+            ErrorAssert.Is(refusal, ToolErrorCode.InvalidArgument, $"Source.cs:{LineOf(sourceText, "Save(1)")}");
             Assert.That(refusal.Message, Does.Contain("Example.Source.Save(long)"));
             Assert.That(workspace.ReadText("Source.cs"), Is.EqualTo(sourceText), "A refused move must not write.");
             Assert.That(workspace.ReadText("Target.cs"), Is.EqualTo(TargetText()), "A refused move must not write.");
@@ -505,7 +508,7 @@ public class MoveMemberOverloadFallbackTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(refusal!.Message, Does.Contain($"Caller.cs:{LineOf(callerText, "a.Save(1)")}"), "Names the file and line.");
+            ErrorAssert.Is(refusal, ToolErrorCode.InvalidArgument, $"Caller.cs:{LineOf(callerText, "a.Save(1)")}");
             Assert.That(refusal.Message, Does.Contain("Example.Source.Save(object)"), "Names the method the call would silently bind to.");
             Assert.That(refusal.Message, Does.Contain("every same-named overload"), "Names the next step.");
             Assert.That(workspace.ReadText("Source.cs"), Is.EqualTo(sourceText), "A refused move must not write.");
@@ -523,7 +526,7 @@ public class MoveMemberOverloadFallbackTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(refusal!.Message, Does.Contain($"Source.cs:{LineOf(sourceText, "Save(1)")}"));
+            ErrorAssert.Is(refusal, ToolErrorCode.InvalidArgument, $"Source.cs:{LineOf(sourceText, "Save(1)")}");
             Assert.That(workspace.ReadText("Source.cs"), Is.EqualTo(sourceText), "A refused move must not write.");
         });
     }
@@ -668,7 +671,7 @@ public class MoveMemberOverloadFallbackTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(refusal!.Message, Does.Contain($"Caller.cs:{LineOf(callerText, "a.Save(1)")}"));
+            ErrorAssert.Is(refusal, ToolErrorCode.InvalidArgument, $"Caller.cs:{LineOf(callerText, "a.Save(1)")}");
             Assert.That(refusal.Message, Does.Contain("Example.Source.Save(long)"));
             Assert.That(workspace.ReadText("Source.cs"), Is.EqualTo(sourceText), "A refused move must not write.");
             Assert.That(workspace.ReadText("Caller.cs"), Is.EqualTo(callerText), "A refused move must not write.");

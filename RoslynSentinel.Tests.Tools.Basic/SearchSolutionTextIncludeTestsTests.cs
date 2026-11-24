@@ -17,6 +17,8 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
 [Category("WorkspaceTools")]
+// Every pin is on a success StatusMessage (the exclusion note is the signal under test); there is no error for ErrorAssert.
+[Category("MessageTextSubject")]
 public class SearchSolutionTextIncludeTestsTests
 {
     private const string TestSdkCsproj =
