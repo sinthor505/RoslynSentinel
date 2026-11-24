@@ -345,8 +345,8 @@ public static class RoslynSentinelServiceExtensionsBasic
         // ModeToToolClasses, so this resolution already sees all of them -> Advanced adds no
         // whole-file-write tools. See WriteToolAdviceHelper's remarks.
         // The exclusive claude-lean mode also restricts WHICH tools of its classes are registered.
-        // Registered here, before any WithSentinelTools call, because WithSentinelTools reads it from
-        // the service collection at registration time. Absent for every other mode.
+        // Registered here because ToolSurfaceStartupPopulation reads the ToolAllowList singleton from DI
+        // when it builds the startup tools. Present only in claude-lean or when hideTools is non-empty.
         // Per-tool hiding (--hide-tools) exists because WriteFile shares a class with DeleteFile, so the
         // per-class --exclude-tools cannot hide it alone. WriteToolAdviceHelper and ActiveToolSurface read
         // toolAllowList.ToolNames, so advice and status follow the filtered list automatically.
@@ -417,24 +417,20 @@ public static class RoslynSentinelServiceExtensionsBasic
         // ToolSurfaceStartupRequest singletons from DI, so it is registered once here.
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IPostConfigureOptions<McpServerOptions>, ToolSurfaceStartupPopulation>());
 
-        // Always registered, independent of activeToolClasses/--mode/--include-tools/
-        // --exclude-tools: the one tool meant to be reachable no matter what selection is in
-        // effect, since it exists for the case where the selection itself might be the problem.
-        // Deliberately not in ToolClassRegistry, so it's never counted or excludable.
-        services.AddSingleton<ServerStatusTools>();
-        mcpBuilder.WithSentinelTools<ServerStatusTools>();
+        // ServerStatusTools is always selected (ToolClassRegistry.AlwaysOnToolClasses), independent of
+        // activeToolClasses/--mode/--include-tools/--exclude-tools: the one tool meant to be reachable whatever
+        // the selection, since it exists for the case where the selection itself might be the problem.
+        // Deliberately not a registry class, so never counted or excludable; registered through the BasicToolClassTypes table.
 
         // claude-lean only: McpToolsetControlTool can add any on-demand tool at runtime, and a tool's class is
         // constructed by ActivatorUtilities from the container - so the DEPENDENCIES of those classes (the Impl
         // singletons registered by AddRoslynSentinelToolImplsBasic above) must exist even though their tools are not exposed at
-        // startup. The per-tool allow-list already makes WithSentinelTools register none of the non-Core
-        // tools, so widening the set here registers dependencies only. Rebinding (not mutating) keeps the
+        // startup. The per-tool allow-list already keeps the non-Core tools out of the startup surface
+        // (ToolSurfaceStartupPopulation applies it), so widening the set here registers dependencies only. Rebinding (not mutating) keeps the
         // ActiveToolSurface/WriteToolAdviceHelper sets above - what McpServerStatusTool and advice report - exact.
         if (activeModes.Contains(ToolClassRegistry.ClaudeLeanMode))
         {
             bool toolsetControlActive = activeToolClasses.Contains("ToolsetControlTools");
-            bool declarationActive = activeToolClasses.Contains("DeclarationTools");
-            bool parameterEditActive = activeToolClasses.Contains("ParameterEditTools");
             activeToolClasses = new HashSet<string>(activeToolClasses, StringComparer.OrdinalIgnoreCase);
             foreach (var onDemandClass in ToolClassRegistry.ClaudeLeanOnDemandToolClasses.Where(c => !resolvedExcludeTools.Contains(c)))
             {
@@ -463,43 +459,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                         Environment.GetEnvironmentVariable("CLAUDE_CODE_SESSION_ID"),
                         sp.GetService<ILoggerFactory>()?.CreateLogger<TabToolsetStateStore>()));
                 }
-                services.AddSingleton<ToolsetControlTools>();
-                mcpBuilder.WithSentinelTools<ToolsetControlTools>();
             }
-
-            // The merged DeclarationTool tool: on-demand only (the allow-list keeps it out of the startup surface; the
-            // `declarations` toolset adds it). Its Impl dependencies are registered by the Structural/Signature blocks below.
-            if (declarationActive)
-            {
-                services.AddSingleton<DeclarationTools>();
-                mcpBuilder.WithSentinelTools<DeclarationTools>();
-            }
-
-            // The merged ParameterEditTool tool: same on-demand arrangement as DeclarationTool; its Impl dependency
-            // (RefactoringSignatureImpl) is registered by the Signature block below.
-            if (parameterEditActive)
-            {
-                services.AddSingleton<ParameterEditTools>();
-                mcpBuilder.WithSentinelTools<ParameterEditTools>();
-            }
-        }
-
-        // SemanticFindReplaceTool: part of --mode=all (or --mode=SemanticFindReplace), or on demand in claude-lean (the `moveExtract` toolset;
-        // the lean on-demand class set above puts the class in activeToolClasses, the allow-list hides the tool).
-        // Dependencies (SemanticReplaceEngine, ValidationEngine, IWorkspaceManager) come from AddRoslynSentinelEnginesBasic.
-        if (activeToolClasses.Contains("SemanticFindReplaceTools"))
-        {
-            services.AddSingleton<SemanticFindReplaceTools>();
-            mcpBuilder.WithSentinelTools<SemanticFindReplaceTools>();
-        }
-
-        // NamedArgumentsTool: opt-in via --mode=NamedArgumentsTool, or on demand in claude-lean (the `moveExtract` toolset;
-        // the lean on-demand class set above puts the class in activeToolClasses, the allow-list hides the tool).
-        // Dependencies (NamedArgumentsEngine, ValidationEngine, IWorkspaceManager) come from AddRoslynSentinelEnginesBasic.
-        if (activeToolClasses.Contains("NamedArgumentsTools"))
-        {
-            services.AddSingleton<NamedArgumentsTools>();
-            mcpBuilder.WithSentinelTools<NamedArgumentsTools>();
         }
 
         if (activeToolClasses.Contains("RefactoringTools"))
