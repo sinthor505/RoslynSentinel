@@ -8,6 +8,24 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## LoadSolution restores unrestored projects automatically (punchlist #19) - resolved (2026-11-24)
+
+LoadSolution restores unrestored projects automatically (2026-11-23) - any LoadSolution (tool path, `WorkspaceProjectManagementImpl.cs:~800`) that finds unrestored projects runs `SolutionRestore.RestoreAsync` in-server before loading and reports the result as a fact; `CreateProject` restores the project it creates; test hosts default to a shared no-op restore seam (ctor `restoreSolution`, `:41,47`; real-restore tests such as LoadSolutionForceReloadRestoreIntegrationTests opt in) because every TestSolutionFixture copy lacks obj/; the unrestored-project hint (`BuildUnrestoredHint`, `:330-341`) remains only for a failed restore and names `LoadSolution(forceReload: true)`, never a shell command (todo review 2026-11-23; restore did not cause the test load timeouts, 24b54b47); acceptance: a load of a copy without obj/ restores and loads without the hint, a fixture host spawns no dotnet restore, WorkspaceUnrestoredProjectHintTests updated; Medium
+
+Evidence: 7abd8e4d, 5b2571de, f4984202; filtered tests queued
+
+## Test hosts write call transcripts into the real-session folder (punchlist #15) - resolved (2026-11-24)
+
+Test hosts write call transcripts into the real-session folder (2026-11-23) - `ToolCallTranscript` is always on (`ServiceRegistrationExtensionsBasic.cs:65`) and in-process test hosts (about 49 test files) write to `ScratchDir\call-transcripts`, capped at 50 files by count (`RuntimeStateRetention.LogMaxFiles`), so one test run can evict every real-session transcript; test hosts write to a separate `call-transcripts-tests` folder with its own cap (todo review 2026-11-23); acceptance: a RunTest of Tests.Server leaves the `call-transcripts` file set unchanged; Small-Medium
+
+Evidence: c7ba24d7, 28599185, 0fec281f; ToolCallTranscriptTests passed
+
+## Dropped toolset tools still listed after StopServer(keepToolsets: false) (punchlist #7) - resolved (2026-11-24)
+
+Dropped toolset tools still listed after `StopServer(keepToolsets: false)` (2026-11-23) - standalone fix, not folded into the JSON toolset plan (todo review 2026-11-23): send the one post-initialized `tools/list_changed` whenever a `TabToolsetStateStore` exists, not only when `RestoredAtStartup` (`ServiceRegistrationExtensionsBasic.cs` AddRestoredToolsetListChangedMessageFilter, code TODO there); new test beside `McpToolsetControlTests.RestoredStart_SendsOneToolListChangedAfterInitialized`, flip `PlainStart_SendsNone`; then a live-window check; Small
+
+Evidence: b0242718; McpToolsetControlTests passed; live-window re-list check left on the morning checklist
+
 ## `-Test Scenario` ran no test: RunScenario_SamplesAndScores lost [Test]/[Explicit] - resolved (2026-11-24)
 
 Scenario rework Step 29 (a9d45ba6) moved the attributes onto the new RunStopFamily_SamplesAndScores, leaving the env-var entry point a plain method; every queued `-Test Scenario` job ended Crashed ("No test matches the given testcase filter Name=RunScenario_SamplesAndScores", evalqueue 112 job 20261124-070932-001). Attributes restored in RoslynSentinel.Tests.ModelEval/ScenarioAgentTests.cs (harness auto-fix).
