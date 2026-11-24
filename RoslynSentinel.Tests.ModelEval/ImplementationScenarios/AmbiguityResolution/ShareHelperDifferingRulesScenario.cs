@@ -1,6 +1,6 @@
 using Microsoft.CodeAnalysis.CSharp;
 
-namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Scenarios;
+namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.AmbiguityResolution;
 
 /// <summary>
 /// Two callers derive a namespace from folder segments with the same folder rule but different root rules, and tests pin both.

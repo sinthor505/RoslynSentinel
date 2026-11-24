@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Scenarios;
+namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.AmbiguityResolution;
 
 /// <summary>
 /// Read-only scenario: review a stale plan against the current code and report. No file may change; the check grades

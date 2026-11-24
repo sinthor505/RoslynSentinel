@@ -1,5 +1,5 @@
 using NUnit.Framework;
-using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Scenarios;
+using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.AmbiguityResolution;
 
 namespace RoslynSentinel.Tests.ModelEval;
 

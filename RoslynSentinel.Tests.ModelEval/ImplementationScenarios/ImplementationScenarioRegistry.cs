@@ -1,4 +1,8 @@
+using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.AmbiguityResolution;
+using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.ErrorRecovery;
+using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.MultiStepState;
 using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Scenarios;
+using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.ToolUse;
 
 namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios;
 

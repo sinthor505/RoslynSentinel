@@ -1,6 +1,6 @@
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Scenarios;
+namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.MultiStepState;
 
 /// <summary>
 /// Thread a trailing optional parameter through three methods, add a guard as the first statement of one branch and two tests

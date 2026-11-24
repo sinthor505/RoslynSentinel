@@ -1,7 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Scenarios;
+namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.ErrorRecovery;
 
 /// <summary>
 /// Sweep 14 `new Dictionary&lt;FilePath, string&gt;` sites in four files to `new DocumentChangeSet`, leave the FailedFiles

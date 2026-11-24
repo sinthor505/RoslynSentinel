@@ -1,7 +1,7 @@
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Scenarios;
+namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.AmbiguityResolution;
 
 /// <summary>
 /// Make a two-file dependency one-way: ReplayPolicy uses four AgentClient members (one of them unqualified through
