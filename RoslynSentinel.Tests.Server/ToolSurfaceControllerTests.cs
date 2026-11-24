@@ -73,7 +73,8 @@ public class ToolSurfaceControllerTests
         }
 
         var host = hostBuilder.Build();
-        var controller = ActivatorUtilities.CreateInstance<ToolSurfaceController>(host.Services);
+        // The registered controller, not a second instance, so the test sees the live runtime layer.
+        var controller = host.Services.GetRequiredService<ToolSurfaceController>();
         var toolsets = host.Services.GetRequiredService<ToolsetService>();
         return new Harness(host, controller, toolsets);
     }

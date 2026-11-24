@@ -5,8 +5,8 @@ namespace RoslynSentinel.Tools.Basic;
 /// <summary>
 /// <c>McpToolsetControlTool</c>: switches on-demand toolsets on and off at runtime so a lean session
 /// (<c>--mode claude-lean</c>, ~26 tools) can pull in the rest only when needed. Registered only in claude-lean
-/// (see ServiceRegistrationExtensionsBasic); the state and the tool-collection mutation live in
-/// <see cref="ToolsetService"/>, and the SDK turns the collection change into <c>tools/list_changed</c>.
+/// (see ServiceRegistrationExtensionsBasic); the state lives in <see cref="ToolSurfaceController"/> (ApplyToolset),
+/// the tools are built by <see cref="ToolsetService"/>, and the SDK turns the collection change into <c>tools/list_changed</c>.
 /// proposal_reduce_tool_schema_token_cost.md, Step 4b stage 2.
 /// </summary>
 [McpServerToolType]

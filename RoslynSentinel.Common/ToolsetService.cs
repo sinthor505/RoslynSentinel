@@ -40,12 +40,11 @@ public sealed record ToolsetChange(
 }
 
 /// <summary>
-/// Owns the runtime state behind <c>McpToolsetControl</c>: which on-demand toolsets are on, and the live
-/// <see cref="McpServerTool"/> instances it added to the server's tool collection. A DI singleton (no statics),
-/// with every state change under one lock. The SDK raises <c>notifications/tools/list_changed</c> itself when
-/// the collection changes on a stateful transport (McpServerImpl subscribes ToolCollection.Changed), so this
-/// service only mutates the collection - inside one <c>DeferChangedEvents</c> scope so a set of N tools is a
-/// single notification, not N.
+/// Runtime-toolset layer source behind <c>McpToolsetControl</c>: which classes are supported, how a set's tools are
+/// built, the <see cref="EnabledToolSetsChanged"/> persistence event and the tools/list_changed counters. The
+/// collection mutation and the runtime layer live in <see cref="ToolSurfaceController.ApplyToolset"/>, the single
+/// writer; this service is a facade over it. The SDK raises <c>notifications/tools/list_changed</c> when the collection
+/// changes on a stateful transport, and each apply runs inside one <c>DeferChangedEvents</c> scope, so N tools are one notification.
 /// </summary>
 /// <remarks>
 /// Tools are built by <see cref="McpToolSchemaPatcher.CreateSentinelTool"/>, the same path startup registration
@@ -56,12 +55,10 @@ public sealed record ToolsetChange(
 public sealed class ToolsetService
 {
     private readonly object _gate = new();
-    private readonly ToolSurfaceController _surface; // unused until Step 2
-    private readonly McpServerOptions _serverOptions;
+    private readonly ToolSurfaceController _surface;
     private readonly IServiceProvider _services;
     private readonly IReadOnlySet<string> _supportedClassNames;
     private readonly Func<IEnumerable<Assembly>> _assemblySource;
-    private readonly Dictionary<ToolSetName, List<McpServerTool>> _enabled = new();
     private int _toolListChangedRaised; // guarded by _gate
     private int _toolListSubscriptionRequests; // guarded by _gate
 
@@ -86,7 +83,6 @@ public sealed class ToolsetService
         Func<IEnumerable<Assembly>>? assemblySource = null)
     {
         _surface = surface;
-        _serverOptions = surface.ServerOptions;
         _services = services;
         _supportedClassNames = supportedClassNames;
         _assemblySource = assemblySource ?? LoadedToolAssemblies;
@@ -109,29 +105,11 @@ public sealed class ToolsetService
     {
     }
 
-    /// <summary>The sets currently on, in enum order.</summary>
-    public IReadOnlyList<ToolSetName> EnabledToolSets
-    {
-        get
-        {
-            lock (_gate)
-            {
-                return _enabled.Keys.OrderBy(s => s).ToArray();
-            }
-        }
-    }
+    /// <summary>The sets currently on, in enum order. Read from the controller's runtime layer.</summary>
+    public IReadOnlyList<ToolSetName> EnabledToolSets => _surface.RuntimeToolSets;
 
-    /// <summary>The tool names this service currently has on the live surface.</summary>
-    public IReadOnlyCollection<string> DynamicToolNames
-    {
-        get
-        {
-            lock (_gate)
-            {
-                return _enabled.Values.SelectMany(t => t).Select(t => t.ProtocolTool.Name).OrderBy(n => n, StringComparer.Ordinal).ToArray();
-            }
-        }
-    }
+    /// <summary>The tool names runtime toolsets currently have on the live surface. Read from the controller.</summary>
+    public IReadOnlyCollection<string> DynamicToolNames => _surface.RuntimeToolNames;
 
     /// <summary>
     /// Number of SetEnabled calls that mutated the tool collection (added or removed at least one tool). These are the
@@ -175,6 +153,10 @@ public sealed class ToolsetService
     }
 
     /// <summary>Switches <paramref name="toolSet"/> on or off. Idempotent.</summary>
+    /// <remarks>
+    /// The change is applied by <see cref="ToolSurfaceController.ApplyToolset"/>, which owns the collection and the
+    /// runtime layer. This method supplies the tool factory, the tools/list_changed counter and the persistence event.
+    /// </remarks>
     /// <exception cref="InvalidOperationException">The server has no tool collection to mutate.</exception>
     public ToolsetChange SetEnabled(ToolSetName toolSet, bool enabled)
     {
@@ -183,83 +165,23 @@ public sealed class ToolsetService
             throw new ArgumentOutOfRangeException(nameof(toolSet), toolSet, $"Unknown toolset. Valid values: {string.Join(", ", Enum.GetNames<ToolSetName>())}.");
         }
 
-        var collection = _serverOptions.ToolCollection
-            ?? throw new InvalidOperationException("The server exposes no mutable tool collection, so toolsets cannot be switched at runtime.");
+        // Candidates are resolved on the first tool the apply asks for, once per call; no-op and disable calls skip the scan.
+        Dictionary<string, (Type ToolType, MethodInfo Method)>? candidates = null;
+        Func<string, McpServerTool?> createTool = name =>
+        {
+            candidates ??= ResolveCandidates();
+            return candidates.TryGetValue(name, out var candidate)
+                ? McpToolSchemaPatcher.CreateSentinelTool(candidate.Method, candidate.ToolType, _services)
+                : null;
+        };
 
-        ToolsetChange result;
+        var result = _surface.ApplyToolset(toolSet, enabled, ToolsetCatalog.GetToolNames(toolSet), createTool);
         lock (_gate)
         {
-            bool isOn = _enabled.ContainsKey(toolSet);
-            var added = new List<string>();
-            var removed = new List<string>();
-            var unavailable = new List<string>();
-
-            if (enabled && !isOn)
-            {
-                var candidates = ResolveCandidates();
-                var built = new List<McpServerTool>();
-                foreach (var name in ToolsetCatalog.GetToolNames(toolSet))
-                {
-                    if (!candidates.TryGetValue(name, out var candidate) || collection.TryGetPrimitive(name, out _))
-                    {
-                        unavailable.Add(name);
-                        continue;
-                    }
-
-                    built.Add(McpToolSchemaPatcher.CreateSentinelTool(candidate.Method, candidate.ToolType, _services));
-                }
-
-                // Built first, added second: a creation failure above leaves the surface and state untouched.
-                using (collection.DeferChangedEvents())
-                {
-                    foreach (var tool in built)
-                    {
-                        if (collection.TryAdd(tool))
-                        {
-                            added.Add(tool.ProtocolTool.Name);
-                        }
-                        else
-                        {
-                            unavailable.Add(tool.ProtocolTool.Name);
-                        }
-                    }
-
-                    // The state must be updated before the scope is disposed: disposing raises
-                    // ToolCollection.Changed, and the ToolSurfaceController's handler reads EnabledToolSets/DynamicToolNames.
-                    _enabled[toolSet] = built.Where(t => added.Contains(t.ProtocolTool.Name)).ToList();
-                }
-            }
-            else if (!enabled && isOn)
-            {
-                using (collection.DeferChangedEvents())
-                {
-                    foreach (var tool in _enabled[toolSet])
-                    {
-                        if (collection.Remove(tool))
-                        {
-                            removed.Add(tool.ProtocolTool.Name);
-                        }
-                    }
-
-                    // Same ordering as the enable branch: state is updated before the scope is disposed.
-                    _enabled.Remove(toolSet);
-                }
-            }
-
-            if (added.Count + removed.Count > 0)
+            if (result.AddedTools.Count + result.RemovedTools.Count > 0)
             {
                 _toolListChangedRaised++;
             }
-
-            result = new ToolsetChange(
-                ToolSet: toolSet,
-                Enabled: _enabled.ContainsKey(toolSet),
-                Changed: enabled != isOn,
-                AddedTools: added,
-                RemovedTools: removed,
-                UnavailableTools: unavailable,
-                EnabledToolSets: _enabled.Keys.OrderBy(s => s).ToArray(),
-                ActiveTools: collection.PrimitiveNames.OrderBy(n => n, StringComparer.Ordinal).ToArray());
         }
 
         if (result.Changed)
