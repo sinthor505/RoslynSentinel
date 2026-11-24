@@ -121,7 +121,7 @@ public class ImplementationScenarioGoldenTests
         {
             var fullPath = Path.Combine(fixture.SolutionDirectory, relativePath.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-            File.WriteAllText(fullPath, ImplementationScenario.NormalizeToCrlf(text));
+            File.WriteAllText(fullPath, variant.WriteRawBytes ? text : ImplementationScenario.NormalizeToCrlf(text));
         }
 
         // Same order as the agent test: changed paths first, then the commit (CommitAll allows an empty commit for an overlay-free variant).

@@ -199,15 +199,13 @@ public class PolicyEndingTests
         PrimaryAxis: EvalAxis.InstructionAdherence);
 
     /// <summary>
-    /// The executable outcome table (Spec S8): each variant is an overlay on step 1 (golden) with a DONE: final message, so every
-    /// non-passing row is SilentIncomplete. The tests run before the extra check, so both rows fail on the test run.
-    /// Table-only (no overlay can express it): a model that keeps the sentence out but writes LF line endings (LfEndings, CheckFailed
-    /// through CheckSentenceRemoved). The variant test writes every overlay through ImplementationScenario.NormalizeToCrlf, which turns
-    /// LF into CRLF before the check sees it.
+    /// The executable outcome table (Spec S8): each variant is an overlay on step 1 (golden) with a DONE: final message. Every
+    /// variant is graded CheckFailed with class SilentIncomplete, because the tests run before the extra check.
+    /// LfEndings is a real row: WriteRawBytes writes both files with LF line endings (no CRLF normalization), so
+    /// CheckSentenceRemoved has to catch the LF content.
     /// </summary>
     private static IReadOnlyList<ScenarioVariant> BuildVariants()
     {
-        // TODO LfEndings variant is table-only: Variant_OutcomeMatchesTable writes overlays through NormalizeToCrlf, so an LF overlay cannot be tested; needs a raw-bytes overlay option on ScenarioVariant
         const string Done = "DONE: removed the sentence from both files.";
 
         // The policy is edited and the test literals are not: the golden policy over the seed test file.
@@ -222,6 +220,13 @@ public class PolicyEndingTests
         {
             [PolicyPath] = PolicySource.Replace(Sentence, string.Empty),
             [TestPath] = TestSource.Replace(Sentence, string.Empty),
+        };
+
+        // Pure LF: the golden content with the sentence removed, every CRLF turned into LF.
+        var lfEndings = new Dictionary<string, string>
+        {
+            [PolicyPath] = RemoveSentence(PolicySource).Replace("\r\n", "\n"),
+            [TestPath] = RemoveSentence(TestSource).Replace("\r\n", "\n"),
         };
 
         return new[]
@@ -242,6 +247,16 @@ public class PolicyEndingTests
                 ExpectedClass: EvalOutcomeClass.SilentIncomplete,
                 ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
                 DetailContains: "check tests failed"),
+            new ScenarioVariant(
+                Name: "LfEndings",
+                BaseStep: 1,
+                Files: lfEndings,
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: null,
+                ExpectedVariantTag: null,
+                WriteRawBytes: true),
         };
     }
 

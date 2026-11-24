@@ -7,6 +7,8 @@ namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios;
 /// the grader must report for it; model-free tests apply each variant and assert the table row.
 /// <paramref name="ExpectedVariantTag"/>: when set, Variant_OutcomeMatchesTable asserts it equals the verdict's Variant value
 /// (the step's VariantProbe text); null = not asserted.
+/// <paramref name="WriteRawBytes"/>: true = Variant_OutcomeMatchesTable writes the overlay files exactly as given instead of through
+/// ImplementationScenario.NormalizeToCrlf, so a variant can carry LF line endings; false = the files are normalized to CRLF.
 /// </summary>
 internal sealed record ScenarioVariant(
     string Name,
@@ -16,4 +18,5 @@ internal sealed record ScenarioVariant(
     EvalOutcomeClass ExpectedClass,
     ImplementationScenarioOutcome ExpectedOutcome,
     string? DetailContains = null,
-    string? ExpectedVariantTag = null);
+    string? ExpectedVariantTag = null,
+    bool WriteRawBytes = false);
