@@ -134,4 +134,97 @@ public class LocalFunctionCandidateTests
         Assert.That(preferred, Has.Count.EqualTo(1));
         Assert.That(preferred[0].Kind, Is.EqualTo(CandidateKind.LocalFunction));
     }
+
+    [Test]
+    public void BuildHint_TwoSameNamedLocalFunctions_NamesEnclosingMembersAndContainerRetry()
+    {
+        const string source = """
+            namespace TestProj;
+
+            public class Type
+            {
+                public void First()
+                {
+                    int Helper() => 1;
+                    Helper();
+                }
+
+                public void Second()
+                {
+                    int Helper() => 2;
+                    Helper();
+                }
+            }
+            """;
+        var (root, text) = Parse(source);
+        var candidates = SyntaxTargetResolver.ResolveCandidates(root, text, "Helper", includeLocalFunctions: true);
+        Assert.That(candidates, Has.Count.EqualTo(2));
+
+        var hint = SyntaxTargetResolver.BuildHintForCandidates(candidates, new List<int>(), "ambiguous");
+
+        Assert.That(hint, Does.Contain("local function inside Type.First"));
+        Assert.That(hint, Does.Contain("local function inside Type.Second"));
+        Assert.That(hint, Does.Contain("containerName: \"First\""));
+        Assert.That(hint, Does.Contain("containerName: \"Second\""));
+        Assert.That(hint, Does.Not.Contain("overloads"));
+    }
+
+    [Test]
+    public void BuildShadowedLocalFunctionHint_LocalOnlyList_ReturnsNull()
+    {
+        var (root, text) = Parse(LocalOnlySource);
+        var candidates = SyntaxTargetResolver.ResolveCandidates(root, text, "Helper", includeLocalFunctions: true);
+
+        var hint = SyntaxTargetResolver.BuildShadowedLocalFunctionHint(candidates, text);
+
+        Assert.That(hint, Is.Null);
+    }
+
+    [Test]
+    public void BuildShadowedLocalFunctionHint_MemberOnlyList_ReturnsNull()
+    {
+        const string source = """
+            namespace TestProj;
+
+            public class Type
+            {
+                public void Helper() { }
+            }
+            """;
+        var (root, text) = Parse(source);
+        var candidates = SyntaxTargetResolver.ResolveCandidates(root, text, "Helper", includeLocalFunctions: true);
+        Assert.That(candidates, Has.Count.EqualTo(1));
+
+        var hint = SyntaxTargetResolver.BuildShadowedLocalFunctionHint(candidates, text);
+
+        Assert.That(hint, Is.Null);
+    }
+
+    [Test]
+    public void BuildShadowedLocalFunctionHint_MethodAndLocalFunctionSameName_NamesEnclosingMember()
+    {
+        const string source = """
+            namespace TestProj;
+
+            public class Type
+            {
+                public void Helper() { }
+
+                public void Outer()
+                {
+                    int Helper() => 1;
+                    Helper();
+                }
+            }
+            """;
+        var (root, text) = Parse(source);
+        var candidates = SyntaxTargetResolver.ResolveCandidates(root, text, "Helper", includeLocalFunctions: true);
+        Assert.That(candidates, Has.Count.EqualTo(2));
+
+        var hint = SyntaxTargetResolver.BuildShadowedLocalFunctionHint(candidates, text);
+
+        Assert.That(hint, Is.Not.Null);
+        Assert.That(hint, Does.Contain("inside Type.Outer"));
+        Assert.That(hint, Does.Contain("containerName: \"Outer\""));
+    }
 }

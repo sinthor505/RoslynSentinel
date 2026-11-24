@@ -333,6 +333,36 @@ public static class SyntaxTargetResolver
     }
 
     /// <summary>
+    /// Explains local-function candidates that sit beside a candidate of another kind, so an agent can tell
+    /// the shadowed local function from the declaration it was dropped for. Returns null when the list does
+    /// not hold both kinds.
+    /// </summary>
+    public static string? BuildShadowedLocalFunctionHint(IReadOnlyList<SyntaxNodeCandidate> candidates, SourceText sourceText)
+    {
+        var hasLocalFunction = candidates.Any(c => c.Kind == CandidateKind.LocalFunction);
+        var hasOtherKind = candidates.Any(c => c.Kind != CandidateKind.LocalFunction);
+        if (!hasLocalFunction || !hasOtherKind)
+        {
+            return null;
+        }
+
+        var lines = candidates
+            .Where(c => c.Kind == CandidateKind.LocalFunction)
+            .Select(c => $"Also a local function '{c.Name}' inside {c.ContainingTypeName}.{c.EnclosingMemberName} (lines {c.StartLine}-{c.EndLine}); retry with containerName: \"{c.EnclosingMemberName}\".");
+        return string.Join(" ", lines);
+    }
+
+    /// <summary>
+    /// Describes one local-function candidate by its enclosing type and member, with the containerName retry
+    /// that selects it. Keeps a local function from being reported with the wording of a member.
+    /// </summary>
+    private static string LocalFunctionDescription(SyntaxNodeCandidate c)
+    {
+        var owner = string.IsNullOrEmpty(c.ContainingTypeName) ? c.EnclosingMemberName : $"{c.ContainingTypeName}.{c.EnclosingMemberName}";
+        return $"local function inside {owner} (lines {c.StartLine}-{c.EndLine}); retry with containerName: \"{c.EnclosingMemberName}\"";
+    }
+
+    /// <summary>
     /// Explains a strict container miss: names the types the file declares, where the member lives,
     /// and a retry call per container, plus the exact line range to read. Behind <see cref="BuildContainerMissDetailAsync"/>.
     /// </summary>
@@ -440,6 +470,11 @@ public static class SyntaxTargetResolver
 
         var previews = candidates.Take(3).Select(c =>
         {
+            if (c.Kind == CandidateKind.LocalFunction)
+            {
+                return LocalFunctionDescription(c);
+            }
+
             var text = c.Preview.Length > 50 ? c.Preview.Substring(0, 47) + "..." : c.Preview;
             return $"line {c.StartLine} `{text}`";
         });
@@ -457,7 +492,7 @@ public static class SyntaxTargetResolver
     public static string BuildOverloadHintForCandidates(List<SyntaxNodeCandidate> candidates, List<int> matches, string failureMode, SourceText sourceText, string filePath, string operation, string memberName)
     {
         var hint = BuildHintForCandidates(candidates, matches, failureMode);
-        if (failureMode != "ambiguous" || candidates.Count < 2)
+        if (failureMode != "ambiguous" || candidates.Count < 2 || candidates.Any(c => c.Kind == CandidateKind.LocalFunction))
         {
             return hint;
         }
