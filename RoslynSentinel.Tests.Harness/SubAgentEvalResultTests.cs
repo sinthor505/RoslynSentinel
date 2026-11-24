@@ -16,13 +16,13 @@ public class SubAgentEvalResultTests
         """{"isError":false,"successData":{"outcome":"Failed","errorCount":4,"warningCount":0}}""";
 
     private const string TestsJson =
-        """{"isError":false,"successData":{"runCompleted":true,"totalCount":12,"passedCount":10,"failedCount":2,"skippedCount":0}}""";
+        """{"isError":false,"successData":{"outcome":"TestsFailed","totalCount":12,"passedCount":10,"failedCount":2,"skippedCount":0}}""";
 
     private const string TestsWithFailureJson =
-        """{"isError":false,"successData":{"runCompleted":true,"totalCount":12,"passedCount":11,"failedCount":1,"skippedCount":0,"results":[{"testName":"Ns.Suite.Adds_Fails","outcome":"Failed","duration":"00:00:00.1","errorMessage":"boom"}]}}""";
+        """{"isError":false,"successData":{"outcome":"TestsFailed","totalCount":12,"passedCount":11,"failedCount":1,"skippedCount":0,"results":[{"testName":"Ns.Suite.Adds_Fails","outcome":"Failed","duration":"00:00:00.1","errorMessage":"boom"}]}}""";
 
     private const string CleanTestsJson =
-        """{"isError":false,"successData":{"runCompleted":true,"totalCount":12,"passedCount":12,"failedCount":0,"skippedCount":0,"results":[]}}""";
+        """{"isError":false,"successData":{"outcome":"Passed","totalCount":12,"passedCount":12,"failedCount":0,"skippedCount":0,"results":[]}}""";
 
     private static AgentRunResult Run(
         AgentStopReason stopReason = AgentStopReason.ModelFinished,

@@ -105,7 +105,7 @@ public static class FullTestMarkerStore
 
         try
         {
-            var next = NextMarker(TryRead(solutionRoot), suite, scope, run.RunCompleted, run.TotalCount, run.FailedCount, utcNow ?? DateTime.UtcNow, filtered: !string.IsNullOrWhiteSpace(filter));
+            var next = NextMarker(TryRead(solutionRoot), suite, scope, run.RanToCompletion, run.TotalCount, run.FailedCount, utcNow ?? DateTime.UtcNow, filtered: !string.IsNullOrWhiteSpace(filter));
             if (next is not null)
             {
                 Write(PathFor(solutionRoot), next);

@@ -49,7 +49,7 @@ public class SubAgentOffloadedResultTests
     {
         File.WriteAllText(
             Path.Combine(_largeResults, "largeresult_20261001T220405Z_4c74d82908f845e4a294755f2c044019.json"),
-            """{"Type":"Raw","Data":{"isError":false,"successData":{"runCompleted":true,"passedCount":9,"failedCount":1}}}""");
+            """{"Type":"Raw","Data":{"isError":false,"successData":{"outcome":"TestsFailed","passedCount":9,"failedCount":1}}}""");
         var pointer = """{"offloaded":true,"resultId":"4c74d82908f845e4a294755f2c044019","sizeBytes":31231,"isError":false}""";
 
         var resolved = SubAgentEvalResult.ResolveOffloadedResult(pointer, _worktree);

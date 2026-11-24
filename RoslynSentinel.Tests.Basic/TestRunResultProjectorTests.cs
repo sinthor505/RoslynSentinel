@@ -25,7 +25,7 @@ public class TestRunResultProjectorTests
         bool runCompleted = true)
     {
         return new TestRunResult(
-            RunSucceeded: failedCount == 0,
+            Outcome: !runCompleted ? TestRunOutcome.RunError : failedCount == 0 ? TestRunOutcome.Passed : TestRunOutcome.TestsFailed,
             ExitCode: failedCount == 0 ? 0 : 1,
             TotalCount: totalCount,
             PassedCount: totalCount - failedCount - skippedCount,
@@ -35,8 +35,7 @@ public class TestRunResultProjectorTests
             Results: rows.ToList(),
             StdoutTail: stdout,
             StderrTail: stderr,
-            Duration: TimeSpan.FromSeconds(1),
-            RunCompleted: runCompleted);
+            Duration: TimeSpan.FromSeconds(1));
     }
 
     [Test]

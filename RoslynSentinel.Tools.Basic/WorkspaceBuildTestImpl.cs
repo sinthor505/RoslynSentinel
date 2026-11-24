@@ -142,9 +142,9 @@ public class WorkspaceBuildTestImpl
     // caller to page a saved file just to read the totals.
     private static TestRunResult WithoutTailsWhenClean(TestRunResult run)
     {
-        var clean = run.RunSucceeded
+        var clean = run.Outcome is TestRunOutcome.Passed or TestRunOutcome.NoTestsMatched
             && run.Detail is null
-            && (run.ProjectSummaries?.All(p => p.RunSucceeded) ?? true);
+            && (run.ProjectSummaries?.All(p => !p.IsError) ?? true);
         return clean ? run with { StdoutTail = null, StderrTail = null } : run;
     }
 
@@ -167,29 +167,29 @@ public class WorkspaceBuildTestImpl
     public static string SummarizeTestRun(TestRunResult run, string? filter = null)
     {
         var headline =
-            $"{(run.RunSucceeded ? "Tests passed" : "Tests FAILED")}: {run.TotalCount} tests, {run.PassedCount} passed, " +
+            $"{(run.Outcome is TestRunOutcome.Passed or TestRunOutcome.NoTestsMatched ? "Tests passed" : "Tests FAILED")}: {run.TotalCount} tests, {run.PassedCount} passed, " +
             $"{run.FailedCount} failed, {run.SkippedCount} skipped in {FormatDuration(run.Duration)} " +
             $"across {run.ProjectSummaries?.Count ?? 1} project(s).";
 
         // A filter that matched no test ran nothing, so "Tests passed" would claim a verification that never happened.
-        // Wording only: runSucceeded/isError deliberately stay as the engine reports them (decision 2026-11-11, wording only).
-        if (!string.IsNullOrWhiteSpace(filter) && run.TotalCount == 0 && run.RunSucceeded)
+        // Wording only: NoTestsMatched stays a non-error as the engine reports it (decision 2026-11-11, wording only).
+        if (!string.IsNullOrWhiteSpace(filter) && run.TotalCount == 0 && run.Outcome == TestRunOutcome.NoTestsMatched)
         {
             headline = $"No test matched the filter '{filter}': nothing ran and nothing was verified (0 tests, 0 passed in {FormatDuration(run.Duration)} across {run.ProjectSummaries?.Count ?? 1} project(s)).";
         }
 
         // A project can exit non-zero (build or adapter error) without any failed test; name it so the
         // caller does not have to open the large result to find out which project broke.
-        if (!run.RunSucceeded && run.FailedCount == 0 && run.ProjectSummaries is { } projects)
+        if (run.Outcome is TestRunOutcome.TimedOut or TestRunOutcome.RunError && run.FailedCount == 0 && run.ProjectSummaries is { } projects)
         {
-            headline += " No test failed, but " + string.Join(", ", projects.Where(p => !p.RunSucceeded).Select(p => p.ProjectName)) +
+            headline += " No test failed, but " + string.Join(", ", projects.Where(p => p.Outcome is TestRunOutcome.TimedOut or TestRunOutcome.RunError).Select(p => p.ProjectName)) +
                 " exited non-zero (build or adapter error); see StdoutTail.";
         }
 
         // A failed run ends with one concrete re-run of its first failing test, so the caller does not
         // have to open the large result to pick one. The row carries no project name, so only the filter is passed.
         var firstFailed = run.Results.FirstOrDefault(r => r.Outcome == TestOutcome.Failed);
-        if (!run.RunSucceeded && run.FailedCount > 0 && firstFailed is not null)
+        if (run.Outcome == TestRunOutcome.TestsFailed && run.FailedCount > 0 && firstFailed is not null)
         {
             headline += " " + ToolCallHint.Next("RunTest", "to re-run only the first failing test.", ("filter", $"FullyQualifiedName~{firstFailed.TestName}"));
         }
@@ -517,13 +517,13 @@ public class WorkspaceBuildTestImpl
             var solutionRoot = _workspaceManager.GetSolutionRoot();
             var now = DateTime.UtcNow;
             // A worktree run says nothing about the loaded tree, so it neither records into nor reads the full-suite marker.
-            if (testRunResult.RunCompleted && worktreeRoot is null)
+            if (testRunResult.RanToCompletion && worktreeRoot is null)
             {
                 FullTestMarkerStore.RecordRun(solutionRoot, suite, scope, testRunResult, now, filter);
             }
 
             // Only a completed fast run carries the staleness object; a full run never does.
-            var stale = suite == TestSuite.fast && testRunResult.RunCompleted && worktreeRoot is null ? FullTestMarkerStore.EvaluateForRoot(solutionRoot, now) : null;
+            var stale = suite == TestSuite.fast && testRunResult.RanToCompletion && worktreeRoot is null ? FullTestMarkerStore.EvaluateForRoot(solutionRoot, now) : null;
             testRunResult = testRunResult with { Suite = suite, FullSuiteStale = stale, WorktreeCommit = worktreeRoot is null ? null : RepoWorktrees.ReadHeadCommit(worktreeRoot) };
 
             var projected = TestRunResultProjector.Project(testRunResult, resultsType, includeOutput: includeOutput);
@@ -532,7 +532,9 @@ public class WorkspaceBuildTestImpl
                 projected = projected with { OmittedResultCount = 0 };
             }
 
-            if (!testRunResult.RunCompleted)
+            // TimedOut and RunError both return isError true. A RunError from a non-zero exit with a TRX and 0 failed tests
+            // (fixture teardown/setup error, host crash) used to return isError false; that change is intended.
+            if (!testRunResult.RanToCompletion)
             {
                 var incompleteMessage = (testRunResult.Detail ?? "Test run did not complete.") + " " + ToolCallHint.Next("Build", "to rule out compile errors, then retry the test run.", ("level", "quickBuild"));
                 return new SentinelCallToolResult<object>() { IsError = true, SuccessData = projected, ErrorData = new ResultError(ToolErrorCode.TestRunIncomplete, incompleteMessage), StatusMessage = incompleteMessage, WorkspaceVersion = _workspaceManager.WorkspaceVersion };

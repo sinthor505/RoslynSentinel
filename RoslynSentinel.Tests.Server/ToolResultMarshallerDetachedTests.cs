@@ -163,7 +163,7 @@ public class ToolResultMarshallerDetachedTests
         string fullStack = string.Join("\n", Enumerable.Range(1, 8).Select(i => $"   at {Marker}-{i} Some.Type.Method{i}()"));
         string fullMessage = "distinct solitary failure " + new string('x', 600);
         var unprojected = new RoslynSentinel.Engines.Basic.TestRunResult(
-            RunSucceeded: false,
+            Outcome: RoslynSentinel.Engines.Basic.TestRunOutcome.TestsFailed,
             ExitCode: 1,
             TotalCount: 1,
             PassedCount: 0,

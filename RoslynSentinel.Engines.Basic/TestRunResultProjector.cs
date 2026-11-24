@@ -20,7 +20,7 @@ public static class TestRunResultProjector
     public static TestRunResult Project(TestRunResult result, TestResultsFilter resultsType, bool includeOutput)
     {
         var rows = result.Results.Select((row, index) => ProjectRow(row, index, includeOutput)).ToList();
-        var keepStreams = includeOutput || !result.RunCompleted || result.TotalCount == 0;
+        var keepStreams = includeOutput || !result.RanToCompletion || result.TotalCount == 0;
         var matchingCount = resultsType switch
         {
             TestResultsFilter.failed => result.FailedCount,

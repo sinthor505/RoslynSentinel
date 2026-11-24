@@ -15,7 +15,7 @@ public record TestCaseResult(
 
 public record ProjectTestSummary(
     string ProjectName,
-    bool RunSucceeded,
+    TestRunOutcome Outcome,
     int TotalCount,
     int PassedCount,
     int FailedCount,
@@ -23,17 +23,22 @@ public record ProjectTestSummary(
     string? Detail
 ) : IOperationResult
 {
-    /// <summary>True when the project's test run did not succeed.</summary>
+    /// <summary>True when the project's run failed a test, timed out or errored; NoTestsMatched is not an error.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public bool IsError => !RunSucceeded;
+    public bool IsError => Outcome is not (TestRunOutcome.Passed or TestRunOutcome.NoTestsMatched);
 
     /// <summary>Failed when IsError; otherwise Success.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);
 
-    /// <summary>ToolErrorCode.TestRunFailed when IsError; null otherwise.</summary>
+    /// <summary>ToolErrorCode.TestRunFailed for TestsFailed; ToolErrorCode.TestRunIncomplete for TimedOut and RunError; null otherwise.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public string? Code => IsError ? ToolErrorCode.TestRunFailed : null;
+    public string? Code => Outcome switch
+    {
+        TestRunOutcome.TestsFailed => ToolErrorCode.TestRunFailed,
+        TestRunOutcome.TimedOut or TestRunOutcome.RunError => ToolErrorCode.TestRunIncomplete,
+        _ => null,
+    };
 
     /// <summary>The detail, or a fallback text, when IsError; null otherwise.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
@@ -41,7 +46,7 @@ public record ProjectTestSummary(
 }
 
 public record TestRunResult(
-    bool RunSucceeded,
+    TestRunOutcome Outcome,
     int ExitCode,
     int TotalCount,
     int PassedCount,
@@ -53,7 +58,6 @@ public record TestRunResult(
     string? StderrTail,
     TimeSpan Duration,
     string? Detail = null,
-    bool RunCompleted = true,
     List<ProjectTestSummary>? ProjectSummaries = null,
     int OmittedResultCount = 0,
     // The suite the run used (fast skips the OutOfProcess fixtures); set by the RunTest tool, null for an engine-level run.
@@ -64,23 +68,30 @@ public record TestRunResult(
     string? WorktreeCommit = null
 ) : IOperationResult
 {
-    // The RunTest tool itself sets the MCP isError only when !RunCompleted (WorkspaceBuildTestImpl.cs ~311).
-    // This member is the stricter engine-level view: a completed run with test failures is also an error.
-    /// <summary>True when the run did not succeed or did not complete.</summary>
+    /// <summary>True unless the outcome is Passed or NoTestsMatched (a zero-match run stays a non-error, decision 2026-11-11).</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public bool IsError => !RunSucceeded || !RunCompleted;
+    public bool IsError => Outcome is not (TestRunOutcome.Passed or TestRunOutcome.NoTestsMatched);
+
+    /// <summary>False when the run timed out or errored (no usable result); true for Passed, TestsFailed and NoTestsMatched.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool RanToCompletion => Outcome is not (TestRunOutcome.TimedOut or TestRunOutcome.RunError);
 
     /// <summary>Failed when IsError; otherwise Success.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);
 
-    /// <summary>ToolErrorCode.TestRunIncomplete when the run did not complete (timeout, hang, no TRX); ToolErrorCode.TestRunFailed when it completed with failures; null otherwise.</summary>
+    /// <summary>ToolErrorCode.TestRunIncomplete for TimedOut and RunError; ToolErrorCode.TestRunFailed for TestsFailed; null otherwise.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public string? Code => !RunCompleted ? ToolErrorCode.TestRunIncomplete : !RunSucceeded ? ToolErrorCode.TestRunFailed : null;
+    public string? Code => Outcome switch
+    {
+        TestRunOutcome.TimedOut or TestRunOutcome.RunError => ToolErrorCode.TestRunIncomplete,
+        TestRunOutcome.TestsFailed => ToolErrorCode.TestRunFailed,
+        _ => null,
+    };
 
     /// <summary>Detail, or a count or incomplete-run text, when IsError; null otherwise.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public string? Message => !IsError ? null : (Detail ?? (RunCompleted ? $"{FailedCount} of {TotalCount} tests failed" : "Test run did not complete"));
+    public string? Message => !IsError ? null : (Detail ?? (Outcome == TestRunOutcome.TestsFailed ? $"{FailedCount} of {TotalCount} tests failed" : "Test run did not complete"));
 }
 
 public class TestRunEngine
@@ -225,7 +236,8 @@ public class TestRunEngine
         var passedCount = projectResults.Sum(p => p.Result.PassedCount);
         var failedCount = projectResults.Sum(p => p.Result.FailedCount);
         var skippedCount = projectResults.Sum(p => p.Result.SkippedCount);
-        var allRunCompleted = projectResults.All(p => p.Result.RunCompleted);
+        var allRunCompleted = projectResults.All(p => p.Result.RanToCompletion);
+        var overallOutcome = AggregateOutcome(projectResults.Select(p => p.Result.Outcome), totalCount);
         var allExitZero = projectResults.All(p => p.Result.ExitCode == 0);
 
         var allCaseResults = projectResults.SelectMany(p => p.Result.Results).ToList();
@@ -261,7 +273,7 @@ public class TestRunEngine
         var projectSummaries = projectResults
             .Select(p => new ProjectTestSummary(
                 ProjectName: p.ProjectName,
-                RunSucceeded: p.Result.RunSucceeded,
+                Outcome: p.Result.Outcome,
                 TotalCount: p.Result.TotalCount,
                 PassedCount: p.Result.PassedCount,
                 FailedCount: p.Result.FailedCount,
@@ -280,7 +292,7 @@ public class TestRunEngine
         if (!allRunCompleted)
         {
             overallDetail = "One or more projects did not complete their run: " +
-                string.Join("; ", projectResults.Where(p => !p.Result.RunCompleted).Select(p => $"{p.ProjectName}: {p.Result.Detail}"));
+                string.Join("; ", projectResults.Where(p => !p.Result.RanToCompletion).Select(p => $"{p.ProjectName}: {p.Result.Detail}"));
         }
         else if (totalCount == 0)
         {
@@ -291,7 +303,7 @@ public class TestRunEngine
         }
 
         return new TestRunResult(
-            RunSucceeded: allRunCompleted && allExitZero && failedCount == 0,
+            Outcome: overallOutcome,
             ExitCode: allExitZero ? 0 : 1,
             TotalCount: totalCount,
             PassedCount: passedCount,
@@ -303,9 +315,53 @@ public class TestRunEngine
             StderrTail: string.IsNullOrEmpty(combinedStderrTail) ? null : combinedStderrTail,
             Duration: DateTime.UtcNow - start,
             Detail: overallDetail,
-            RunCompleted: allRunCompleted,
             ProjectSummaries: projectSummaries
         );
+    }
+
+    /// <summary>Classifies one project's run. Precedence: TimedOut, then RunError (blame hang, no TRX, or a non-zero exit with no failed test),
+    /// then TestsFailed (failedCount above 0), then NoTestsMatched (totalCount 0), then Passed.</summary>
+    public static TestRunOutcome ClassifyOutcome(int exitCode, int failedCount, int totalCount, bool hung, bool timedOut, bool trxExists)
+    {
+        if (timedOut)
+        {
+            return TestRunOutcome.TimedOut;
+        }
+
+        if (hung || !trxExists || (exitCode != 0 && failedCount == 0))
+        {
+            return TestRunOutcome.RunError;
+        }
+
+        if (failedCount > 0)
+        {
+            return TestRunOutcome.TestsFailed;
+        }
+
+        return totalCount == 0 ? TestRunOutcome.NoTestsMatched : TestRunOutcome.Passed;
+    }
+
+    /// <summary>Combines per-project outcomes: TimedOut if any project timed out, else RunError if any errored, else TestsFailed if any project
+    /// failed a test, else NoTestsMatched when no test ran in total, else Passed.</summary>
+    public static TestRunOutcome AggregateOutcome(IEnumerable<TestRunOutcome> projectOutcomes, int totalCount)
+    {
+        var outcomes = projectOutcomes.ToList();
+        if (outcomes.Contains(TestRunOutcome.TimedOut))
+        {
+            return TestRunOutcome.TimedOut;
+        }
+
+        if (outcomes.Contains(TestRunOutcome.RunError))
+        {
+            return TestRunOutcome.RunError;
+        }
+
+        if (outcomes.Contains(TestRunOutcome.TestsFailed))
+        {
+            return TestRunOutcome.TestsFailed;
+        }
+
+        return totalCount == 0 ? TestRunOutcome.NoTestsMatched : TestRunOutcome.Passed;
     }
 
     /// <summary>Detects a build-output file lock (MSB3021/MSB3026/MSB3027) in `dotnet test` output.
@@ -432,7 +488,7 @@ public class TestRunEngine
 
     /// <summary>Runs `dotnet test` against a single project with its own dedicated TRX file, and
     /// parses the result. Never throws -> timeouts, missing TRX, and process failures are all
-    /// reported via <see cref="TestRunResult.RunCompleted"/> and <see cref="TestRunResult.Detail"/>
+    /// reported via <see cref="TestRunResult.Outcome"/> and <see cref="TestRunResult.Detail"/>
     /// so a single failing project can't take down the aggregate result for the rest.</summary>
     private static async Task<TestRunResult> RunOneProjectAsync(
         string projectName,
@@ -517,7 +573,7 @@ public class TestRunEngine
             if (timeoutDetail is not null)
             {
                 return new TestRunResult(
-                    RunSucceeded: false,
+                    Outcome: ClassifyOutcome(exitCode: -1, failedCount: 0, totalCount: 0, hung: hungTestName is not null, timedOut: true, trxExists: File.Exists(trxPath)),
                     ExitCode: -1,
                     TotalCount: 0,
                     PassedCount: 0,
@@ -528,8 +584,7 @@ public class TestRunEngine
                     StdoutTail: Tail(stdoutText),
                     StderrTail: string.IsNullOrWhiteSpace(stderrText) ? null : Tail(stderrText),
                     Duration: DateTime.UtcNow - start,
-                    Detail: hungTestName is null ? timeoutDetail : $"{timeoutDetail} The test running when it hung: {hungTestName}.",
-                    RunCompleted: false
+                    Detail: hungTestName is null ? timeoutDetail : $"{timeoutDetail} The test running when it hung: {hungTestName}."
                 );
             }
 
@@ -537,7 +592,7 @@ public class TestRunEngine
             {
                 var noTrxDetail = lockDetail ?? "No TRX result file was produced - the run failed before any test adapter reported results.";
                 return new TestRunResult(
-                    RunSucceeded: false,
+                    Outcome: ClassifyOutcome(exitCode: process.ExitCode, failedCount: 0, totalCount: 0, hung: hungTestName is not null, timedOut: false, trxExists: false),
                     ExitCode: process.ExitCode,
                     TotalCount: 0,
                     PassedCount: 0,
@@ -548,8 +603,7 @@ public class TestRunEngine
                     StdoutTail: Tail(stdoutText),
                     StderrTail: string.IsNullOrWhiteSpace(stderrText) ? null : Tail(stderrText),
                     Duration: DateTime.UtcNow - start,
-                    Detail: hungDetail ?? noTrxDetail,
-                    RunCompleted: false
+                    Detail: hungDetail ?? noTrxDetail
                 );
             }
 
@@ -569,13 +623,21 @@ public class TestRunEngine
                     : "Project produced no test results.";
             }
 
+            var outcome = ClassifyOutcome(process.ExitCode, failedCount, totalCount, hung: hungTestName is not null, timedOut: false, trxExists: true);
+            if (outcome == TestRunOutcome.RunError && hungDetail is null)
+            {
+                // Non-zero exit with no failed test: facts only, appended to any 0-matched or lock text already in detail.
+                var exitDetail = $"dotnet test exited with code {process.ExitCode} but no test failed (fixture setup/teardown error or test host crash); see StderrTail/StdoutTail.";
+                detail = detail is null ? exitDetail : $"{detail} {exitDetail}";
+            }
+
             var failureSummary = failedResults
                 .GroupBy(r => Signature(r.ErrorMessage))
                 .Select(g => new GroupedCountSummary(Signature: g.Key, Count: g.Count(), ExampleRef: g.First().TestName))
                 .OrderByDescending(g => g.Count)
                 .ToList();
             return new TestRunResult(
-                RunSucceeded: process.ExitCode == 0 && failedCount == 0,
+                Outcome: outcome,
                 ExitCode: process.ExitCode,
                 TotalCount: totalCount,
                 PassedCount: passedCount,
@@ -586,8 +648,7 @@ public class TestRunEngine
                 StdoutTail: Tail(stdoutText),
                 StderrTail: string.IsNullOrWhiteSpace(stderrText) ? null : Tail(stderrText),
                 Duration: DateTime.UtcNow - start,
-                Detail: hungDetail ?? detail,
-                RunCompleted: hungTestName is null
+                Detail: hungDetail ?? detail
             );
         }
         finally

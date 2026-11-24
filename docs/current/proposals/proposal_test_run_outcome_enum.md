@@ -36,6 +36,10 @@ Decided (owner, 2026-11-23):
 
 - `BuildFailed` is used only if it can be detected structurally (no TRX plus the build result, not message parsing); otherwise those
   runs map to `RunError` and the plan says so.
+- **Scoping answer 2026-11-23:** a build failure before tests is NOT structurally detectable. `dotnet test` builds implicitly, so no
+  separate build result exists, and "no TRX" is the same branch as a testhost crash (`RunOneProjectAsync`, the `!File.Exists(trxPath)`
+  branch). The first slice therefore ships without a `BuildFailed` value: the no-TRX case maps to `RunError`, with its Detail text
+  (lock detail or "No TRX result file was produced") as the cause. Add `BuildFailed` later only if a structural signal appears.
 
 ## Alternatives considered, not pursued
 
@@ -46,7 +50,7 @@ Decided (owner, 2026-11-23):
 
 ## Open questions
 
-- Is a build failure before tests structurally distinguishable today (TestRunEngine near `:538`)? Unverified.
+- Is a build failure before tests structurally distinguishable today (TestRunEngine near `:538`)? Answered 2026-11-23: no (see Proposal).
 - Cancellation path was not traced (probably throws rather than returns a result).
 
 ## Cost / risk

@@ -38,8 +38,8 @@ public class FullTestMarkerStoreTests
     }
 
     private static TestRunResult Run(bool completed = true, int total = 100, int failed = 0) => new(
-        RunSucceeded: completed && failed == 0, ExitCode: 0, TotalCount: total, PassedCount: total - failed, FailedCount: failed, SkippedCount: 0,
-        FailureSummary: [], Results: [], StdoutTail: null, StderrTail: null, Duration: TimeSpan.FromSeconds(1), RunCompleted: completed);
+        Outcome: !completed ? TestRunOutcome.RunError : failed == 0 ? TestRunOutcome.Passed : TestRunOutcome.TestsFailed, ExitCode: 0, TotalCount: total, PassedCount: total - failed, FailedCount: failed, SkippedCount: 0,
+        FailureSummary: [], Results: [], StdoutTail: null, StderrTail: null, Duration: TimeSpan.FromSeconds(1));
 
     private void WriteMarkerFile(string json)
     {

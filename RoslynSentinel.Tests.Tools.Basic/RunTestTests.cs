@@ -86,7 +86,7 @@ public class RunTestTests
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var data = (TestRunResult)result.SuccessData!;
-        Assert.That(data.RunSucceeded, Is.False);
+        Assert.That(data.Outcome, Is.EqualTo(TestRunOutcome.TestsFailed));
         Assert.That(data.FailedCount, Is.EqualTo(1));
         
         var failedTest = data.Results.Single(r => r.Outcome == TestOutcome.Failed);
@@ -114,7 +114,7 @@ public class RunTestTests
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var data = (TestRunResult)result.SuccessData!;
-        Assert.That(data.RunSucceeded, Is.False);
+        Assert.That(data.Outcome, Is.EqualTo(TestRunOutcome.TestsFailed));
         Assert.That(data.PassedCount, Is.EqualTo(2));
         Assert.That(data.FailedCount, Is.EqualTo(1));
         var failure = data.Results.Single(r => r.Outcome == TestOutcome.Failed);
@@ -138,7 +138,7 @@ public class RunTestTests
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var data = (TestRunResult)result.SuccessData!;
-        Assert.That(data.RunSucceeded, Is.True);
+        Assert.That(data.Outcome, Is.EqualTo(TestRunOutcome.Passed));
         Assert.That(data.StdoutTail, Is.Null);
         Assert.That(data.StderrTail, Is.Null);
         Assert.That(result.StatusMessage, Does.Contain("Tests passed").And.Contain($"{data.TotalCount} tests"));
@@ -214,6 +214,7 @@ public class RunTestTests
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var data = (TestRunResult)result.SuccessData!;
         Assert.That(data.TotalCount, Is.Zero);
+        Assert.That(data.Outcome, Is.EqualTo(TestRunOutcome.NoTestsMatched), "a zero-match filter is NoTestsMatched and stays a non-error.");
         Assert.That(data.Detail, Does.Contain("matched filter"));
     }
 
@@ -350,7 +351,7 @@ public class RunTestTests
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var data = (TestRunResult)result.SuccessData!;
-        Assert.That(data.RunSucceeded, Is.False);
+        Assert.That(data.Outcome, Is.EqualTo(TestRunOutcome.TestsFailed));
         Assert.That(data.StdoutTail, Is.Not.Null.And.Not.Empty, "includeOutput: true keeps the stdout tail on a completed run with tests.");
     }
 
@@ -471,6 +472,7 @@ public class RunTestTests
         var result = await workspaceTools.RunTestTool(reason: "test message", ToolScope.project, scopeName: "ContosoOrders.Tests", timeoutSeconds: 120);
 
         Assert.That(result.IsError, Is.True);
+        Assert.That(((TestRunResult)result.SuccessData!).Outcome, Is.EqualTo(TestRunOutcome.RunError), "no TRX file is a RunError (a build failure is not distinguishable from a host crash).");
         Assert.That(result.StatusMessage, Does.Contain("ContosoOrders.Tests").And.Contain("TRX"));
     }
 
@@ -479,9 +481,9 @@ public class RunTestTests
     public void SummarizeTestRun_NonZeroExitWithNoFailedTests_NamesTheProject()
     {
         var run = new TestRunResult(
-            RunSucceeded: false, ExitCode: 1, TotalCount: 0, PassedCount: 0, FailedCount: 0, SkippedCount: 0,
+            Outcome: TestRunOutcome.RunError, ExitCode: 1, TotalCount: 0, PassedCount: 0, FailedCount: 0, SkippedCount: 0,
             FailureSummary: [], Results: [], StdoutTail: null, StderrTail: null, Duration: TimeSpan.FromSeconds(1),
-            ProjectSummaries: [new ProjectTestSummary("Some.Tests", RunSucceeded: false, TotalCount: 0, PassedCount: 0, FailedCount: 0, SkippedCount: 0, Detail: null)]);
+            ProjectSummaries: [new ProjectTestSummary("Some.Tests", Outcome: TestRunOutcome.RunError, TotalCount: 0, PassedCount: 0, FailedCount: 0, SkippedCount: 0, Detail: null)]);
 
         var text = WorkspaceBuildTestImpl.SummarizeTestRun(run);
 
@@ -494,12 +496,12 @@ public class RunTestTests
     {
         const string testName = "RoslynSentinel.Tests.Battery.Basic.SampleTests.Fails_Here";
         var failed = new TestRunResult(
-            RunSucceeded: false, ExitCode: 1, TotalCount: 1, PassedCount: 0, FailedCount: 1, SkippedCount: 0,
+            Outcome: TestRunOutcome.TestsFailed, ExitCode: 1, TotalCount: 1, PassedCount: 0, FailedCount: 1, SkippedCount: 0,
             FailureSummary: [], Results: [new TestCaseResult(testName, TestOutcome.Failed, TimeSpan.FromSeconds(1), "boom", null)],
             StdoutTail: null, StderrTail: null, Duration: TimeSpan.FromSeconds(1),
-            ProjectSummaries: [new ProjectTestSummary("Some.Tests", RunSucceeded: false, TotalCount: 1, PassedCount: 0, FailedCount: 1, SkippedCount: 0, Detail: null)]);
+            ProjectSummaries: [new ProjectTestSummary("Some.Tests", Outcome: TestRunOutcome.TestsFailed, TotalCount: 1, PassedCount: 0, FailedCount: 1, SkippedCount: 0, Detail: null)]);
         var passed = new TestRunResult(
-            RunSucceeded: true, ExitCode: 0, TotalCount: 1, PassedCount: 1, FailedCount: 0, SkippedCount: 0,
+            Outcome: TestRunOutcome.Passed, ExitCode: 0, TotalCount: 1, PassedCount: 1, FailedCount: 0, SkippedCount: 0,
             FailureSummary: [], Results: [], StdoutTail: null, StderrTail: null, Duration: TimeSpan.FromSeconds(1),
             ProjectSummaries: []);
 
@@ -515,7 +517,7 @@ public class RunTestTests
     {
         const string filter = "FullyQualifiedName~Nope";
         var run = new TestRunResult(
-            RunSucceeded: true, ExitCode: 0, TotalCount: 0, PassedCount: 0, FailedCount: 0, SkippedCount: 0,
+            Outcome: TestRunOutcome.NoTestsMatched, ExitCode: 0, TotalCount: 0, PassedCount: 0, FailedCount: 0, SkippedCount: 0,
             FailureSummary: [], Results: [], StdoutTail: null, StderrTail: null, Duration: TimeSpan.FromSeconds(1),
             ProjectSummaries: []);
 
@@ -531,7 +533,7 @@ public class RunTestTests
     public void SummarizeTestRun_FilterGivenAndTestsRan_KeepsTestsPassed()
     {
         var run = new TestRunResult(
-            RunSucceeded: true, ExitCode: 0, TotalCount: 3, PassedCount: 3, FailedCount: 0, SkippedCount: 0,
+            Outcome: TestRunOutcome.Passed, ExitCode: 0, TotalCount: 3, PassedCount: 3, FailedCount: 0, SkippedCount: 0,
             FailureSummary: [], Results: [], StdoutTail: null, StderrTail: null, Duration: TimeSpan.FromSeconds(1),
             ProjectSummaries: []);
 

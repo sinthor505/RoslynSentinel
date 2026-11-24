@@ -764,7 +764,7 @@ public class ResultStatusTests
     [Test]
     public void ProjectTestSummary_Passed_IsSuccess()
     {
-        var summary = new ProjectTestSummary("P", true, 3, 3, 0, 0, null);
+        var summary = new ProjectTestSummary("P", TestRunOutcome.Passed, 3, 3, 0, 0, null);
 
         Assert.That(summary.IsError, Is.False);
         Assert.That(summary.Status, Is.EqualTo(ResultStatus.Success));
@@ -775,7 +775,7 @@ public class ResultStatusTests
     [Test]
     public void ProjectTestSummary_RunFailed_IsFailedWithDetail()
     {
-        var summary = new ProjectTestSummary("P", false, 3, 2, 1, 0, "boom");
+        var summary = new ProjectTestSummary("P", TestRunOutcome.TestsFailed, 3, 2, 1, 0, "boom");
 
         Assert.That(summary.IsError, Is.True);
         Assert.That(summary.Status, Is.EqualTo(ResultStatus.Failed));
@@ -783,15 +783,54 @@ public class ResultStatusTests
         Assert.That(summary.Message, Is.EqualTo("boom"));
     }
 
-    private static TestRunResult MakeRun(bool runSucceeded, bool runCompleted, int failed) => new(
-        runSucceeded, 0, 5, 5 - failed, failed, 0,
-        new List<GroupedCountSummary>(), new List<TestCaseResult>(), null, null, TimeSpan.Zero,
-        null, runCompleted);
+    // One row per TestRunOutcome value (Passed, TestsFailed, NoTestsMatched, TimedOut, RunError).
+    [TestCase(TestRunOutcome.Passed, false, null, ResultStatus.Success)]
+    [TestCase(TestRunOutcome.TestsFailed, true, ToolErrorCode.TestRunFailed, ResultStatus.Failed)]
+    [TestCase(TestRunOutcome.NoTestsMatched, false, null, ResultStatus.Success)]
+    [TestCase(TestRunOutcome.TimedOut, true, ToolErrorCode.TestRunIncomplete, ResultStatus.Failed)]
+    [TestCase(TestRunOutcome.RunError, true, ToolErrorCode.TestRunIncomplete, ResultStatus.Failed)]
+    public void ProjectTestSummary_EveryOutcome_MapsToIsErrorCodeAndStatus(TestRunOutcome outcome, bool isError, string? code, ResultStatus status)
+    {
+        var summary = new ProjectTestSummary("P", outcome, 3, 3, 0, 0, null);
+
+        Assert.That(summary.IsError, Is.EqualTo(isError));
+        Assert.That(summary.Code, Is.EqualTo(code));
+        Assert.That(summary.Status, Is.EqualTo(status));
+    }
+
+    [Test]
+    public void TestRunOutcome_AllValues_AreCoveredByTheStatusRows()
+    {
+        Assert.That(Enum.GetValues<TestRunOutcome>(), Is.EquivalentTo(new[]
+        {
+            TestRunOutcome.Passed, TestRunOutcome.TestsFailed, TestRunOutcome.NoTestsMatched, TestRunOutcome.TimedOut, TestRunOutcome.RunError,
+        }), "a new TestRunOutcome value needs a row in the TestRunResult/ProjectTestSummary status tests");
+    }
+
+    private static TestRunResult MakeRun(TestRunOutcome outcome, int failed) => new(
+        outcome, 0, 5, 5 - failed, failed, 0,
+        new List<GroupedCountSummary>(), new List<TestCaseResult>(), null, null, TimeSpan.Zero);
+
+    // One row per TestRunOutcome value; RanToCompletion is false only for TimedOut and RunError.
+    [TestCase(TestRunOutcome.Passed, false, null, ResultStatus.Success, true)]
+    [TestCase(TestRunOutcome.TestsFailed, true, ToolErrorCode.TestRunFailed, ResultStatus.Failed, true)]
+    [TestCase(TestRunOutcome.NoTestsMatched, false, null, ResultStatus.Success, true)]
+    [TestCase(TestRunOutcome.TimedOut, true, ToolErrorCode.TestRunIncomplete, ResultStatus.Failed, false)]
+    [TestCase(TestRunOutcome.RunError, true, ToolErrorCode.TestRunIncomplete, ResultStatus.Failed, false)]
+    public void TestRunResult_EveryOutcome_MapsToIsErrorCodeStatusAndCompletion(TestRunOutcome outcome, bool isError, string? code, ResultStatus status, bool ranToCompletion)
+    {
+        TestRunResult run = MakeRun(outcome, 0);
+
+        Assert.That(run.IsError, Is.EqualTo(isError));
+        Assert.That(run.Code, Is.EqualTo(code));
+        Assert.That(run.Status, Is.EqualTo(status));
+        Assert.That(run.RanToCompletion, Is.EqualTo(ranToCompletion));
+    }
 
     [Test]
     public void TestRunResult_Success_IsSuccess()
     {
-        TestRunResult run = MakeRun(true, true, 0);
+        TestRunResult run = MakeRun(TestRunOutcome.Passed, 0);
 
         Assert.That(run.IsError, Is.False);
         Assert.That(run.Status, Is.EqualTo(ResultStatus.Success));
@@ -802,7 +841,7 @@ public class ResultStatusTests
     [Test]
     public void TestRunResult_TestFailures_IsFailedWithCountMessage()
     {
-        TestRunResult run = MakeRun(false, true, 2);
+        TestRunResult run = MakeRun(TestRunOutcome.TestsFailed, 2);
 
         Assert.That(run.IsError, Is.True);
         Assert.That(run.Status, Is.EqualTo(ResultStatus.Failed));
@@ -813,7 +852,7 @@ public class ResultStatusTests
     [Test]
     public void TestRunResult_IncompleteRun_IsFailedWithIncompleteMessage()
     {
-        TestRunResult run = MakeRun(false, false, 0);
+        TestRunResult run = MakeRun(TestRunOutcome.RunError, 0);
 
         Assert.That(run.IsError, Is.True);
         Assert.That(run.Status, Is.EqualTo(ResultStatus.Failed));
@@ -824,7 +863,7 @@ public class ResultStatusTests
     [Test]
     public void TestRunResult_IncompleteRunWithFailedTests_IsStillIncomplete()
     {
-        TestRunResult run = MakeRun(false, false, 2);
+        TestRunResult run = MakeRun(TestRunOutcome.TimedOut, 2);
 
         Assert.That(run.Code, Is.EqualTo(ToolErrorCode.TestRunIncomplete));
         Assert.That(run.Status, Is.EqualTo(ResultStatus.Failed));
