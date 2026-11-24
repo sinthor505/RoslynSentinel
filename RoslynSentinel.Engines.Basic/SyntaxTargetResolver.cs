@@ -112,7 +112,7 @@ public static class SyntaxTargetResolver
             return candidates;
         }
 
-        var narrowed = candidates.Where(c => c.ContainingTypeName == containingTypeName).ToList();
+        var narrowed = candidates.Where(c => c.Kind == CandidateKind.LocalFunction ? CandidateMatchesContainer(c, containingTypeName) : c.ContainingTypeName == containingTypeName).ToList();
         return narrowed.Count > 0 ? narrowed : candidates;
     }
 
@@ -285,7 +285,51 @@ public static class SyntaxTargetResolver
 
         // Deliberate deviation from FilterByContainingType: this never falls back to the unfiltered
         // candidates. A container the caller named must match, or the result is empty.
-        return candidates.Where(c => ContainingTypeMatches(c.ContainingTypeName, containerName)).ToList();
+        return candidates.Where(c => c.Kind == CandidateKind.LocalFunction ? CandidateMatchesContainer(c, containerName) : ContainingTypeMatches(c.ContainingTypeName, containerName)).ToList();
+    }
+
+    /// <summary>
+    /// Reports whether a candidate sits inside <paramref name="containerName"/>. For a local function the
+    /// container may also name its enclosing member: <c>Outer</c> or <c>Type.Outer</c> matches a local
+    /// function declared in method <c>Outer</c>. Every other kind compares the containing type only.
+    /// </summary>
+    public static bool CandidateMatchesContainer(SyntaxNodeCandidate candidate, string containerName)
+    {
+        if (candidate.Kind != CandidateKind.LocalFunction)
+        {
+            return ContainingTypeMatches(candidate.ContainingTypeName, containerName);
+        }
+
+        if (ContainingTypeMatches(candidate.ContainingTypeName, containerName))
+        {
+            return true;
+        }
+
+        var lastDot = containerName.LastIndexOf('.');
+        var lastSegment = lastDot < 0 ? containerName : containerName.Substring(lastDot + 1);
+        if (candidate.EnclosingMemberName is null || !lastSegment.Equals(candidate.EnclosingMemberName, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var prefix = lastDot < 0 ? null : containerName.Substring(0, lastDot);
+        return prefix is null || ContainingTypeMatches(candidate.ContainingTypeName, prefix);
+    }
+
+    /// <summary>
+    /// Drops local-function candidates when a candidate of any other kind (a member or a type) is also
+    /// present, so a local function never shadows a real declaration. Otherwise returns the list unchanged.
+    /// </summary>
+    public static List<SyntaxNodeCandidate> PreferMembersOverLocalFunctions(List<SyntaxNodeCandidate> candidates)
+    {
+        var hasLocalFunction = candidates.Any(c => c.Kind == CandidateKind.LocalFunction);
+        var hasOtherKind = candidates.Any(c => c.Kind != CandidateKind.LocalFunction);
+        if (!hasLocalFunction || !hasOtherKind)
+        {
+            return candidates;
+        }
+
+        return candidates.Where(c => c.Kind != CandidateKind.LocalFunction).ToList();
     }
 
     /// <summary>
@@ -454,6 +498,8 @@ public static class SyntaxTargetResolver
         return identifier == default ? string.Empty : sourceText.Lines.GetLineFromPosition(identifier.SpanStart).ToString().Trim();
     }
 
+    private static string GetMemberName(LocalFunctionStatementSyntax localFunction) => localFunction.Identifier.Text;
+
     public static string? GetMemberName(MemberDeclarationSyntax member)
     {
         return member switch
@@ -505,14 +551,14 @@ public static class SyntaxTargetResolver
     /// file, line, docCommentId) -- e.g. building a "did you mean" hint or a discovery listing --
     /// use LocateSymbolAsync instead; that is a different consumer shape than this method solves.
     /// </summary>
-    public static List<SyntaxNodeCandidate> ResolveCandidates(SyntaxNode root, SourceText sourceText, string name, CancellationToken cancellationToken = default)
+    /// <param name="includeLocalFunctions">Opt-in: when true, also returns every local function named <paramref name="name"/>, with EnclosingMemberName set to its nearest enclosing member. Default false returns member and type candidates only, so existing callers are unchanged.</param>
+    public static List<SyntaxNodeCandidate> ResolveCandidates(SyntaxNode root, SourceText sourceText, string name, CancellationToken cancellationToken = default, bool includeLocalFunctions = false)
     {
-        // TODO local functions are never candidates, so Member(view/replace/remove) cannot target one (GetMethodSource resolves a unique one itself)
         var normalizedName = SyntaxTargetResolver.NormalizeTypeName(name);
         var results = new List<SyntaxNodeCandidate>();
         var lines = sourceText.Lines;
 
-        void Add(SyntaxNode node, CandidateKind kind, string candidateName)
+        void Add(SyntaxNode node, CandidateKind kind, string candidateName, string? enclosingMemberName = null)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var containingTypeName = node.Ancestors().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault()?.Identifier.Text;
@@ -524,7 +570,7 @@ public static class SyntaxTargetResolver
                 preview = preview.Substring(0, 77) + "...";
             }
 
-            results.Add(new SyntaxNodeCandidate(node, kind, candidateName, containingTypeName, startLine, endLine, preview));
+            results.Add(new SyntaxNodeCandidate(node, kind, candidateName, containingTypeName, startLine, endLine, preview, enclosingMemberName));
         }
 
         foreach (var member in root.DescendantNodes().OfType<MemberDeclarationSyntax>())
@@ -575,6 +621,15 @@ public static class SyntaxTargetResolver
                 case EnumDeclarationSyntax e when SyntaxTargetResolver.NormalizeTypeName(e.Identifier.Text) == normalizedName:
                     Add(e, CandidateKind.Enum, e.Identifier.Text);
                     break;
+            }
+        }
+
+        if (includeLocalFunctions)
+        {
+            foreach (var localFunction in root.DescendantNodes().OfType<LocalFunctionStatementSyntax>().Where(l => l.Identifier.Text == name))
+            {
+                var enclosingMember = localFunction.Ancestors().OfType<MemberDeclarationSyntax>().FirstOrDefault();
+                Add(localFunction, CandidateKind.LocalFunction, localFunction.Identifier.Text, enclosingMember is null ? null : GetMemberName(enclosingMember));
             }
         }
 
@@ -884,7 +939,7 @@ public static class SyntaxTargetResolver
 public enum CandidateKind
 {
     Method, Property, Field, Constructor, Event, Indexer,
-    Class, Interface, Struct, Record, Enum, EnumMember
+    Class, Interface, Struct, Record, Enum, EnumMember, LocalFunction
 }
 
 /// <summary>
@@ -900,4 +955,5 @@ public sealed record SyntaxNodeCandidate(
     int StartLine,
     int EndLine,
     /// <summary>First-line declaration text, for hints/diagnostics.</summary>
-    string Preview);
+    string Preview,
+    string? EnclosingMemberName = null);
