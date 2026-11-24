@@ -87,10 +87,7 @@ public class ImplementationScenarioAgentTests
                 var testCase = new TestCaseData(scenario.Id, step).SetName($"ImplScenario_{scenario.Id}_Step{step}");
 
                 // The category is generated from the property, never written by hand, so it cannot drift from the declared axis.
-                if (scenario.PrimaryAxis != EvalAxis.Unassigned)
-                {
-                    testCase.SetCategory(EvalAxisCategory.Name(scenario.PrimaryAxis));
-                }
+                testCase.SetCategory(EvalAxisCategory.Name(scenario.PrimaryAxis));
 
                 yield return testCase;
             }

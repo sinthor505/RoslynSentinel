@@ -63,15 +63,11 @@ public class ImplementationScenarioGoldenTests
 
         Assert.That(verdict.Outcome, Is.EqualTo(ImplementationScenarioOutcome.Pass), $"{scenario.Id} step {step}: {verdict.Detail}");
 
-        // The class needs the DONE:/BLOCKED: token in the canned message, which a scenario gets when it is reworked and declares its
-        // axis; a scenario that has not been reworked yet (PrimaryAxis Unassigned) has no token and is graded on the outcome only.
-        if (scenario.PrimaryAxis != EvalAxis.Unassigned)
-        {
-            var expectedClass = scenario.Steps[step - 1].ExpectedEnding == ExpectedEnding.Blocked
-                ? EvalOutcomeClass.CorrectBlocked
-                : EvalOutcomeClass.CorrectDone;
-            Assert.That(verdict.Class, Is.EqualTo(expectedClass), $"{scenario.Id} step {step}: {verdict.Detail}");
-        }
+        // The class comes from the DONE:/BLOCKED: token in the canned message; every scenario declares its axis and carries the token.
+        var expectedClass = scenario.Steps[step - 1].ExpectedEnding == ExpectedEnding.Blocked
+            ? EvalOutcomeClass.CorrectBlocked
+            : EvalOutcomeClass.CorrectDone;
+        Assert.That(verdict.Class, Is.EqualTo(expectedClass), $"{scenario.Id} step {step}: {verdict.Detail}");
     }
 
     [TestCaseSource(nameof(PreviousCases))]
@@ -197,8 +193,7 @@ public class ImplementationScenarioGoldenTests
             .FirstOrDefault(line => line.StartsWith("Files:", StringComparison.Ordinal));
         if (filesLine is null)
         {
-            // A prompt not yet rewritten into the Goal/Files/... shape has no Files line to check.
-            Assert.Ignore($"{scenario.Id} step {step}: the prompt has no 'Files:' line (not reworked yet).");
+            Assert.Fail($"{scenario.Id} step {step}: the prompt has no 'Files:' line.");
         }
 
         foreach (var entry in stepDefinition.AllowedPaths)

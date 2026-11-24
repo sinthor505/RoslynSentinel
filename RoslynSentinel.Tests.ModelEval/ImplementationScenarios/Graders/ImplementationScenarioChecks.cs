@@ -9,19 +9,6 @@ namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Graders;
 /// </summary>
 internal static class ImplementationScenarioChecks
 {
-    /// <summary>The check pipeline as a tuple; kept for callers that have not moved to <see cref="VerdictAsync"/>.</summary>
-    [Obsolete("Use VerdictAsync")]
-    public static async Task<(ImplementationScenarioOutcome Outcome, string Detail)> CheckAsync(
-        ImplementationScenario scenario,
-        int step,
-        string solutionDirectory,
-        string? finalMessage,
-        IReadOnlyList<string> changedPaths,
-        CancellationToken cancellationToken)
-    {
-        var verdict = await VerdictAsync(scenario, step, solutionDirectory, finalMessage, changedPaths, cancellationToken);
-        return (verdict.Outcome, verdict.Detail);
-    }
 
     /// <summary>
     /// Grades one step: the outcome and detail of the pipeline above, the outcome class from the final-message token, the grade
