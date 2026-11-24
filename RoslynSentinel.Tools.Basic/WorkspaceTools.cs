@@ -155,7 +155,7 @@ public class WorkspaceTools
         [Description("apply: writes the change. validate: checks it would apply cleanly without writing.")]
         [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'batchEdits' is omitted -> see the either/or check below.
-        [Consumes(DataTag.SourceFilepath, required: false)][Description("File to edit. Required unless batchEdits is given. Beside batchEdits it is the default file for items without their own filePath.")] string? filePath = null,
+        [Consumes(DataTag.SourceFilepath, required: false)][Description("File to edit. Required unless batchEdits is given; beside batchEdits it is the default for items without a filePath.")] string? filePath = null,
         [ToolOption(ToolOptionTag.OldContent, required: false)][Description(ToolParams.OldContent)] string? oldContent = null,
         [ToolOption(ToolOptionTag.NewContent, required: false)][Description(ToolParams.NewContent)] string? newContent = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
