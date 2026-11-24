@@ -30,7 +30,6 @@ public static class BuildIsolation
     private static readonly string[] BuildVerbs = ["build", "test", "publish", "pack", "restore", "msbuild"];
 
     /// <summary>Environment variables MSBuildLocator.RegisterDefaults() pins in this server process to one SDK's MSBuild.</summary>
-    // TODO SolutionRestore.MsBuildPinnedVariables and TestInstanceLauncher.MsBuildPinnedVariables keep their own copy of this list; point them at MsBuildPinnedVariables here.
     public static readonly IReadOnlyList<string> MsBuildPinnedVariables =
     [
         "MSBUILD_EXE_PATH", "MSBuildExtensionsPath", "MSBuildSDKsPath", "MSBuildLoadMicrosoftTargetsReadOnly",

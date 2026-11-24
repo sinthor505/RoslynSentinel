@@ -24,12 +24,6 @@ public sealed class TestSolutionFixture : IDisposable
 {
     private static readonly string[] SourceExtensions = [".sln", ".csproj", ".cs", ".md"];
 
-    private static readonly string[] MsBuildPinnedVariables =
-    [
-        "MSBUILD_EXE_PATH", "MSBuildExtensionsPath", "MSBuildSDKsPath", "MSBuildLoadMicrosoftTargetsReadOnly",
-        "DOTNET_HOST_PATH", "DOTNET_MSBUILD_SDK_RESOLVER_SDKS_DIR", "DOTNET_MSBUILD_SDK_RESOLVER_CLI_DIR",
-    ];
-
     // Full/parallel test runs contend on MSBuild loads; the 30 s default of PersistentWorkspaceManager.LoadSolutionAsync
     // flakes with SolutionLoadTimeoutException under that load, so fixtures that load a solution use this instead.
     public static readonly TimeSpan LoadTimeout = TimeSpan.FromSeconds(120);
@@ -208,11 +202,8 @@ public sealed class TestSolutionFixture : IDisposable
         startInfo.ArgumentList.Add("-bl:" + binlogPath);
         startInfo.Environment["MSBUILDDISABLENODEREUSE"] = "1";
         startInfo.Environment["DOTNET_CLI_USE_MSBUILD_SERVER"] = "0";
-        // MSBuildLocator.RegisterDefaults() in this test process pins MSBuild toolset variables; the restore child must resolve its own (same list as BuildEngine.RunFullBuildAsync).
-        foreach (var pinned in MsBuildPinnedVariables)
-        {
-            startInfo.Environment.Remove(pinned);
-        }
+        // MSBuildLocator.RegisterDefaults() in this test process pins MSBuild toolset variables; the restore child must resolve its own.
+        RoslynSentinel.Engines.Basic.BuildIsolation.RemoveInheritedMsBuildPins(startInfo);
 
         using var process = System.Diagnostics.Process.Start(startInfo)
             ?? throw new InvalidOperationException("TestSolutionFixture could not start 'dotnet restore'.");

@@ -28,13 +28,6 @@ public static class SolutionRestore
     private const int TailMaxLines = 12;
     private const int TailMaxChars = 1200;
 
-    // Env vars the MSBuildLocator pins in this process; the child must resolve its own toolset (same list as BuildEngine).
-    private static readonly string[] MsBuildPinnedVariables =
-    [
-        "MSBUILD_EXE_PATH", "MSBuildExtensionsPath", "MSBuildSDKsPath", "MSBuildLoadMicrosoftTargetsReadOnly",
-        "DOTNET_HOST_PATH", "DOTNET_MSBUILD_SDK_RESOLVER_SDKS_DIR", "DOTNET_MSBUILD_SDK_RESOLVER_CLI_DIR",
-    ];
-
     private static Func<string, TimeSpan, CancellationToken, Task<SolutionRestoreResult>>? _ambientRestore;
 
     /// <summary>
@@ -73,10 +66,8 @@ public static class SolutionRestore
         startInfo.ArgumentList.Add("--nologo");
         startInfo.ArgumentList.Add("-v");
         startInfo.ArgumentList.Add("quiet");
-        foreach (var variable in MsBuildPinnedVariables)
-        {
-            startInfo.EnvironmentVariables.Remove(variable);
-        }
+        // The MSBuildLocator pins in this process must not reach the child: it resolves its own toolset.
+        BuildIsolation.RemoveInheritedMsBuildPins(startInfo);
 
         Process? process;
         try

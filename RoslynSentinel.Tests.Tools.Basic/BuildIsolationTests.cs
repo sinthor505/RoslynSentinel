@@ -87,14 +87,19 @@ public class BuildIsolationTests
     // ends with no output and no TRX (blocking_error_runtest_no_trx_in_git_worktree). Both engines that spawn dotnet must strip the pin.
     [TestCase("RoslynSentinel.Engines.Basic/TestRunEngine.cs")]
     [TestCase("RoslynSentinel.Engines.Basic/BuildEngine.cs")]
+    [TestCase("RoslynSentinel.Engines.Basic/SolutionRestore.cs")]
+    [TestCase("RoslynSentinel.Engines.Basic/TestInstanceLauncher.cs")]
+    [TestCase("RoslynSentinel.Tests/TestSolutionFixture.cs")]
+    [TestCase("RoslynSentinel.Tests.Tools.Basic/LoadSolutionForceReloadRestoreIntegrationTests.cs")]
     [Category("MsBuildPins")]
-    public void DotnetSpawningEngines_StripTheInheritedMsBuildPins(string relativePath)
+    public void DotnetSpawningCallers_StripTheInheritedMsBuildPinsThroughTheSharedList(string relativePath)
     {
         var path = Path.Combine(RepoRootLocator.Find(AppContext.BaseDirectory), relativePath.Replace('/', Path.DirectorySeparatorChar));
 
         var source = File.ReadAllText(path);
 
-        Assert.That(source, Does.Contain("BuildIsolation.RemoveInheritedMsBuildPins(process.StartInfo)"), relativePath);
+        Assert.That(source, Does.Contain("BuildIsolation.RemoveInheritedMsBuildPins("), relativePath);
+        Assert.That(source, Does.Not.Contain("\"MSBUILD_EXE_PATH\""), relativePath + " keeps its own copy of the pin list; use BuildIsolation.MsBuildPinnedVariables");
     }
 
     [Test]

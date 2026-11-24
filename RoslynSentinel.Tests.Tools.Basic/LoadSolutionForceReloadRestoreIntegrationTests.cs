@@ -90,10 +90,7 @@ public class LoadSolutionForceReloadRestoreIntegrationTests
             UseShellExecute = false,
         };
         // The test host pins an MSBuild toolset in its environment; the child resolves its own.
-        foreach (var variable in new[] { "MSBUILD_EXE_PATH", "MSBuildExtensionsPath", "MSBuildSDKsPath", "MSBuildLoadMicrosoftTargetsReadOnly", "DOTNET_HOST_PATH", "DOTNET_MSBUILD_SDK_RESOLVER_SDKS_DIR", "DOTNET_MSBUILD_SDK_RESOLVER_CLI_DIR" })
-        {
-            startInfo.EnvironmentVariables.Remove(variable);
-        }
+        BuildIsolation.RemoveInheritedMsBuildPins(startInfo);
 
         using var process = Process.Start(startInfo)!;
         process.StandardInput.Close();

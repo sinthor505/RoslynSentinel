@@ -32,13 +32,6 @@ public sealed class TestInstanceLauncher
     private static readonly TimeSpan ReadyPollInterval = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan ReadyAttemptTimeout = TimeSpan.FromSeconds(5);
 
-    // Env vars the MSBuildLocator pins in this process; the child must resolve its own toolset (same list as BuildEngine).
-    private static readonly string[] MsBuildPinnedVariables =
-    [
-        "MSBUILD_EXE_PATH", "MSBuildExtensionsPath", "MSBuildSDKsPath", "MSBuildLoadMicrosoftTargetsReadOnly",
-        "DOTNET_HOST_PATH", "DOTNET_MSBUILD_SDK_RESOLVER_SDKS_DIR", "DOTNET_MSBUILD_SDK_RESOLVER_CLI_DIR",
-    ];
-
     private readonly IWorkspaceManager _workspaceManager;
     private readonly BuildEngine _buildEngine;
     private readonly ServerInstancePaths _paths;
@@ -158,10 +151,8 @@ public sealed class TestInstanceLauncher
             startInfo.ArgumentList.Add(argument);
         }
 
-        foreach (var variable in MsBuildPinnedVariables)
-        {
-            startInfo.EnvironmentVariables.Remove(variable);
-        }
+        // The MSBuildLocator pins in this process must not reach the child: it resolves its own toolset.
+        BuildIsolation.RemoveInheritedMsBuildPins(startInfo);
 
         startInfo.EnvironmentVariables[BuildIsolation.InstanceIdEnvironmentVariable] = ResolveChildInstanceId(Environment.ProcessId, workingDirectory);
 
