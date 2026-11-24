@@ -3,6 +3,8 @@ using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
+using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Graders;
+
 namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios;
 
 /// <summary>Result classes of one implementation-scenario step run; mirrors ShippingKindStepOutcome.</summary>
@@ -26,6 +28,10 @@ internal enum ImplementationScenarioOutcome
 /// plan, which only names exact paths: a model-written test file has no fixed name). <paramref name="HiddenTestSource"/> is an
 /// xUnit file injected for grading (null = none). <paramref name="ExtraCheck"/> returns a failure message or null.
 /// <paramref name="CannedFinalMessage"/> is the final message the golden self-test supplies (read-only steps).
+/// <paramref name="ExpectedEnding"/> is how a correct run ends (DONE: or BLOCKED:); <paramref name="ExpectedRedTests"/> are test names
+/// a correct BLOCKED end state may leave failing; <paramref name="Variants"/> are the named end states of the executable outcome
+/// table; <paramref name="VariantProbe"/> returns extra variant detail or null; <paramref name="DoneWhenTests"/> are the test class
+/// names as written in the step's Done-when sentence (read by the catalog; null = exempt from rule 9).
 /// </summary>
 internal sealed record ImplementationScenarioStep(
     string Prompt,
@@ -33,7 +39,12 @@ internal sealed record ImplementationScenarioStep(
     IReadOnlyList<string> AllowedPaths,
     string? HiddenTestSource,
     Func<ImplementationScenarioCheckContext, Task<string?>>? ExtraCheck,
-    string? CannedFinalMessage);
+    string? CannedFinalMessage,
+    ExpectedEnding ExpectedEnding = ExpectedEnding.Done,
+    IReadOnlyList<string>? ExpectedRedTests = null,
+    IReadOnlyList<ScenarioVariant>? Variants = null,
+    Func<ImplementationScenarioCheckContext, string?>? VariantProbe = null,
+    IReadOnlyList<string>? DoneWhenTests = null);
 
 /// <summary>
 /// A data-driven implementation scenario (see docs/current/plans/closed/plan_modeleval_implementation_scenarios.md).
@@ -41,6 +52,7 @@ internal sealed record ImplementationScenarioStep(
 /// <paramref name="ParkedReason"/> and its test cases are reported Ignored.
 /// </summary>
 /// <param name="OfferFullToolSchema">Mechanism only: true builds the sample's world with the full tool schema (validateOnApply offered); no scenario sets it.</param>
+/// <param name="PrimaryAxis">The one declared axis; the NUnit category Axis:&lt;Name&gt; and the catalog section are generated from it. The free-text <paramref name="Axis"/> stays as a description.</param>
 internal sealed record ImplementationScenario(
     string Id,
     string Title,
@@ -51,9 +63,11 @@ internal sealed record ImplementationScenario(
     int TurnCap = 25,
     string PreferredHost = "113",
     string? ParkedReason = null,
-    bool OfferFullToolSchema = false)
+    bool OfferFullToolSchema = false,
+    EvalAxis PrimaryAxis = EvalAxis.Unassigned)
 {
-    /// <summary>Context budget in characters: seed text + the longest step prompt (~6k tokens at 24,000).</summary>
+    /// <summary>Context budget in characters: seed text (visible acceptance tests excluded) + the longest step prompt (~6k tokens at 24,000).</summary>
+    // Visible acceptance tests (seed files under ContosoOrders.Tests/ that no step lets the model edit) are not counted: the model runs them with RunTest instead of reading them. This is on purpose. Watch run transcripts for context-limit failures; if the model starts reading them, count them again.
     public const int ContextBudgetCharacters = 24000;
 
     public static ImplementationScenario Placeholder(string id, string reason)
@@ -80,12 +94,22 @@ internal sealed record ImplementationScenario(
         return files.ToDictionary(entry => entry.Key, entry => NormalizeToCrlf(entry.Value));
     }
 
-    /// <summary>Seed text characters plus the longest step prompt; compared with <see cref="ContextBudgetCharacters"/>.</summary>
+    /// <summary>
+    /// Seed text characters plus the longest step prompt, compared with <see cref="ContextBudgetCharacters"/>. Visible acceptance
+    /// tests (seed files under ContosoOrders.Tests/ that no step's AllowedPaths lets the model edit) are not counted: the model runs
+    /// them instead of reading them.
+    /// </summary>
     public int ContextCharacters()
     {
         var longestPrompt = Steps.Count == 0 ? 0 : Steps.Max(step => step.Prompt.Length);
-        return SeedFiles.Values.Sum(text => text.Length) + longestPrompt;
+        return SeedFiles.Where(entry => !IsVisibleAcceptanceTest(entry.Key)).Sum(entry => entry.Value.Length) + longestPrompt;
     }
+
+    // A visible acceptance test: under ContosoOrders.Tests/ and matched by no step's AllowedPaths (an entry equals the key, or ends with '/' and is a prefix of it).
+    private bool IsVisibleAcceptanceTest(string seedPath) =>
+        seedPath.StartsWith("ContosoOrders.Tests/", StringComparison.Ordinal)
+        && !Steps.Any(step => step.AllowedPaths.Any(allowed =>
+            allowed == seedPath || (allowed.EndsWith('/') && seedPath.StartsWith(allowed, StringComparison.Ordinal))));
 
     internal static string NormalizeToCrlf(string text) => text.Replace("\r\n", "\n").Replace("\n", "\r\n");
 }
@@ -96,7 +120,8 @@ internal sealed record ImplementationScenarioCheckContext(
     string? FinalMessage,
     IReadOnlyList<string> ChangedPaths,
     IReadOnlyDictionary<string, string> SeedFiles,
-    CancellationToken CancellationToken)
+    CancellationToken CancellationToken,
+    DotnetTestResult? TestRun = null)
 {
     // File.WriteAllText of a string that starts with U+FEFF writes a BOM; this encoding reproduces exactly those bytes.
     private static readonly UTF8Encoding Utf8NoBomEncoding = new(false);
