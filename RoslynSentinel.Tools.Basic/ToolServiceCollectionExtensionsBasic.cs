@@ -10,7 +10,8 @@ namespace Microsoft.Extensions.DependencyInjection;
 /// <c>Microsoft.Extensions.DependencyInjection</c> so callers need no extra using) so a project that cannot
 /// reference a Server project -- chiefly test projects -- can register and resolve the real tool graph.
 /// Everything here is <c>TryAdd*</c>: a registration the host made earlier or later wins, whichever order the
-/// calls come in. Mode gating (<c>activeToolClasses</c>) and MCP exposure (<c>WithSentinelTools</c>) are host
+/// calls come in. Mode gating (<c>activeToolClasses</c>) and the startup tool population
+/// (ToolSurfaceStartupPopulation, filled from the ToolClassRegistry tables) are host
 /// concepts and stay in the Server project.
 /// </summary>
 public static class ToolServiceCollectionExtensionsBasic
