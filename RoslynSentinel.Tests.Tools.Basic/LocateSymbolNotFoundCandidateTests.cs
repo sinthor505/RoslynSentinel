@@ -59,7 +59,7 @@ public class LocateSymbolNotFoundCandidateTests
         Assert.That(message, Does.Contain("CalcDisc"), "the similar declared method is named");
         Assert.That(message, Does.Contain(OrderPricingFixture.FileName), "the candidate's declaring file is named");
         Assert.That(message, Does.Contain("OrderPricingCalculator"), "the candidate's container is named");
-        Assert.That(message, Does.Contain(ToolCallHint.Call("Search", ("mode", "symbol"), ("query", "CalcDisc"), ("filePath", OrderPricingFixture.FileName))),
+        Assert.That(message, Does.Contain(ToolCallHint.Call("Search", ("mode", "symbol"), ("query", "CalcDisc"), ("containingType", "OrderPricingCalculator"), ("filePath", OrderPricingFixture.FileName))),
             "the candidate carries a prefilled Search call");
         Assert.That(message, Does.Not.Contain("Try exactMatch=false"));
     }
