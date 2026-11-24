@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using RoslynSentinel.Engines.Advanced;
 
 using static RoslynSentinel.Tests.Support.FormatKit;
+using RoslynSentinel.Tests.Support;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
@@ -987,8 +988,8 @@ public class AdvancedStructuralFormatCharacterizationTests
         var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(
             async () => await _engine.IntroduceParameterObjectAsync("Test.cs", "Compare"));
 
-        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
-        Assert.That(ex.Message, Does.Contain("System.Collections.Generic.IComparer<T>.Compare").And.Contain("Nothing was changed"));
+        ErrorAssert.Is(ex, ToolErrorCode.TargetIneligible, "IComparer<T>.Compare");
+        Assert.That(ex.Message, Does.Contain("Nothing was changed"));
     }
 
     [Test]

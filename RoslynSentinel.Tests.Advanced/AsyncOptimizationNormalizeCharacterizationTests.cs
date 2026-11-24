@@ -3,6 +3,7 @@ using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Engines.Advanced;
+using RoslynSentinel.Tests.Support;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
@@ -775,8 +776,7 @@ public class AsyncOptimizationNormalizeCharacterizationTests
             "}"));
 
         var ex = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () => await _engine.RewriteObsoleteCallsInAsyncMethodAsync("Test.cs", "RunAsync"));
-        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
-        Assert.That(ex.Message, Does.Contain("Method 'RunAsync' matches 2 declarations"));
+        ErrorAssert.Is(ex, ToolErrorCode.Ambiguous, "'RunAsync' matches 2");
     }
 
     [Test]

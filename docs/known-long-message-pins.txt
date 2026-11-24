@@ -9,8 +9,6 @@ AddMemberManyCallBindingTests.cs | 4
 AddMembersAsyncTests.cs | 3
 AdminToolsLedgerTests.cs | 1
 AdminToolsTests.cs | 1
-AdvancedStructuralFormatCharacterizationTests.cs | 1
-AsyncOptimizationNormalizeCharacterizationTests.cs | 1
 BatteryFifteenTests.cs | 1
 BatteryFourTests.cs | 1
 BatteryTwentyTests.cs | 2
@@ -21,7 +19,6 @@ ChangeSignatureDescriptionAndRefusalTests.cs | 2
 ChangeSignatureNonConstantDefaultTests.cs | 3
 ChangeSignaturePrimaryConstructorTests.cs | 1
 ChangeSignatureWrapperTests.cs | 4
-CodeHealingStyleNormalizeCharacterizationTests.cs | 1
 CodeTransformToolsOutcomeTests.cs | 2
 ConstructorParameterCallSiteFixupTests.cs | 1
 ContextHelperIndentationDiagnosisTests.cs | 2

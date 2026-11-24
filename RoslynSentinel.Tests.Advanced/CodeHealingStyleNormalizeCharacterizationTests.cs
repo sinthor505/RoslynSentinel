@@ -3,6 +3,7 @@ using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Engines.Advanced;
+using RoslynSentinel.Tests.Support;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
@@ -617,6 +618,6 @@ public class CodeHealingStyleNormalizeCharacterizationTests
         SetSource("public class C { int One() => 1; }");
         var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _healing.AddRetryPolicyAsync("Test.cs", 0, 0, 3));
         Assert.That(ex.MissingTargetKind, Is.EqualTo(MissingTargetKinds.Method));
-        Assert.That(ex.Message, Does.Contain("No method in 'Test.cs' has a block body"));
+        ErrorAssert.Is(ex, ToolErrorCode.NotFound, "has a block body");
     }
 }
