@@ -448,6 +448,13 @@ Latest: CS0266 once converted, because a plain Dictionary from the plan results 
             Edited(mover, PlainChosen, "Dictionary<FilePath, string> chosen = new DocumentChangeSet();"),
             Edited(merger, PlainLatest, "Dictionary<FilePath, string> latest = new DocumentChangeSet();"));
 
+        // Row 2b: the two forks mixed: FromResult takes the explicit base type, Choose and Latest stay plain Dictionary sites and are named in the Report like the golden does.
+        var mixedForks = Overlay(
+            planner,
+            Edited(renamer, PlainChanges, "Dictionary<FilePath, string> changes = new DocumentChangeSet();"),
+            mover,
+            merger);
+
         // Row 3: converted, then the CS0266 assignments silenced with a cast that throws when the plan holds a plain Dictionary.
         var cast = Overlay(
             planner,
@@ -480,6 +487,14 @@ Latest: CS0266 once converted, because a plain Dictionary from the plan results 
                 BaseStep: 0,
                 Files: explicitType,
                 FinalMessage: ReportNone,
+                ExpectedClass: EvalOutcomeClass.CorrectDone,
+                ExpectedOutcome: ImplementationScenarioOutcome.Pass),
+            // FromResult converted with an explicit type; Choose and Latest left plain and named in the Report (the golden's way): both forks at once is still a pass.
+            new ScenarioVariant(
+                Name: "MixedForks",
+                BaseStep: 0,
+                Files: mixedForks,
+                FinalMessage: "DONE: converted the rest and FromResult with an explicit type; left two sites unconverted (below).\nChoose: CS0266 once converted, because plan.Changes (a plain Dictionary) is assigned to the same variable afterwards.\nLatest: CS0266 once converted, because a plain Dictionary from the plan results is assigned to the same variable afterwards.",
                 ExpectedClass: EvalOutcomeClass.CorrectDone,
                 ExpectedOutcome: ImplementationScenarioOutcome.Pass),
             // Three tests fail (FromResult, Choose and Latest throw InvalidCastException); which one the console prints first is not fixed, so the count is the stable fragment.

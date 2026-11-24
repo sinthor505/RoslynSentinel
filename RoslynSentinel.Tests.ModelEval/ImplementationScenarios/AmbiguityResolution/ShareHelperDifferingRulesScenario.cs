@@ -254,7 +254,7 @@ public class FolderNamespaceTests
             "Where the two callers differ, each keeps its own behaviour exactly.",
         IfFails: EvalContractOptions.PlainIfFails,
         DoneWhen: "The solution builds with 0 errors; all tests in ContosoOrders.Tests pass, including NamespaceTests, RootRuleTests and FolderNamespaceTests; " +
-            "both callers call `FolderNamespace.Expected`; where a caller's rule differs from the helper's, a comment starting `// Deviation:` says how."));
+            "both callers call `FolderNamespace.Expected`; where a caller's root rule differs from the other caller's, a comment starting `// Deviation:` says how."));
 
     // The contract placement is read once per process, when this Definition initialises (StepPrompt renders then); one process runs one arm.
     public static ImplementationScenario Definition { get; } = new ImplementationScenario(
@@ -356,7 +356,7 @@ public class FolderNamespaceTests
 
         return docCommentOnly
             ? "the brief asks for a comment starting `// Deviation:` in ProjectStructure.cs or FileTools.cs; a `///` doc comment starting with Deviation: does not count"
-            : "the brief asks for a comment starting `// Deviation:` in ProjectStructure.cs or FileTools.cs, where a caller's rule differs from the helper's; none was found";
+            : "the brief asks for a comment starting `// Deviation:` in ProjectStructure.cs or FileTools.cs, where a caller's root rule differs from the other caller's; none was found";
     }
 
     // True for a comment (line, block or doc) whose text, after the delimiters and whitespace, starts with "Deviation:"; no symbol can see a comment.
