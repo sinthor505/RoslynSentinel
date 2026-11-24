@@ -1,8 +1,8 @@
 # Plan: Tool-surface controller stage C - runtime toolsets go through the controller (one writer, exact attribution)
 
-**Status:** IN PROGRESS 2026-11-24. Steps 1-11 done (aadefa7c..0a23c779, live A-E ok); Step 12 full run pending. Approved 2026-11-24: Stage C: runtime toolsets applied through ToolSurfaceController with exact attribution; ToolsetService becomes a facade. Review fixes applied; decisions R1-R9 taken at recommendation (owner away), R3 needs owner confirmation (non-blocking).
+**Status:** IMPLEMENTED 2026-11-24. aadefa7c, c4d40a08, a4401917, 6709e406, 3be85b9e, 719a9c37, 4f9dfbe9, ac3142d3, 0a23c779, 309e94c1; live A-E ok; full run green at 9c5fdaf2 (1,695 s, 0 failures). Approved 2026-11-24: Stage C: runtime toolsets applied through ToolSurfaceController with exact attribution; ToolsetService becomes a facade. Review fixes applied; decisions R1-R9 taken at recommendation (owner away), R3 needs owner confirmation (non-blocking).
 
-Stage 2 of [proposal_tool_surface_controller.md](../proposals/proposal_tool_surface_controller.md); follows phase A/B ([closed/plan_tool_surface_controller.md](closed/plan_tool_surface_controller.md), ad3b5879..9619e344: B5 a3007c77, close 9619e344), whose "Later phases" bullet C this details.
+Stage 2 of [proposal_tool_surface_controller.md](../../proposals/proposal_tool_surface_controller.md); follows phase A/B ([closed/plan_tool_surface_controller.md](plan_tool_surface_controller.md), ad3b5879..9619e344: B5 a3007c77, close 9619e344), whose "Later phases" bullet C this details.
 
 ## Problem
 
@@ -20,7 +20,7 @@ Phase A made `ToolSurfaceController` the read side of the tool surface, but the 
 - **Attribution is a catalog guess.** The snapshot's `ToolSet` is `ToolsetCatalog.FindSet(name)`
   (`ToolSurfaceController.cs:121`), not the set whose apply added the tool. It is right today only because the sets are
   disjoint (`McpToolsetControlTests.Catalog_SetsAreDisjoint_AndExcludeCoreTools`); JSON toolsets
-  ([plan_json_toolset_definitions.md](plan_json_toolset_definitions.md)) may overlap. Phase A/B deferred this to stage C
+  ([plan_json_toolset_definitions.md](../plan_json_toolset_definitions.md)) may overlap. Phase A/B deferred this to stage C
   (its Risk "Toolset attribution").
 - **A zero-tool apply leaves the snapshot stale (hypothesis).** `SetEnabled` marks a set on even when every member is
   unavailable (`_enabled[toolSet] = built.Where(...)` with an empty list), but no tool moved, so no `Changed` fires and the
@@ -369,7 +369,7 @@ attribution through its `ToolsetService` fallback, which is text-neutral; see Ri
 - Done when: the section matches the code; links resolve.
 
 ### Step 12 - No stubs left, full run
-- Done: stub sweep 0 matches; full run pending (ClaudeLeanSchemaBudgetTests red from peer punchlist #20, fix promised by roslynsentinel-0c)
+- Done: stub sweep 0 matches; full run green at 9c5fdaf2 (c:\tmp\rs-testtrees\_results\9c5fdaf2-20261124-013717-10008) after the peer trimmed ReplaceSnippet schema text (273e6734)
 - Files: none (check only)
 - Depends on: all above
 - Effect: none
