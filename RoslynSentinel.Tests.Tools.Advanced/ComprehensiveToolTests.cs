@@ -260,7 +260,7 @@ public class ComprehensiveToolTests
         var report = await _impactAnalyzer.AnalyzeImpactAsync("C.cs", "using");
         Assert.That(report.Error, Does.Contain("at line 1 of"));
         Assert.That(report.Error, Does.Contain("C.cs"));
-        Assert.That(report.Error, Does.Contain("innermost node (UsingDirectiveSyntax)"));
+        Assert.That(report.Error, Does.Contain("innermost node (UsingDirective"));
         Assert.That(report.Error, Does.Contain("GetFileOutline"));
     }
 }

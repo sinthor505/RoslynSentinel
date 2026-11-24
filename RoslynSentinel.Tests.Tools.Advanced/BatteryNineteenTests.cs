@@ -6,6 +6,7 @@ using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tools.Advanced;
+using RoslynSentinel.Tests.Support;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Tools.Advanced;
@@ -240,8 +241,8 @@ public interface IOrderRepository
         SetSource("public class C {}", "Test.cs");
         var result = await _generationTools.GenerateDefaultConfigJsonTool(reason: "test message", "NoSuchProject");
         Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
-        Assert.That(result.ErrorData.Message, Does.Contain("Project 'NoSuchProject' was not found"), "Tools return a structured not-found error rather than throwing for an unknown project.");
+        // Tools return a structured not-found error rather than throwing for an unknown project.
+        ErrorAssert.Is(result.ErrorData, ToolErrorCode.NotFound, "'NoSuchProject'");
         Assert.That(result.ErrorData.Message, Does.Contain("Loaded projects:"));
     }
 

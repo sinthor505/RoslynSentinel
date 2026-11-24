@@ -835,7 +835,8 @@ namespace TestProj
         var result = await _asyncSafetyEngine.DetectValueTaskMisuseAsync("Vt.cs");
         Assert.That(result, Has.Count.EqualTo(1));
         Assert.That(result[0].MethodName, Is.EqualTo("RunAsync"));
-        Assert.That(result[0].Reason, Does.Contain("ValueTask variable 'vt' is awaited more than once"));
+        Assert.That(result[0].Reason, Does.Contain("ValueTask variable 'vt'"));
+        Assert.That(result[0].Reason, Does.Contain("awaited more than once"));
         SetSource("using System.Threading.Tasks; public class V { public async Task RunAsync() { var vt = Get(); await vt; } public ValueTask<int> Get() { return new ValueTask<int>(1); } }", "Clean.cs");
         var clean = await _asyncSafetyEngine.DetectValueTaskMisuseAsync("Clean.cs");
         Assert.That(clean, Is.Empty);

@@ -13,9 +13,7 @@ AdvancedStructuralFormatCharacterizationTests.cs | 1
 AsyncOptimizationNormalizeCharacterizationTests.cs | 1
 BatteryFifteenTests.cs | 1
 BatteryFourTests.cs | 1
-BatteryNineteenTests.cs | 1
 BatteryTwentyTests.cs | 2
-BatteryTwentyThreeTests.cs | 1
 CallBindingCheckTests.cs | 1
 CallableToolHintTests.cs | 4
 ChangeSignatureConstructorWrapperTests.cs | 4
@@ -25,7 +23,6 @@ ChangeSignaturePrimaryConstructorTests.cs | 1
 ChangeSignatureWrapperTests.cs | 4
 CodeHealingStyleNormalizeCharacterizationTests.cs | 1
 CodeTransformToolsOutcomeTests.cs | 2
-ComprehensiveToolTests.cs | 1
 ConstructorParameterCallSiteFixupTests.cs | 1
 ContextHelperIndentationDiagnosisTests.cs | 2
 ContextHelperLineAfterTests.cs | 3
