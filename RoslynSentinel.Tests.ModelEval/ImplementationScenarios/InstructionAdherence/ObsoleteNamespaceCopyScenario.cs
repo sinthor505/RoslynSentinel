@@ -234,7 +234,7 @@ public class ObsoleteMigrationTests
         Goal: "In ContosoOrders.Core/Evals/ObsoleteNamespaceCopy the file Legacy/Orders.cs declares three top-level types in the namespace " +
             "`ContosoOrders.Evals.ObsoleteNamespaceCopy.Legacy`. Two files change. " +
             "1. New file Modern/Orders.cs (same folder tree): a copy of Legacy/Orders.cs in the namespace `ContosoOrders.Evals.ObsoleteNamespaceCopy.Modern`; " +
-            "it keeps the doc comments and CRLF line endings, has no byte order mark requirement and carries no Obsolete attribute. " +
+            "it keeps the doc comments and CRLF line endings, needs no byte order mark and carries no Obsolete attribute. " +
             "2. Existing file Legacy/Orders.cs: every top-level type gets the attribute `[System.Obsolete(\"Use ContosoOrders.Evals.ObsoleteNamespaceCopy.Modern.<Type>\")]`, " +
             "where `<Type>` is that type's name, written fully qualified as `System.Obsolete` and placed below the type's XML doc comment. " +
             "The attribute points at the Modern type and goes on the Legacy type.",

@@ -236,7 +236,7 @@ Step 2 reason: the target-typed new() arguments and the [] argument cannot targe
         Goal: "The plan Evals/PlanStalenessReview/plan.md (at the solution root) was drafted some time ago. " +
             "The code it describes is in ContosoOrders.Core/Evals/PlanStalenessReview. " +
             "Check the plan against the current code and tell the owner what is stale. Implement nothing.",
-        Files: "none: change no file.",
+        Files: "none (change no file).",
         Conditions: "",
         IfFails: "Change no file. If you cannot answer a Report line, write `unknown` and why.",
         DoneWhen: "Every Report line is answered from the current code, and no file changed. " +
@@ -244,7 +244,7 @@ Step 2 reason: the target-typed new() arguments and the [] argument cannot targe
         Report: "One line each, exactly in this form. " +
             "`Anchor <n>: holds` or `Anchor <n>: line <N>` for each of the six rows of the plan's Anchors table. " +
             "`Method <Type.Name>: exists` or `Method <Type.Name>: gone` for each method the plan names. " +
-            "`Calls IWriter.Apply: <total>; <File>=<n>, ...` and `Calls Writer.Apply: <total>; <File>=<n>, ...` (real direct call sites, total and per file). " +
+            "`Calls IWriter.Apply: <total>; <File>=<n>, ...` and `Calls Writer.Apply: <total>; <File>=<n>, ...` (real direct call sites, total and per file; `<File>` is the file name without its folder). " +
             "`Step 2: possible` or `Step 2: not possible` for the plan's Step 2 (widening the parameter to `IReadOnlyDictionary<string, string>` with no caller edits). " +
             "`Step 2 reason: <one sentence>`."));
 
