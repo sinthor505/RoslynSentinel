@@ -311,8 +311,6 @@ public class OperationSummaryRetypeTests
 }
 """;
 
-    private const string PlainIfFails = "Make no further changes; list what you wrote.";
-
     private const string CannedReport = "DONE: retyped ChangedContent to DocumentChangeSet? through a private ToChangeSet helper and left the constructor parameter, the From overloads and the TODO as they were.";
 
     // Expression-bodied on purpose: a static readonly field would render before the contract placement is known (initialisation order).
@@ -323,7 +321,7 @@ public class OperationSummaryRetypeTests
         Conditions: "The primary-constructor parameter `changedContent` and the parameters of both `From` overloads keep the type `Dictionary<FilePath, string>?`; " +
             "RenameStep, MoveStep, DeleteStep and ReportWriter compile unchanged. The JSON the type serializes to does not change. " +
             "Keep the comment `// TODO retype this parameter` where it is, on the `changedContent` parameter's line or the line above.",
-        IfFails: PlainIfFails,
+        IfFails: EvalContractOptions.PlainIfFails,
         DoneWhen: "The property is initialised from the parameter through a new private static helper that returns an existing `DocumentChangeSet` as it is " +
             "(the same reference), copies a plain `Dictionary<FilePath, string>` into a new `DocumentChangeSet`, and returns null for null. " +
             "The solution builds with 0 errors and all tests in ContosoOrders.Tests pass, including OperationSummaryRetypeTests and OperationSummaryWireTests."));

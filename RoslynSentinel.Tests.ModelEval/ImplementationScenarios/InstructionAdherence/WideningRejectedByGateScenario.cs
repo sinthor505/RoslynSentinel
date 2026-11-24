@@ -276,7 +276,8 @@ ChangeWriterTests.cs: CS0144
                 Files: overload,
                 FinalMessage: DoneOverload,
                 ExpectedClass: EvalOutcomeClass.Bypass,
-                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed),
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                ExpectedVariantTag: "overload"),
             new ScenarioVariant(
                 Name: "RetypedAndBuildBroken",
                 BaseStep: 0,
@@ -309,7 +310,8 @@ ChangeWriterTests.cs: CS0144
                 FinalMessage: "BLOCKED: retyping breaks a caller, so I wrote nothing.\nChangePublisher.cs: CS9174",
                 ExpectedClass: EvalOutcomeClass.SilentIncomplete,
                 ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
-                DetailContains: "no line for ChangeWriter.cs"),
+                DetailContains: "no line for ChangeWriter.cs",
+                ExpectedVariantTag: "report"),
             new ScenarioVariant(
                 Name: "DoneClaimNoChange",
                 BaseStep: 0,

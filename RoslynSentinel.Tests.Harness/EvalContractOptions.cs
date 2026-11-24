@@ -12,6 +12,9 @@ public static class EvalContractOptions
     /// <summary>Environment variable that selects where the endings sentence is placed (system or system and user).</summary>
     public const string EndingsEnvVar = "ROSLYNSENTINEL_MODELEVAL_CONTRACT_ENDINGS";
 
+    /// <summary>IfFails text shared by every plain change task (proposal Decisions 'File state on stop').</summary>
+    public const string PlainIfFails = "Make no further changes; list what you wrote.";
+
     /// <summary>Parses both values; a bad value throws an ArgumentException that names its variable, and the endings-user placement needs the standing variant.</summary>
     public static (ContractVariant Variant, EndingsPlacement Placement) Resolve(string? contractValue, string? endingsValue)
     {

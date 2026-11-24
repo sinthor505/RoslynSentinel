@@ -148,6 +148,11 @@ public class ImplementationScenarioGoldenTests
         {
             Assert.That(verdict.Detail, Does.Contain(variant.DetailContains), message);
         }
+
+        if (variant.ExpectedVariantTag is not null)
+        {
+            Assert.That(verdict.Variant, Is.EqualTo(variant.ExpectedVariantTag), message);
+        }
     }
 
     /// <summary>A seed test must compile against the seed: step 0 (the seed with its visible tests) builds with 0 errors, so the new tests are red, not broken.</summary>

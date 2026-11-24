@@ -136,6 +136,12 @@ public sealed class EvalContractOptionsTests
     }
 
     [Test]
+    public void PlainIfFails_IsTheSharedPlainStopSentence()
+    {
+        Assert.That(EvalContractOptions.PlainIfFails, Is.EqualTo("Make no further changes; list what you wrote."));
+    }
+
+    [Test]
     public void Current_ReadsTheEnvironmentOnEveryCall()
     {
         string? originalContract = Environment.GetEnvironmentVariable(EvalContractOptions.ContractEnvVar);
