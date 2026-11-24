@@ -177,9 +177,9 @@ and fix the map.
 - **Sibling projects cannot see each other** (`Tools.Advanced` not `Tools.Basic`; `Engines.Basic` not
   `Engines.Advanced`). Shared helpers go one layer down: `Engines.Basic` for engine logic, `Common` for
   result/MCP plumbing. Advanced is additive, not a fork: verify with `scripts/build.ps1 -Flavor Solution`.
-- **A new MCP tool needs three things**, or it is silently dead with no startup error: the
-  `[McpServerToolType]` class in a `Tools.*` project; an entry in `Server.Advanced/ToolClassRegistry.cs`; an
-  `if (activeToolClasses.Contains("..."))` DI block in `ServiceRegistrationExtensions{Basic,Advanced}.cs`.
+- **A new MCP tool needs two things**, or startup or tests fail: the `[McpServerToolType]` class in a
+  `Tools.*` project and its `Server.Advanced/ToolClassRegistry.cs` entries (a mode plus a
+  `BasicToolClassTypes`/`AdvancedToolClassTypes` row, in tools/list order).
   A new `Tools.*` project also needs a `<ProjectReference>` from `Server.Advanced`.
 - **Tool responses:** tools return DTOs and never measure, store or trim them. Before changing response shape, size,
   paging, `GetLargeResult` or a call-tool filter, read `docs/current/references/reference_tool_response_pipeline.md`.

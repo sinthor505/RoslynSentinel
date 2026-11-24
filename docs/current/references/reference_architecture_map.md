@@ -52,21 +52,35 @@ stdout), `--bind=loopback|any` (default loopback), `--respawn=auto|none` (defaul
 selects the `StopServer` text), `--log-dir`, and `--working-dir=<path>` (`Common/ServerInstancePaths`: logs,
 `crash.log`, tool dumps, `stopped-by-script.marker`; default = the binary folder, marker in its parent).
 
-### Tool registration: three places, none sufficient alone
+### Tool registration: two places
 
 1. The class: `[McpServerToolType]` with `[McpServerTool(Name = ...)]` methods, in a `Tools.*` project.
-2. `Server.Advanced/ToolClassRegistry.cs`: add the class name to the right mode in
-   `ModeToToolClasses` (the one union map). `ResolveActiveToolClasses`
-   (`Server.Advanced/ServerStartupHelpers.cs`) turns modes + `--include-tools/--exclude-tools` into the
-   active class set.
-3. A DI block in `Server.Advanced/ServiceRegistrationExtensionsBasic.cs` (`AddRoslynSentinelToolsBasic`)
-   or `Server.Advanced/ServiceRegistrationExtensionsAdvanced.cs` (`AddRoslynSentinelToolsAdvanced`):
-   `if (activeToolClasses.Contains("X")) { AddSingleton<XImpl>(); AddSingleton<X>(); mcpBuilder.WithSentinelTools<X>(); }`.
-   `WithSentinelTools` is `Common/McpToolSchemaPatcher.cs` (`CreateSentinelTool` runs the schema-patch
-   pipeline, see "Tool surface" below).
+2. `Server.Advanced/ToolClassRegistry.cs`, two entries: the class name in the right mode of
+   `ModeToToolClasses` (the one union map), and a `typeof(X)` row in `BasicToolClassTypes` or
+   `AdvancedToolClassTypes` (the flavor's table; row order is tools/list order, which is wire).
+   `ResolveActiveToolClasses` (`Server.Advanced/ServerStartupHelpers.cs`) turns modes +
+   `--include-tools/--exclude-tools` into the active class set; `SelectStartupToolTypes` picks, in table order,
+   the table rows that are in that set (plus the always-on `ServerStatusTools`, and the claude-lean-only
+   classes only in claude-lean).
 
-A missing step yields a dead tool with no startup error. `ServerStatusTools` is the exception: always
-registered, outside the registry, so `McpServerStatus` works in any mode.
+How startup population works: `AddRoslynSentinelToolsBasic`/`Advanced` call `AddStartupToolClasses`, which
+registers each selected class as a singleton (so `ValidateOnBuild` checks its dependencies) and one
+`ToolSurfaceStartupRequest` per flavor. `ToolSurfaceStartupPopulation` (`Common/ToolSurface/`, an
+`IPostConfigureOptions<McpServerOptions>` singleton) builds the tools once, lazily, through
+`ToolSurfaceController.BuildStartupTools` (applies the claude-lean allow-list and `CreateSentinelTool`, so the
+schema-patch pipeline, see "Tool surface" below), and adds the same cached instances to every
+`McpServerOptions` it sees (stateless HTTP builds one per request). The collection is always created, empty when
+no tool is selected. There is no per-class DI block and no `WithSentinelTools` any more.
+
+A registry class without a row fails startup (`RegisterRoslynSentinelToolsBasic` throws on
+`ToolClassRegistry.DescribeToolClassTableProblems`: a mode class with no row, a class with two rows, a row that
+is in no mode and not always-on, a row whose class declares no `[McpServerTool]` method), and a tool class with
+no registry entry at all is caught by `ToolClassTableTests` (reflection over the Tools assemblies), not at
+startup. The check does not detect a class in the wrong table; the parity goldens
+(`Tests.Harness/ToolSurfaceGolden`) cover that for the listed argv cases. The flat
+`AddRoslynSentinelToolClasses{Basic,Advanced,Experimental}` lists (`Tools.*`, class singletons for tests) stay
+test-enforced (`ToolClassRegistrationTests`, `ToolClassRegistrationAdvancedTests`). `ServerStatusTools` is the
+exception to the registry: always selected, outside the modes, so `McpServerStatus` works in any mode.
 
 **claude-lean** (`ToolClassRegistry.ClaudeLeanMode`) is exclusive and also applies a per-tool allow-list
 (`ClaudeLeanToolNames`, `Common/ToolAllowList.cs`), because its classes hold non-Core tools too. Tools
@@ -92,8 +106,9 @@ Ground truth for "does this tool exist / is it gated": `McpServerStatus(toolList
   (no catalog lookup). `ToolsetService.SetEnabled` (called by `McpToolsetControl`, `--toolsets` and tab-state
   restore) delegates to it. Lock order is `_applyGate -> _lock`; `Refresh` never takes `_applyGate`.
 - `McpServerStatus` reads it (`toolSurface.surfaceVersion/surfaceTrigger/schemaPatches`, per-tool `exposedBy`):
-  a tool counts as active only if it is in the live collection, so an allowed tool with a missing DI block
-  is reported as not registered. Before the first snapshot it falls back to the declared-tool rule.
+  a tool counts as active only if it is in the live collection, so an allowed tool whose class has no table row
+  (startup fails first for a registry class; a class with no registry entry is declared but absent) is reported
+  as not registered. Before the first snapshot it falls back to the declared-tool rule.
 - Schema patches are `IToolSchemaPatch` implementations (`Name`, `Order`, `Apply`), resolved from DI as an
   ordered collection (Order, then Name). The defaults (`DefaultToolSchemaPatches.All`: ConsumesTags 100,
   BatchItemFields 200, ReplaceSnippetLimits 300, HiddenParameters 400) are registered as instances in
@@ -266,7 +281,7 @@ call `RecordObserved` explicitly, because the reader is solution-granular and ca
 
 | I want to... | Go to |
 | --- | --- |
-| Add a tool | The three registration places above; then `McpServerStatus` to confirm it is active |
+| Add a tool | The two registration places above (class, then the `ToolClassRegistry.cs` mode entry and table row); then `McpServerStatus` to confirm it is active |
 | Change which tools a mode exposes | `ToolClassRegistry.cs` (both dictionaries; Advanced is its own map) |
 | Expose a tool in claude-lean | `ClaudeLeanToolNames` (always on) or `ToolsetCatalog.ToolsBySet` (on demand) |
 | Persist a source edit | `ValidateAndApplyHelper.ValidateAndApplyAsync` -> `ApplyProposedChangesAsync` |
@@ -290,5 +305,6 @@ call `RecordObserved` explicitly, because the reader is solution-granular and ca
 - `docs/generated/*.md` are produced by `Tests.Server/ArchitectureDocGenerator.cs` and guarded by
   `ArchitectureDocFreshnessTests`. A stale file fails that test; regenerate with `scripts/Generate-ArchitectureMap.ps1`
   (sets `ROSLYNSENTINEL_UPDATE_GENERATED_DOCS=1`). Adding a tool class or changing the registry will require it.
-- Registry gaps surface as silent dead tools, not startup errors (see registration above).
+- A registry class without a table row fails startup; a tool class with no registry entry at all is not seen at
+  startup and fails `ToolClassTableTests` (see registration above).
 - Changed server source does not change the running server: check `isServerBinaryStale` / see CLAUDE.md Verification.
