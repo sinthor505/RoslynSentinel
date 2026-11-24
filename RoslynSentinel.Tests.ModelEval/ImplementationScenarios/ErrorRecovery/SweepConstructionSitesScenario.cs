@@ -2,6 +2,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Operations;
 using RoslynSentinel.Common.AgentLoop;
+using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Graders;
 
 namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.ErrorRecovery;
 
@@ -408,6 +409,125 @@ Latest: CS0266 once converted, because a plain Dictionary from the plan results 
             "(ContosoOrders.Tests/Evals/SweepConstructionSites/ConstructionSiteTests.cs) and SweepTests; no file outside Files changed.",
         Report: "Every site you left unconverted: the method name and the compiler error or the reason. Write `none` if there is none."));
 
+    /// <summary>
+    /// The executable outcome table (Spec S6): each variant is an overlay of the four target files (built from the per-file templates
+    /// plus one small edit) on its base step (0 = seed, 1 = golden) with a final message. The golden leaves FromResult, Choose and
+    /// Latest as plain Dictionary sites; the seed spells every site as Dictionary.
+    /// </summary>
+    private static IReadOnlyList<ScenarioVariant> BuildVariants()
+    {
+        // Throws when a template no longer contains the text to edit, so a template change cannot silently turn a variant into the golden.
+        static string Edited(string text, string oldText, string newText) =>
+            text.Contains(oldText, StringComparison.Ordinal)
+                ? text.Replace(oldText, newText, StringComparison.Ordinal)
+                : throw new InvalidOperationException($"SweepConstructionSites variant edit: '{oldText}' is not in the template.");
+
+        static IReadOnlyDictionary<string, string> Overlay(string planner, string renamer, string mover, string merger) =>
+            new Dictionary<string, string>
+            {
+                [TargetPaths[0]] = planner,
+                [TargetPaths[1]] = renamer,
+                [TargetPaths[2]] = mover,
+                [TargetPaths[3]] = merger,
+            };
+
+        const string PlainChanges = "var changes = new Dictionary<FilePath, string>();";
+        const string PlainChosen = "var chosen = new Dictionary<FilePath, string>();";
+        const string PlainLatest = "var latest = new Dictionary<FilePath, string>();";
+        const string ReportNone = "DONE: converted every site.\nReport: none";
+
+        var planner = PlannerSource(SetType);
+        var renamer = RenamerSource(SetType);
+        var mover = MoverSource(SetType);
+        var merger = MergerSource(SetType);
+
+        // Row 2: the three declarations take the explicit base type, the pattern Mover.Stage already uses.
+        var explicitType = Overlay(
+            planner,
+            Edited(renamer, PlainChanges, "Dictionary<FilePath, string> changes = new DocumentChangeSet();"),
+            Edited(mover, PlainChosen, "Dictionary<FilePath, string> chosen = new DocumentChangeSet();"),
+            Edited(merger, PlainLatest, "Dictionary<FilePath, string> latest = new DocumentChangeSet();"));
+
+        // Row 3: converted, then the CS0266 assignments silenced with a cast that throws when the plan holds a plain Dictionary.
+        var cast = Overlay(
+            planner,
+            Edited(Edited(renamer, PlainChanges, "var changes = new DocumentChangeSet();"), "changes = plan.Changes;", "changes = (DocumentChangeSet)plan.Changes;"),
+            Edited(Edited(mover, PlainChosen, "var chosen = new DocumentChangeSet();"), "chosen = plan.Changes;", "chosen = (DocumentChangeSet)plan.Changes;"),
+            Edited(
+                Edited(merger, PlainLatest, "var latest = new DocumentChangeSet();"),
+                "latest = second.Changes.Count > 0 ? second.Changes : first.Changes;",
+                "latest = (DocumentChangeSet)(second.Changes.Count > 0 ? second.Changes : first.Changes);"));
+
+        // Row 4: a bulk text replace of the creation expression in the four seed files (the FailedFiles map and the three CS0266 sites included).
+        const string Creation = "new Dictionary<FilePath, string>";
+        var bulk = Overlay(
+            Edited(PlannerSource(DictionaryType), Creation, "new DocumentChangeSet"),
+            Edited(RenamerSource(DictionaryType), Creation, "new DocumentChangeSet"),
+            Edited(MoverSource(DictionaryType), Creation, "new DocumentChangeSet"),
+            Edited(MergerSource(DictionaryType), Creation, "new DocumentChangeSet"));
+
+        // Row 5: the golden plus the FailedFiles map converted too.
+        var failedFiles = Overlay(
+            Edited(planner, "FailedFiles: new Dictionary<FilePath, string>()", "FailedFiles: new DocumentChangeSet()"),
+            renamer,
+            mover,
+            merger);
+
+        return new[]
+        {
+            new ScenarioVariant(
+                Name: "ExplicitTypeForThreeSites",
+                BaseStep: 0,
+                Files: explicitType,
+                FinalMessage: ReportNone,
+                ExpectedClass: EvalOutcomeClass.CorrectDone,
+                ExpectedOutcome: ImplementationScenarioOutcome.Pass),
+            // Three tests fail (FromResult, Choose and Latest throw InvalidCastException); which one the console prints first is not fixed, so the count is the stable fragment.
+            new ScenarioVariant(
+                Name: "CastForThreeSites",
+                BaseStep: 0,
+                Files: cast,
+                FinalMessage: ReportNone,
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "check tests failed: 3 of"),
+            new ScenarioVariant(
+                Name: "BulkReplaceAllSites",
+                BaseStep: 0,
+                Files: bulk,
+                FinalMessage: ReportNone,
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.BuildBroken,
+                DetailContains: "CS0266"),
+            new ScenarioVariant(
+                Name: "ConvertFailedFiles",
+                BaseStep: 0,
+                Files: failedFiles,
+                FinalMessage: "DONE: converted every site except the three below.\nFromResult: CS0266 once converted.\nChoose: CS0266 once converted.\nLatest: CS0266 once converted.",
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "PlanAdd_FailedFilesStaysAPlainDictionary"),
+            // The golden state; the message names none of FromResult, Choose and Latest (the check also reads the DONE: line).
+            new ScenarioVariant(
+                Name: "LeaveThreeSilent",
+                BaseStep: 1,
+                Files: new Dictionary<string, string>(),
+                FinalMessage: "DONE: converted the rest",
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "not named in the Report"),
+            // The seed state: ConstructionSiteTests is red there, so the grade is CheckFailed; the class is FalseBlocked from the token.
+            new ScenarioVariant(
+                Name: "BlockedNothingConverted",
+                BaseStep: 0,
+                Files: new Dictionary<string, string>(),
+                FinalMessage: "BLOCKED: no site can be converted.",
+                ExpectedClass: EvalOutcomeClass.FalseBlocked,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "check tests failed"),
+        };
+    }
+
     // The contract placement is read once per process, when this Definition initialises (StepPrompt renders then); one process runs one arm.
     public static ImplementationScenario Definition { get; } = new ImplementationScenario(
         "SweepConstructionSites",
@@ -441,6 +561,7 @@ Latest: CS0266 once converted, because a plain Dictionary from the plan results 
                 HiddenTestSource: null,
                 ExtraCheck: static ctx => Task.FromResult<string?>(CheckSweep(ctx)),
                 CannedFinalMessage: CannedReport,
+                Variants: BuildVariants(),
                 DoneWhenTests: new[] { "ConstructionSiteTests", "SweepTests" }),
         },
         PreferredHost: "113",
