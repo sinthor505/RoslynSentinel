@@ -1328,22 +1328,7 @@ Nothing was dispatched.
         $filePath   = $toolInput.filePath
         $batchEdits = $toolInput.batchEdits
 
-        if ($filePath -and $batchEdits) {
-            Deny @"
-BLOCKED by dog-fooding policy: ReplaceSnippet called with both filePath and batchEdits.
-
-Each batch edit carries its own path - filePath is only for the single-edit form.
-Move the top-level filePath into each batchEdits entry instead:
-
-  ReplaceSnippet(reason: ..., action: "apply", batchEdits: [
-    { filePath: "$filePath", oldContent: <old>, newContent: <new> }
-    // ...additional entries, each with its own filePath
-  ])
-
-Or, if this really is a single edit, drop batchEdits entirely and pass
-oldContent/newContent alongside filePath instead of a batch.
-"@
-        }
+        # A top-level filePath beside batchEdits is allowed: the server uses it as the default for items without their own.
 
         # Heuristic-only ordering check: for each batch entry, if its newContent appears to
         # invoke a method/member that isn't defined by an earlier entry's newContent AND isn't

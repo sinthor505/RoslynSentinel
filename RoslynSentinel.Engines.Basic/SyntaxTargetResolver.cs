@@ -507,6 +507,7 @@ public static class SyntaxTargetResolver
     /// </summary>
     public static List<SyntaxNodeCandidate> ResolveCandidates(SyntaxNode root, SourceText sourceText, string name, CancellationToken cancellationToken = default)
     {
+        // TODO local functions are never candidates, so Member(view/replace/remove) cannot target one (GetMethodSource resolves a unique one itself)
         var normalizedName = SyntaxTargetResolver.NormalizeTypeName(name);
         var results = new List<SyntaxNodeCandidate>();
         var lines = sourceText.Lines;

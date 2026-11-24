@@ -213,15 +213,64 @@ public class SymbolNotFoundDetailTests
     {
         var projects = Projects(BuildSolution());
 
-        var text = await SymbolNotFoundDetail.BuildAsync(projects, "CalcDsc", "method", ScopeDescription, ProjectName);
+        var text = await SymbolNotFoundDetail.BuildAsync(projects, "CalcDsc", "method", ScopeDescription, ProjectName, wholeSolution: true);
 
         Assert.That(text, Does.Contain("Symbol 'CalcDsc' (method) was not found in " + ScopeDescription));
         Assert.That(text, Does.Contain("Did you mean one of these?"));
         Assert.That(text, Does.Contain("CalcDisc (method) in OrderPricingCalculator, " + OrderPricingFixture.FileName));
-        Assert.That(text, Does.Contain(ToolCallHint.Call("Search", ("mode", "symbol"), ("query", "CalcDisc"), ("filePath", OrderPricingFixture.FileName))));
+        Assert.That(text, Does.Contain(ToolCallHint.Call("Search", ("mode", "symbol"), ("query", "CalcDisc"), ("containingType", "OrderPricingCalculator"), ("filePath", OrderPricingFixture.FileName))));
         Assert.That(text, Does.Contain("does not exist in this solution"));
         Assert.That(text, Does.Not.Contain("tell the user"));
         Assert.That(text, Does.Not.Contain("You MUST"));
+    }
+
+    [Test]
+    public async Task BuildAsync_ManyExactNameTies_ListsUpToTenAndCountsTheRest()
+    {
+        var classes = "namespace Fixture;\n" + string.Concat(Enumerable.Range(1, 12).Select(i => $"public class Holder{i:D2} {{ public void Classify() {{ }} }}\n"));
+        var projects = Projects(BuildSolution(("Ties.cs", classes)));
+
+        var text = await SymbolNotFoundDetail.BuildAsync(projects, "Classify", "method", ScopeDescription, ProjectName);
+
+        Assert.That(text.Split('\n').Count(line => line.StartsWith("  - Classify (method)", StringComparison.Ordinal)), Is.EqualTo(10));
+        Assert.That(text, Does.Contain("(+2 more not listed)"));
+        Assert.That(text, Does.Contain("'Classify' is declared in:"));
+        Assert.That(text, Does.Not.Contain("does not exist in this solution"));
+    }
+
+    [Test]
+    public async Task BuildAsync_ContainingTypeGiven_HeaderNamesTypeAndRetryCarriesContainingType()
+    {
+        const string holder = "namespace Fixture; public class Holder { public void Classify() { } }";
+        var projects = Projects(BuildSolution(("Holder.cs", holder)));
+
+        var text = await SymbolNotFoundDetail.BuildAsync(projects, "Classify", "method", ScopeDescription, ProjectName, containingType: "Holder");
+
+        Assert.That(text, Does.Contain("Symbol 'Classify' (method) in type 'Holder' was not found in " + ScopeDescription));
+        Assert.That(text, Does.Contain("containingType:"));
+    }
+
+    [Test]
+    public async Task BuildAsync_CandidateInContainerFile_ListedFirst()
+    {
+        const string others = "namespace Fixture; public class Alpha { public void Classify() { } } public class Beta { public void Classify() { } }";
+        const string holder = "namespace Fixture; public class Holder { public void Classify() { } }";
+        var projects = Projects(BuildSolution(("Others.cs", others), ("Holder.cs", holder)));
+
+        var text = await SymbolNotFoundDetail.BuildAsync(projects, "Holder.Classify", "method", ScopeDescription, ProjectName);
+
+        Assert.That(text.Split('\n')[1], Does.StartWith("  - Classify (method) in Holder"));
+    }
+
+    [Test]
+    public async Task BuildAsync_WholeSolutionNearNamesOnly_KeepsAbsenceSentence()
+    {
+        var projects = Projects(BuildSolution());
+
+        var text = await SymbolNotFoundDetail.BuildAsync(projects, "CalcDsc", "method", ScopeDescription, ProjectName, wholeSolution: true);
+
+        Assert.That(text, Does.Contain("Did you mean one of these?"));
+        Assert.That(text, Does.Contain("does not exist in this solution"));
     }
 
     [Test]
@@ -379,7 +428,7 @@ public class SymbolNotFoundDetailTests
         var text = await SymbolNotFoundDetail.BuildAsync(projects, "CalcDsc", "method", ScopeDescription, ProjectName, retryCall: _ => null);
 
         Assert.That(text, Does.Contain($"docCommentId '{CalcDiscId}'"));
-        Assert.That(text, Does.Contain(ToolCallHint.Call("Search", ("mode", "symbol"), ("query", "CalcDisc"), ("filePath", OrderPricingFixture.FileName))));
+        Assert.That(text, Does.Contain(ToolCallHint.Call("Search", ("mode", "symbol"), ("query", "CalcDisc"), ("containingType", "OrderPricingCalculator"), ("filePath", OrderPricingFixture.FileName))));
     }
 
     [Test]
@@ -417,7 +466,7 @@ public class SymbolNotFoundDetailTests
 
         Assert.That(withoutId, Does.Not.Contain("docCommentId"), "a candidate without an id has no id to state");
         Assert.That(withoutId, Does.Not.Contain("Tool()"));
-        Assert.That(withoutId, Does.Contain("-> " + ToolCallHint.Call("Search", ("mode", "symbol"), ("query", "CalcDisc"), ("filePath", "Calc.cs"))));
+        Assert.That(withoutId, Does.Contain("-> " + ToolCallHint.Call("Search", ("mode", "symbol"), ("query", "CalcDisc"), ("containingType", "OrderPricingCalculator"), ("filePath", "Calc.cs"))));
         Assert.That(withNextCall, Does.Contain("-> Next()"));
         Assert.That(withNextCall, Does.Not.Contain("Tool()"));
     }
@@ -535,7 +584,7 @@ public class SymbolNotFoundDetailTests
     {
         var projects = Projects(BuildSolution());
         ToolCallContext.Set(null);
-        var today = await SymbolNotFoundDetail.BuildAsync(projects, "CalcDsc", "method", ScopeDescription, ProjectName);
+        var today = await SymbolNotFoundDetail.BuildAsync(projects, "CalcDsc", "method", ScopeDescription, ProjectName, wholeSolution: true);
 
         SetWorkspaceCurrent(true);
         var current = await SymbolNotFoundDetail.BuildAsync(projects, "CalcDsc", "method", ScopeDescription, ProjectName, wholeSolution: true);

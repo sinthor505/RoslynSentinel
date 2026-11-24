@@ -12,6 +12,9 @@
 > (Decision, Steps 9, 10, 13, 22, live case D, Out of scope) was updated to match. Both transports now pass
 > `runtimeGroupsSupported: true`, so the fold branch in Step 5 (`FoldedGroups`) has no caller; remove it, and the
 > parameter if nothing else needs it, when this plan is reshaped under the controller proposal.
+> **Toolset key (owner, 2026-11-24).** The controller keeps the `ToolSetName` enum key (stage C R3). Reshape Step 12 onto
+> `ToolSurfaceController.ApplyToolset` (a string overload there, no state in `ToolsetService`) and Step 13's registration to
+> pass the registered controller.
 
 ## Problem
 

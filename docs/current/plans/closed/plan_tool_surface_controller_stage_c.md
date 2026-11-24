@@ -411,6 +411,7 @@ attribution through its `ToolsetService` fallback, which is text-neutral; see Ri
   there) and the controller-taking constructor, and Step 13's registration must pass the registered controller. Recommendation: proceed with the enum (status quo, nothing to undo) and reshape the
   JSON plan under the controller, as phase A/B already anticipated. No stage C step depends on the owner's answer; what
   needs confirming is the JSON plan's reshape.
+  **Owner 2026-11-24: enum key kept (recommendation agreed); the JSON plan's Steps 12-13 are reshaped onto `ApplyToolset`.**
 - **R4. Old `ToolsetService` constructor: remove (recommend) or keep.** Keeping it as a test convenience is cheap, but a
   production registration that used it would silently create a second controller whose layer the registered one never
   sees (runtime tools labelled `Startup`). Step 9 removes it. Not STOP-worthy.

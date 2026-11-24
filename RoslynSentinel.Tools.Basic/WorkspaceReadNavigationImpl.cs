@@ -145,6 +145,7 @@ public class WorkspaceReadNavigationImpl
             name = bare;
         }
 
+        var localFunctions = FindLocalFunctions(root, name);
         if (name.Length > 0)
         {
             var cmp = StringComparison.OrdinalIgnoreCase;
@@ -155,11 +156,13 @@ public class WorkspaceReadNavigationImpl
                 otherKind = "field";
             else if (root.DescendantNodes().OfType<EventDeclarationSyntax>().Any(e => e.Identifier.Text.Equals(name, cmp)))
                 otherKind = "event";
-            else if (root.DescendantNodes().OfType<LocalFunctionStatementSyntax>().Any(l => l.Identifier.Text.Equals(name, cmp)))
-                otherKind = "local function";
             if (otherKind != null)
             {
                 parts.Add($"'{name}' exists in this file as a {otherKind}, not a method; read it with {ToolCallHint.Call("Member", ("operation", "view"), ("memberName", name))}.");
+            }
+            else if (localFunctions.Count > 0)
+            {
+                parts.Add(BuildLocalFunctionListing(localFunctions, name, requestedFilePath));
             }
         }
 
@@ -206,7 +209,7 @@ public class WorkspaceReadNavigationImpl
                 }
                 parts.Add("A method or constructor with this name is declared in:\n" + lines + $"\nRetry {ToolCallHint.Call("GetMethodSource")} with filePath set to the file that holds the one you mean.");
             }
-            else
+            else if (localFunctions.Count == 0)
             {
                 parts.Add($"No method or constructor named '{name}' is declared in any project of the loaded solution (tests included). If the name may be a substring or differently spelled, call {ToolCallHint.Call("Search", ("mode", "method"), ("query", name), ("exactMatch", "false"))}; a file outside the loaded solution cannot be searched until it is loaded.");
             }
@@ -345,6 +348,41 @@ public class WorkspaceReadNavigationImpl
             {
                 if (!hasContainer)
                 {
+                    // A name that is not a method here may still be exactly one local function: resolve it and say so in a finding.
+                    var localFunctions = FindLocalFunctions(root, methodName);
+                    if (localFunctions.Count == 1)
+                    {
+                        var localFunction = localFunctions[0];
+                        var localSource = localFunction.ToFullString();
+                        var localBytes = System.Text.Encoding.UTF8.GetByteCount(localSource);
+                        var localFileText = await document.GetTextAsync(cancellationToken);
+                        _workspaceManager.RecordObserved(filePathResolved, localFileText.ToString());
+                        var localSpan = localFunction.GetLocation().GetLineSpan();
+                        var localSourceStartLine = localFileText.Lines.GetLineFromPosition(localFunction.FullSpan.Start).LineNumber + 1;
+                        var localEnvelope = ReadEnvelopeBuilder.BuildForMember(
+                            localFileText.Lines.Count,
+                            memberFromLine: localSourceStartLine,
+                            memberToLine: localSpan.EndLinePosition.Line + 1,
+                            memberByteCount: localBytes);
+                        var localOwner = DescribeLocalFunctionContainer(localFunction).Owner;
+                        return new SentinelCallToolResult<MethodSourceResult, ResultError>()
+                        {
+                            IsError = false,
+                            SuccessData = new MethodSourceResult
+                            {
+                                Envelope = localEnvelope,
+                                Signature = BuildLocalFunctionSignature(localFunction),
+                                Source = localSource,
+                                Attributes = ExtractLocalFunctionAttributes(localFunction)
+                            },
+                            Findings = new List<Finding>
+                            {
+                                new Finding("LocalFunctionResolved", $"'{methodName}' is a local function inside {localOwner} (lines {localSpan.StartLinePosition.Line + 1}-{localSpan.EndLinePosition.Line + 1}); this file declares no method or constructor named '{methodName}'.", FindingSeverity.Info)
+                            },
+                            WorkspaceVersion = _workspaceManager.WorkspaceVersion,
+                        };
+                    }
+
                     return new SentinelCallToolResult<MethodSourceResult, ResultError>()
                     {
                         IsError = true,
@@ -1747,6 +1785,70 @@ public class WorkspaceReadNavigationImpl
     }
 
     private static List<MethodAttributeInfo> ExtractAttributes(BaseMethodDeclarationSyntax method) => method.AttributeLists.SelectMany(al => al.Attributes).Select(a => new MethodAttributeInfo { Name = a.Name.ToString(), Arguments = a.ArgumentList?.Arguments.ToString() ?? "", }).ToList();
+
+    private static List<LocalFunctionStatementSyntax> FindLocalFunctions(SyntaxNode root, string name)
+    {
+        var all = root.DescendantNodes().OfType<LocalFunctionStatementSyntax>().ToList();
+        var exact = all.Where(l => l.Identifier.Text.Equals(name, StringComparison.Ordinal)).ToList();
+        return exact.Count > 0 ? exact : all.Where(l => l.Identifier.Text.Equals(name, StringComparison.OrdinalIgnoreCase)).ToList();
+    }
+
+    /// <summary>
+    /// Owner text for a local function ("Type.Member", or whichever part exists) and, when the containing member is a
+    /// method or constructor, its name for a GetMethodSource retry (null otherwise).
+    /// </summary>
+    private static (string Owner, string? RetryMethodName) DescribeLocalFunctionContainer(LocalFunctionStatementSyntax local)
+    {
+        var member = local.Ancestors().OfType<MemberDeclarationSyntax>().FirstOrDefault();
+        var typeName = GetNearestTypeName(local);
+        string? memberName = member switch
+        {
+            BaseMethodDeclarationSyntax m => GetMethodOrCtorName(m),
+            PropertyDeclarationSyntax p => p.Identifier.Text,
+            FieldDeclarationSyntax f => f.Declaration.Variables.FirstOrDefault()?.Identifier.Text,
+            _ => null,
+        };
+        var owner = typeName != null && memberName != null ? $"{typeName}.{memberName}" : typeName ?? memberName ?? "file scope";
+        var retry = member is BaseMethodDeclarationSyntax ? memberName : null;
+        return (owner, retry);
+    }
+
+    private static string BuildLocalFunctionSignature(LocalFunctionStatementSyntax local)
+    {
+        var modifiers = local.Modifiers.ToString();
+        var typeParams = local.TypeParameterList?.ToString() ?? "";
+        var text = $"{modifiers} {local.ReturnType} {local.Identifier.Text}{typeParams}{local.ParameterList}";
+        return System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ").Replace("( ", "(").Replace(" )", ")").Trim();
+    }
+
+    private static List<MethodAttributeInfo> ExtractLocalFunctionAttributes(LocalFunctionStatementSyntax local) => local.AttributeLists.SelectMany(al => al.Attributes).Select(a => new MethodAttributeInfo { Name = a.Name.ToString(), Arguments = a.ArgumentList?.Arguments.ToString() ?? "", }).ToList();
+
+    /// <summary>
+    /// Lists the local functions that share a name GetMethodSource could not resolve to one method: each container, the
+    /// first five with a retry (GetMethodSource on a containing method, and ReadFile by line range for the first).
+    /// </summary>
+    private static string BuildLocalFunctionListing(IReadOnlyList<LocalFunctionStatementSyntax> locals, string name, string requestedFilePath)
+    {
+        var descriptions = new List<string>();
+        var hints = new List<string>();
+        for (var i = 0; i < Math.Min(locals.Count, 5); i++)
+        {
+            var span = locals[i].GetLocation().GetLineSpan();
+            var (owner, retryMethod) = DescribeLocalFunctionContainer(locals[i]);
+            descriptions.Add($"inside {owner} (lines {span.StartLinePosition.Line + 1}-{span.EndLinePosition.Line + 1})");
+            if (retryMethod != null)
+            {
+                hints.Add($"To read the one inside {owner}: {ToolCallHint.Call("GetMethodSource", ("filePath", requestedFilePath), ("methodName", retryMethod))}.");
+            }
+            if (i == 0)
+            {
+                hints.Add($"To read the first by line range: {ToolCallHint.Call("ReadFile", ("filePath", requestedFilePath), ("startLine", (span.StartLinePosition.Line + 1).ToString()), ("endLine", (span.EndLinePosition.Line + 1).ToString()))}.");
+            }
+        }
+        var more = locals.Count > 5 ? $" (+{locals.Count - 5} more)" : "";
+        var head = $"'{name}' exists in this file as {locals.Count} local function{(locals.Count == 1 ? "" : "s")}, not a method: {string.Join("; ", descriptions)}{more}.";
+        return hints.Count == 0 ? head : head + " " + string.Join(" ", hints);
+    }
 
     // Paths a caller can page in a stored Envelope result: the marshaller's recorded omitted paths when the file has them (the
     // first is the default), else the largest arrays and strings of the stored envelope.

@@ -359,4 +359,84 @@ public class McpServerStatusToolListingTests
         Assert.That(status.ToolSurface.SurfaceVersion, Is.Null);
         Assert.That(status.ToolSurface.SurfaceTrigger, Is.Null);
     }
+
+    // Controller over hand-made tools: ReplaceSnippet is recorded as stripped of validateOnApply (what the schema patch does on a
+    // real host), and the given hide rules decide which rule wins and which win nothing.
+    private static ToolSurfaceController ControllerWithHiddenParameter(IReadOnlyList<ParameterVisibilityRule> rules)
+    {
+        var collection = CreateCollection("McpServerStatus", "ReplaceSnippet");
+        var replaceSnippet = collection.Single(t => t.ProtocolTool.Name == "ReplaceSnippet");
+        StrippedToolParameters.Record(replaceSnippet, ["validateOnApply"]);
+        var controller = new ToolSurfaceController(
+            Options.Create(new McpServerOptions { ToolCollection = collection }),
+            parameters: new ParameterSurface(new ToolParameterSurfaceOptions(rules)));
+        controller.Refresh("test");
+        return controller;
+    }
+
+    [Test]
+    public void Listing_WithController_LeanProfile_ReportsHiddenParameterGroupWithOrigin()
+    {
+        var controller = ControllerWithHiddenParameter(
+        [
+            new ParameterVisibilityRule(null, "validateOnApply", ParameterVisibility.Hide, ParameterRuleSource.Profile, "--schema-profile=lean"),
+        ]);
+
+        var status = CallWithSurface(NoActiveClasses(), controller, null, McpServerStatusToolListing.inactive);
+
+        var group = status.ToolSurface.HiddenParameterGroups?.Single();
+        Assert.That(group, Is.Not.Null);
+        Assert.That(group!.Parameter, Is.EqualTo("validateOnApply"));
+        Assert.That(group.Source, Is.EqualTo(ParameterRuleSource.Profile));
+        Assert.That(group.Origin, Is.EqualTo("--schema-profile=lean"));
+        Assert.That(group.Tools, Is.EqualTo(new[] { "ReplaceSnippet" }));
+        Assert.That(status.ToolSurface.UnmatchedHideRules, Is.Null);
+    }
+
+    [Test]
+    public void Listing_ToolListingNone_OmitsParameterProvenance()
+    {
+        var controller = ControllerWithHiddenParameter(
+        [
+            new ParameterVisibilityRule(null, "validateOnApply", ParameterVisibility.Hide, ParameterRuleSource.Profile, "--schema-profile=lean"),
+            new ParameterVisibilityRule(null, "validateOnAply", ParameterVisibility.Hide, ParameterRuleSource.EnvOrFlag, "--hide-params"),
+        ]);
+
+        var status = CallWithSurface(NoActiveClasses(), controller, null, McpServerStatusToolListing.none);
+
+        Assert.That(status.ToolSurface.HiddenParameterGroups, Is.Null);
+        Assert.That(status.ToolSurface.UnmatchedHideRules, Is.Null);
+    }
+
+    [Test]
+    public void Listing_ReportsUnmatchedRule_ForMisspeltHideParam()
+    {
+        var controller = ControllerWithHiddenParameter(
+        [
+            new ParameterVisibilityRule(null, "validateOnAply", ParameterVisibility.Hide, ParameterRuleSource.EnvOrFlag, "--hide-params"),
+        ]);
+
+        var status = CallWithSurface(NoActiveClasses(), controller, null, McpServerStatusToolListing.all);
+
+        var unmatched = status.ToolSurface.UnmatchedHideRules?.Single();
+        Assert.That(unmatched, Is.Not.Null);
+        Assert.That(unmatched!.Parameter, Is.EqualTo("validateOnAply"));
+        Assert.That(unmatched.Source, Is.EqualTo(ParameterRuleSource.EnvOrFlag));
+        // The misspelt rule won nothing, so the stripped parameter has no winning rule and no group.
+        Assert.That(status.ToolSurface.HiddenParameterGroups, Is.Null);
+    }
+
+    [Test]
+    public void ParameterProvenanceEnums_SerializeAsStrings_UnderMcpDefaultOptions()
+    {
+        var group = new HiddenParameterGroup("validateOnApply", ParameterRuleSource.Profile, "--schema-profile=lean", ["ReplaceSnippet"]);
+        var rule = new ParameterVisibilityRule("Search", "nope", ParameterVisibility.Hide, ParameterRuleSource.EnvOrFlag, "--hide-params");
+
+        var groupJson = JsonSerializer.Serialize(group, ModelContextProtocol.McpJsonUtilities.DefaultOptions);
+        var ruleJson = JsonSerializer.Serialize(rule, ModelContextProtocol.McpJsonUtilities.DefaultOptions);
+
+        Assert.That(groupJson, Does.Contain("\"source\":\"Profile\""));
+        Assert.That(ruleJson, Does.Contain("\"source\":\"EnvOrFlag\""));
+        Assert.That(ruleJson, Does.Contain("\"action\":\"Hide\""));
+    }
 }

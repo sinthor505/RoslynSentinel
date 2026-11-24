@@ -168,7 +168,12 @@ public class ServerStatusTools
                 SurfaceVersion: useSnapshot ? surfaceSnapshot!.Version : null,
                 SurfaceBuiltUtc: useSnapshot ? surfaceSnapshot!.BuiltUtc : null,
                 SurfaceTrigger: useSnapshot ? surfaceSnapshot!.Trigger : null,
-                SchemaPatches: useSnapshot ? surfaceSnapshot!.SchemaPatches : null
+                SchemaPatches: useSnapshot ? surfaceSnapshot!.SchemaPatches : null,
+                // Parameter provenance rides with a tool listing only, and only when non-empty (null = omitted from the wire).
+                HiddenParameterGroups: useSnapshot && toolListing != McpServerStatusToolListing.none
+                    && surfaceSnapshot!.HiddenParameterGroups is { Count: > 0 } hiddenGroups ? hiddenGroups : null,
+                UnmatchedHideRules: useSnapshot && toolListing != McpServerStatusToolListing.none
+                    && surfaceSnapshot!.UnmatchedHideRules is { Count: > 0 } unmatchedRules ? unmatchedRules : null
             ),
             StoppedByScript: new McpServerStatusStoppedByScript(
                 WasFound: _stoppedByScriptMarker.WasFound,
@@ -288,7 +293,10 @@ public sealed record McpServerStatusToolSurface(
     long? SurfaceVersion = null,
     DateTime? SurfaceBuiltUtc = null,
     string? SurfaceTrigger = null,
-    IReadOnlyList<string>? SchemaPatches = null);
+    IReadOnlyList<string>? SchemaPatches = null,
+    // Parameter provenance (stage D): null unless a tool listing was requested and the snapshot has entries.
+    IReadOnlyList<HiddenParameterGroup>? HiddenParameterGroups = null,
+    IReadOnlyList<ParameterVisibilityRule>? UnmatchedHideRules = null);
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>Whether this instance's predecessor was deliberately stopped by
 /// roslynsentinel-vscode-control.ps1's stopallstdio/stopallhttp/stopalltypes actions, as reported by
