@@ -75,7 +75,7 @@ public static class ToolParams
         "edits only. If it matches more than once, widen it with a neighbouring line or pass matchLine from the error's candidate list.";
 
     */
-    public const string OldContent = "Text to find and replace; indentation and the amount of spacing may differ from the file. Default limit of 2000 characters. Beside batchEdits, oldContent with newContent counts as one more item.";
+    public const string OldContent = "Text to find and replace; indentation and the amount of spacing may differ from the file. Default limit of 2000 characters.";
 
     /*
     public const string NewContent =
@@ -83,7 +83,7 @@ public static class ToolParams
         "than oldContent (net insertion), as long as it stays within the size limit (a startup-" +
         "configured line/char limit, reported in the error if exceeded).";
     */
-    public const string NewContent = "Replacement text, re-indented to the file. Default limit of 2000 characters. Beside batchEdits, oldContent with newContent counts as one more item.";
+    public const string NewContent = "Replacement text, re-indented to the file. Default limit of 2000 characters.";
 
     public const string ContainingTypeName =
         "Name of the type that directly declares the target. Only needed when the target's name AND " +
@@ -117,7 +117,7 @@ public static class ToolParams
     */
 
     public const string SnippetEdits =
- "Batch form of filePath/oldContent/newContent. A top-level oldContent/newContent beside it counts as one more item; a top-level filePath is the default for items without their own. " + BatchSemantics +
+ "Batch form of filePath/oldContent/newContent. Beside it, oldContent+newContent is one more item and filePath is the default for items without their own. " + BatchSemantics +
  " Each edit has the same size limits.";
 
     public const string ModifierEdits =
