@@ -84,7 +84,15 @@ public class ImplementationScenarioAgentTests
 
             for (var step = 1; step <= scenario.Steps.Count; step++)
             {
-                yield return new TestCaseData(scenario.Id, step).SetName($"ImplScenario_{scenario.Id}_Step{step}");
+                var testCase = new TestCaseData(scenario.Id, step).SetName($"ImplScenario_{scenario.Id}_Step{step}");
+
+                // The category is generated from the property, never written by hand, so it cannot drift from the declared axis.
+                if (scenario.PrimaryAxis != EvalAxis.Unassigned)
+                {
+                    testCase.SetCategory(EvalAxisCategory.Name(scenario.PrimaryAxis));
+                }
+
+                yield return testCase;
             }
         }
     }
@@ -141,8 +149,10 @@ public class ImplementationScenarioAgentTests
         // was a tool call cut off by a cap, and a mid-task "I need to report what breaks: ChangePublisher ..." then satisfied a
         // report check (WideningRejectedByGate on 85 graded PassedAfterCap with no report and an unchanged tree).
         var finalMessage = result.Converged ? result.Transcript.FinalMessage() : "";
-        var (checkOutcome, checkDetail) = await ImplementationScenarioChecks.CheckAsync(
+        var verdict = await ImplementationScenarioChecks.VerdictAsync(
             scenario, step, _environment.SolutionDirectory, finalMessage, changedPaths, cancellationToken);
+        var checkOutcome = verdict.Outcome;
+        var checkDetail = verdict.Detail;
 
         var outcome = checkOutcome;
         var detail = checkDetail;
@@ -161,18 +171,22 @@ public class ImplementationScenarioAgentTests
                 detail = $"Stopped: {result.StopReason}. State check would have been {checkOutcome}: {checkDetail}";
             }
         }
-        else if (checkOutcome != ImplementationScenarioOutcome.Pass
-            && (StopMarker.IsLeading(finalMessage) || StopMarker.ContainsAnywhere(finalMessage)))
-        {
-            outcome = ImplementationScenarioOutcome.Blocked;
-            detail = $"Blocked-stop final message. State check was {checkOutcome}: {checkDetail}";
-        }
 
+        // outcomeClass= and variant= are appended after the free-text detail so a parser of the leading key=value fields is unaffected.
         var summary =
-            $"{scenario.Id} step {step}: outcome={outcome}, turns={result.TurnCount}, started={result.StartedTurnCount}, wallTime={stopwatch.Elapsed:hh\\:mm\\:ss}, wallClockCap={wallClockCap.TotalMinutes}m, stopReason={result.StopReason}. {detail}";
+            $"{scenario.Id} step {step}: outcome={outcome}, turns={result.TurnCount}, started={result.StartedTurnCount}, wallTime={stopwatch.Elapsed:hh\\:mm\\:ss}, wallClockCap={wallClockCap.TotalMinutes}m, stopReason={result.StopReason}. {detail} outcomeClass={verdict.Class} variant={verdict.Variant}";
         TestContext.Out.WriteLine(summary);
         File.WriteAllText(Path.Combine(_runDirectory, $"step-{step}.outcome.txt"), summary + "\r\n");
 
-        Assert.That(outcome, Is.EqualTo(ImplementationScenarioOutcome.Pass), $"{detail} Transcript: {result.TranscriptPath}");
+        // A step that expects BLOCKED passes on the class CorrectBlocked (it needs the token, an unchanged tree and a passing grade);
+        // every other step passes on outcome Pass.
+        if (scenario.Steps[step - 1].ExpectedEnding == ExpectedEnding.Blocked)
+        {
+            Assert.That(verdict.Class, Is.EqualTo(EvalOutcomeClass.CorrectBlocked), $"{detail} Transcript: {result.TranscriptPath}");
+        }
+        else
+        {
+            Assert.That(outcome, Is.EqualTo(ImplementationScenarioOutcome.Pass), $"{detail} Transcript: {result.TranscriptPath}");
+        }
     }
 }
