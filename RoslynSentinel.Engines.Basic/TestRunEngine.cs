@@ -527,7 +527,7 @@ public class TestRunEngine
         {
             detail += " It printed nothing to stdout or stderr. One known cause of a silent exit is an MSBuild worker node handshake failure when the SDK dotnet runs differs from the SDK its MSBuild nodes start from"
                 + " (for example a worktree without global.json, which runs the newest installed SDK). Options: `dotnet --version` in the project directory shows the SDK dotnet selects, and global.json in the repo or worktree decides it;"
-                + " RunTest(environment: {\"MSBUILDDEBUGCOMM\": \"1\", \"MSBUILDDEBUGPATH\": \"<folder>\"}) writes each node's handshake trace into that folder.";
+                + " MSBUILDDEBUGCOMM=1 plus MSBUILDDEBUGPATH=<folder> in the environment parameter of this tool writes each node's handshake trace into that folder.";
         }
 
         return detail;
