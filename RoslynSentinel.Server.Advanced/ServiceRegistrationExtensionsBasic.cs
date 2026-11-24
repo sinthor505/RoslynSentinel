@@ -543,45 +543,6 @@ public static class RoslynSentinelServiceExtensionsBasic
             services.AddSingleton<DocumentationTools>();
             mcpBuilder.WithSentinelTools<DocumentationTools>();
         }
-        // Fine-grained Symbol sub-modes (Decision 7 step 4, Addendum A) - independently
-        // opt-in-able, neither requires "SymbolNavigationTools"/"Workspace" itself.
-        if (activeToolClasses.Contains("SymbolNavigationTools"))
-        {
-            services.AddSingleton<SymbolNavigationTools>();
-            mcpBuilder.WithSentinelTools<SymbolNavigationTools>();
-        }
-        if (activeToolClasses.Contains("SymbolRelationshipTools"))
-        {
-            services.AddSingleton<SymbolRelationshipTools>();
-            mcpBuilder.WithSentinelTools<SymbolRelationshipTools>();
-        }
-        if (activeToolClasses.Contains("GitTools"))
-        {
-            services.AddSingleton<GitTools>();
-            mcpBuilder.WithSentinelTools<GitTools>();
-        }
-        if (activeToolClasses.Contains("GitRemoteTools"))
-        {
-            services.AddSingleton<GitRemoteTools>();
-            mcpBuilder.WithSentinelTools<GitRemoteTools>();
-        }
-        if (activeToolClasses.Contains("AdminTools"))
-        {
-            // Operator tool. --mode=all also exposes it (AllModes derives from ModeToToolClasses.Keys, see
-            // ServerStdio.cs/ServerHttp.cs); reachable via --mode=Admin, --mode=Claude, or
-            // --include-tools=AdminTools.
-            services.AddSingleton<AdminTools>();
-            mcpBuilder.WithSentinelTools<AdminTools>();
-        }
-        if (activeToolClasses.Contains("WholeFileWriteTools"))
-        {
-            // Whole-file write tools (WriteFile, DeleteFile, ApplyDiff, ApplyUnifiedDiff). --mode=all also
-            // exposes the class (AllModes derives from ModeToToolClasses.Keys, see ServerStdio.cs/ServerHttp.cs).
-            // claude-lean makes WriteFile and DeleteFile core (ToolClassRegistry.ClaudeLeanToolNames); the other
-            // tools stay on demand there. Also reachable via --mode=WholeFileWrite or --include-tools=WholeFileWriteTools.
-            services.AddSingleton<WholeFileWriteTools>();
-            mcpBuilder.WithSentinelTools<WholeFileWriteTools>();
-        }
         if (activeToolClasses.Contains("RefactoringTools"))
         {
             services.AddSingleton<RefactoringSignatureTools>();
@@ -591,6 +552,7 @@ public static class RoslynSentinelServiceExtensionsBasic
             services.AddSingleton<RefactoringExtractionDocsTools>();
             mcpBuilder.WithSentinelTools<RefactoringExtractionDocsTools>();
         }
+
         // Sees the claude-lean widened set, so this stays after the activeToolClasses rebinding in the claude-lean block above.
         AddStartupToolClasses(services, "Basic", ToolClassRegistry.SelectStartupToolTypes(ToolClassRegistry.BasicToolClassTypes, activeToolClasses, activeModes.Contains(ToolClassRegistry.ClaudeLeanMode)));
     }
