@@ -1,3 +1,6 @@
+using RoslynSentinel.Common.AgentLoop;
+using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Graders;
+
 namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.InstructionAdherence;
 
 /// <summary>
@@ -101,16 +104,69 @@ public class PolicyBodyTests
 }
 """;
 
-    private const string StepPrompt = """
-Two files must keep identical body text: the Markdown raw string literal in
-ContosoOrders.Core/Evals/RemovePinnedSentence/PolicyDocument.cs and the
-ExpectedBodies literals in ContosoOrders.Tests/Evals/RemovePinnedSentence/PolicyBodyTests.cs. In both
-SymbolNotFound bodies (SymbolNotFound.Edit and SymbolNotFound.Lookup), in both files, remove this trailing sentence
-together with the single space in front of it, so each body ends at "...correct it and continue.":
-"If the task also describes what the symbol does, make one Search or ReadFile in the file the task names to look for a member matching that description before you stop."
-Change nothing else: the FileNotFound bodies stay as they are, and the document bodies and the test literals must stay
-identical to each other.
+    private const string EndingTestPath = "ContosoOrders.Tests/Evals/RemovePinnedSentence/PolicyEndingTests.cs";
+
+    // Visible acceptance test, red on the seed (both SymbolNotFound bodies still end with the pinned sentence) and compiled against
+    // the seed (it only reads PolicyDocument.Markdown). It repeats the body reader of PolicyBodyTests because that one is private.
+    private const string EndingTestSource = """
+using ContosoOrders.Evals.RemovePinnedSentence;
+using Xunit;
+
+namespace ContosoOrders.Tests.Evals.RemovePinnedSentence;
+
+public class PolicyEndingTests
+{
+    private const string SharedClosing = "correct it and continue.";
+
+    [Fact]
+    public void EverySymbolNotFoundBodyEndsWithTheSharedClosing()
+    {
+        var bodies = ReadBodies()
+            .Where(entry => entry.Key.StartsWith("SymbolNotFound.", StringComparison.Ordinal))
+            .ToList();
+        Assert.Equal(2, bodies.Count);
+        foreach (var (key, body) in bodies)
+        {
+            Assert.True(body.EndsWith(SharedClosing, StringComparison.Ordinal), key + " does not end with: " + SharedClosing);
+        }
+    }
+
+    private static Dictionary<string, string> ReadBodies()
+    {
+        var bodies = new Dictionary<string, string>();
+        string? key = null;
+        foreach (var line in PolicyDocument.Markdown.ReplaceLineEndings("\n").Split('\n'))
+        {
+            if (line.StartsWith("### ", StringComparison.Ordinal))
+            {
+                key = line[4..].Trim();
+            }
+            else if (key is not null && line.Length > 0)
+            {
+                bodies[key] = line;
+                key = null;
+            }
+        }
+
+        return bodies;
+    }
+}
 """;
+
+    private const string CannedReport = "DONE: removed the pinned sentence and the space before it from both SymbolNotFound bodies in PolicyDocument.cs and PolicyBodyTests.cs.";
+
+    // Expression-bodied on purpose: a static readonly field would render before the contract placement is known (initialisation order).
+    private static string StepPrompt => EvalContractOptions.Render(new ScenarioTask(
+        Goal: "Two files must keep identical body text: the Markdown raw string literal in ContosoOrders.Core/Evals/RemovePinnedSentence/PolicyDocument.cs " +
+            "and the `ExpectedBodies` literals in ContosoOrders.Tests/Evals/RemovePinnedSentence/PolicyBodyTests.cs. " +
+            "In both SymbolNotFound bodies (`SymbolNotFound.Edit` and `SymbolNotFound.Lookup`), in both files, remove this trailing sentence " +
+            "together with the single space in front of it, so each body ends at `...correct it and continue.`: " +
+            "\"If the task also describes what the symbol does, make one Search or ReadFile in the file the task names to look for a member matching that description before you stop.\"",
+        Files: "PolicyDocument.cs and PolicyBodyTests.cs in the folders above. No other file.",
+        Conditions: "The FileNotFound bodies stay as they are. The document bodies and the test literals stay identical to each other. " +
+            "Both files keep their CRLF line endings.",
+        IfFails: EvalContractOptions.PlainIfFails,
+        DoneWhen: "The solution builds with 0 errors; all tests in ContosoOrders.Tests pass, including PolicyBodyTests and PolicyEndingTests."));
 
     public static ImplementationScenario Definition { get; } = new ImplementationScenario(
         "RemovePinnedSentence",
@@ -121,6 +177,7 @@ identical to each other.
         {
             [PolicyPath] = PolicySource,
             [TestPath] = TestSource,
+            [EndingTestPath] = EndingTestSource,
         },
         new[]
         {
@@ -134,9 +191,59 @@ identical to each other.
                 AllowedPaths: new List<string> { PolicyPath, TestPath },
                 HiddenTestSource: null,
                 ExtraCheck: static ctx => Task.FromResult<string?>(CheckSentenceRemoved(ctx)),
-                CannedFinalMessage: null),
+                CannedFinalMessage: CannedReport,
+                Variants: BuildVariants(),
+                DoneWhenTests: new[] { "PolicyBodyTests", "PolicyEndingTests" }),
         },
-        PreferredHost: "112");
+        PreferredHost: "112",
+        PrimaryAxis: EvalAxis.InstructionAdherence);
+
+    /// <summary>
+    /// The executable outcome table (Spec S8): each variant is an overlay on step 1 (golden) with a DONE: final message, so every
+    /// non-passing row is SilentIncomplete. The tests run before the extra check, so both rows fail on the test run.
+    /// Table-only (no overlay can express it): a model that keeps the sentence out but writes LF line endings (LfEndings, CheckFailed
+    /// through CheckSentenceRemoved). The variant test writes every overlay through ImplementationScenario.NormalizeToCrlf, which turns
+    /// LF into CRLF before the check sees it.
+    /// </summary>
+    private static IReadOnlyList<ScenarioVariant> BuildVariants()
+    {
+        // TODO LfEndings variant is table-only: Variant_OutcomeMatchesTable writes overlays through NormalizeToCrlf, so an LF overlay cannot be tested; needs a raw-bytes overlay option on ScenarioVariant
+        const string Done = "DONE: removed the sentence from both files.";
+
+        // The policy is edited and the test literals are not: the golden policy over the seed test file.
+        var onlyPolicyEdited = new Dictionary<string, string>
+        {
+            [PolicyPath] = RemoveSentence(PolicySource),
+            [TestPath] = TestSource,
+        };
+
+        // The sentence is gone from both files but the single space in front of it stays, so each body ends at "continue. ".
+        var trailingSpaceKept = new Dictionary<string, string>
+        {
+            [PolicyPath] = PolicySource.Replace(Sentence, string.Empty),
+            [TestPath] = TestSource.Replace(Sentence, string.Empty),
+        };
+
+        return new[]
+        {
+            new ScenarioVariant(
+                Name: "OnlyPolicyEdited",
+                BaseStep: 1,
+                Files: onlyPolicyEdited,
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "check tests failed"),
+            new ScenarioVariant(
+                Name: "TrailingSpaceKept",
+                BaseStep: 1,
+                Files: trailingSpaceKept,
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "check tests failed"),
+        };
+    }
 
     private static string RemoveSentence(string text) => text.Replace(" " + Sentence, string.Empty);
 
