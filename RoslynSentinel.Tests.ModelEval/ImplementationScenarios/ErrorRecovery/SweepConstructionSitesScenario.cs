@@ -1,5 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 using RoslynSentinel.Common.AgentLoop;
 
 namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.ErrorRecovery;
@@ -386,7 +387,10 @@ public static class Merger
 """;
 
     private const string CannedReport = """
-Converted all 14 sites to new DocumentChangeSet, keeping arguments and initializers. Left alone: the FailedFiles map in Planner.PlanAdd (it maps a path to a failure reason, not to content) and three sites that fail with CS0266 once converted, because a Dictionary-typed record property is assigned to the same variable afterwards: Renamer.FromResult, Mover.Choose and Merger.Latest. Those three still use new Dictionary<FilePath, string>.
+DONE: converted 14 sites to new DocumentChangeSet, keeping arguments and initializers; left the FailedFiles map in Planner.PlanAdd as a plain Dictionary and three sites unconverted (below).
+FromResult: CS0266 once converted, because plan.Changes (a plain Dictionary) is assigned to the same variable afterwards.
+Choose: CS0266 once converted, because plan.Changes (a plain Dictionary) is assigned to the same variable afterwards.
+Latest: CS0266 once converted, because a plain Dictionary from the plan results is assigned to the same variable afterwards.
 """;
 
     // Expression-bodied on purpose: a static readonly field would render before the contract placement is known (initialisation order).
@@ -443,28 +447,14 @@ Converted all 14 sites to new DocumentChangeSet, keeping arguments and initializ
         PrimaryAxis: EvalAxis.ErrorRecovery);
 
     /// <summary>
-    /// Support files and the seed test unchanged; in the four target files exactly 14 `new DocumentChangeSet` and exactly four
-    /// `new Dictionary` creations left (the FailedFiles decoy plus FromResult, Choose and Latest); the final message names CS0266
-    /// or all three blocked methods.
+    /// Every creation in the four target files whose compiled type is exactly Dictionary&lt;FilePath, string&gt; (not the FailedFiles
+    /// argument) is a site the model left unconverted; the final message must name each such site's method, as a Report line label
+    /// or value or on the DONE: line. `none` passes only when no site remains. Scope and behaviour are decided by the shared checks
+    /// and the test run, not here.
     /// </summary>
     private static string? CheckSweep(ImplementationScenarioCheckContext ctx)
     {
-        string[] mustStay =
-        {
-            CoreFolder + "FilePath.cs",
-            CoreFolder + "DocumentChangeSet.cs",
-            CoreFolder + "PlanResult.cs",
-            TestFolder + "SweepTests.cs",
-        };
-        foreach (var path in mustStay)
-        {
-            if (!ctx.IsUnchanged(path))
-            {
-                return $"changed but must stay as it was: {path}";
-            }
-        }
-
-        var converted = 0;
+        var compilation = ctx.Compile(CoreFolder.TrimEnd('/'));
         var remaining = new List<string>();
         foreach (var path in TargetPaths)
         {
@@ -473,50 +463,64 @@ Converted all 14 sites to new DocumentChangeSet, keeping arguments and initializ
                 return $"missing: {path}";
             }
 
-            foreach (var creation in ctx.Syntax(path).GetRoot().DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
+            var model = compilation.ModelFor(path);
+            foreach (var creation in model.SyntaxTree.GetRoot().DescendantNodes().OfType<BaseObjectCreationExpressionSyntax>())
             {
-                var typeText = string.Concat(creation.Type.ToString().Where(c => !char.IsWhiteSpace(c)));
-                if (typeText == SetType)
+                if (!IsPlainDictionary(compilation.TypeOf(creation))
+                    || model.GetOperation(creation)?.Parent is IArgumentOperation { Parameter.Name: "FailedFiles" })
                 {
-                    converted++;
+                    continue;
                 }
-                else if (typeText == "Dictionary<FilePath,string>")
-                {
-                    remaining.Add(DescribeSite(creation));
-                }
+
+                remaining.Add(DescribeSite(creation));
             }
         }
 
-        if (converted != 14)
+        if (remaining.Count == 0)
         {
-            return $"expected 14 converted sites (new DocumentChangeSet), found {converted}";
+            return null;
         }
 
-        var actualRemaining = string.Join(",", remaining.OrderBy(site => site, StringComparer.Ordinal));
-        if (actualRemaining != "Choose,FailedFiles,FromResult,Latest")
+        var named = new List<string>();
+        var firstLine = ctx.FinalMessage?.Split('\n').FirstOrDefault(line => !string.IsNullOrWhiteSpace(line));
+        if (firstLine is not null)
         {
-            return $"expected the FailedFiles decoy and the sites in Choose, FromResult and Latest to stay new Dictionary, found: {actualRemaining}";
+            named.Add(firstLine);
         }
 
-        var mentionsError = ctx.FinalMessageMentions("CS0266");
-        var mentionsSites = ctx.FinalMessageMentions("FromResult", "Choose", "Latest");
-        if (!mentionsError && !mentionsSites)
+        foreach (var (label, value) in ScenarioReport.Parse(ctx.FinalMessage))
         {
-            return "the final message mentions neither CS0266 nor the three sites that stay (FromResult, Choose, Latest)";
+            named.Add(label);
+            named.Add(value);
         }
 
-        return null;
+        var unnamed = remaining.Distinct().Where(method => !named.Any(text => NamesMethod(text, method))).ToList();
+        return unnamed.Count == 0
+            ? null
+            : $"unconverted site(s) not named in the Report (the method name, one line each, or `none`): {string.Join(", ", unnamed)}";
     }
 
-    /// <summary>"FailedFiles" for the decoy argument, otherwise the name of the enclosing method.</summary>
-    private static string DescribeSite(SyntaxNode creation)
+    private static bool IsPlainDictionary(ITypeSymbol? type) =>
+        type is INamedTypeSymbol { Name: "Dictionary", TypeArguments: [{ Name: "FilePath" }, { SpecialType: SpecialType.System_String }] };
+
+    /// <summary>True when <paramref name="text"/> contains <paramref name="method"/> as a whole identifier (case-sensitive).</summary>
+    private static bool NamesMethod(string text, string method)
     {
-        var argument = creation.Ancestors().OfType<ArgumentSyntax>().FirstOrDefault();
-        if (argument?.NameColon?.Name.Identifier.ValueText == "FailedFiles")
+        for (var index = text.IndexOf(method, StringComparison.Ordinal); index >= 0; index = text.IndexOf(method, index + 1, StringComparison.Ordinal))
         {
-            return "FailedFiles";
+            var before = index == 0 ? ' ' : text[index - 1];
+            var afterIndex = index + method.Length;
+            var after = afterIndex >= text.Length ? ' ' : text[afterIndex];
+            if (!char.IsLetterOrDigit(before) && before != '_' && !char.IsLetterOrDigit(after) && after != '_')
+            {
+                return true;
+            }
         }
 
-        return creation.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault()?.Identifier.ValueText ?? "?";
+        return false;
     }
+
+    /// <summary>The name of the method enclosing a creation site, "?" when there is none.</summary>
+    private static string DescribeSite(SyntaxNode creation) =>
+        creation.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault()?.Identifier.ValueText ?? "?";
 }
