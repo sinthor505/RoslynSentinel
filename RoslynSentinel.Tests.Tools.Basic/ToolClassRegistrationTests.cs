@@ -11,6 +11,7 @@ using Microsoft.Extensions.Options;
 
 using ModelContextProtocol.Server;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Tools.Basic;
 
 namespace RoslynSentinel.Tests.Battery.Basic;
@@ -34,7 +35,7 @@ public class ToolClassRegistrationTests
         // Host state, not registered by the flat methods: ToolsetControlTools needs a ToolsetService, which a real
         // host builds from the live McpServerOptions and the claude-lean on-demand class set. A stand-in over empty
         // options is enough to prove the class itself is constructible (no allowlist entry needed).
-        _services.AddSingleton(sp => new ToolsetService(Options.Create(new McpServerOptions()), sp, new HashSet<string>()));
+        _services.AddSingleton(sp => new ToolsetService(new ToolSurfaceController(Options.Create(new McpServerOptions())), sp, new HashSet<string>()));
 
         // ValidateOnBuild checks every registered constructor graph up front, the same check the server enables.
         _provider = _services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });

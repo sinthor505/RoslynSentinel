@@ -3,6 +3,7 @@
 
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Tools.Basic;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -392,7 +393,7 @@ public class AdminToolsTests
     {
         var options = Options.Create(new McpServerOptions { ToolCollection = new McpServerPrimitiveCollection<McpServerTool>() });
         var service = new ToolsetService(
-            options,
+            new ToolSurfaceController(options),
             new ServiceCollection().BuildServiceProvider(),
             new HashSet<string> { "GitRemoteTools", "DeclarationTools", "ParameterEditTools" },
             () => new[] { typeof(AdminTools).Assembly });

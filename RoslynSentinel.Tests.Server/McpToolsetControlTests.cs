@@ -41,7 +41,7 @@ public class McpToolsetControlTests
         var collection = new McpServerPrimitiveCollection<McpServerTool>();
         var options = Options.Create(new McpServerOptions { ToolCollection = withCollection ? collection : null });
         var service = new ToolsetService(
-            options,
+            new ToolSurfaceController(options),
             new ServiceCollection().BuildServiceProvider(),
             ToolClassRegistry.ClaudeLeanOnDemandToolClasses,
             () => ToolAssemblies);
@@ -202,7 +202,7 @@ public class McpToolsetControlTests
     {
         var collection = new McpServerPrimitiveCollection<McpServerTool>();
         var service = new ToolsetService(
-            Options.Create(new McpServerOptions { ToolCollection = collection }),
+            new ToolSurfaceController(Options.Create(new McpServerOptions { ToolCollection = collection })),
             new ServiceCollection().BuildServiceProvider(),
             new HashSet<string>(StringComparer.Ordinal),
             () => ToolAssemblies);

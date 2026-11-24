@@ -29,7 +29,7 @@ public class McpServerStatusToolsetCountTests
         var collection = new McpServerPrimitiveCollection<McpServerTool>();
         var options = Options.Create(new McpServerOptions { ToolCollection = collection });
         var service = new ToolsetService(
-            options,
+            new ToolSurfaceController(options),
             new ServiceCollection().BuildServiceProvider(),
             new HashSet<string> { nameof(TestCategoryTaggingTools) },
             () => new[] { typeof(TestCategoryTaggingTools).Assembly });

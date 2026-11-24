@@ -94,7 +94,7 @@ public class StartupToolsetRestoreTests
         var collection = new McpServerPrimitiveCollection<McpServerTool>();
         var options = Options.Create(new McpServerOptions { ToolCollection = collection });
         var service = new ToolsetService(
-            options,
+            new ToolSurfaceController(options),
             new ServiceCollection().BuildServiceProvider(),
             ToolClassRegistry.ClaudeLeanOnDemandToolClasses,
             () => ToolAssemblies);
