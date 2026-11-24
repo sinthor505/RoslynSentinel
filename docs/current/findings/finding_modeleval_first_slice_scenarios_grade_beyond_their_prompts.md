@@ -1,6 +1,6 @@
 # Finding: the first-slice eval graders accept and reject outcomes their prompts do not decide
 
-**Status:** OPEN 2026-11-23. Audit of the 18 first-slice prompts against their graders; rework decided per scenario below, not yet scheduled (phase 3 of proposal_modeleval_standing_workflow_contract).
+**Status:** FIXED 2026-11-23 by plan_modeleval_first_slice_scenario_rework (scenario Steps 12-48 landed as 7cbfc4d9..3db4c7c0, b5d6d45d..0d6ee1e0, ab3a1976..86f825b2 and 5d5b632e..86428879; Batch F catalog, axis enforcement and cold read after that). Audit of the 18 first-slice prompts against their graders; rework decided per scenario below (phase 3 of proposal_modeleval_standing_workflow_contract).
 
 ## Context
 
