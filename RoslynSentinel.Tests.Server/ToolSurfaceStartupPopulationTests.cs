@@ -135,21 +135,22 @@ public class ToolSurfaceStartupPopulationTests
     }
 
     [Test]
-    public void PostConfigure_NoTools_LeavesANullCollectionNull()
+    public void PostConfigure_NoTools_CreatesAnEmptyCollection()
     {
-        // Pins the Step 5 rule: with no tools the collection stays null. Step 19 changes exactly this test
-        // (it creates the collection even when empty), so update this test with that change and nothing else.
+        // Pins Step 19: with no tools the population still creates an empty tool collection.
         var services = new ServiceCollection().BuildServiceProvider();
         var emptyList = new ToolSurfaceStartupPopulation(services, Array.Empty<ToolSurfaceStartupRequest>());
         var emptyTypes = new ToolSurfaceStartupPopulation(services, new[] { new ToolSurfaceStartupRequest("empty", Array.Empty<Type>()) });
 
         var fromEmptyList = new McpServerOptions();
         emptyList.PostConfigure(null, fromEmptyList);
-        Assert.That(fromEmptyList.ToolCollection, Is.Null);
+        Assert.That(fromEmptyList.ToolCollection, Is.Not.Null);
+        Assert.That(fromEmptyList.ToolCollection!.Count, Is.EqualTo(0));
 
         var fromEmptyTypes = new McpServerOptions();
         emptyTypes.PostConfigure(null, fromEmptyTypes);
-        Assert.That(fromEmptyTypes.ToolCollection, Is.Null);
+        Assert.That(fromEmptyTypes.ToolCollection, Is.Not.Null);
+        Assert.That(fromEmptyTypes.ToolCollection!.Count, Is.EqualTo(0));
     }
 
     [Test]

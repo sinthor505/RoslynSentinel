@@ -33,7 +33,7 @@ public sealed class ToolSurfaceStartupPopulation : IPostConfigureOptions<McpServ
     public IReadOnlyList<McpServerTool> Tools => _tools.Value;
 
     /// <summary>
-    /// Adds the startup tools to the given options, creating its tool collection when there is at least one tool and it is null.
+    /// Adds the startup tools to the given options, creating its tool collection when it is null, even when there are no tools.
     /// Runs inside options construction, so it never reads <c>IOptions&lt;McpServerOptions&gt;.Value</c> and never resolves
     /// <see cref="ToolSurfaceController"/> from the provider.
     /// </summary>
@@ -41,15 +41,13 @@ public sealed class ToolSurfaceStartupPopulation : IPostConfigureOptions<McpServ
     /// <param name="options">The options instance to populate.</param>
     public void PostConfigure(string? name, McpServerOptions options)
     {
+        options.ToolCollection ??= new McpServerPrimitiveCollection<McpServerTool>();
         var tools = Tools;
         if (tools.Count == 0)
         {
-            // no tools: leave a null collection null, as the SDK setup does; Step 19 creates it
-            // TODO create the collection even when empty (Step 19)
             return;
         }
 
-        options.ToolCollection ??= new McpServerPrimitiveCollection<McpServerTool>();
         foreach (var tool in tools)
         {
             // TryAdd keeps the first tool of a duplicate name, as the SDK's own registration does.
