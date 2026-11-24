@@ -29,14 +29,14 @@ public class WorkspaceProjectManagementImpl
     private readonly StructuralRefinementEngine _structuralRefinementEngine;
     private readonly SolutionStructureEngine _solutionStructureEngine;
     private readonly ILogger _logger;
-    private readonly Func<string, TimeSpan, CancellationToken, Task<SolutionRestoreResult>> _restoreSolution;
+    private readonly Func<string, TimeSpan, CancellationToken, Task<SolutionRestoreResult>>? _restoreSolution;
 
     private const int ListWorkspaceSolutionsMaxFilesWalked = 5000;
 
     // dotnet restore of a large solution can take minutes; same ceiling as the full Build.
     private static readonly TimeSpan RestoreBeforeLoadTimeout = TimeSpan.FromMinutes(5);
 
-    /// <param name="restoreSolution">Seam for the restore that LoadSolution(forceReload) runs before loading; null = the real <see cref="SolutionRestore.RestoreAsync"/>. Tests pass a fake so no dotnet process is spawned.</param>
+    /// <param name="restoreSolution">Seam for the restore that LoadSolution (forceReload, or unrestored projects) and CreateProject run; null = resolved at call time to <see cref="SolutionRestore.AmbientRestore"/> when a test assembly set one, else the real <see cref="SolutionRestore.RestoreAsync"/>. A test that needs the real restore passes <see cref="SolutionRestore.RestoreAsync"/> here.</param>
     public WorkspaceProjectManagementImpl(IWorkspaceManager workspaceManager, StructuralRefinementEngine structuralRefinementEngine, ILogger logger, SolutionStructureEngine solutionStructureEngine,
         Func<string, TimeSpan, CancellationToken, Task<SolutionRestoreResult>>? restoreSolution = null)
     {
@@ -44,7 +44,7 @@ public class WorkspaceProjectManagementImpl
         _structuralRefinementEngine = structuralRefinementEngine;
         _solutionStructureEngine = solutionStructureEngine;
         _logger = logger;
-        _restoreSolution = restoreSolution ?? SolutionRestore.RestoreAsync;
+        _restoreSolution = restoreSolution;
     }
 
     public async Task<SentinelCallToolResult<object>> ListSolutionItems(ToolCallReason reason, SolutionItemsKind kind,
@@ -337,7 +337,7 @@ public class WorkspaceProjectManagementImpl
 
         var shown = string.Join(", ", names.Take(3));
         var more = names.Count > 3 ? $" (+{names.Count - 3} more)" : "";
-        return $"Unrestored project(s) (no current obj/project.assets.json): {shown}{more}. Run {ToolCallHint.Call("Build", ("level", "fullBuild"))} then {ToolCallHint.Call("LoadSolution", ("forceReload", "true"))}.";
+        return $"Unrestored project(s) (no current obj/project.assets.json): {shown}{more}. {ToolCallHint.Call("LoadSolution", ("forceReload", "true"))} retries the restore and reloads.";
     }
 
     // "1.2" -> "1.2.0", "1.2.3.0" -> "1.2.3", prerelease lower-cased; null for floating/range/property versions,
@@ -694,25 +694,55 @@ public class WorkspaceProjectManagementImpl
     // same advice. Process-wide because the workspace manager is a singleton per server process.
     private static readonly ConcurrentDictionary<string, string> AdvisedRestoreStates = new(StringComparer.OrdinalIgnoreCase);
 
-    // Restores the solution before a forced reload and returns a fact sentence for the LoadSolution result (leading space,
-    // never empty). Never throws except for caller cancellation: any restore problem is reported and the load goes ahead.
-    private async Task<string> RestoreBeforeLoadAsync(string solutionPath, string? baseRepoDir, CancellationToken cancellationToken)
+    // Restores the solution before a load and returns a fact sentence for the LoadSolution result (leading space; empty when
+    // no restore ran). forceReload always restores. Otherwise it restores only when a project of the solution is flagged
+    // by AnalyzeRestoreState and not already advised about in that identical state (a restore that already ran and left
+    // the project flagged would only repeat itself). Never throws except for caller cancellation: any restore problem is
+    // reported and the load goes ahead.
+    private async Task<string> RestoreBeforeLoadAsync(string solutionPath, string? baseRepoDir, bool forceReload, CancellationToken cancellationToken)
     {
         var resolved = ResolveSolutionPathForRestore(solutionPath, baseRepoDir);
         if (resolved is null)
         {
-            return " Restore before loading was skipped: the solution path did not resolve to an existing file before the load, so the load used the existing restore state.";
+            return forceReload
+                ? " Restore before loading was skipped: the solution path did not resolve to an existing file before the load, so the load used the existing restore state."
+                : "";
         }
 
+        int? unrestoredCount = null;
+        if (!forceReload)
+        {
+            var unrestored = AnalyzeRestoreState(SolutionProjectPaths.Read(resolved))
+                .Where(f => !AdvisedRestoreStates.TryGetValue(f.Path, out var advised) || advised != f.State)
+                .ToList();
+            if (unrestored.Count == 0)
+            {
+                return "";
+            }
+
+            unrestoredCount = unrestored.Count;
+        }
+
+        return await RunRestoreAsync(resolved, "the solution", unrestoredCount, cancellationToken);
+    }
+
+    // Runs the resolved restore delegate (explicit seam, else the ambient test default, else the real restore) on one
+    // solution or project file and returns the DescribeRestoreResult sentence. Logs the duration at Information so the
+    // synchronous cost can be measured. Never throws except for caller cancellation.
+    private async Task<string> RunRestoreAsync(string path, string target, int? unrestoredCount, CancellationToken cancellationToken)
+    {
         try
         {
-            var result = await _restoreSolution(resolved, RestoreBeforeLoadTimeout, cancellationToken);
-            return DescribeRestoreResult(result, RestoreBeforeLoadTimeout);
+            var restore = _restoreSolution ?? SolutionRestore.ResolveDefault();
+            var result = await restore(path, RestoreBeforeLoadTimeout, cancellationToken);
+            _logger.LogInformation("Restore of {Target} '{Path}' finished: started {Started}, succeeded {Succeeded}, timed out {TimedOut}, {DurationSeconds:0.0} s",
+                target, path, result.Started, result.Succeeded, result.TimedOut, result.Duration.TotalSeconds);
+            return DescribeRestoreResult(result, RestoreBeforeLoadTimeout, unrestoredCount, target);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogWarning(ex, "Restore before loading '{SolutionPath}' failed unexpectedly", solutionPath);
-            return " Restore before loading could not run (unexpected error, details in the server log); the load used the existing restore state.";
+            _logger.LogWarning(ex, "Restore of {Target} '{Path}' failed unexpectedly", target, path);
+            return $" Restore of {target} could not run (unexpected error, details in the server log); the existing restore state was kept.";
         }
     }
 
@@ -740,26 +770,27 @@ public class WorkspaceProjectManagementImpl
         return candidates.FirstOrDefault(File.Exists);
     }
 
-    internal static string DescribeRestoreResult(SolutionRestoreResult result, TimeSpan timeout)
+    internal static string DescribeRestoreResult(SolutionRestoreResult result, TimeSpan timeout, int? unrestoredCount = null, string target = "the solution")
     {
         var seconds = result.Duration.TotalSeconds.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
         if (!result.Started)
         {
-            return " Restore before loading could not run: the dotnet CLI could not be started; the load used the existing restore state.";
+            return $" Restore of {target} could not run: the dotnet CLI could not be started; the existing restore state was kept.";
         }
 
         if (result.TimedOut)
         {
-            return $" Restore before loading did not finish within {timeout.TotalSeconds:0} s and was terminated; the load used the existing restore state. Option: {ToolCallHint.Call("Build", ("level", "fullBuild"))} then {ToolCallHint.Call("LoadSolution", ("forceReload", "true"))}.";
+            return $" Restore of {target} did not finish within {timeout.TotalSeconds:0} s and was terminated; the existing restore state was kept. Option: {ToolCallHint.Call("LoadSolution", ("forceReload", "true"))} retries the restore.";
         }
 
         if (!result.Succeeded)
         {
             var output = result.OutputTail.Length > 0 ? $" Last restore output: {result.OutputTail}" : "";
-            return $" Restore before loading ended with exit code {result.ExitCode} after {seconds} s; the load used the existing restore state.{output}";
+            return $" Restore of {target} ended with exit code {result.ExitCode} after {seconds} s; the existing restore state was kept.{output}";
         }
 
-        return $" Restored the solution first (dotnet restore, {seconds} s).";
+        var because = unrestoredCount is { } count ? $" because {count} project(s) had no current obj/project.assets.json" : "";
+        return $" Restored {target} first{because} (dotnet restore, {seconds} s).";
     }
 
     public async Task<SentinelCallToolResult<object>> LoadSolution(ToolCallReason reason, string solutionPath, string? baseRepoDir = null,
@@ -795,9 +826,10 @@ public class WorkspaceProjectManagementImpl
                 };
             }
 
-            // A project added since the last load has no obj/project.assets.json; Build restores into a throwaway
-            // path, so only an explicit restore here lets the reload see it. A restore problem never blocks the load.
-            var restoreNote = forceReload ? await RestoreBeforeLoadAsync(solutionPath, baseRepoDir, cancellationToken) : "";
+            // A project added since the last load (or a fresh checkout) has no obj/project.assets.json; Build restores into a
+            // throwaway path, so only an explicit restore here lets the load see it. Restore time is not part of the load
+            // timeout (the restore has its own). A restore problem never blocks the load.
+            var restoreNote = await RestoreBeforeLoadAsync(solutionPath, baseRepoDir, forceReload, cancellationToken);
             await _workspaceManager.LoadSolutionAsync(solutionPath, baseRepoDir, timeout, cancellationToken);
             var solutionRoot = _workspaceManager.GetSolutionRoot();
             if (solutionRoot != null)
@@ -853,6 +885,17 @@ public class WorkspaceProjectManagementImpl
         try
         {
             var result = await _solutionStructureEngine.CreateProjectAsync(projectName, projectType, cancellationToken);
+
+            // The engine does not reload the workspace, so the earliest hook is right after it returns: the csproj exists on disk
+            // and the new project is restored before anything loads it. A restore problem never fails the creation.
+            var solutionDir = _workspaceManager.SolutionPath is { } slnPath ? Path.GetDirectoryName(slnPath) : null;
+            var csprojPath = solutionDir is null ? null : Path.Combine(solutionDir, projectName, projectName + ".csproj");
+            if (csprojPath is not null && File.Exists(csprojPath))
+            {
+                var restoreNote = await RunRestoreAsync(csprojPath, $"project '{projectName}'", null, cancellationToken);
+                result = result with { Message = result.Message + restoreNote };
+            }
+
             return new SentinelCallToolResult<object>()
             {
                 IsError = false,
@@ -875,6 +918,7 @@ public class WorkspaceProjectManagementImpl
     {
         try
         {
+            // TODO the target project this creates (engine CreateProjectAsync) is not restored the way CreateProject restores its project (punchlist #19 follow-up)
             var result = await _solutionStructureEngine.SplitProjectByFolderAsync(sourceProjectName, folderName, targetProjectName, cancellationToken);
             return new SentinelCallToolResult<object>()
             {

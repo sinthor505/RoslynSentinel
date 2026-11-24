@@ -107,6 +107,7 @@ public class LoadSolutionForceReloadRestoreIntegrationTests
     {
         var config = Battery.Basic.TestEngines.SentinelConfiguration();
         return new WorkspaceProjectManagementImpl(
-            workspaceManager, Battery.Basic.TestEngines.StructuralRefinementEngine(workspaceManager, config), NullLogger<WorkspaceProjectManagementImpl>.Instance, Battery.Basic.TestEngines.SolutionStructureEngine(workspaceManager, config));
+            workspaceManager, Battery.Basic.TestEngines.StructuralRefinementEngine(workspaceManager, config), NullLogger<WorkspaceProjectManagementImpl>.Instance, Battery.Basic.TestEngines.SolutionStructureEngine(workspaceManager, config),
+            SolutionRestore.RestoreAsync); // opts in to the real restore: the test-host ambient default is a no-op
     }
 }

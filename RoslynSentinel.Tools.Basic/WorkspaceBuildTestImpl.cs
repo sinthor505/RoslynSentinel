@@ -310,6 +310,7 @@ public class WorkspaceBuildTestImpl
                 var cause = state == "assets missing"
                     ? "obj/project.assets.json is missing (no restore assets)"
                     : $"obj/project.assets.json is older than the project's restore inputs and no longer matches them ({state.Split('|', 4).Last()})";
+                // TODO this Options text still tells the caller to run Build(fullBuild) before LoadSolution(forceReload); LoadSolution now restores by itself, so name only LoadSolution(forceReload: true) (punchlist #19 follow-up)
                 findings.Add(new Finding(
                     "RestoreState",
                     $"{name}: {cause}, so its package and project references are not resolved; its CS0246/CS0234 errors can follow from that. "

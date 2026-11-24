@@ -35,6 +35,26 @@ public static class SolutionRestore
         "DOTNET_HOST_PATH", "DOTNET_MSBUILD_SDK_RESOLVER_SDKS_DIR", "DOTNET_MSBUILD_SDK_RESOLVER_CLI_DIR",
     ];
 
+    private static Func<string, TimeSpan, CancellationToken, Task<SolutionRestoreResult>>? _ambientRestore;
+
+    /// <summary>
+    /// Process-wide default restore delegate that a caller without an explicit seam uses instead of <see cref="RestoreAsync"/>.
+    /// Null (the default) means the real restore. Set only by test assemblies (from their SetUpFixture, to
+    /// <see cref="NoOpRestoreForTests"/>) so in-process hosts never spawn dotnet; production code never sets it.
+    /// </summary>
+    public static Func<string, TimeSpan, CancellationToken, Task<SolutionRestoreResult>>? AmbientRestore
+    {
+        get => Volatile.Read(ref _ambientRestore);
+        set => Volatile.Write(ref _ambientRestore, value);
+    }
+
+    /// <summary>The restore delegate to run now: the <see cref="AmbientRestore"/> when set, else the real <see cref="RestoreAsync"/>. Resolve per call, not once at construction.</summary>
+    public static Func<string, TimeSpan, CancellationToken, Task<SolutionRestoreResult>> ResolveDefault() => AmbientRestore ?? RestoreAsync;
+
+    /// <summary>A restore that spawns no process and reports success with zero duration; the test-host ambient default.</summary>
+    public static Task<SolutionRestoreResult> NoOpRestoreForTests(string solutionPath, TimeSpan timeout, CancellationToken cancellationToken)
+        => Task.FromResult(new SolutionRestoreResult(true, true, false, 0, "", TimeSpan.Zero));
+
     public static async Task<SolutionRestoreResult> RestoreAsync(string solutionPath, TimeSpan timeout, CancellationToken cancellationToken)
     {
         var stopwatch = Stopwatch.StartNew();

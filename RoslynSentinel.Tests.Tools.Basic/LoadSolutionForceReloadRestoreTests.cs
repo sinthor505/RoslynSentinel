@@ -41,7 +41,7 @@ public class LoadSolutionForceReloadRestoreTests
     }
 
     [Test]
-    public async Task LoadSolution_FirstLoadAndAlreadyLoadedWithoutForceReload_NeverRestore()
+    public async Task LoadSolution_FirstLoadOfUnrestoredSolutionRestoresOnceAndAlreadyLoadedWithoutForceReloadNeverRestores()
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
@@ -58,7 +58,8 @@ public class LoadSolutionForceReloadRestoreTests
         Assert.That(first.IsError, Is.False);
         Assert.That(again.IsError, Is.False);
         Assert.That(again.SuccessData?.ToString(), Does.Contain("already loaded"));
-        Assert.That(restoreCalls, Is.Zero, "the normal path must not spawn a restore");
+        // The TestSolutionFixture copy has no obj/, so the first load restores automatically; the repeat is the already-loaded no-op.
+        Assert.That(restoreCalls, Is.EqualTo(1), "only the first load of an unrestored solution restores; the already-loaded no-op must not");
     }
 
     [Test]

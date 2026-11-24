@@ -23,8 +23,8 @@ public abstract class WorkingDirectoryLeakDetector
     [OneTimeSetUp]
     public void ApplyAmbientTestHostDefaults()
     {
-        // Keeps in-process test hosts from writing call transcripts into the real-session folder.
-        RoslynSentinel.Common.ToolCallTranscript.UseTestHostDefaults();
+        // Keeps in-process test hosts from writing call transcripts into the real-session folder and from spawning dotnet restores.
+        TestHostAmbientDefaults.Apply();
     }
 
     /// <summary>

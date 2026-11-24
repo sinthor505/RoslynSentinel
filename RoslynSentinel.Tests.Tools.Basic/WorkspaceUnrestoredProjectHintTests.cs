@@ -11,7 +11,7 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 public class WorkspaceUnrestoredProjectHintTests
 {
     [Test]
-    public void FindUnrestoredProjects_NoAssetsFile_FlagsProjectAndHintNamesBuildAndLoadSolution()
+    public void FindUnrestoredProjects_NoAssetsFile_FlagsProjectAndHintNamesLoadSolutionForceReloadOnly()
     {
         var root = Path.Combine(Path.GetTempPath(), "rs-unrestored-" + Guid.NewGuid().ToString("N"));
         try
@@ -25,8 +25,8 @@ public class WorkspaceUnrestoredProjectHintTests
 
             var hint = WorkspaceProjectManagementImpl.BuildUnrestoredHint(flagged);
             Assert.That(hint, Does.Contain("Sample"));
-            Assert.That(hint, Does.Contain("Build"));
-            Assert.That(hint, Does.Contain("LoadSolution"));
+            Assert.That(hint, Does.Contain("LoadSolution").And.Contain("forceReload"));
+            Assert.That(hint, Does.Not.Contain("Build").And.Not.Contain("dotnet"), "the retry is the LoadSolution restore, never a Build or shell command");
         }
         finally
         {
