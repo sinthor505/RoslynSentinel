@@ -89,6 +89,51 @@ public static class ToolClassRegistry
         StringComparer.Ordinal);
 
     /// <summary>
+    /// Tool-class types in tools/list order (the order of the per-class DI blocks before stage F). Filled tail-first by the migration slices (Steps 9-13); a new tool class needs a row.
+    /// </summary>
+    public static readonly IReadOnlyList<Type> BasicToolClassTypes = [];
+
+    /// <summary>
+    /// Tool-class types in tools/list order (the order of the per-class DI blocks before stage F). Filled tail-first by the migration slices (Steps 9-13); a new tool class needs a row.
+    /// </summary>
+    public static readonly IReadOnlyList<Type> AdvancedToolClassTypes = [];
+
+    /// <summary>
+    /// Tool classes registered only while claude-lean is active (their registration blocks sat inside the claude-lean branch).
+    /// </summary>
+    public static readonly IReadOnlySet<string> ClaudeLeanOnlyToolClasses = new HashSet<string>(["ToolsetControlTools", "DeclarationTools", "ParameterEditTools"], StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Tool classes selected in every launch; not registry classes, so never counted or excludable.
+    /// </summary>
+    public static readonly IReadOnlySet<string> AlwaysOnToolClasses = new HashSet<string>(["ServerStatusTools"], StringComparer.Ordinal);
+
+    /// <summary>
+    /// Returns the types of <paramref name="table"/>, in table order, whose name is in <see cref="AlwaysOnToolClasses"/>, or is in
+    /// <paramref name="activeToolClasses"/> and is either not in <see cref="ClaudeLeanOnlyToolClasses"/> or <paramref name="claudeLean"/> is true.
+    /// </summary>
+    public static IReadOnlyList<Type> SelectStartupToolTypes(IReadOnlyList<Type> table, IReadOnlySet<string> activeToolClasses, bool claudeLean)
+    {
+        var selected = new List<Type>();
+        foreach (var type in table)
+        {
+            if (AlwaysOnToolClasses.Contains(type.Name)
+                || (activeToolClasses.Contains(type.Name) && (!ClaudeLeanOnlyToolClasses.Contains(type.Name) || claudeLean)))
+            {
+                selected.Add(type);
+            }
+        }
+
+        return selected;
+    }
+
+    /// <summary>
+    /// Reports problems in the mode table and the tool-class type tables (Step 14 of the stage F plan). Not implemented yet.
+    /// </summary>
+    public static IReadOnlyList<string> DescribeToolClassTableProblems(IReadOnlyDictionary<string, string[]> modeToToolClasses, IReadOnlyList<Type> basicTypes, IReadOnlyList<Type> advancedTypes)
+        => throw new NotImplementedException();
+
+    /// <summary>
     /// The one mode-name -> tool-class-name map, registered by <c>AddRoslynSentinelToolsAdvanced</c>
     /// (which delegates the Basic tool classes to <c>AddRoslynSentinelToolsBasic</c>). It is the union of
     /// the former separate Basic and Advanced maps: the Basic-only sub-modes (WorkspaceReadNav, ...)
