@@ -18,7 +18,6 @@ BatteryNineteenTests.cs | 1
 BatteryTwentyTests.cs | 2
 BatteryTwentyThreeTests.cs | 1
 BatteryTwentyTwoTests.cs | 7
-BugFixTests.cs | 13
 CallBindingCheckTests.cs | 1
 CallableToolHintTests.cs | 4
 ChangeSignatureConstructorWrapperTests.cs | 4

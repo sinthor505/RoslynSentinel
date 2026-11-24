@@ -6,6 +6,7 @@ using RoslynSentinel.Common.SnippetMatching;
 using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tools.Advanced;
+using RoslynSentinel.Tests.Support;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
@@ -280,7 +281,7 @@ public class Svc { public void Foo() {} }";
         Assert.That(result.Changes, Is.Empty, "Should return no changes when refusing due to skipped call sites");
         Assert.That(result.SkippedCallSites, Has.Count.EqualTo(1), "Should populate SkippedCallSites with the single problem site");
         Assert.That(result.SkippedCallSites[0].LineNumber, Is.EqualTo(6), "The omitted-argument call is on line 6");
-        Assert.That(result.SkippedCallSites[0].Reason, Does.Contain("Could not resolve the bound overload"), "Skip reason should name the unresolved bound overload");
+        Assert.That(result.SkippedCallSites[0].Reason, Does.Contain("bound overload"), "Skip reason should name the unresolved bound overload");
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -1408,7 +1409,7 @@ public class Consumer
 }";
             SetSource(src, "Standalone.cs");
             var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await _navigationEngine.FindImplementationsForMemberAsync(null, "DoWork", contextSnippet: null));
-            Assert.That(ex!.Message, Does.Contain("structurally incapable of having implementations"));
+            ErrorAssert.Is(ex, ToolErrorCode.TargetIneligible, "structurally incapable");
             Assert.That(ex.Message, Does.Contain("DoWork"));
         }
 
@@ -1452,7 +1453,7 @@ public class Second { public void Run() { } }";
             Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
             Assert.That(ex.Message, Does.StartWith("symbolName 'Run' is ambiguous"));
             Assert.That(ex.Message, Does.Not.Contain("FindCallers:"));
-            Assert.That(ex.Message, Does.Contain("Candidates (retry with filePath + contextSnippet of the one you mean):"));
+            ErrorAssert.Is(ex, ToolErrorCode.Ambiguous, "Candidates (retry");
             Assert.That(System.Text.RegularExpressions.Regex.Matches(ex.Message, "contextSnippet=\"").Count, Is.EqualTo(2));
         }
 
@@ -1955,7 +1956,7 @@ public class Foo : IFoo
 }"));
             var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _navigationEngine.FindImplementationsForMemberAsync("A.cs", "Missing", contextSnippet: null));
             Assert.That(ex!.Message, Does.Contain("was not found in 'A.cs'"), "The failure must be scoped to the file the caller named");
-            Assert.That(ex.Message, Does.Contain("No symbol declared in 'A.cs' has a similar name to 'Missing'"), "No-similar-name fact for the pinned file (Step 5e)");
+            ErrorAssert.Is(ex, ToolErrorCode.NotFound, "similar name to 'Missing'");
             Assert.That(ex.Message, Does.Not.Contain("Did you mean"), "Nothing in A.cs is similar, and the other file's type is not offered");
         }
 
@@ -2014,7 +2015,7 @@ public class Foo : IFoo
             Assert.That(ex.Message, Does.Contain("symbolName: \"Run\""));
             Assert.That(ex.Message, Does.Contain("kind: callers"));
             Assert.That(ex.Message, Does.Contain("filePath:"));
-            Assert.That(ex.Message, Does.Contain("contextSnippet: \"public void Run() { }\""));
+            ErrorAssert.Is(ex, ToolErrorCode.NotFound, "public void Run()");
             Assert.That(ex.Message.TrimEnd(), Does.EndWith(")"));
         }
 
@@ -2029,7 +2030,7 @@ public class Foo : IFoo
             Assert.That(ex.Message, Does.Contain("kind: callers"));
             Assert.That(ex.Message, Does.Contain("filePath:"));
             Assert.That(ex.Message, Does.Contain("A.cs"));
-            Assert.That(ex.Message, Does.Contain("contextSnippet: \"public void Run() { }\""));
+            ErrorAssert.Is(ex, ToolErrorCode.NotFound, "public void Run()");
             Assert.That(ex.Message.TrimEnd(), Does.EndWith(")"));
         }
 
@@ -2111,7 +2112,7 @@ public record Person(string Name) : IHasName;", "Person.cs");
             var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _navigationEngine.FindImplementationsForMemberAsync("Person.cs", "Name", contextSnippet: "using System;"));
             Assert.That(ex!.Message, Does.Contain("WAS found declared at"), "The snippet miss must list the declarations named Name that exist in the file");
             Assert.That(ex.Message, Does.Contain("line 3"), "The positional record parameter sits on line 3 of the source");
-            Assert.That(ex.Message, Does.Contain("positional parameter of record Person"), "The message must name the record that owns the positional parameter");
+            ErrorAssert.Is(ex, ToolErrorCode.NotFound, "record Person");
         }
 
         // -- Positional record parameter: DescribeNameOnlyCandidates lists the ParameterSyntax with its line --
@@ -2243,7 +2244,7 @@ public class TargetDto
             {
                 await _asyncEngine.OptimizeIndependentAwaitsAsync("MyService.cs", "NonExistentMethod");
             });
-            Assert.That(ex!.Message, Does.Contain("Method 'NonExistentMethod' not found"), "Should name the missing method in the exception message");
+            ErrorAssert.Is(ex, ToolErrorCode.NotFound, "NonExistentMethod");
         }
 
         [Test]
@@ -2279,7 +2280,7 @@ public class TargetDto
             {
                 await _asyncEngine.AddCancellationTokenToMethodAsync("Loader.cs", "NonExistentMethod");
             });
-            Assert.That(ex!.Message, Does.Contain("Method 'NonExistentMethod' not found"), "Should name the missing method in the exception message");
+            ErrorAssert.Is(ex, ToolErrorCode.NotFound, "NonExistentMethod");
         }
 
         [Test]
@@ -2490,7 +2491,7 @@ public class OtherClass
             SetSource(src, "MyClass.cs");
             var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolNotFoundException>(async () => await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("MyClass.cs", "NonExistentMethod", "ToExpressionBody"));
             Assert.That(ex.ErrorCode, Is.EqualTo(RoslynSentinel.Common.ToolErrorCode.NotFound));
-            Assert.That(ex.Message, Does.Contain("Member 'NonExistentMethod' not found"), "Should name the missing member");
+            ErrorAssert.Is(ex, ToolErrorCode.NotFound, "NonExistentMethod");
         }
 
         // Bug: ConvertExpressionBody on multi-statement method -> now returns error string
@@ -2508,7 +2509,7 @@ public class OtherClass
             SetSource(src, "MyClass.cs");
             var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolTargetIneligibleException>(async () => await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("MyClass.cs", "GetName", "ToExpressionBody"));
             Assert.That(ex.ErrorCode, Is.EqualTo(RoslynSentinel.Common.ToolErrorCode.TargetIneligible));
-            Assert.That(ex.Message, Does.Contain("only single-return methods can be converted"), "Should explain that the method has multiple statements");
+            ErrorAssert.Is(ex, ToolErrorCode.TargetIneligible, "single-return methods");
         }
 
         // Bug: ConvertExpressionBody ToBlockBody on already-block-body -> now returns error string
@@ -3855,7 +3856,8 @@ public class B
 }";
                 SetSource(code, "Pair.cs");
                 var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await _advancedStructuralEngine.InlineMethodAsync("Pair.cs", "Answer"));
-                Assert.That(ex!.Message, Does.Contain("'_x'").And.Contain("instance member of another instance"));
+                ErrorAssert.Is(ex, ToolErrorCode.TargetIneligible, "'_x'");
+                Assert.That(ex.Message, Does.Contain("another instance"));
             }
 
             [Test]
@@ -3875,7 +3877,7 @@ public class A
 }";
                 SetSource(code, "A.cs");
                 var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await _advancedStructuralEngine.InlineMethodAsync("A.cs", "Answer"));
-                Assert.That(ex!.Message, Does.Contain("instance member of another instance"));
+                ErrorAssert.Is(ex, ToolErrorCode.TargetIneligible, "another instance");
             }
 
             [Test]
