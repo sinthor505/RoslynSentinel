@@ -295,11 +295,11 @@ and can run beside it (disjoint files).
 
 ## Risks and open decisions
 
-- **`Changed` re-entrancy.** The handler calls `Refresh`, which enumerates the collection (the enumerator takes the
-  collection's mutation lock). If the SDK raises `Changed` while holding that lock, this deadlocks. From
-  `McpServerPrimitiveCollection.cs:92-122` the deferred raise happens when the scope is disposed; whether that is
-  outside the lock is not confirmed (hypothesis: yes). A3's toolset test exercises it; if it hangs, queue the refresh
-  (`ThreadPool.QueueUserWorkItem`) instead.
+- **`Changed` re-entrancy: resolved (verified against SDK v2.4.0 source).** The handler calls `Refresh`, which
+  enumerates the collection. No deadlock: `TryAdd`/`Remove`/`Clear` release `_mutationLock` before `RaiseChanged()`
+  (`McpServerPrimitiveCollection.cs:186-198`); `RaiseChanged` and `EndDeferral` invoke `Changed` after leaving
+  `_deferralLock` (`:92-122`); enumeration reads a cached array copy and locks only to rebuild it (`:295-317`). The
+  handler runs on the mutating (or last scope-disposing) thread. A3's toolset test still exercises the path.
 - **Eager options outside claude-lean.** `Refresh("startup")` reads `IOptions<McpServerOptions>.Value`, which builds every
   lazy tool singleton. In claude-lean `ToolsetService`'s constructor already does this before host start; in other
   modes it is new at that point (hypothesis: harmless). A4's `NoActiveToolsStartupTests` run covers the no-tools path.
@@ -309,6 +309,12 @@ and can run beside it (disjoint files).
 - **Name proximity.** `plan_json_toolset_definitions.md` reserves `ToolsetSurfaceSnapshotTests` for its own resolver
   snapshot (plan-only, no code). Rename it when that plan is reshaped under the controller, to avoid two "surface
   snapshots".
-- **Unverified proposal citations.** The proposal's `McpServerImpl.cs` line citations (`:119`, `:1504`, `:1603`,
-  `:1751-1760`) were not re-checked for this plan (a read was blocked by the dogfood hook). Phases A and B do not
-  depend on them; phase C does.
+- **Proposal citations: verified at SDK v2.4.0.** `McpServerImpl.cs:117-130` (subscribes `ToolCollection.Changed`
+  only with a stateful transport), `:1504` (captures `options.ToolCollection` once), `:1603` ("Unknown tool"),
+  `:1751-1760` (`MatchTool` resolves per call via `TryGetPrimitive`), and `:1552-1565` (`tools/list` reads
+  `t.ProtocolTool` per request, legacy wire shaping included) all match. Re-check if the package version changes.
+- **Empty startup leaves no collection (phase E).** `McpServerOptionsSetup.Configure` (SDK
+  `src/ModelContextProtocol/McpServerOptionsSetup.cs:26-39`) keeps an existing `options.ToolCollection` but leaves it
+  null when no tools are registered; then `McpServerImpl` never subscribes and `ToolsetService.SetEnabled` throws
+  (`ToolsetService.cs:166`). Today the always-on status and control tools keep it non-empty. When the controller owns
+  startup population (phase E), it must create the collection itself before the setup runs.

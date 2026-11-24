@@ -166,10 +166,11 @@ problem by elimination.
 ## Open questions
 
 - **Replace mechanism for same-name tools:** in-place mutation of `tool.ProtocolTool` (the patcher already
-  assigns `InputSchema` this way; `tools/list` reads it per call) versus a derived
-  `McpServerPrimitiveCollection` with an atomically swapped snapshot (its `Count`, `IsEmpty` and indexer read
-  base-private state; installing it needs `options.ToolCollection` set before `McpServerOptionsSetup`,
-  hypothesis). Recommendation: in-place for schema changes, add/remove for membership.
+  assigns `InputSchema` this way; `tools/list` reads `t.ProtocolTool` per request, legacy wire shaping included,
+  `McpServerImpl.cs:1552-1565`) versus a derived `McpServerPrimitiveCollection` with an atomically swapped snapshot
+  (its `Count`, `IsEmpty` and indexer read base-private state; installing it needs `options.ToolCollection` set
+  before `McpServerOptionsSetup`, which keeps an existing collection's identity, confirmed at
+  `McpServerOptionsSetup.cs:26-39`). Recommendation: in-place for schema changes, add/remove for membership.
 - **Does Claude Code re-read the schema of an already-listed tool after `list_changed`?** Adds and removes
   are verified live (2026-11-23); schema changes are not, and one journal entry shows a client keeping an old
   schema across a restart (`2026-11-12_1acedb4e`). A live probe is needed before stage 3 relies on it.
