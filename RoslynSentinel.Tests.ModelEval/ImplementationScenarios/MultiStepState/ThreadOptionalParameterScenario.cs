@@ -1,10 +1,13 @@
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using RoslynSentinel.Common.AgentLoop;
+using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Graders;
 
 namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.MultiStepState;
 
 /// <summary>
-/// Thread a trailing optional parameter through three methods, add a guard as the first statement of one branch and two tests
-/// copied from a neighbour, without touching the callers.
+/// Thread a trailing optional parameter through three methods, make one branch honour it and add two tests copied from a
+/// neighbour, without touching the callers. The visible ErrorHintBehaviourTests decide the behaviour; the check wants the two
+/// added tests to kill two mutants of the hint (parameter ignored; any non-empty collection matches).
 /// </summary>
 internal static class ThreadOptionalParameterScenario
 {
@@ -169,27 +172,63 @@ public class ErrorHintTests
 }
 """;
 
-    private const string HiddenTestSource = """
+    // Visible acceptance tests (the old hidden step-1 tests). Describe is called through reflection, so this file compiles on the seed, where
+    // Describe has no fourth parameter: passing renamedAwayNames then fails the call (red) instead of breaking the build.
+    private const string BehaviourTestsSource = """
 using System.Reflection;
 using ContosoOrders.Evals.ThreadOptionalParameter;
 using Xunit;
 
 namespace ContosoOrders.Tests.Evals.ThreadOptionalParameter;
 
-public class ThreadOptionalParameterStep1Tests
+public class ErrorHintBehaviourTests
 {
-    [Fact]
-    public void RenamedAwayName_GetsTheFixedSentenceOnly()
+    private const BindingFlags AnyStatic = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+
+    private static string Describe(string code, string name, IReadOnlyCollection<string> candidates)
     {
-        var text = ErrorHint.Describe("CS0103", "rate", Array.Empty<string>(), renamedAwayNames: new[] { "rate" });
+        return Invoke(code, name, candidates);
+    }
+
+    private static string DescribeWith(string code, string name, IReadOnlyCollection<string> candidates, IReadOnlyCollection<string> renamedAwayNames)
+    {
+        return Invoke(code, name, candidates, renamedAwayNames);
+    }
+
+    // Missing fills an optional parameter the call leaves out; a fourth argument on a three-parameter method throws.
+    private static string Invoke(params object[] arguments)
+    {
+        var method = typeof(ErrorHint).GetMethod("Describe", AnyStatic)!;
+        var all = new List<object>(arguments);
+        while (all.Count < method.GetParameters().Length)
+        {
+            all.Add(Type.Missing);
+        }
+
+        try
+        {
+            return (string)method.Invoke(null, all.ToArray())!;
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is not null)
+        {
+            throw ex.InnerException;
+        }
+    }
+
+    [Fact]
+    public void RenamedAwayName_GetsTheFixedTextWithThePrefix()
+    {
+        var text = DescribeWith("CS0103", "rate", Array.Empty<string>(), new[] { "rate" });
         Assert.Equal("CS0103: No symbol named 'rate' was found anywhere in the solution.", text);
+        Assert.DoesNotContain("likely a typo", text);
+        Assert.DoesNotContain("Closest name", text);
     }
 
     [Fact]
     public void OtherRenamedName_KeepsTheTypoText()
     {
-        var text = ErrorHint.Describe("CS0103", "rate", Array.Empty<string>(), renamedAwayNames: new[] { "other" });
-        Assert.Contains("likely a typo", text);
+        var text = DescribeWith("CS0103", "rate", Array.Empty<string>(), new[] { "other" });
+        Assert.Equal("CS0103: No symbol named 'rate' was found. 'rate' is likely a typo. Closest name: Rate.", text);
     }
 
     [Fact]
@@ -197,8 +236,8 @@ public class ThreadOptionalParameterStep1Tests
     {
         Assert.Equal(
             "CS0103: No symbol named 'rate' was found. 'rate' is likely a typo. Closest name: Rate.",
-            ErrorHint.Describe("CS0103", "rate", Array.Empty<string>()));
-        Assert.Equal("CS0103: 'rate' is not in scope. Candidates: rates.", ErrorHint.Describe("CS0103", "rate", new[] { "rates" }));
+            Describe("CS0103", "rate", Array.Empty<string>()));
+        Assert.Equal("CS0103: 'rate' is not in scope. Candidates: rates.", Describe("CS0103", "rate", new[] { "rates" }));
     }
 
     [Fact]
@@ -206,8 +245,17 @@ public class ThreadOptionalParameterStep1Tests
     {
         Assert.Equal(
             "CS0103: 'rate' is not in scope. Candidates: rates.",
-            ErrorHint.Describe("CS0103", "rate", new[] { "rates" }, new[] { "rate" }));
-        Assert.Equal("CS0246: No extra hint.", ErrorHint.Describe("CS0246", "rate", Array.Empty<string>(), new[] { "rate" }));
+            DescribeWith("CS0103", "rate", new[] { "rates" }, new[] { "rate" }));
+        Assert.Equal("CS0246: No extra hint.", DescribeWith("CS0246", "rate", Array.Empty<string>(), new[] { "rate" }));
+    }
+
+    [Fact]
+    public void RenamedAwayNames_MatchIsOrdinal()
+    {
+        // A collection with its own case-insensitive comparer must not decide the match: the comparison is ordinal.
+        var renamed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "RATE" };
+        var text = DescribeWith("CS0103", "rate", Array.Empty<string>(), renamed);
+        Assert.Contains("likely a typo", text);
     }
 
     [Theory]
@@ -216,7 +264,7 @@ public class ThreadOptionalParameterStep1Tests
     [InlineData("DescribeNameMissing")]
     public void ParameterIsTrailingOptionalWithNullDefault(string methodName)
     {
-        var method = typeof(ErrorHint).GetMethod(methodName, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)!;
+        var method = typeof(ErrorHint).GetMethod(methodName, AnyStatic)!;
         var last = method.GetParameters().Last();
         Assert.Equal("renamedAwayNames", last.Name);
         Assert.Equal(typeof(IReadOnlyCollection<string>), last.ParameterType);
@@ -234,21 +282,81 @@ public class ThreadOptionalParameterStep1Tests
 }
 """;
 
-    private const string StepPrompt = """
-In ContosoOrders.Core/Evals/ThreadOptionalParameter/ErrorHint.cs the CS0103 hint says a name is "likely a typo" and offers a
-"Closest name" even when an edit has just renamed that name away. Add a trailing optional parameter
-`IReadOnlyCollection<string>? renamedAwayNames = null` to Describe, DescribeHint and DescribeNameMissing and pass it down the
-chain. In DescribeNameMissing, as the very first statement of the `if (candidates.Count == 0)` block (before the typo and
-closest-name sentences are built), return exactly the text `No symbol named '{name}' was found anywhere in the solution.`
-when renamedAwayNames contains the name (ordinal comparison); every other output must stay byte-identical. Do not edit
-CallerA.cs or CallerB.cs. In ContosoOrders.Tests/Evals/ThreadOptionalParameter/ErrorHintTests.cs add two tests next to the
-existing one, copying its shape: one where renamedAwayNames contains the name (the text is the sentence above and has
-neither "likely a typo" nor "Closest name"), and one where it holds a different name (the typo text stays).
+    // Variant overlay: the model's ErrorHintTests.cs with the original test plus one [Theory] of two rows (fewer than three [Fact] methods).
+    private const string TheoryTestsSource = """
+using ContosoOrders.Evals.ThreadOptionalParameter;
+using Xunit;
+
+namespace ContosoOrders.Tests.Evals.ThreadOptionalParameter;
+
+public class ErrorHintTests
+{
+    [Fact]
+    public void MissingNameWithoutCandidates_MentionsTypoAndClosestName()
+    {
+        var text = ErrorHint.Describe("CS0103", "rate", Array.Empty<string>());
+        Assert.Contains("likely a typo", text);
+        Assert.Contains("Closest name: Rate.", text);
+    }
+
+    [Theory]
+    [InlineData("rate", true)]
+    [InlineData("other", false)]
+    public void RenamedAwayNames_DecideWhetherTheTypoTextIsDropped(string renamed, bool dropped)
+    {
+        var text = ErrorHint.Describe("CS0103", "rate", Array.Empty<string>(), renamedAwayNames: new[] { renamed });
+        Assert.Equal(dropped, !text.Contains("likely a typo"));
+        Assert.Equal(dropped, !text.Contains("Closest name"));
+    }
+}
 """;
 
-    public static ImplementationScenario Definition { get; } = new ImplementationScenario(
+    private const string CannedReport = "DONE: threaded renamedAwayNames through Describe, DescribeHint and DescribeNameMissing and added two tests to ErrorHintTests.cs.";
+
+    // The guard's condition as it appears in GoldenHintSource; the mutants and variants below each change this text, so a template change cannot silently turn them into the golden.
+    private const string GuardCondition = "renamedAwayNames is not null && renamedAwayNames.Contains(name, StringComparer.Ordinal)";
+
+    // Edits are written with \n; the template's line endings are kept. Throws when the template no longer contains the text to
+    // edit, so a template change cannot silently turn a mutant or variant into the golden.
+    private static string Edited(string text, string oldText, string newText)
+    {
+        var eol = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        var normalized = text.Replace("\r\n", "\n", StringComparison.Ordinal);
+        if (!normalized.Contains(oldText, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"ThreadOptionalParameter edit: '{oldText}' is not in the template.");
+        }
+
+        return normalized.Replace(oldText, newText, StringComparison.Ordinal).Replace("\n", eol, StringComparison.Ordinal);
+    }
+
+    // The two mutants (Spec S9): the golden hint with exactly one changed condition each. static readonly (not const) so the change is stated
+    // against GoldenHintSource; only read by the check, never by the Definition.
+    // The parameter is ignored: the guard never fires.
+    private static readonly string GuardIgnoredHint = Edited(GoldenHintSource, GuardCondition, "name.Length < 0");
+
+    // Any non-empty collection counts as a match, whatever it holds.
+    private static readonly string MatchesAnyNonEmptyHint = Edited(GoldenHintSource, GuardCondition, "renamedAwayNames is not null && renamedAwayNames.Count > 0");
+
+    private static string StepPrompt => EvalContractOptions.Render(new ScenarioTask(
+        Goal: "In ContosoOrders.Core/Evals/ThreadOptionalParameter/ErrorHint.cs the CS0103 hint says a name is \"likely a typo\" and offers a \"Closest name\" " +
+            "even when an edit has just renamed that name away. Add a trailing optional parameter `IReadOnlyCollection<string>? renamedAwayNames = null` " +
+            "to `Describe`, `DescribeHint` and `DescribeNameMissing` and pass it down the chain. When there are no candidates and `renamedAwayNames` " +
+            "contains the name (ordinal comparison), `Describe` returns exactly `CS0103: No symbol named '{name}' was found anywhere in the solution.` " +
+            "(the `CS0103: ` prefix every Describe text carries, then that sentence), without \"likely a typo\" or \"Closest name\". " +
+            "Every other output stays byte-identical.",
+        Files: "ErrorHint.cs and ContosoOrders.Tests/Evals/ThreadOptionalParameter/ErrorHintTests.cs. CallerA.cs and CallerB.cs keep compiling unedited.",
+        IfFails: EvalContractOptions.PlainIfFails,
+        DoneWhen: "The solution builds with 0 errors; all tests in ContosoOrders.Tests pass, including ErrorHintBehaviourTests; " +
+            "in ErrorHintTests you add two tests next to the existing one, copying its shape: one where `renamedAwayNames` contains the name, " +
+            "one where it holds a different name (the typo text stays); your two tests fail if the parameter is ignored and if it matches any non-empty collection."));
+
+    public static ImplementationScenario Definition
+    {
+        get;
+    } = new ImplementationScenario(
         "ThreadOptionalParameter",
-        "Thread a trailing optional parameter through three methods, guard first in a branch, add two copied tests",
+        "Thread a trailing optional parameter through three methods and add two tests copied from a neighbour",
         "multi-step state, adherence",
         "ModelEval-Scenario-Ideas 03, commit 96bac8c8",
         new Dictionary<string, string>
@@ -257,6 +365,7 @@ neither "likely a typo" nor "Closest name"), and one where it holds a different 
             [CallerAPath] = CallerASource,
             [CallerBPath] = CallerBSource,
             [TestsPath] = SeedTestsSource,
+            [TestFolder + "ErrorHintBehaviourTests.cs"] = BehaviourTestsSource,
         },
         new[]
         {
@@ -268,63 +377,154 @@ neither "likely a typo" nor "Closest name"), and one where it holds a different 
                     [TestsPath] = GoldenTestsSource,
                 },
                 AllowedPaths: new List<string> { HintPath, TestsPath },
-                HiddenTestSource: HiddenTestSource,
-                ExtraCheck: static ctx => Task.FromResult<string?>(CheckGuardAndTests(ctx)),
-                CannedFinalMessage: null),
+                HiddenTestSource: null,
+                ExtraCheck: static ctx => CheckAddedTestsKillMutantsAsync(ctx),
+                CannedFinalMessage: CannedReport,
+                Variants: BuildVariants(),
+                DoneWhenTests: new[] { "ErrorHintBehaviourTests", "ErrorHintTests" }),
         },
-        PreferredHost: "113");
+        PreferredHost: "113",
+        PrimaryAxis: EvalAxis.MultiStepState);
 
-    /// <summary>Callers unchanged; the guard is the first statement of the candidates.Count == 0 block; the model added at least two tests.</summary>
-    private static string? CheckGuardAndTests(ImplementationScenarioCheckContext ctx)
+    private const string TestProjectPath = "ContosoOrders.Tests/ContosoOrders.Tests.csproj";
+
+    private const string ModelTestClassName = "ContosoOrders.Tests.Evals.ThreadOptionalParameter.ErrorHintTests";
+
+    private const string SeedTestName = "MissingNameWithoutCandidates_MentionsTypoAndClosestName";
+
+    /// <summary>
+    /// The hint and test files exist and the tests the model added to ErrorHintTests (every test method besides the seed one) pass against the
+    /// reference ErrorHint and kill both mutants (parameter ignored; any non-empty collection matches). The build, the visible
+    /// ErrorHintBehaviourTests (trailing optional parameter, ordinal match, unchanged output) and scope (CallerA.cs and CallerB.cs untouched)
+    /// are decided by the shared pipeline and the test run, not here.
+    /// </summary>
+    private static async Task<string?> CheckAddedTestsKillMutantsAsync(ImplementationScenarioCheckContext ctx)
     {
-        foreach (var path in new[] { CallerAPath, CallerBPath })
+        if (!ctx.Exists(HintPath))
         {
-            if (!ctx.IsUnchanged(path))
-            {
-                return $"changed but must stay as it was: {path}";
-            }
+            return $"missing: {HintPath}";
         }
 
-        var root = ctx.Syntax(HintPath).GetRoot();
-        var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.ValueText == "DescribeNameMissing");
-        if (method?.Body is null)
+        if (!ctx.Exists(TestsPath))
         {
-            return "DescribeNameMissing is gone or lost its block body";
+            return $"missing: {TestsPath}";
         }
 
-        var branch = method.Body.Statements.OfType<IfStatementSyntax>()
-            .FirstOrDefault(s => s.Condition.ToString().Replace(" ", string.Empty) == "candidates.Count==0");
-        if (branch?.Statement is not BlockSyntax block || block.Statements.Count == 0)
+        var addedTests = ctx.Syntax(TestsPath).GetRoot().DescendantNodes()
+            .OfType<ClassDeclarationSyntax>()
+            .Where(declaration => declaration.Identifier.ValueText == "ErrorHintTests")
+            .SelectMany(declaration => declaration.Members.OfType<MethodDeclarationSyntax>())
+            .Where(method => method.Identifier.ValueText != SeedTestName && method.AttributeLists.SelectMany(list => list.Attributes).Any(IsTestAttribute))
+            .Select(method => method.Identifier.ValueText)
+            .Distinct()
+            .ToList();
+        if (addedTests.Count == 0)
         {
-            return "the 'if (candidates.Count == 0)' block of DescribeNameMissing is gone or empty";
+            return "ErrorHintTests.cs has no test method besides the original one, expected two new ones";
         }
 
-        if (block.Statements[0] is not IfStatementSyntax guard || !guard.Condition.ToString().Contains("renamedAwayNames"))
+        // A [Theory] shows up as its method name plus the row, so the ~ (contains) filter picks up every row.
+        var filter = string.Join("|", addedTests.Select(name => $"FullyQualifiedName~{ModelTestClassName}.{name}"));
+        var mutants = new[]
         {
-            return "the first statement of the 'candidates.Count == 0' block is not a guard on renamedAwayNames";
+            new ScenarioMutant("Golden", new Dictionary<string, string> { [HintPath] = GoldenHintSource }),
+            new ScenarioMutant(nameof(GuardIgnoredHint), new Dictionary<string, string> { [HintPath] = GuardIgnoredHint }),
+            new ScenarioMutant(nameof(MatchesAnyNonEmptyHint), new Dictionary<string, string> { [HintPath] = MatchesAnyNonEmptyHint }),
+        };
+
+        // Sequential inside MutationGrader: one dotnet test at a time. The first entry is the unmutated golden, the rest are the mutants.
+        var results = await MutationGrader.RunAsync(ctx.SolutionDirectory, TestProjectPath, filter, mutants, ctx.CancellationToken);
+        var golden = results[0];
+        var names = string.Join(", ", addedTests);
+        if (golden.Killed)
+        {
+            var why = golden.Note.Length > 0 ? golden.Note : $"{golden.Failed} of {golden.Passed + golden.Failed} failed";
+            return $"the tests you added ({names}) do not pass against the reference ErrorHint: {why}";
         }
 
-        var tests = ctx.Syntax(TestsPath).GetRoot();
-        var facts = tests.DescendantNodes().OfType<MethodDeclarationSyntax>()
-            .Count(m => m.AttributeLists.SelectMany(list => list.Attributes).Any(attribute => attribute.Name.ToString() == "Fact"));
-        if (facts < 3)
+        if (golden.Passed == 0)
         {
-            return $"ErrorHintTests.cs has {facts} [Fact] test(s), expected the original one plus two new ones";
+            return $"no test of {names} ran against the reference ErrorHint";
         }
 
-        // The seed Describe arity is read from SeedHintSource, so the check never hard-codes it. A call supplies the
-        // new parameter when it has more arguments than the seed or names it renamedAwayNames: (positional or named).
-        var seedArity = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(SeedHintSource).GetRoot().DescendantNodes()
-            .OfType<MethodDeclarationSyntax>().First(m => m.Identifier.ValueText == "Describe").ParameterList.Parameters.Count;
-        var renamedAwareCalls = tests.DescendantNodes().OfType<InvocationExpressionSyntax>().Count(call =>
-            (call.Expression is MemberAccessExpressionSyntax access ? access.Name.Identifier.ValueText : (call.Expression as IdentifierNameSyntax)?.Identifier.ValueText) == "Describe"
-            && (call.ArgumentList.Arguments.Count > seedArity
-                || call.ArgumentList.Arguments.Any(argument => argument.NameColon?.Name.Identifier.ValueText == "renamedAwayNames")));
-        if (renamedAwareCalls < 1)
+        var survivors = results.Skip(1).Where(result => !result.Killed).Select(result => result.Name).ToList();
+        if (survivors.Count > 0)
         {
-            return "the new tests do not pass renamedAwayNames";
+            return $"the tests you added do not kill: {string.Join(", ", survivors)} (every test still passed against an ErrorHint with that one defect)";
         }
 
         return null;
+    }
+
+    private static bool IsTestAttribute(AttributeSyntax attribute)
+    {
+        var name = attribute.Name.ToString().Split('.').Last();
+        return name is "Fact" or "FactAttribute" or "Theory" or "TheoryAttribute";
+    }
+
+    /// <summary>
+    /// The executable outcome table (Spec S9): each variant overlays ErrorHint.cs and/or ErrorHintTests.cs (the golden plus one change) on step 1
+    /// (golden) with a DONE: final message. A failing row claims DONE, so its class is SilentIncomplete. The two failing rows break a visible
+    /// ErrorHintBehaviourTests test, so the shared test run rejects them before the mutation check.
+    /// </summary>
+    private static IReadOnlyList<ScenarioVariant> BuildVariants()
+    {
+        const string Done = "DONE: threaded renamedAwayNames through the chain and added two tests.";
+        const string TypoBlock = "            var typoSentence";
+        const string FixedSentenceReturn = "                return $\"No symbol named '{name}' was found anywhere in the solution.\";";
+
+        // Row 1: the guard is a ternary on the final return of the block instead of an early return as the first statement.
+        var withoutGuardBlock = Edited(
+            GoldenHintSource,
+            "            // A name the edit renamed away is explained by the edit, so the typo and closest-name text is dropped.\n"
+            + "            if (" + GuardCondition + ")\n"
+            + "            {\n"
+            + FixedSentenceReturn + "\n"
+            + "            }\n\n"
+            + TypoBlock,
+            TypoBlock);
+        var ternaryGuard = Edited(
+            withoutGuardBlock,
+            "            return $\"No symbol named '{name}' was found.{typoSentence}{closestNameSentence}\";",
+            "            return " + GuardCondition + "\n"
+            + "                ? $\"No symbol named '{name}' was found anywhere in the solution.\"\n"
+            + "                : $\"No symbol named '{name}' was found.{typoSentence}{closestNameSentence}\";");
+
+        // Row 3: the match goes through the collection's own comparer (a case-insensitive set matches "RATE" for "rate"); it builds, and the ordinal test fails.
+        var collectionContains = Edited(GoldenHintSource, "renamedAwayNames.Contains(name, StringComparer.Ordinal)", "renamedAwayNames.Contains(name)");
+
+        return new[]
+        {
+            new ScenarioVariant(
+                Name: "TernaryGuard",
+                BaseStep: 1,
+                Files: new Dictionary<string, string> { [HintPath] = ternaryGuard },
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.CorrectDone,
+                ExpectedOutcome: ImplementationScenarioOutcome.Pass),
+            new ScenarioVariant(
+                Name: "TheoryTests",
+                BaseStep: 1,
+                Files: new Dictionary<string, string> { [TestsPath] = TheoryTestsSource },
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.CorrectDone,
+                ExpectedOutcome: ImplementationScenarioOutcome.Pass),
+            new ScenarioVariant(
+                Name: "CollectionContains",
+                BaseStep: 1,
+                Files: new Dictionary<string, string> { [HintPath] = collectionContains },
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "check tests failed"),
+            new ScenarioVariant(
+                Name: "GuardIgnored",
+                BaseStep: 1,
+                Files: new Dictionary<string, string> { [HintPath] = GuardIgnoredHint },
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "check tests failed"),
+        };
     }
 }
