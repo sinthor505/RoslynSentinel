@@ -1,4 +1,4 @@
-// Slice 1a of docs/current/plans/plan_member_local_function_targets.md: local-function candidates in
+// Slice 1a of docs/current/plans/closed/plan_member_local_function_targets.md: local-function candidates in
 // SyntaxTargetResolver. Default ResolveCandidates calls must not surface local functions; the opt-in flag,
 // the container check and the precedence helper are exercised directly on syntax parsed from source text.
 

@@ -1,6 +1,6 @@
 # Plan: Member view/replace/remove can target a local function
 
-**Status:** APPROVED 2026-11-24. Reviewed against source; precedence (types win, shadowed-local-function hint), schema budget raise and Direct mode settled with the owner (Decision section).
+**Status:** IMPLEMENTED 2026-11-24. bffe61af, aa4619ba (Step 1), f60701f1 (Step 2), b5134430 (Step 3), 9d5894a1 (Step 4), 00f72c4b (Step 5), 76c8e7d6 (test fix, follow-up TODO); live checks passed on 9d5894a1.
 
 ## Problem
 
@@ -117,6 +117,7 @@ Further blockers found by investigation:
   `CandidateMatchesContainer`, both filters, `PreferMembersOverLocalFunctions` and their tests; slice 1b =
   the two hint builders and `BuildShadowedLocalFunctionHint` and their tests.
 - Done when: `Build` 0 errors.
+- Done: bffe61af (1a), aa4619ba (1b)
 
 ### Step 2 - View (and ReadFile memberName) opt in
 - Files: `RoslynSentinel.Engines.Basic/SymbolNavigationEngine.cs`, `RoslynSentinel.Tests.Tools.Basic/MemberLocalFunctionViewTests.cs` (new)
@@ -139,6 +140,7 @@ Further blockers found by investigation:
   two local functions without `containerName` -> ambiguity naming both enclosing members;
   `containerName: "<enclosing method>"` picks one; `ReadFile(memberName:)` returns the local function.
 - Done when: `Build` 0 errors.
+- Done: f60701f1 (the ReadFile test was skipped; the Step 6 live check covers ReadFile(memberName:))
 
 ### Step 3 - Remove opts in, semantic usage check, post-check
 - Files: `RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs`, `RoslynSentinel.Tools.Basic/RefactoringStructuralImpl.cs`, `RoslynSentinel.Tests.Tools.Basic/MemberLocalFunctionRemoveTests.cs` (new)
@@ -164,6 +166,7 @@ Further blockers found by investigation:
     same-named method elsewhere does not block removing the local function; a method named X wins over a
     local function X.
 - Done when: `Build` 0 errors.
+- Done: b5134430 (SymbolFinder reports local-function references; no fallback needed)
 
 ### Step 4 - Replace opts in, local-function parse branch
 - Files: `RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs`, `RoslynSentinel.Tests.Tools.Basic/MemberLocalFunctionReplaceTests.cs` (new)
@@ -189,6 +192,7 @@ Further blockers found by investigation:
     rejected by the compile gate; a method-shaped source with `public` modifier is rejected with the
     local-function message; multi-declaration source refused.
 - Done when: `Build` 0 errors.
+- Done: 9d5894a1 (test expectation fixed in 76c8e7d6)
 
 ### Step 5 - Tool parameter descriptions
 - Files: `RoslynSentinel.Tools.Basic/RefactoringStructuralTools.cs`, `ClaudeLeanSchemaBudgetTests` (RoslynSentinel.Tests.Server)
@@ -201,6 +205,7 @@ Further blockers found by investigation:
   `"The type that holds the member."` becomes `"The type that holds the member (for a local function, its type or enclosing method)."`.
   Regenerate `docs/generated/` tool tables if a generator covers descriptions.
 - Done when: `Build` 0 errors and the schema-size ratchet/baseline tests pass (see Risks).
+- Done: 00f72c4b (also regenerated the ToolSurfaceGolden catalogs in Tests.Harness and Tests.ModelEval, which pin every description)
 
 ### Step 6 - Verify and close
 - Files: none (plan doc status, INBOX line removal)
@@ -214,6 +219,7 @@ Further blockers found by investigation:
   (expect source + note) and `Member(remove, memberName: "Verdict", dryRun: true)` (expect a refusal naming
   the usage). Delete the 2026-11-24 18:00 INBOX line; status IMPLEMENTED with hashes; move to `plans/closed/`.
 - Done when: all named classes pass, both live calls give the expected outcome.
+- Done: named classes green at 76c8e7d6; live view, ReadFile(memberName:) and dry-run remove (refused, 5 usages) as expected. Follow-up: the refusal's Search(mode: references) hint cannot resolve a local function (INBOX, TODO in RemoveMemberAsync).
 
 ## Out of scope
 
