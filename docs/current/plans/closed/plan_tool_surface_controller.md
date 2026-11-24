@@ -1,6 +1,6 @@
 # Plan: Tool-surface controller - phase A read-only snapshot, phase B pluggable schema patches
 
-**Status:** IN PROGRESS 2026-11-23. Steps A1-A7, B1-B5 done (ad3b5879, 3ce6f373, f7f9c00f, c3974c36, 1e57e2da, 5a95aab7, 33e9e00f, 61be309e, f4c3e4e4, c9602226, 07e8d5ca); B6 full run pending. Approved 2026-11-23: Phase A read-only snapshot and phase B patch seam, with the 2026-11-23 review fixes (stale toolset state, hosted-service startup refresh, instance registration of default patches). Implements stage 1 of [proposal_tool_surface_controller.md](../proposals/proposal_tool_surface_controller.md) (phase A) plus the schema-patch seam (phase B); later stages are outlined at the end and get detailed steps here before they start.
+**Status:** IMPLEMENTED 2026-11-24. ad3b5879, 3ce6f373, f7f9c00f, c3974c36, 1e57e2da, 5a95aab7, 33e9e00f, 61be309e, f4c3e4e4, c9602226, 07e8d5ca, a3007c77; full run green at 07e8d5ca (1,547 s, 0 failures). Stages C-G continue in new per-stage plans (TODO.md "Tool-surface controller stages 2-6"). Approved 2026-11-23: Phase A read-only snapshot and phase B patch seam, with the 2026-11-23 review fixes (stale toolset state, hosted-service startup refresh, instance registration of default patches). Implements stage 1 of [proposal_tool_surface_controller.md](../../proposals/proposal_tool_surface_controller.md) (phase A) plus the schema-patch seam (phase B); later stages are outlined at the end and get detailed steps here before they start.
 
 ## Problem
 
@@ -327,7 +327,7 @@ Slice map (review 2026-11-23): A1 || B1; A2 || B2; A3 || A4 (after B2 commits); 
 - Done when: both docs updated; links resolve.
 
 ### Step B6 - No stubs left
-- Done: stub sweep 0 matches 2026-11-24; full run pending
+- Done: stub sweep 0 matches 2026-11-24; full run green at 07e8d5ca (c:\tmp\rs-testtrees\_results\07e8d5ca-20261124-001557-47408)
 - Files: none (check only)
 - Depends on: all above
 - Effect: none

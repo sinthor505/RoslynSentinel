@@ -1,6 +1,6 @@
 # One front door for the server's tool surface: layered inputs, one composed spec, one atomic apply
 
-**Status:** PROPOSED 2026-11-23. Owner endorsed the direction and the shape below on 2026-11-23; recommended decisions given. Plan: [plan_tool_surface_controller.md](../plans/plan_tool_surface_controller.md) (stage 1 plus the schema-patch seam).
+**Status:** PROPOSED 2026-11-23. Owner endorsed the direction and the shape below on 2026-11-23; recommended decisions given. Plan: [plan_tool_surface_controller.md](../plans/closed/plan_tool_surface_controller.md) (stage 1 plus the schema-patch seam), IMPLEMENTED 2026-11-24. Stages 2-6 open: one plan per stage (`plans/plan_tool_surface_controller_stage_<c|d|e|f>.md`), TODO.md "Tool-surface controller stages 2-6".
 
 ## Motivation
 

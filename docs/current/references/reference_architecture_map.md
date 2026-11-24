@@ -93,7 +93,7 @@ Ground truth for "does this tool exist / is it gated": `McpServerStatus(toolList
   `AddRoslynSentinelToolsBasic`; with none registered, or no service provider (`ToolSignatureCatalogReflection`),
   `CreateSentinelTool` applies the defaults, so "no patches" is not expressible.
 - Not yet on the snapshot: `ActiveToolSurface.IsCallable` (still startup configuration) and the validator,
-  hidden-parameter and hint caches; later phases of `plans/plan_tool_surface_controller.md` move them.
+  hidden-parameter and hint caches; later stages of [proposal_tool_surface_controller.md](../proposals/proposal_tool_surface_controller.md) move them.
 
 ### Request pipeline (`WithRequestFilters` in `AddRoslynSentinelToolsBasic`)
 
