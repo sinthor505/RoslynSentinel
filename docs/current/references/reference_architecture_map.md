@@ -99,8 +99,17 @@ Ground truth for "does this tool exist / is it gated": `McpServerStatus(toolList
   BatchItemFields 200, ReplaceSnippetLimits 300, HiddenParameters 400) are registered as instances in
   `AddRoslynSentinelToolsBasic`; with none registered, or no service provider (`ToolSignatureCatalogReflection`),
   `CreateSentinelTool` applies the defaults, so "no patches" is not expressible.
-- Not yet on the snapshot: `ActiveToolSurface.IsCallable` (still startup configuration) and the validator,
-  hidden-parameter and hint caches; later stages of [proposal_tool_surface_controller.md](../proposals/proposal_tool_surface_controller.md) move them.
+- Parameter rules (`ParameterSurface.cs`, `ParameterRules.cs`) are a controller input: one `ParameterSurface`
+  singleton per host (`TryAddSingleton(_ => ParameterSurface.FromStartup())` from `--schema-profile`/`--hide-params`,
+  where a `Tool.param` entry hides that parameter on that tool only); a host or eval harness overrides it by
+  registering its own first (`ModelEvalMcpEnvironment` registers a Harness-layer surface hiding `validateOnApply`).
+  `HiddenParametersPatch` reads it through the services overload `IToolSchemaPatch.Apply(tool, method, services)`
+  and records what it stripped per tool instance (`StrippedToolParameters`); the snapshot carries `Parameters`,
+  `HiddenParameterGroups` (hidden names grouped by winning rule) and `UnmatchedHideRules`; the call-time validator
+  accepts a hidden name by reading the snapshot row. `HiddenSchemaParams` is an obsolete mirror kept only for
+  `ToolCallHint` and the validator fallback until stage E.
+- Not yet on the snapshot: `ActiveToolSurface.IsCallable` (still startup configuration), the validator's schema
+  cache and `ToolCallHint`; later stages of [proposal_tool_surface_controller.md](../proposals/proposal_tool_surface_controller.md) move them.
 
 ### Request pipeline (`WithRequestFilters` in `AddRoslynSentinelToolsBasic`)
 
@@ -261,6 +270,7 @@ call `RecordObserved` explicitly, because the reader is solution-granular and ca
 | Add a startup option | Static options class in `Common` + `Configure(args)` at every `ServerStdio`/`ServerHttp` entry point |
 | Understand a tool's result/error shape | `Common/SentinelCallToolResult.cs`, `ToolErrorCode`; size and `largeResult`: [reference_tool_response_pipeline.md](reference_tool_response_pipeline.md) |
 | See what the server exposes right now | `McpServerStatus(toolListing: all)` (live snapshot, includes runtime toolsets) or the `tool_list_<mode>.json` in the server bin folder (startup only) |
+| Change which parameters a schema hides | A rule in a `ParameterSurface` (`--hide-params`/`--schema-profile` at startup, or a host/harness registration of its own surface) |
 | Change how a schema is patched | An `IToolSchemaPatch` (`Common/ToolSurface/`): register it in DI, or replace the defaults with `RemoveAll<IToolSchemaPatch>()` plus your list |
 
 ## Gotchas

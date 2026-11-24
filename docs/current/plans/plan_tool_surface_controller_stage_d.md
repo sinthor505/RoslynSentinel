@@ -1,6 +1,6 @@
 # Plan: Tool-surface controller stage D - parameter rules become a controller input; the snapshot owns hidden parameters
 
-**Status:** APPROVED 2026-11-24. Stage D: parameter rules as a ParameterSurface input of the controller; HiddenParametersPatch, snapshot and validator read it; Steps 14-15 on HOLD for the owner (R3). Review fixes applied; other decisions taken at recommendation (owner away).
+**Status:** IN PROGRESS 2026-11-24. Steps 1-13, 16-17 done (1df39603..99a2b7ca); Steps 14-15 deferred (HOLD, R3); Step 18 full run pending. Approved 2026-11-24: Stage D: parameter rules as a ParameterSurface input of the controller; HiddenParametersPatch, snapshot and validator read it; Steps 14-15 on HOLD for the owner (R3). Review fixes applied; other decisions taken at recommendation (owner away).
 
 Stage 3 of [proposal_tool_surface_controller.md](../proposals/proposal_tool_surface_controller.md); follows phase A/B ([closed/plan_tool_surface_controller.md](closed/plan_tool_surface_controller.md)) and stage C ([plan_tool_surface_controller_stage_c.md](closed/plan_tool_surface_controller_stage_c.md), aadefa7c..309e94c1); reshapes the paused [plan_tool_parameter_surface_options.md](plan_tool_parameter_surface_options.md) Steps 4-15 (see "What happened to the paused plan").
 
@@ -183,6 +183,7 @@ Batches for the run:
 - Done when: the Status line links here; the link resolves.
 
 ### Step 2 - Contract skeleton
+- Done: 1df39603
 - Files: `RoslynSentinel.Common/ToolSurface/ParameterRules.cs` (new), `RoslynSentinel.Common/ToolSurface/ParameterSurface.cs` (new),
   `RoslynSentinel.Common/ToolSurface/IToolSchemaPatch.cs`
 - Depends on: Step 1 (approval)
@@ -237,6 +238,7 @@ Batches for the run:
 - Done when: `Build` 0 errors.
 
 ### Step 3a - Implement options, parser, resolver and the strip table
+- Done: 0acb22ec
 - Files: `RoslynSentinel.Common/ToolSurface/ParameterRules.cs`, `RoslynSentinel.Common/ToolSurface/ParameterSurface.cs`
 - Depends on: 2
 - Pairs with: Step 4
@@ -262,6 +264,7 @@ Batches for the run:
 - Done when: `Build` 0 errors.
 
 ### Step 3b - Implement attribution and unmatched rules
+- Done: 8511eda7 (+779ddd51 comment cleanup)
 - Files: `RoslynSentinel.Common/ToolSurface/ParameterSurface.cs`
 - Depends on: 3a
 - Effect: text-neutral (no callers)
@@ -277,6 +280,7 @@ Batches for the run:
 - Done when: `Build` 0 errors.
 
 ### Step 4 - Parity oracle for hidden parameters
+- Done: 40d0eb26
 - Files: `RoslynSentinel.Tests.Server/HiddenParametersParityTests.cs` (new)
 - Depends on: none (pins today's behaviour; must pass before Step 7 lands and at every later gate)
 - Pairs with: Step 3a
@@ -305,6 +309,7 @@ Batches for the run:
 - Done when: dispatcher runs `HiddenParametersParityTests` on the current code: all pass.
 
 ### Step 5 - Resolver unit tests
+- Done: 7f25720f
 - Files: `RoslynSentinel.Tests/ParameterSurfaceTests.cs` (new)
 - Depends on: 3b
 - Pairs with: Step 6
@@ -324,6 +329,7 @@ Batches for the run:
 - Done when: dispatcher runs `ParameterSurfaceTests`: all pass.
 
 ### Step 6 - Register the surface; the controller takes it; the snapshot carries it
+- Done: 056fabaf
 - Files: `RoslynSentinel.Server.Advanced/ServiceRegistrationExtensionsBasic.cs`, `RoslynSentinel.Common/ToolSurface/ToolSurfaceController.cs`,
   `RoslynSentinel.Common/ToolSurface/ToolSurfaceSnapshot.cs`
 - Depends on: 3b
@@ -349,6 +355,7 @@ Batches for the run:
   `ToolSurfaceControllerApplyTests`, `ToolSurfaceControllerWiringTests`, `ToolSchemaPatchPipelineTests`, `McpServerStatusToolListingTests`: all pass.
 
 ### Step 7 - HiddenParametersPatch strips by the surface and records per tool instance
+- Done: b775ae9d
 - Files: `RoslynSentinel.Common/McpToolSchemaPatcher.cs`, `RoslynSentinel.Common/ToolSurface/DefaultToolSchemaPatches.cs`,
   `RoslynSentinel.Common/SchemaOptions.cs`
 - Depends on: 3a, 6 (so DI hosts use their registered surface); acceptance needs Step 4 landed
@@ -376,6 +383,7 @@ Batches for the run:
   `BatchItemSchemaTests`, `McpToolsetControlTests`, `ToolCallHintTests`, `ClaudeLeanSchemaBudgetTests`: all pass.
 
 ### Step 8 - Snapshot rows and the validator read the per-instance view
+- Done: 1c585b6c
 - Files: `RoslynSentinel.Common/ToolSurface/ToolSurfaceController.cs`, `RoslynSentinel.Server.Advanced/ToolArgumentValidator.cs`
 - Depends on: 6, 7
 - Effect: text-neutral in a single-host process (production). In a multi-host process (tests, eval worlds) the snapshot rows
@@ -403,6 +411,7 @@ Batches for the run:
   (all 7; eval STOP rule applies): all pass.
 
 ### Step 9 - Per-host parameter surface tests
+- Done: e3227a76
 - Files: `RoslynSentinel.Tests.Server/ToolSurfaceParameterTests.cs` (new)
 - Depends on: 8
 - Pairs with: Step 10
@@ -433,6 +442,7 @@ Batches for the run:
 - Done when: dispatcher runs `ToolSurfaceParameterTests`: all pass.
 
 ### Step 10 - Eval harness supplies a Harness-layer surface
+- Done: d23875b0 (+99a2b7ca comment restore)
 - Files: `RoslynSentinel.Tests.ModelEval/ModelEvalMcpEnvironment.cs`, `RoslynSentinel.Common/SchemaOptions.cs`
 - Depends on: 7, 8
 - Effect: text-neutral by construction; **eval-surface step** (it builds the surface eval models see; eval STOP rule applies)
@@ -468,6 +478,7 @@ Batches for the run:
   all pass with unchanged outcomes (any change: STOP, do not commit).
 
 ### Step 11 - HiddenSchemaParams becomes the ToolCallHint mirror
+- Done: 197c56d9
 - Files: `RoslynSentinel.Common/HiddenSchemaParams.cs`, `RoslynSentinel.Common/ToolCallHint.cs`, `RoslynSentinel.Common/McpToolSchemaPatcher.cs`
 - Depends on: 8, 10
 - Pairs with: Step 12 (disjoint files)
@@ -486,6 +497,7 @@ Batches for the run:
   `SchemaLeanProfileTests`, `HiddenParametersParityTests`, `ToolSchemaPatchPipelineTests`, `ClaudeLeanSchemaBudgetTests`: all pass.
 
 ### Step 12 - Tool-scoped entries in --hide-params
+- Done: 290eaa9d
 - Files: `RoslynSentinel.Common/ToolSurface/ParameterRules.cs`, `RoslynSentinel.Common/SchemaOptions.cs`, `RoslynSentinel.Tests/ParameterSurfaceTests.cs`
 - Depends on: 7 (and 5, same test file)
 - Effect: **behaviour-changing**: a `--hide-params` / `ROSLYNSENTINEL_HIDE_PARAMS` entry of the form `Tool.param` now hides
@@ -502,6 +514,7 @@ Batches for the run:
 - Done when: `Build` 0 errors; dispatcher runs `ParameterSurfaceTests`, `HiddenParametersParityTests`, `SchemaHiddenParametersTests`: all pass.
 
 ### Step 13 - Tool-scope tests
+- Done: 68d0bf23
 - Files: `RoslynSentinel.Tests.Server/SchemaHiddenParametersTests.cs`
 - Depends on: 12
 - Effect: text-neutral
@@ -513,6 +526,7 @@ Batches for the run:
 - Done when: dispatcher runs `SchemaHiddenParametersTests`: all pass.
 
 ### Step 14 - HOLD (owner decision R3): McpServerStatus reports parameter provenance
+- Done: DEFERRED (HOLD, owner decision R3; INBOX line)
 - Files: `RoslynSentinel.Tools.Basic/ServerStatusTools.cs`, `RoslynSentinel.Tests.Server/ClaudeLeanSchemaBudgetTests.cs`
 - Depends on: 8; owner approval of R3
 - Effect: **behaviour-changing (wire)**: `toolSurface` gains `hiddenParameterGroups` and `unmatchedHideRules`, filled from the
@@ -528,6 +542,7 @@ Batches for the run:
 - Done when: `Build` 0 errors; dispatcher runs `McpServerStatusToolListingTests`, `ClaudeLeanSchemaBudgetTests`: all pass.
 
 ### Step 15 - HOLD (with Step 14): status tests
+- Done: DEFERRED (HOLD, owner decision R3; INBOX line)
 - Files: `RoslynSentinel.Tests.Tools.Basic/McpServerStatusToolListingTests.cs`
 - Depends on: 14
 - Effect: text-neutral
@@ -537,6 +552,7 @@ Batches for the run:
 - Done when: dispatcher runs the three tests: all pass.
 
 ### Step 16 - LIVE check
+- Done: 2026-11-24 on servedSha 290eaa9d (attempted 99a2b7ca; later commits test/comment only): A ok (v1 startup, four patches), B ok-none (no hiddenParameters on 123 rows; no hide args), C ok-rejected (Unknown parameter validateOnApply for Search), D not-run, E n/a (14-15 HOLD)
 - Files: none
 - Depends on: Steps 2-13 committed (and 14-15 if they ran); own-server restart (`McpServerControl(StopServer)`, then
   `LoadSolution`); no subagent mid-operation
@@ -557,6 +573,7 @@ Batches for the run:
 - Done when: A-E recorded.
 
 ### Step 17 - Docs
+- Done: this commit
 - Files: `docs/current/references/reference_architecture_map.md`, `docs/current/references/reference_model_eval_procedure.md`
 - Depends on: 8, 10, 11 (and 12)
 - Effect: none (docs)
@@ -571,6 +588,7 @@ Batches for the run:
 - Done when: both docs match the code; links resolve.
 
 ### Step 18 - No stubs left, full run, close
+- Done: sweep 0 matches in plan files, HiddenFor gone; INBOX lines added; full run pending
 - Files: `docs/current/INBOX.md` (two lines), this plan and the paused plan (via `ProjectDoc close`), `docs/current/TODO.md` (the
   stages line)
 - Depends on: all above (14-15 excepted while on HOLD)
