@@ -1,6 +1,6 @@
 # Plan: Tool-surface controller stage F - the controller fills the tool collection at startup; per-class DI blocks and WithSentinelTools go
 
-**Status:** APPROVED 2026-11-24. Stage F: the controller fills the tool collection at startup from ordered registry tables; per-class DI blocks and WithSentinelTools removed. Implemented on branch tool-surface-stage-f (worktree), unmerged, for owner review. Review fixes applied; decisions taken at recommendation (owner away).
+**Status:** IMPLEMENTED on branch tool-surface-stage-f (unmerged, for owner review) 2026-11-24: 1be4aa87..afb49bbb in worktree c:\tmp\rs-stage-f; full run green at afb49bbb (c:\tmp\rs-testtrees\_results\afb49bbb-20261124-062801-404), ModelEval gate 71/71; live check A-F ok. Close after the merge (the merge or the first master commit after it carries Closes:). Approved 2026-11-24: Stage F: the controller fills the tool collection at startup from ordered registry tables; per-class DI blocks and WithSentinelTools removed. Implemented on branch tool-surface-stage-f (worktree), unmerged, for owner review. Review fixes applied; decisions taken at recommendation (owner away).
 
 Stage 5 of [proposal_tool_surface_controller.md](../proposals/proposal_tool_surface_controller.md). Follows phase A/B
 ([closed/plan_tool_surface_controller.md](closed/plan_tool_surface_controller.md)), stage C
@@ -181,6 +181,7 @@ Suggested orchestrator batches:
 - **Main session:** Steps 21-23.
 
 ### Step 1 - Contract skeleton (Common)
+- Done: 1be4aa87 (branch)
 - Files: `RoslynSentinel.Common/ToolSurface/ToolSurfaceStartupRequest.cs` (new), `RoslynSentinel.Common/ToolSurface/ToolSurfaceStartupPopulation.cs` (new),
   `RoslynSentinel.Common/ToolSurface/ToolSurfaceController.cs`
 - Depends on: none
@@ -224,6 +225,7 @@ Suggested orchestrator batches:
 - Done when: `Build` 0 errors.
 
 ### Step 2 - Registry tables and selection (Server.Advanced)
+- Done: 9f036b92
 - Files: `RoslynSentinel.Server.Advanced/ToolClassRegistry.cs`
 - Depends on: none
 - Pairs with: Step 1
@@ -244,6 +246,7 @@ Suggested orchestrator batches:
 - Done when: `Build` 0 errors; `ArchitectureDocFreshnessTests` green (Execution rules, "Generated docs").
 
 ### Step 3a - Parity golden helper and one smoke case
+- Done: e22d1008
 - Files: `RoslynSentinel.Tests.Harness/ToolSurfaceGolden.cs` (new), `RoslynSentinel.Tests.Harness/ToolSurfaceParityTests.cs` (new); generated
   `RoslynSentinel.Tests.Harness/ToolSurfaceGolden/*` (written only by the regenerate run)
 - Depends on: none (all goldens must be committed before Step 5 starts)
@@ -275,6 +278,7 @@ Suggested orchestrator batches:
   (the two plain runs disagree: a finding, stop) | `host-failed` (the host cannot build: report the missing dependency).
 
 ### Step 3b - Parity golden: the production and harness case matrix
+- Done: f45b97aa
 - Files: `RoslynSentinel.Tests.Harness/ToolSurfaceParityTests.cs`; generated goldens as 3a
 - Depends on: 3a
 - Pairs with: Step 4
@@ -296,6 +300,7 @@ Suggested orchestrator batches:
 - Done when: as 3a (regenerate, commit, two plain `-Ref` runs green).
 
 ### Step 4 - Parity golden: eval surfaces
+- Done: 34f5931c
 - Files: `RoslynSentinel.Tests.ModelEval/EvalToolSurfaceParityTests.cs` (new); generated `RoslynSentinel.Tests.ModelEval/ToolSurfaceGolden/*`
 - Depends on: 3a (the helper)
 - Pairs with: Step 3b
@@ -314,6 +319,7 @@ Suggested orchestrator batches:
 - Done when: as 3a, filter `FullyQualifiedName~EvalToolSurfaceParityTests` with `-Projects RoslynSentinel.Tests.ModelEval`: all pass.
 
 ### Step 5 - Implement the startup population
+- Done: 13424be4
 - Files: `RoslynSentinel.Common/ToolSurface/ToolSurfaceController.cs`, `RoslynSentinel.Common/ToolSurface/ToolSurfaceStartupPopulation.cs`,
   `RoslynSentinel.Common/McpToolSchemaPatcher.cs`
 - Depends on: 1; the goldens of Steps 3a, 3b and 4 committed
@@ -333,6 +339,7 @@ Suggested orchestrator batches:
 - Done when: `Build` 0 errors (CS0618 at the 37 `WithSentinelTools` call sites expected); standard gate green.
 
 ### Step 6 - Population tests
+- Done: 6ab65ede
 - Files: `RoslynSentinel.Tests.Server/ToolSurfaceStartupPopulationTests.cs` (new)
 - Depends on: 5
 - Pairs with: Step 7
@@ -350,6 +357,7 @@ Suggested orchestrator batches:
 - Done when: dispatcher runs `ToolSurfaceStartupPopulationTests`: all pass.
 
 ### Step 7 - Wire the population beside the blocks; manifest reads the collection
+- Done: bebd2a05
 - Files: `RoslynSentinel.Server.Advanced/ServiceRegistrationExtensionsBasic.cs`, `RoslynSentinel.Server.Advanced/ServiceRegistrationExtensionsAdvanced.cs`,
   `RoslynSentinel.Server.Advanced/ConsoleMode.cs`
 - Depends on: 2, 5
@@ -376,6 +384,7 @@ Suggested orchestrator batches:
   (reviewer checks the order in the diff); standard gate green.
 
 ### Step 8 - Manifest test
+- Done: b9e8a5c9 (test lives in Tests.Harness: Tests.Server cannot see ToolSurfaceGolden)
 - Files: `RoslynSentinel.Tests.Server/ToolManifestListToolsTests.cs` (new)
 - Depends on: 7
 - Pairs with: Step 9
@@ -389,6 +398,7 @@ Suggested orchestrator batches:
 - Done when: dispatcher runs `ToolManifestListToolsTests`: all pass.
 
 ### Step 9 - Migrate the Advanced classes (11)
+- Done: f00bf153
 - Files: `RoslynSentinel.Server.Advanced/ServiceRegistrationExtensionsAdvanced.cs`, `RoslynSentinel.Server.Advanced/ToolClassRegistry.cs`
 - Depends on: 7
 - Pairs with: Step 8
@@ -401,6 +411,7 @@ Suggested orchestrator batches:
 - Done when: `Build` 0 errors; standard gate green (`ArchitectureDocFreshnessTests` included; Execution rules, "Generated docs").
 
 ### Step 10 - Migrate the Basic tail (5)
+- Done: e9c9cc38
 - Files: `RoslynSentinel.Server.Advanced/ServiceRegistrationExtensionsBasic.cs`, `RoslynSentinel.Server.Advanced/ToolClassRegistry.cs`
 - Depends on: 9 (same registry file)
 - Effect: text-neutral
@@ -413,6 +424,7 @@ Suggested orchestrator batches:
 - Done when: `Build` 0 errors; standard gate green (`ArchitectureDocFreshnessTests` included). Same for Steps 11-14.
 
 ### Step 11 - Migrate the Basic middle (6)
+- Done: 610b3fdd
 - Files: as Step 10
 - Depends on: 10
 - Effect: text-neutral
@@ -422,6 +434,7 @@ Suggested orchestrator batches:
 - Done when: `Build` 0 errors; standard gate green.
 
 ### Step 12 - Migrate the Basic upper middle (6)
+- Done: 4a8499c9
 - Files: as Step 10
 - Depends on: 11
 - Effect: text-neutral (wire); DI presence of `WorkspaceReadNavigationTools` changes only when WorkspaceTools is active without it (R8)
@@ -432,6 +445,7 @@ Suggested orchestrator batches:
 - Done when: `Build` 0 errors; standard gate green (`McpToolsetControlTests.WorkspaceTools_AndReadNavigationTools_ResolveFromTheContainer_AndSearchIsDeclaredOnce` included).
 
 ### Step 13 - Migrate the Basic head (6) and the claude-lean branch
+- Done: 10bcb7dc
 - Files: as Step 10
 - Depends on: 12
 - Effect: text-neutral
@@ -447,6 +461,7 @@ Suggested orchestrator batches:
 - Done when: `Build` 0 errors with no CS0618 for `WithSentinelTools` outside the `RefactoringTools` block; standard gate green.
 
 ### Step 14 - Dead-tool check at startup
+- Done: 8c2cc7bb
 - Files: `RoslynSentinel.Server.Advanced/ToolClassRegistry.cs`, `RoslynSentinel.Server.Advanced/ServiceRegistrationExtensionsBasic.cs`
 - Depends on: 13
 - Effect: text-neutral (the tables are consistent, so nothing throws)
@@ -462,6 +477,7 @@ Suggested orchestrator batches:
 - Done when: `Build` 0 errors; standard gate green.
 
 ### Step 15 - Table tests
+- Done: 38753772
 - Files: `RoslynSentinel.Tests.Server/ToolClassTableTests.cs` (new)
 - Depends on: 14
 - Pairs with: Step 16
@@ -474,6 +490,7 @@ Suggested orchestrator batches:
 - Done when: dispatcher runs `ToolClassTableTests`: all pass.
 
 ### Step 16 - BEHAVIOUR-CHANGING: the RefactoringTools block goes
+- Done: 474afe3c (launchSettings.json is gitignored and absent from the worktree: the untracked local copy still names RefactoringTools, fix after the merge)
 - Files: `RoslynSentinel.Server.Advanced/ServiceRegistrationExtensionsBasic.cs`, `RoslynSentinel.Server.Advanced/Properties/launchSettings.json`
 - Depends on: 13 (same file)
 - Pairs with: Step 15
@@ -487,6 +504,7 @@ Suggested orchestrator batches:
 - Done when: `Build` 0 errors with no CS0618 for `WithSentinelTools`; standard gate green (every golden unchanged).
 
 ### Step 17 - Delete WithSentinelTools
+- Done: 4404d755
 - Files: `RoslynSentinel.Common/McpToolSchemaPatcher.cs`, `RoslynSentinel.Common/ToolAllowList.cs`
 - Depends on: 16 (its last caller)
 - Effect: text-neutral
@@ -497,6 +515,7 @@ Suggested orchestrator batches:
 - Done when: `Build` 0 errors, no CS1574; standard gate green.
 
 ### Step 18 - Stale mentions outside Server
+- Done: 16109961
 - Files: `RoslynSentinel.Tools.Basic/ToolServiceCollectionExtensionsBasic.cs` (`:13`), `RoslynSentinel.Tests.Tools.Basic/ToolClassRegistrationTests.cs`
   (`:46-48`: ServerStatusTools is now the always-on row of `BasicToolClassTypes`), `RoslynSentinel.Tests.Server/McpToolsetControlTests.cs` (`:293`)
 - Depends on: 17
@@ -507,6 +526,7 @@ Suggested orchestrator batches:
 - Done when: `Build` 0 errors; `Search(mode: text, query: "WithSentinelTools", includeTests: true)` finds nothing.
 
 ### Step 19 - BEHAVIOUR-CHANGING: create the collection when no tool is registered
+- Done: cbab4a64
 - Files: `RoslynSentinel.Common/ToolSurface/ToolSurfaceStartupPopulation.cs`, `RoslynSentinel.Tests.Server/ToolSurfaceStartupPopulationTests.cs`
 - Depends on: 7, 6
 - Pairs with: Step 18
@@ -521,6 +541,7 @@ Suggested orchestrator batches:
 - Done when: `Build` 0 errors; standard gate plus `ToolSurfaceStartupPopulationTests` green.
 
 ### Step 20 - Tests for the two behaviour changes
+- Done: 52c95fdf (both fixtures in Tests.Harness)
 - Files: `RoslynSentinel.Tests.Server/ToolSurfaceEmptyCollectionTests.cs` (new), `RoslynSentinel.Tests.Harness/UmbrellaIncludeToolsTests.cs` (new)
 - Depends on: 16, 19
 - Effect: text-neutral
@@ -536,6 +557,7 @@ Suggested orchestrator batches:
 - Done when: dispatcher runs both classes: all pass.
 
 ### Step 21 - LIVE check from the worktree
+- Done: 2026-11-24 at 52c95fdf (GitSha 52c95fdf): preconditions ok; A identical (115 tools); B identical (28 tools), git toolset exposedBy toolset:git, surfaceVersion 2 (ok, not n/a-http); C ok; D identical (115 names); E stopped; F identical (115 names). Details c:\tmp\rs-stage-f-live-results.md
 - Files: none
 - Depends on: Steps 1-20 committed; the session loaded on the worktree; no subagent mid-operation
 - Effect: none
@@ -572,6 +594,7 @@ Suggested orchestrator batches:
 - Done when: A-F recorded.
 
 ### Step 22 - Docs (on the branch)
+- Done: afb49bbb (CLAUDE.md 16017 -> 15978 bytes)
 - Files: `CLAUDE.md`, `docs/current/references/reference_architecture_map.md`
 - Depends on: 17, 19
 - Effect: none (docs)
@@ -592,6 +615,7 @@ Suggested orchestrator batches:
 - Done when: both match the branch code; CLAUDE.md is not larger than before; links resolve.
 
 ### Step 23 - No stubs left, full run, master bookkeeping
+- Done: branch searches clean; full run green at afb49bbb (c:\tmp\rs-testtrees\_results\afb49bbb-20261124-062801-404, 0 failures); ModelEval gate 71/71 (c:\tmp\rs-testtrees\_results\afb49bbb-20261124-065031-56736); master bookkeeping this commit
 - Files: on master only: this plan, `docs/current/TODO.md` (the tool-surface stages line), `docs/current/INBOX.md`
 - Depends on: all above
 - Effect: none
