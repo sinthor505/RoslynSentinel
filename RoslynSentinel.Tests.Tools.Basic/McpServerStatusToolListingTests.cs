@@ -1,4 +1,7 @@
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using ModelContextProtocol.Server;
 using RoslynSentinel.Common;
 using RoslynSentinel.Tools.Basic;
 
@@ -251,5 +254,109 @@ public class McpServerStatusToolListingTests
         Assert.That(
             status.AllDeclaredTools.Single(t => t.Name == "ProjectDoc").EnabledBy,
             Is.EqualTo("--mode Workspace or Claude, or --include-tools DocumentationTools"));
+    }
+
+    private McpServerStatusResult CallWithSurface(
+        ActiveToolSurface surface,
+        ToolSurfaceController? controller,
+        ToolsetService? toolsets,
+        McpServerStatusToolListing listing,
+        string? filter = null)
+    {
+        var tools = new ServerStatusTools(
+            _manager,
+            surface,
+            new StoppedByScriptMarker(WasFound: false, Details: null),
+            toolsets: toolsets,
+            surface: controller);
+
+        var result = (SentinelCallToolResult<McpServerStatusResult>)tools.McpServerStatusTool("test reason", listing, filter);
+        return result.SuccessData!;
+    }
+
+    private static McpServerPrimitiveCollection<McpServerTool> CreateCollection(params string[] toolNames)
+    {
+        var collection = new McpServerPrimitiveCollection<McpServerTool>();
+        foreach (var name in toolNames)
+        {
+            collection.TryAdd(McpServerTool.Create((string reason) => reason, new McpServerToolCreateOptions { Name = name }));
+        }
+
+        return collection;
+    }
+
+    private static ActiveToolSurface NoActiveClasses()
+    {
+        var none = new HashSet<string>();
+        return new ActiveToolSurface("test", none, none, none, new HashSet<string>(), null);
+    }
+
+    [Test]
+    public void Listing_WithController_RuntimeToolsetToolIsActive_WithExposedBy()
+    {
+        var collection = CreateCollection("McpServerStatus");
+        var options = Options.Create(new McpServerOptions { ToolCollection = collection });
+        var toolsets = new ToolsetService(
+            options,
+            new ServiceCollection().BuildServiceProvider(),
+            new HashSet<string> { nameof(TestCategoryTaggingTools) },
+            () => new[] { typeof(TestCategoryTaggingTools).Assembly });
+        toolsets.SetEnabled(ToolSetName.testCategories, true);
+        var controller = new ToolSurfaceController(options, toolsets);
+        controller.Refresh("test");
+
+        var status = CallWithSurface(NoActiveClasses(), controller, toolsets, McpServerStatusToolListing.all, "TagTestCategories");
+
+        var row = status.AllDeclaredTools.Single(t => t.Name == "TagTestCategories");
+        Assert.That(row.ActiveForThisMode, Is.True);
+        Assert.That(row.ExposedBy, Is.EqualTo("toolset:testCategories"));
+    }
+
+    [Test]
+    public void Listing_WithController_AllowedButUnregisteredTool_ReportsMissingRegistration()
+    {
+        var collection = CreateCollection("McpServerStatus", "Git");
+        var controller = new ToolSurfaceController(Options.Create(new McpServerOptions { ToolCollection = collection }));
+        controller.Refresh("test");
+        var none = new HashSet<string>();
+        var surface = new ActiveToolSurface(
+            "test",
+            none,
+            none,
+            none,
+            new HashSet<string> { "WorkspaceTools" },
+            null,
+            allowedToolNames: new HashSet<string> { "Build" });
+
+        var status = CallWithSurface(surface, controller, null, McpServerStatusToolListing.inactive);
+
+        var build = status.AllDeclaredTools.Single(t => t.Name == "Build");
+        Assert.That(build.ActiveForThisMode, Is.False);
+        Assert.That(build.EnabledBy, Does.Contain("not registered with the server"));
+    }
+
+    [Test]
+    public void Listing_WithController_ReportsSurfaceVersionAndTrigger()
+    {
+        var collection = CreateCollection("McpServerStatus", "Git");
+        var controller = new ToolSurfaceController(Options.Create(new McpServerOptions { ToolCollection = collection }));
+        controller.Refresh("test");
+
+        var status = CallWithSurface(NoActiveClasses(), controller, null, McpServerStatusToolListing.none);
+
+        Assert.That(status.ToolSurface.SurfaceVersion, Is.EqualTo(1));
+        Assert.That(status.ToolSurface.SurfaceTrigger, Is.EqualTo("test"));
+        Assert.That(status.ToolSurface.SchemaPatches, Is.Not.Empty);
+    }
+
+    [Test]
+    public void Listing_WithoutController_KeepsLegacyAnswer()
+    {
+        var status = Call(["WorkspaceTools"], McpServerStatusToolListing.all);
+
+        var build = status.AllDeclaredTools.Single(t => t.Name == "Build");
+        Assert.That(build.ActiveForThisMode, Is.True);
+        Assert.That(status.ToolSurface.SurfaceVersion, Is.Null);
+        Assert.That(status.ToolSurface.SurfaceTrigger, Is.Null);
     }
 }
