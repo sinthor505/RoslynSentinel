@@ -16,6 +16,18 @@ public abstract class WorkingDirectoryLeakDetector
     }
 
     /// <summary>
+    /// Applies the ambient test-host defaults for this test assembly. This shared SetUpFixture base is also the one place
+    /// that gives every derived test assembly its ambient test-host defaults (call transcripts go to call-transcripts-tests
+    /// with their own cap), so the name is historical; later slices add more defaults here.
+    /// </summary>
+    [OneTimeSetUp]
+    public void ApplyAmbientTestHostDefaults()
+    {
+        // Keeps in-process test hosts from writing call transcripts into the real-session folder.
+        RoslynSentinel.Common.ToolCallTranscript.UseTestHostDefaults();
+    }
+
+    /// <summary>
     /// Fails if a test left a new .cs or .csproj file in the working directory. Does not delete the files.
     /// </summary>
     [OneTimeTearDown]

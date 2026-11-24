@@ -12,6 +12,8 @@ namespace RoslynSentinel.Common;
 /// as sent and the duration. Written to <c>&lt;scratch root&gt;/call-transcripts/calls-&lt;yyyyMMdd-HHmmss&gt;-&lt;pid&gt;-&lt;short guid&gt;.jsonl</c>,
 /// created on the first recorded call; files of earlier sessions are swept by age and count when this object is constructed
 /// (through <see cref="RuntimeStateRetention.SweepLogs"/>, the sweeper the host logs use).
+/// A test assembly calls <see cref="UseTestHostDefaults"/> once from its SetUpFixture, so its hosts write to <c>call-transcripts-tests</c>
+/// with a smaller cap and never fill the real-session folder.
 /// <para>
 /// Registered as a DI singleton so every host has its own file; the writer is the call-tool filter
 /// <c>AddToolCallTranscriptFilter</c> (Server.Advanced). Best effort by design: <see cref="Record"/> never throws, and a write
@@ -29,6 +31,16 @@ public sealed class ToolCallTranscript
     /// <summary>Folder under the scratch root that holds the transcripts.</summary>
     public const string FolderName = "call-transcripts";
 
+    /// <summary>Folder under the scratch root that a test host's transcripts go to (see <see cref="UseTestHostDefaults"/>), apart from the real-session folder.</summary>
+    public const string TestHostFolderName = "call-transcripts-tests";
+
+    /// <summary>Sweep limit on the number of transcript files for a test host; smaller than the real-session limit.</summary>
+    public const int TestHostMaxFiles = 30;
+
+    // Ambient defaults used when a constructor call passes no folder or limit. Plain statics: set once, before any host is built.
+    private static string _defaultFolderName = FolderName;
+    private static int _defaultMaxFiles = RuntimeStateRetention.LogMaxFiles;
+
     // Relaxed escaping keeps quotes and '+' readable; the file is a local log, never embedded in HTML (same choice as InProcessCommitRoute's JSONL).
     private static readonly JsonSerializerOptions LineOptions = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
@@ -40,20 +52,22 @@ public sealed class ToolCallTranscript
 
     /// <summary>
     /// Creates the transcript for one host and sweeps old files in <paramref name="directory"/>. A null directory means the
-    /// default folder under <see cref="ScratchRoot"/>; if that cannot be resolved the transcript is disabled (<see cref="FilePath"/> is null).
+    /// default folder under <see cref="ScratchRoot"/>: <c>call-transcripts</c>, or <see cref="TestHostFolderName"/> once
+    /// <see cref="UseTestHostDefaults"/> has run. If the folder cannot be resolved the transcript is disabled (<see cref="FilePath"/> is null).
     /// </summary>
     /// <param name="directory">Target folder (tests pass a temp folder); null for the default.</param>
-    /// <param name="maxFiles">Sweep limit on the number of transcript files; default <see cref="RuntimeStateRetention.LogMaxFiles"/>.</param>
+    /// <param name="maxFiles">Sweep limit on the number of transcript files; null for the default <see cref="RuntimeStateRetention.LogMaxFiles"/>
+    /// (<see cref="TestHostMaxFiles"/> after <see cref="UseTestHostDefaults"/>).</param>
     /// <param name="maxAge">Sweep limit on file age; default <see cref="RuntimeStateRetention.LogMaxAge"/>.</param>
-    public ToolCallTranscript(string? directory = null, int maxFiles = RuntimeStateRetention.LogMaxFiles, TimeSpan? maxAge = null)
+    public ToolCallTranscript(string? directory = null, int? maxFiles = null, TimeSpan? maxAge = null)
     {
         try
         {
-            var folder = directory ?? Path.Combine(ScratchRoot.Resolve(), FolderName);
+            var folder = directory ?? Path.Combine(ScratchRoot.Resolve(), _defaultFolderName);
             var name = $"{FilePrefix}{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Environment.ProcessId}-{Guid.NewGuid().ToString("N")[..8]}{FileExtension}";
             DirectoryPath = folder;
             FilePath = Path.Combine(folder, name);
-            RuntimeStateRetention.SweepLogs(folder, FilePrefix, FilePath, maxFiles, maxAge ?? RuntimeStateRetention.LogMaxAge, utcNow: null, fileExtension: FileExtension);
+            RuntimeStateRetention.SweepLogs(folder, FilePrefix, FilePath, maxFiles ?? _defaultMaxFiles, maxAge ?? RuntimeStateRetention.LogMaxAge, utcNow: null, fileExtension: FileExtension);
         }
         catch (Exception ex)
         {
@@ -62,6 +76,17 @@ public sealed class ToolCallTranscript
             DirectoryPath = null;
             FilePath = null;
         }
+    }
+
+    /// <summary>
+    /// Switches the ambient defaults to the test-host values: folder <see cref="TestHostFolderName"/> and sweep limit
+    /// <see cref="TestHostMaxFiles"/>, for every transcript constructed without its own folder or limit. Called once from each test
+    /// assembly's SetUpFixture; production never calls it. The test folder stays under the scratch root.
+    /// </summary>
+    public static void UseTestHostDefaults()
+    {
+        _defaultFolderName = TestHostFolderName;
+        _defaultMaxFiles = TestHostMaxFiles;
     }
 
     /// <summary>The folder the transcript is written to, or null when the transcript is disabled.</summary>

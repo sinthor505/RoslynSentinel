@@ -189,6 +189,37 @@ public class ToolCallTranscriptTests
         Assert.That(line.GetProperty("arguments").GetProperty("q").GetString(), Is.EqualTo("a\"b+c"));
         Assert.That(System.Text.Encoding.UTF8.GetString(bytes), Does.EndWith("\n"));
     }
+
+    [Test]
+    public void DefaultFolder_UnderATestAssembly_IsTheTestHostFolder()
+    {
+        // The SetUpFixture base applied UseTestHostDefaults, so the parameterless ctor (the production DI default) must not
+        // point at the real-session folder.
+        var transcript = new ToolCallTranscript();
+
+        Assert.That(transcript.DirectoryPath, Does.EndWith(Path.DirectorySeparatorChar + ToolCallTranscript.TestHostFolderName));
+    }
+
+    [Test]
+    public void ProductionRegistration_InAHostWithoutPreRegisteredTranscript_ResolvesTheTestHostFolder()
+    {
+        // No pre-registered transcript: the production registration must fall back to the ambient test-host default.
+        var services = new ServiceCollection();
+        services.AddRoslynSentinelEnginesBasic();
+        var mcpBuilder = services.AddMcpServer();
+        mcpBuilder.AddRoslynSentinelToolsBasic(services, ActiveModes);
+
+        var hostBuilder = Host.CreateApplicationBuilder();
+        foreach (var descriptor in services)
+        {
+            hostBuilder.Services.Add(descriptor);
+        }
+
+        using var host = hostBuilder.Build();
+        var transcript = host.Services.GetRequiredService<ToolCallTranscript>();
+
+        Assert.That(transcript.DirectoryPath, Does.EndWith(Path.DirectorySeparatorChar + ToolCallTranscript.TestHostFolderName));
+    }
 }
 
 /// <summary>Test-only tools for <see cref="ToolCallTranscriptTests"/>: one that succeeds and one that throws (the SDK turns the throw into an error result).</summary>
