@@ -473,6 +473,19 @@ Data-driven family of small implementation tasks distilled from real plan and pu
   test longer than 20 min) and `-EvalArgs "-Scenario <Id> -StepWallClockMinutes 30"` on 113 (45 on 112).
 - Prefer tree-state or syntax checks; final-message keyword checks needed two refinement rounds.
 
+## Schema-patch variants (A/B of how tool schemas are shaped)
+
+- A schema patch is an `IToolSchemaPatch` (`RoslynSentinel.Common/ToolSurface/`, `Name`, `Order`, `Apply`).
+  The server applies every registered patch to every tool as it is created, in `Order`, then `Name`.
+- Add a patch: register it in the harness host's own service collection, before or after
+  `AddRoslynSentinelToolsBasic/Advanced`: `services.AddSingleton<IToolSchemaPatch>(new MyPatch())`.
+- Replace or drop a default: `services.RemoveAll<IToolSchemaPatch>()` after that call, then add the list you
+  want (start from `DefaultToolSchemaPatches.All`). An empty registration falls back to the four defaults,
+  so a run with no patches at all is not expressible.
+- Where the run records it: `ToolSurfaceController.Current.SchemaPatches` (read it from the host's services
+  and log it with the run's results); `McpServerStatus` shows the same list as `toolSurface.schemaPatches`,
+  but eval surfaces hide that tool.
+
 ## Where output goes
 
 - The scratch root is env `ROSLYNSENTINEL_SCRATCH_ROOT` (absolute), else `<parent of the repo>\RoslynSentinel-ScratchDir`.

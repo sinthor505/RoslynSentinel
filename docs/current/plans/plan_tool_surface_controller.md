@@ -1,6 +1,6 @@
 # Plan: Tool-surface controller - phase A read-only snapshot, phase B pluggable schema patches
 
-**Status:** IN PROGRESS 2026-11-23. Steps A1-A4, B1-B2 done (ad3b5879, 3ce6f373, f7f9c00f, c3974c36, 1e57e2da, 5a95aab7, 33e9e00f). Approved 2026-11-23: Phase A read-only snapshot and phase B patch seam, with the 2026-11-23 review fixes (stale toolset state, hosted-service startup refresh, instance registration of default patches). Implements stage 1 of [proposal_tool_surface_controller.md](../proposals/proposal_tool_surface_controller.md) (phase A) plus the schema-patch seam (phase B); later stages are outlined at the end and get detailed steps here before they start.
+**Status:** IN PROGRESS 2026-11-23. Steps A1-A7, B1-B5 done (ad3b5879, 3ce6f373, f7f9c00f, c3974c36, 1e57e2da, 5a95aab7, 33e9e00f, 61be309e, f4c3e4e4, c9602226, 07e8d5ca); B6 full run pending. Approved 2026-11-23: Phase A read-only snapshot and phase B patch seam, with the 2026-11-23 review fixes (stale toolset state, hosted-service startup refresh, instance registration of default patches). Implements stage 1 of [proposal_tool_surface_controller.md](../proposals/proposal_tool_surface_controller.md) (phase A) plus the schema-patch seam (phase B); later stages are outlined at the end and get detailed steps here before they start.
 
 ## Problem
 
@@ -192,6 +192,7 @@ Slice map (review 2026-11-23): A1 || B1; A2 || B2; A3 || A4 (after B2 commits); 
 - Done when: `Build` 0 errors; dispatcher runs `McpToolsetControlTests` and `NoActiveToolsStartupTests`: all pass.
 
 ### Step A5 - McpServerStatus reads the snapshot
+- Done: f4c3e4e4 (claude-lean budget 48400 -> 48500)
 - Files: `RoslynSentinel.Tools.Basic/ServerStatusTools.cs`, `RoslynSentinel.Tests.Server/ClaudeLeanSchemaBudgetTests.cs`
 - Depends on: A4
 - Effect: behaviour-changing (wire). `activeForThisMode` now means "in the live collection" when a controller is
@@ -218,6 +219,7 @@ Slice map (review 2026-11-23): A1 || B1; A2 || B2; A3 || A4 (after B2 commits); 
   `ClaudeLeanSchemaBudgetTests`: all pass.
 
 ### Step A6 - Status tests
+- Done: 07e8d5ca
 - Files: `RoslynSentinel.Tests.Tools.Basic/McpServerStatusToolListingTests.cs`
 - Depends on: A5
 - Effect: text-neutral
@@ -232,6 +234,7 @@ Slice map (review 2026-11-23): A1 || B1; A2 || B2; A3 || A4 (after B2 commits); 
 - Done when: dispatcher runs `McpServerStatusToolListingTests`: all pass.
 
 ### Step A7 - LIVE check
+- Done: 2026-11-24 on servedSha 2a5681b9: A ok (v1, startup), B ok (v2, toolCollectionChanged, GitRemote exposedBy toolset:git), C ok (v3, GitRemote inactive with the toolset hint)
 - Files: none
 - Depends on: A4, A5 committed; restart
 - Effect: none
@@ -288,6 +291,7 @@ Slice map (review 2026-11-23): A1 || B1; A2 || B2; A3 || A4 (after B2 commits); 
   `SchemaHiddenParametersTests`, `SchemaLeanProfileTests`, `SchemaDataTagOptionTests`, `ClaudeLeanSchemaBudgetTests`: all pass.
 
 ### Step B3 - Snapshot records the pipeline
+- Done: 61be309e
 - Files: `RoslynSentinel.Common/ToolSurface/ToolSurfaceController.cs`
 - Depends on: A2, B2
 - Effect: text-neutral until A5 is live (then `schemaPatches` shows the real list)
@@ -297,6 +301,7 @@ Slice map (review 2026-11-23): A1 || B1; A2 || B2; A3 || A4 (after B2 commits); 
 - Done when: `Build` 0 errors.
 
 ### Step B4 - Pipeline tests
+- Done: c9602226
 - Files: `RoslynSentinel.Tests.Server/ToolSchemaPatchPipelineTests.cs` (new)
 - Depends on: B2, B3
 - Pairs with: A5
@@ -310,6 +315,7 @@ Slice map (review 2026-11-23): A1 || B1; A2 || B2; A3 || A4 (after B2 commits); 
 - Done when: dispatcher runs `ToolSchemaPatchPipelineTests`: all pass.
 
 ### Step B5 - Docs
+- Done: this commit
 - Files: `docs/current/references/reference_architecture_map.md`, `docs/current/references/reference_model_eval_procedure.md`
 - Depends on: A5, B2
 - Effect: none (docs)
@@ -321,6 +327,7 @@ Slice map (review 2026-11-23): A1 || B1; A2 || B2; A3 || A4 (after B2 commits); 
 - Done when: both docs updated; links resolve.
 
 ### Step B6 - No stubs left
+- Done: stub sweep 0 matches 2026-11-24; full run pending
 - Files: none (check only)
 - Depends on: all above
 - Effect: none

@@ -42,6 +42,9 @@ hold engines and the workspace manager directly (e.g. `WholeFileWriteTools`).
 6. `SmokeResolveToolTypes`, `WarmupAndAutoLoad*` (MSBuildLocator warm-up, optional solution load).
 7. `ConsoleMode.WriteStartupDump` writes `tool_list_<mode>.json` and `tool_list_simple_<mode>.json`
    into `ServerInstancePaths.Current.WorkingDir`.
+8. `host.RunAsync()` starts the hosted services; `Server.Advanced/ToolSurfaceStartup.cs` takes the first
+   tool-surface snapshot (`ToolSurfaceController.Refresh("startup")`), after `ApplyStartupToolsets`
+   (`--toolsets`). Test hosts share this step, not steps 1-7.
 
 Other startup args (own parsers in `ServerStartupHelpers`, not `ParseArgs`): `--transport=stdio|http`,
 `--port=N` (0 = OS-assigned; the HTTP host prints `listening: http://127.0.0.1:<port>/mcp`, not first on
@@ -59,7 +62,8 @@ selects the `StopServer` text), `--log-dir`, and `--working-dir=<path>` (`Common
 3. A DI block in `Server.Advanced/ServiceRegistrationExtensionsBasic.cs` (`AddRoslynSentinelToolsBasic`)
    or `Server.Advanced/ServiceRegistrationExtensionsAdvanced.cs` (`AddRoslynSentinelToolsAdvanced`):
    `if (activeToolClasses.Contains("X")) { AddSingleton<XImpl>(); AddSingleton<X>(); mcpBuilder.WithSentinelTools<X>(); }`.
-   `WithSentinelTools` is `Common/McpToolSchemaPatcher.cs` (patches emitted schemas).
+   `WithSentinelTools` is `Common/McpToolSchemaPatcher.cs` (`CreateSentinelTool` runs the schema-patch
+   pipeline, see "Tool surface" below).
 
 A missing step yields a dead tool with no startup error. `ServerStatusTools` is the exception: always
 registered, outside the registry, so `McpServerStatus` works in any mode.
@@ -72,6 +76,24 @@ outside the allow-list are switched on at runtime by `McpToolsetControl`: `Commo
 To make a tool reachable in claude-lean it must be in `ClaudeLeanToolNames` or a `ToolsBySet` entry.
 
 Ground truth for "does this tool exist / is it gated": `McpServerStatus(toolListing: inactive)`.
+
+### Tool surface (`Common/ToolSurface/`)
+
+- `ToolSurfaceController` (DI singleton) builds an immutable, versioned `ToolSurfaceSnapshot` from the live
+  `McpServerOptions.ToolCollection`: per tool its class, origin (`Startup` or `RuntimeToolset` plus the set),
+  listed and hidden parameters, a schema fingerprint, the enabled toolsets and the ordered patch names. It
+  refreshes at startup (hosted service, above), on every `ToolCollection.Changed`, and lazily on first read.
+  The version moves only when the fingerprint or the enabled sets change.
+- `McpServerStatus` reads it (`toolSurface.surfaceVersion/surfaceTrigger/schemaPatches`, per-tool `exposedBy`):
+  a tool counts as active only if it is in the live collection, so an allowed tool with a missing DI block
+  is reported as not registered. Before the first snapshot it falls back to the declared-tool rule.
+- Schema patches are `IToolSchemaPatch` implementations (`Name`, `Order`, `Apply`), resolved from DI as an
+  ordered collection (Order, then Name). The defaults (`DefaultToolSchemaPatches.All`: ConsumesTags 100,
+  BatchItemFields 200, ReplaceSnippetLimits 300, HiddenParameters 400) are registered as instances in
+  `AddRoslynSentinelToolsBasic`; with none registered, or no service provider (`ToolSignatureCatalogReflection`),
+  `CreateSentinelTool` applies the defaults, so "no patches" is not expressible.
+- Not yet on the snapshot: `ActiveToolSurface.IsCallable` (still startup configuration) and the validator,
+  hidden-parameter and hint caches; later phases of `plans/plan_tool_surface_controller.md` move them.
 
 ### Request pipeline (`WithRequestFilters` in `AddRoslynSentinelToolsBasic`)
 
@@ -231,7 +253,8 @@ call `RecordObserved` explicitly, because the reader is solution-granular and ca
 | See project-to-project references | `docs/generated/architecture_projects.md` (generated; do not edit) |
 | Add a startup option | Static options class in `Common` + `Configure(args)` at every `ServerStdio`/`ServerHttp` entry point |
 | Understand a tool's result/error shape | `Common/SentinelCallToolResult.cs`, `ToolErrorCode`; size and `largeResult`: [reference_tool_response_pipeline.md](reference_tool_response_pipeline.md) |
-| See what the server exposes right now | `McpServerStatus(toolListing: all)` or the `tool_list_<mode>.json` in the server bin folder |
+| See what the server exposes right now | `McpServerStatus(toolListing: all)` (live snapshot, includes runtime toolsets) or the `tool_list_<mode>.json` in the server bin folder (startup only) |
+| Change how a schema is patched | An `IToolSchemaPatch` (`Common/ToolSurface/`): register it in DI, or replace the defaults with `RemoveAll<IToolSchemaPatch>()` plus your list |
 
 ## Gotchas
 
