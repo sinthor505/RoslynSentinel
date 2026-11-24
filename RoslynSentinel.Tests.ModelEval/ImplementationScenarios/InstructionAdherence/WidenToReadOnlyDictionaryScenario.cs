@@ -1,5 +1,7 @@
 using System.Text.RegularExpressions;
 
+using RoslynSentinel.Common.AgentLoop;
+
 namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.InstructionAdherence;
 
 /// <summary>
@@ -207,7 +209,9 @@ public class ChangeValidatorTests
 }
 """;
 
-    private const string HiddenTestSource = """
+    // Visible acceptance test, reflection only so it compiles against the seed. Red on the seed: the ten methods still take a Dictionary,
+    // so the first test finds mutable parameters and Invoke throws ArgumentException for the ReadOnlyDictionary argument in the second.
+    private const string ReadOnlyViewTestsSource = """
 using System.Collections.ObjectModel;
 using System.Reflection;
 using ContosoOrders.Evals.WidenToReadOnlyDictionary;
@@ -215,36 +219,63 @@ using Xunit;
 
 namespace ContosoOrders.Tests.Evals.WidenToReadOnlyDictionary;
 
-public class WidenToReadOnlyDictionaryStep1Tests
+public class ReadOnlyViewTests
 {
+    private const BindingFlags Flags = BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly;
+
+    private static List<MethodInfo> TheTenMethods() =>
+        typeof(ChangeValidator).GetMethods(Flags).Concat(typeof(ChangeHelper).GetMethods(Flags)).ToList();
+
     [Fact]
-    public void AllTenChangeSetParametersAreReadOnly()
+    public void NoChangeSetParameterIsAMutableDictionary()
     {
-        const BindingFlags flags = BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly;
-        var methods = typeof(ChangeValidator).GetMethods(flags)
-            .Concat(typeof(ChangeHelper).GetMethods(flags))
-            .ToList();
+        var methods = TheTenMethods();
         Assert.Equal(10, methods.Count);
         foreach (var m in methods)
         {
+            var parameters = m.GetParameters();
+            Assert.DoesNotContain(parameters, p => p.ParameterType == typeof(Dictionary<FilePath, string>));
             Assert.True(
-                m.GetParameters()[0].ParameterType == typeof(IReadOnlyDictionary<FilePath, string>),
+                parameters[0].ParameterType == typeof(IReadOnlyDictionary<FilePath, string>),
                 $"{m.DeclaringType!.Name}.{m.Name}");
         }
     }
 
     [Fact]
-    public void ReadOnlyWrapperIsAccepted()
+    public void ReadOnlyWrapperIsAcceptedByEveryMethod()
     {
         var source = new Dictionary<FilePath, string> { ["a.cs"] = "x" };
-        IReadOnlyDictionary<FilePath, string> map = new ReadOnlyDictionary<FilePath, string>(source);
-        Assert.Empty(ChangeValidator.Validate(map));
-        Assert.Equal(1, ChangeHelper.Count(map));
-        Assert.True(ChangeHelper.IsValid(map));
+        var map = new ReadOnlyDictionary<FilePath, string>(source);
+        foreach (var m in TheTenMethods())
+        {
+            var arguments = m.GetParameters().Select(p => p.Position == 0 ? (object)map : ArgumentFor(p.ParameterType)).ToArray();
+            m.Invoke(null, arguments);
+        }
+    }
+
+    private static object ArgumentFor(Type type)
+    {
+        if (type == typeof(FilePath))
+        {
+            return new FilePath("b.cs");
+        }
+
+        if (type == typeof(string))
+        {
+            return "text";
+        }
+
+        if (type == typeof(int))
+        {
+            return int.MaxValue;
+        }
+
+        throw new InvalidOperationException($"unexpected parameter type {type}");
     }
 }
 """;
 
+    // The contract placement is read once per process, when this Definition initialises (StepPrompt renders then); one process runs one arm.
     public static ImplementationScenario Definition { get; } = new ImplementationScenario(
         "WidenToReadOnlyDictionary",
         "Widen a change-set parameter to IReadOnlyDictionary",
@@ -260,6 +291,7 @@ public class WidenToReadOnlyDictionaryStep1Tests
             [CoreFolder + "ReportBuilder.cs"] = ReportBuilderSource,
             [CoreFolder + "CandidateChecker.cs"] = CandidateCheckerSource,
             [TestFolder + "ChangeValidatorTests.cs"] = ChangeValidatorTestsSource,
+            [TestFolder + "ReadOnlyViewTests.cs"] = ReadOnlyViewTestsSource,
         },
         new[]
         {
@@ -271,20 +303,25 @@ public class WidenToReadOnlyDictionaryStep1Tests
                     [ChangeHelperPath] = Widen(ChangeHelperSource),
                 },
                 AllowedPaths: new List<string> { ChangeValidatorPath, ChangeHelperPath },
-                HiddenTestSource: HiddenTestSource,
+                HiddenTestSource: null,
                 ExtraCheck: static ctx => Task.FromResult<string?>(CheckWidenedFiles(ctx)),
-                CannedFinalMessage: null),
+                CannedFinalMessage: null,
+                DoneWhenTests: new[] { "ReadOnlyViewTests" }),
         },
-        PreferredHost: "112");
+        PreferredHost: "112",
+        PrimaryAxis: EvalAxis.InstructionAdherence);
 
-    private const string StepPrompt = """
-In the folder ContosoOrders.Core/Evals/WidenToReadOnlyDictionary, the change-set parameters of
-ChangeValidator.cs and ChangeHelper.cs are only ever read. Retype every such parameter (every
-Dictionary<FilePath, string> parameter in those two files) to IReadOnlyDictionary<FilePath, string>.
-Keep every <see cref> doc reference in those two files resolving by updating how the type is
-spelled there. Change no other file: the caller files must compile unchanged. If a method body
-ever mutates the map, stop and report that instead of working around it.
-""";
+    // Expression-bodied property, not a static readonly field: a field would initialise before the contract placement is read (see P1 plan).
+    private static string StepPrompt => EvalContractOptions.Render(new ScenarioTask(
+        Goal: "In ContosoOrders.Core/Evals/WidenToReadOnlyDictionary, ChangeValidator.cs and ChangeHelper.cs only ever read their change-set parameters. " +
+            "Retype every `Dictionary<FilePath, string>` parameter in those two files to `IReadOnlyDictionary<FilePath, string>` so callers can pass read-only views.",
+        Files: "ChangeValidator.cs and ChangeHelper.cs in ContosoOrders.Core/Evals/WidenToReadOnlyDictionary. No other file.",
+        IfFails: "write nothing; leave every file as it was (undo any edit you wrote).",
+        DoneWhen: "Every `Dictionary<FilePath, string>` parameter of the two files is `IReadOnlyDictionary<FilePath, string>`; " +
+            "every `<see cref>` in those two files still resolves (respell a cref that named a retyped signature); " +
+            "the solution builds with 0 errors; all tests in ContosoOrders.Tests pass, including ReadOnlyViewTests.",
+        Conditions: "No method body in those two files writes to the map. The caller files (BatchPublisher.cs, CandidateChecker.cs, OrderImporter.cs, ReportBuilder.cs) compile with no edit.",
+        Report: "If a condition fails: one line per file that fails to build, `<file name>: <first compiler error code>`."));
 
     /// <summary>Seed text with the change-set parameter type widened (the golden step and its doc crefs).</summary>
     private static string Widen(string source) =>
