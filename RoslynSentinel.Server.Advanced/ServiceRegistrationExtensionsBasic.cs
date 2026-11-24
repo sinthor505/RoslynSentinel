@@ -330,6 +330,13 @@ public static class RoslynSentinelServiceExtensionsBasic
 
     private static void RegisterRoslynSentinelToolsBasic(IServiceCollection services, IMcpServerBuilder mcpBuilder, HashSet<string> activeModes, HashSet<string>? includeTools = null, HashSet<string>? excludeTools = null, IReadOnlySet<string>? hideTools = null)
     {
+        // The input is static, so every host and test host fails the same way, instead of a silently dead tool.
+        var tableProblems = ToolClassRegistry.DescribeToolClassTableProblems(ToolClassRegistry.ModeToToolClasses, ToolClassRegistry.BasicToolClassTypes, ToolClassRegistry.AdvancedToolClassTypes);
+        if (tableProblems.Count > 0)
+        {
+            throw new InvalidOperationException("ToolClassRegistry tables are inconsistent: " + string.Join(" ", tableProblems));
+        }
+
         var resolvedIncludeTools = includeTools ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var resolvedExcludeTools = excludeTools ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var activeToolClasses = ServerStartupHelpers.ResolveActiveToolClasses(

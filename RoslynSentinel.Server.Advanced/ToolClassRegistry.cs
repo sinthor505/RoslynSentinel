@@ -1,3 +1,5 @@
+using System.Reflection;
+using ModelContextProtocol.Server;
 using RoslynSentinel.Tools.Advanced;
 using RoslynSentinel.Tools.Basic;
 using RoslynSentinel.Tools.Experimental;
@@ -135,10 +137,101 @@ public static class ToolClassRegistry
     }
 
     /// <summary>
-    /// Reports problems in the mode table and the tool-class type tables (Step 14 of the stage F plan). Not implemented yet.
+    /// Reports problems in the mode table and the tool-class type tables, one line per problem, each naming the
+    /// class and the fix. Empty when the tables agree. It does not detect a class in the wrong table (an Advanced
+    /// class in BasicToolClassTypes would register in Basic hosts); the parity goldens catch that for the covered cases.
     /// </summary>
     public static IReadOnlyList<string> DescribeToolClassTableProblems(IReadOnlyDictionary<string, string[]> modeToToolClasses, IReadOnlyList<Type> basicTypes, IReadOnlyList<Type> advancedTypes)
-        => throw new NotImplementedException();
+    {
+        var problems = new List<string>();
+
+        var registryNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var classes in modeToToolClasses.Values)
+        {
+            foreach (var className in classes)
+            {
+                registryNames.Add(className);
+            }
+        }
+
+        var allTypes = new List<Type>(basicTypes);
+        allTypes.AddRange(advancedTypes);
+
+        var tableNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var type in allTypes)
+        {
+            tableNames.Add(type.Name);
+        }
+
+        var registryNameList = new List<string>(registryNames);
+        registryNameList.Sort(StringComparer.Ordinal);
+        foreach (var className in registryNameList)
+        {
+            if (!tableNames.Contains(className))
+            {
+                problems.Add($"Tool class '{className}' is in ModeToToolClasses but has no row: add typeof({className}) to BasicToolClassTypes or AdvancedToolClassTypes in ToolClassRegistry.cs.");
+            }
+        }
+
+        var rowCounts = new Dictionary<Type, int>();
+        foreach (var type in allTypes)
+        {
+            rowCounts[type] = rowCounts.TryGetValue(type, out var count) ? count + 1 : 1;
+        }
+
+        var duplicateTypes = new List<Type>();
+        foreach (var pair in rowCounts)
+        {
+            if (pair.Value > 1)
+            {
+                duplicateTypes.Add(pair.Key);
+            }
+        }
+
+        duplicateTypes.Sort((left, right) => string.CompareOrdinal(left.Name, right.Name));
+        foreach (var type in duplicateTypes)
+        {
+            problems.Add($"Tool class '{type.Name}' has {rowCounts[type]} rows across BasicToolClassTypes and AdvancedToolClassTypes: keep exactly one.");
+        }
+
+        var distinctTypes = new List<Type>();
+        var seenTypes = new HashSet<Type>();
+        foreach (var type in allTypes)
+        {
+            if (seenTypes.Add(type))
+            {
+                distinctTypes.Add(type);
+            }
+        }
+
+        foreach (var type in distinctTypes)
+        {
+            if (!registryNames.Contains(type.Name) && !AlwaysOnToolClasses.Contains(type.Name))
+            {
+                problems.Add($"Table type '{type.Name}' is not a ModeToToolClasses class and not always-on: add it to a mode in ModeToToolClasses or remove its row.");
+            }
+        }
+
+        foreach (var type in distinctTypes)
+        {
+            var hasToolMethod = false;
+            foreach (var method in type.GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
+            {
+                if (method.GetCustomAttribute<McpServerToolAttribute>() is not null)
+                {
+                    hasToolMethod = true;
+                    break;
+                }
+            }
+
+            if (!hasToolMethod)
+            {
+                problems.Add($"Table type '{type.Name}' declares no [McpServerTool] method: remove its row or add the tool method.");
+            }
+        }
+
+        return problems;
+    }
 
     /// <summary>
     /// The one mode-name -> tool-class-name map, registered by <c>AddRoslynSentinelToolsAdvanced</c>
@@ -146,8 +239,8 @@ public static class ToolClassRegistry
     /// the former separate Basic and Advanced maps: the Basic-only sub-modes (WorkspaceReadNav, ...)
     /// are kept, "Workspace" includes SymbolRelationshipTools, and "Refactor"
     /// includes the Advanced-only AdvancedRefactoringTools. A class name whose tool class a given
-    /// registration method does not register is inert there (each registration block is guarded by
-    /// <c>activeToolClasses.Contains(...)</c>).
+    /// registration method does not register is inert there because the registration method selects only the types of its own
+    /// table (BasicToolClassTypes / AdvancedToolClassTypes) that are in the active set.
     /// </summary>
     public static readonly IReadOnlyDictionary<string, string[]> ModeToToolClasses =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
