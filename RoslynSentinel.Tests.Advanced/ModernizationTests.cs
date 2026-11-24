@@ -4,6 +4,7 @@ using RoslynSentinel.Common;
 using Microsoft.Extensions.Logging.Abstractions;
 using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Tests.Support;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
@@ -109,7 +110,7 @@ public class ModernizationTests
         var ex = await Assert.ThrowsAsync<ToolNotFoundException>(
             async () => await _modernEngine.RecordToClassAsync("Test.cs", "Point", contextSnippet: "public class Other"));
 
-        Assert.That(ex!.Message, Does.Contain("not inside any record named 'Point'"));
+        ErrorAssert.Is(ex, ToolErrorCode.NotFound, "record named 'Point'");
     }
 
     [Test]
@@ -182,8 +183,7 @@ public class ModernizationTests
         // A multi-statement body is ineligible for expression-body conversion: typed TargetIneligible, not a no-op.
         var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
             await _modernEngine.ConvertMethodToExpressionBodyAsync("C.cs", "GetFullName"));
-        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
-        Assert.That(ex.Message, Does.Contain("cannot be converted to an expression body"));
+        ErrorAssert.Is(ex, ToolErrorCode.TargetIneligible, "expression body");
     }
 
     [Test]

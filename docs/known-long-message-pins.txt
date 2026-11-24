@@ -17,7 +17,6 @@ BatteryFourTests.cs | 1
 BatteryNineteenTests.cs | 1
 BatteryTwentyTests.cs | 2
 BatteryTwentyThreeTests.cs | 1
-BatteryTwentyTwoTests.cs | 7
 CallBindingCheckTests.cs | 1
 CallableToolHintTests.cs | 4
 ChangeSignatureConstructorWrapperTests.cs | 4
@@ -60,7 +59,6 @@ MemberRemoveTests.cs | 2
 MemberReplaceMultiDeclarationTests.cs | 2
 MemberSingleDeclarationTests.cs | 3
 MemberSplitDeclarationsTests.cs | 1
-ModernizationTests.cs | 2
 ModifyAttributeBatchTests.cs | 2
 MoveMemberCallBindingTests.cs | 2
 MoveMemberCompanionRefusalTests.cs | 2
@@ -79,7 +77,6 @@ ReplaceSnippetErrorCodeTests.cs | 3
 ReplaceSnippetRenameLiftTests.cs | 1
 SearchModeTests.cs | 1
 SearchSolutionTextIncludeTestsTests.cs | 5
-SemanticRefactoringMissAdvancedTests.cs | 3
 SemanticReplaceEngineTests.cs | 2
 SequenceLargeResultPagingTests.cs | 3
 SnippetLookupTests.cs | 1

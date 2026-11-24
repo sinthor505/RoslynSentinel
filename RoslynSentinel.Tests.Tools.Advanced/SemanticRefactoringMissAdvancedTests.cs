@@ -1,5 +1,6 @@
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tests.Fakes;
+using RoslynSentinel.Tests.Support;
 
 namespace RoslynSentinel.Tests.Tools.Advanced;
 
@@ -89,7 +90,8 @@ public sealed class SemanticRefactoringMissAdvancedTests
     public async Task ConvertPropertyToMethods_MisspeltClass_OffersTheNearClassAsync()
     {
         var ex = await ConvertMissAsync("OrderPricingCalculatr", "UnitPrice");
-        Assert.That(ex.Message, Does.Contain("Did you mean 'OrderPricingCalculator'? Retry with className: 'OrderPricingCalculator'."));
+        ErrorAssert.Is(ex, ToolErrorCode.NotFound, "'OrderPricingCalculator'");
+        Assert.That(ex.Message, Does.Contain("Retry with className:"));
         AssertFactsAndOptionsOnly(ex.Message);
     }
 
@@ -109,8 +111,9 @@ public sealed class SemanticRefactoringMissAdvancedTests
     public async Task ConvertPropertyToMethods_MisspeltProperty_OffersTheNearPropertyAndStatesTheSearchedClassAsync()
     {
         var ex = await ConvertMissAsync("OrderPricingCalculator", "UnitPrce");
-        Assert.That(ex.Message, Does.Contain("Did you mean 'UnitPrice'? Retry with propertyName: 'UnitPrice'."));
-        Assert.That(ex.Message, Does.Contain("Only the properties declared directly in class 'OrderPricingCalculator' were searched."));
+        ErrorAssert.Is(ex, ToolErrorCode.NotFound, "'UnitPrice'");
+        Assert.That(ex.Message, Does.Contain("Retry with propertyName:"));
+        Assert.That(ex.Message, Does.Contain("class 'OrderPricingCalculator'"));
         AssertFactsAndOptionsOnly(ex.Message);
     }
 

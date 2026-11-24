@@ -749,7 +749,8 @@ public class Model {
         // Facts and options of ProjectNotFoundDetail (Step 5e): the miss, the loaded count, the no-similar-name fact and the project list.
         Assert.That(result.ErrorData!.Message, Does.StartWith("GetPublicApiSurface failed: Project 'NoSuchProject' was not found among the "));
         Assert.That(result.ErrorData!.Message, Does.Contain("loaded project(s)"));
-        Assert.That(result.ErrorData!.Message, Does.Contain("No loaded project has a similar name to 'NoSuchProject'."));
+        ErrorAssert.Is(result.ErrorData, ToolErrorCode.NotFound, "NoSuchProject");
+        Assert.That(result.ErrorData!.Message, Does.Contain("has a similar name"));
         Assert.That(result.ErrorData!.Message, Does.Contain("Loaded projects:"));
     }
 
@@ -945,7 +946,7 @@ public class AttributedTarget { }
             var hiddenSites = (hidden.SuccessData as System.Collections.IEnumerable)?.Cast<AttributeUsageSite>().ToList();
             Assert.That(hiddenSites, Is.Not.Null.And.Count.EqualTo(1));
             Assert.That(hiddenSites![0].ProjectName, Is.EqualTo("AppProj"));
-            Assert.That(hidden.StatusMessage, Does.Contain("hidden because includeTests is false").And.Contain("includeTests: true"));
+            Assert.That(hidden.StatusMessage, Does.Contain("hidden because includeTests").And.Contain("includeTests: true"));
 
             var all = await impl.QuerySymbolRelationships(reason: "test message", "Probe", FindUsagesSearchKind.attributeUsages, includeTests: true);
             Assert.That(all.IsError, Is.False, all.ErrorData?.Message);
@@ -973,7 +974,7 @@ public class AttributedTarget { }
             var hiddenHits = (hidden.SuccessData as System.Collections.IEnumerable)?.Cast<SearchResult>().ToList();
             Assert.That(hiddenHits, Is.Not.Null.And.Count.EqualTo(1));
             Assert.That(hiddenHits![0].FilePath, Does.Contain("AppProj"));
-            Assert.That(hidden.StatusMessage, Does.Contain("hidden because includeTests is false").And.Contain("TestsProj"));
+            Assert.That(hidden.StatusMessage, Does.Contain("hidden because includeTests").And.Contain("TestsProj"));
 
             var all = await impl.QuerySymbolRelationships(reason: "test message", "Probe", FindUsagesSearchKind.typesWithAttribute, includeTests: true);
             Assert.That(all.IsError, Is.False, all.ErrorData?.Message);
@@ -1025,7 +1026,7 @@ public class AttributedTarget { }
             var hidden = await impl.QuerySymbolRelationships(reason: "test message", "Probe", FindUsagesSearchKind.attributeUsages, includeTests: false, hasAttribute: "Marker");
             Assert.That(hidden.IsError, Is.False, hidden.ErrorData?.Message);
             Assert.That(hidden.TotalRecords, Is.EqualTo(0));
-            Assert.That(hidden.StatusMessage, Does.Contain("hidden because includeTests is false").And.Contain("TestsProj"));
+            Assert.That(hidden.StatusMessage, Does.Contain("hidden because includeTests").And.Contain("TestsProj"));
 
             var all = await impl.QuerySymbolRelationships(reason: "test message", "Probe", FindUsagesSearchKind.attributeUsages, includeTests: true, hasAttribute: "Marker");
             Assert.That(all.IsError, Is.False, all.ErrorData?.Message);
@@ -1084,7 +1085,7 @@ public class AttributedTarget { }
             Assert.That(hidden.IsError, Is.False, hidden.ErrorData?.Message);
             var hiddenList = (hidden.SuccessData as System.Collections.IEnumerable)?.Cast<object>().ToList();
             Assert.That(hiddenList, Is.Not.Null.And.Count.EqualTo(1));
-            Assert.That(hidden.StatusMessage, Does.Contain("hidden because includeTests is false").And.Contain("TestsProj"));
+            Assert.That(hidden.StatusMessage, Does.Contain("hidden because includeTests").And.Contain("TestsProj"));
 
             var all = await impl.QuerySymbolRelationships(reason: "test message", "IThing", FindUsagesSearchKind.implementorsOf, includeTests: true);
             Assert.That(all.IsError, Is.False, all.ErrorData?.Message);
@@ -1110,7 +1111,7 @@ public class AttributedTarget { }
             Assert.That(hidden.IsError, Is.False, hidden.ErrorData?.Message);
             var hiddenSites = (hidden.SuccessData as System.Collections.IEnumerable)?.Cast<object>().ToList();
             Assert.That(hiddenSites, Is.Not.Null.And.Count.EqualTo(1));
-            Assert.That(hidden.StatusMessage, Does.Contain("hidden because includeTests is false").And.Contain("TestsProj"));
+            Assert.That(hidden.StatusMessage, Does.Contain("hidden because includeTests").And.Contain("TestsProj"));
 
             var all = await impl.QuerySymbolRelationships(reason: "test message", "Widget", FindUsagesSearchKind.objectCreations, includeTests: true);
             Assert.That(all.IsError, Is.False, all.ErrorData?.Message);
@@ -1161,7 +1162,7 @@ public class AttributedTarget { }
             Assert.That(hidden.IsError, Is.False, hidden.ErrorData?.Message);
             var hiddenList = (hidden.SuccessData as System.Collections.IEnumerable)?.Cast<object>().ToList();
             Assert.That(hiddenList, Is.Not.Null.And.Count.EqualTo(1));
-            Assert.That(hidden.StatusMessage, Does.Contain("hidden because includeTests is false").And.Contain("TestsProj"));
+            Assert.That(hidden.StatusMessage, Does.Contain("hidden because includeTests").And.Contain("TestsProj"));
 
             var all = await impl.QuerySymbolRelationships(reason: "test message", "Widget", FindUsagesSearchKind.methodsByReturnType, includeTests: true);
             Assert.That(all.IsError, Is.False, all.ErrorData?.Message);
