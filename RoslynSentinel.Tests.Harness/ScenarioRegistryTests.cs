@@ -38,4 +38,29 @@ public class ScenarioRegistryTests
 
         Assert.That(ids.Select(id => id.ToUpperInvariant()).Distinct().Count(), Is.EqualTo(ids.Count));
     }
+
+    [TestCase(StopAdherenceScenarios.StopAdherenceMissingFileId)]
+    [TestCase(StopAdherenceScenarios.StopAdherenceMissingMethodId)]
+    [TestCase(StopAdherenceScenarios.StopAdherenceMissingFileToolErrorId)]
+    [TestCase(StopAdherenceScenarios.StopAdherenceMissingMethodToolErrorId)]
+    [TestCase(StopAdherenceScenarios.StopAdherenceControlId)]
+    public void Registry_EveryStopScenarioDeclaresAnAxis(string id)
+    {
+        var scenario = ScenarioRegistry.Find(id);
+
+        Assert.That(scenario, Is.Not.Null);
+        Assert.That(scenario!.PrimaryAxis, Is.Not.EqualTo(EvalAxis.Unassigned), $"{id} does not declare a PrimaryAxis.");
+    }
+
+    // Stop-family half of the Decision 6 assignment (the implementation scenarios are pinned in ImplementationScenarioGoldenTests).
+    // A re-axis is a deliberate edit of this test.
+    [TestCase(StopAdherenceScenarios.StopAdherenceMissingFileId, EvalAxis.InstructionAdherence)]
+    [TestCase(StopAdherenceScenarios.StopAdherenceMissingMethodId, EvalAxis.InstructionAdherence)]
+    [TestCase(StopAdherenceScenarios.StopAdherenceControlId, EvalAxis.InstructionAdherence)]
+    [TestCase(StopAdherenceScenarios.StopAdherenceMissingFileToolErrorId, EvalAxis.ErrorRecovery)]
+    [TestCase(StopAdherenceScenarios.StopAdherenceMissingMethodToolErrorId, EvalAxis.ErrorRecovery)]
+    public void Registry_StopFamilyAxisAssignment_MatchesThePlan(string id, EvalAxis expectedAxis)
+    {
+        Assert.That(ScenarioRegistry.Find(id)!.PrimaryAxis, Is.EqualTo(expectedAxis), $"{id} is expected on axis {expectedAxis}.");
+    }
 }

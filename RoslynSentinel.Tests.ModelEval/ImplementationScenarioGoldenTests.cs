@@ -259,6 +259,84 @@ public class ImplementationScenarioGoldenTests
         }
     }
 
+    // Model-free (the class is [Explicit] only so the heavy per-step cases do not run by default; run these by name).
+    // StepCases is private in the LiveModel agent test class, so it is read by reflection: that asserts the Axis:<Name>
+    // category on the real case source instead of re-deriving it from the property.
+    [Test]
+    public void Registry_EveryScenarioDeclaresAnAxis()
+    {
+        foreach (var scenario in ImplementationScenarioRegistry.All)
+        {
+            Assert.That(scenario.PrimaryAxis, Is.Not.EqualTo(EvalAxis.Unassigned), $"{scenario.Id} does not declare a PrimaryAxis.");
+        }
+
+        var stepCases = typeof(RoslynSentinel.Tests.ModelEval.LiveModel.ImplementationScenarioAgentTests)
+            .GetMethod("StepCases", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        Assert.That(stepCases, Is.Not.Null, "ImplementationScenarioAgentTests.StepCases not found (renamed?); update this test.");
+
+        var cases = ((IEnumerable<TestCaseData>)stepCases!.Invoke(null, null)!).ToList();
+        foreach (var scenario in ImplementationScenarioRegistry.All.Where(scenario => scenario.ParkedReason is null))
+        {
+            var expectedCategory = EvalAxisCategory.Name(scenario.PrimaryAxis);
+            for (var step = 1; step <= scenario.Steps.Count; step++)
+            {
+                var stepCase = cases.SingleOrDefault(testCase => (string)testCase.Arguments[0]! == scenario.Id && (int)testCase.Arguments[1]! == step);
+                Assert.That(stepCase, Is.Not.Null, $"StepCases has no case for {scenario.Id} step {step}.");
+
+                var categories = stepCase!.Properties["Category"].Cast<object>().Select(category => category.ToString()).ToList();
+                Assert.That(categories, Does.Contain(expectedCategory), $"{scenario.Id} step {step} is missing category {expectedCategory}.");
+            }
+        }
+    }
+
+    // Pins Decision 6 of the scenario-rework plan (the stop family half lives in ScenarioRegistryTests). A re-axis is a deliberate edit of this test.
+    [Test]
+    public void Registry_AxisAssignment_MatchesThePlan()
+    {
+        var expected = new Dictionary<EvalAxis, string[]>
+        {
+            [EvalAxis.AmbiguityResolution] = ["PlanStalenessReview", "BreakCycleWithForwarders", "ShareHelperDifferingRules"],
+            [EvalAxis.ErrorRecovery] = ["SweepConstructionSites"],
+            [EvalAxis.MultiStepState] = ["ThreadOptionalParameter"],
+            [EvalAxis.ToolUse] = ["LargeBlockRewrite"],
+            [EvalAxis.InstructionAdherence] =
+            [
+                "WidenToReadOnlyDictionary", "WideningRejectedByGate", "ChangeSetTypeFromSpec", "RetypeSliceExactLines",
+                "PropertyFirstRetype", "RemovePinnedSentence", "NotFoundToTypedThrow", "ObsoleteNamespaceCopy", "MigrateOntoEnvironmentHelper",
+            ],
+        };
+
+        var expectedIds = expected.Values.SelectMany(ids => ids).ToList();
+        Assert.That(ImplementationScenarioRegistry.All.Select(scenario => scenario.Id), Is.EquivalentTo(expectedIds),
+            "The registry and the pinned assignment disagree on the scenario ids; add the new scenario to this test with its axis.");
+
+        foreach (var (axis, ids) in expected)
+        {
+            foreach (var id in ids)
+            {
+                Assert.That(ImplementationScenarioRegistry.Find(id).PrimaryAxis, Is.EqualTo(axis), $"{id} is expected on axis {axis}.");
+            }
+        }
+    }
+
+    // The folder under ImplementationScenarios is the axis, so a scenario's namespace must end with its PrimaryAxis name.
+    [Test]
+    public void Registry_ScenarioFolderMatchesAxis()
+    {
+        foreach (var scenario in ImplementationScenarioRegistry.All)
+        {
+            var type = ImplementationScenarioRegistry.FindScenarioClass(scenario.Id);
+            Assert.That(type, Is.Not.Null, $"no class <Id>Scenario found for id {scenario.Id}");
+            Assert.That(type!.Namespace, Does.EndWith("." + scenario.PrimaryAxis), $"{type.Name} lives in the wrong axis folder for {scenario.PrimaryAxis}.");
+        }
+
+        var strayInGraders = typeof(ImplementationScenarioRegistry).Assembly.GetTypes()
+            .Where(type => type.Name.EndsWith("Scenario", StringComparison.Ordinal) && type.Namespace is { } ns && ns.EndsWith(".Graders", StringComparison.Ordinal))
+            .Select(type => type.FullName)
+            .ToList();
+        Assert.That(strayInGraders, Is.Empty, "a *Scenario class lives in Graders; scenario definitions belong in their axis folder.");
+    }
+
     private static IEnumerable<TestCaseData> GoldenCases()
     {
         foreach (var scenario in ImplementationScenarioRegistry.All)
