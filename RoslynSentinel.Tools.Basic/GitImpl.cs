@@ -83,6 +83,8 @@ public static class GitErrorCodes
     public const string HunkStale = "GitHunkStale";
     /// <summary>git commit exited 1 and a blocking hook (pre-commit, prepare-commit-msg, commit-msg) exists, so the hook declined the commit; the hook's own output is in the error text. Not used when the index is empty and git printed its own nothing-to-commit status.</summary>
     public const string HookRejected = "GitHookRejected";
+    /// <summary>git commit failed because another process holds the repository's index.lock; the error text carries git's own message.</summary>
+    public const string IndexLocked = "GitIndexLocked";
 
     /// <summary>The missing-target kind (<see cref="MissingTargetKinds"/>) a not-found failure code names for the error-policy classifier, or null for every other code.</summary>
     public static string? MissingTargetKind(string? code) => code switch
@@ -129,6 +131,7 @@ internal static class GitErrorDetails
     internal const string Refused = "Take the safe alternative the message names, then retry. Nothing was changed.";
     internal static string HunkUnsupported => $"Stage the whole file with {ToolCallHint.Call("Git", ("operation", "stage"), ("paths", "<path>"))} instead, or use a file kind that has text hunks.";
     internal static string HunkSelection => $"Call {ToolCallHint.Call("Git", ("operation", "hunks"), ("paths", "<path>"))} and pass hunkIds or lineRange exactly as it lists them.";
+    internal static string IndexLocked(string lockPath) => $"Another git process holds {lockPath}. Wait for it to finish and retry the commit; if no git process is running, the lock is stale and deleting that file clears it.";
     internal const string HookRejected = "The text above ends with the hook's own output. Fix what the hook reports and commit again; the hooks live in .git/hooks, or in the directory named by core.hooksPath.";
     internal static string HunkStale => $"Re-run {ToolCallHint.Call("Git", ("operation", "hunks"), ("paths", "<path>"))} and pick again with the new hunkFingerprint. Nothing was staged.";
 }
@@ -3808,6 +3811,15 @@ public class GitImpl : IGitOperations
                 var pathsWereClassified = string.IsNullOrWhiteSpace(paths) || scope == GitStageScope.listed;
                 var nothingStaged = !amend && pathsWereClassified && await NothingStagedAsync(gitRoot, paths, cancellationToken);
 
+                // Index lock tested first: while another process holds index.lock, the staging step before this commit could not write the index,
+                // so NothingStagedAsync saw an empty index and would otherwise report NothingToCommit. Exit 128 is git's die() path for a held lock.
+                var commitGitDir = commitRaw.ExitCode == 128 ? await RunGitAsync(gitRoot, ["rev-parse", "--absolute-git-dir"], cancellationToken) : null;
+                var indexLockPath = commitGitDir is { ExitCode: 0 } ? Path.Combine(commitGitDir.Stdout.Trim(), "index.lock") : null;
+                if (indexLockPath is not null && File.Exists(indexLockPath))
+                {
+                    failed.ErrorKind = GitErrorCodes.IndexLocked;
+                    failed.ErrorDetail = GitErrorDetails.IndexLocked(indexLockPath);
+                }
                 // Hook rejection, tested before the NothingToCommit fallback (an empty index plus a rejecting pre-commit hook would
                 // otherwise send the caller to stage). git prints nothing of its own when a hook declines, so the signal is structural
                 // first: exit 1 (git's die() paths such as no identity or a locked index exit 128, a declining hook makes commit exit 1)
@@ -3816,7 +3828,7 @@ public class GitImpl : IGitOperations
                 // "hook declined" or "hook passed, nothing to commit"; there git's English status text ("nothing to commit", "no changes
                 // added to commit", "nothing added to commit") is the tie-break, and a localised git without that text reads as a rejection
                 // (the error text still carries git's output). A commit-msg hook never runs on an empty index, so there the text is always present.
-                if (commitRaw.ExitCode == 1
+                else if (commitRaw.ExitCode == 1
                     && GitHooks.HasBlockingHook(gitRoot).Outcome == BlockingHookOutcome.Found
                     && !(nothingStaged && IsGitNothingToCommitText(commitRaw.Stdout, commitRaw.Stderr)))
                 {

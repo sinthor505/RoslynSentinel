@@ -283,6 +283,8 @@ public class GitCommitUntrackedParityTests
         Assert.Multiple(() =>
         {
             Assert.That(viaCli.IsError, Is.True);
+            Assert.That(viaCli.ErrorKind, Is.EqualTo(GitErrorCodes.IndexLocked));
+            Assert.That(viaComposite.ErrorKind, Is.EqualTo(GitErrorCodes.IndexLocked));
             Assert.That(viaCli.Error, Does.Contain("index.lock"), "git's own message names the lock");
             Assert.That(GitCommitReadsParityTests.CommitJson(viaComposite), Is.EqualTo(GitCommitReadsParityTests.CommitJson(viaCli)), "the composite reports exactly what the CLI-only reader reports");
             Assert.That(composite.LastDeclineReason, Does.Contain("index.lock"));
