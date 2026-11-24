@@ -282,7 +282,7 @@ public sealed class ToolSurfaceController
                 toolSetName is null ? ToolSurfaceOrigin.Startup : ToolSurfaceOrigin.RuntimeToolset,
                 toolSetName,
                 ListedParameterNames(schemaElement),
-                HiddenSchemaParams.HiddenFor(name));
+                StrippedToolParameters.For(tool));
             tools.Add((row, schemaText));
         }
 

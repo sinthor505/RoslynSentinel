@@ -1020,6 +1020,19 @@ public static class ToolArgumentValidator
     /// </summary>
     private const string BatchEditsSuffix = "batchEdits";
 
+    /// <summary>True when <paramref name="parameterName"/> is hidden from the tool's emitted schema but still accepted. Reads this server's snapshot when a controller is registered.</summary>
+    private static bool IsHiddenParameter(ModelContextProtocol.Server.McpServer? server, string? toolName, string parameterName)
+    {
+        if (string.IsNullOrEmpty(toolName))
+            return false;
+
+        if (server?.Services?.GetService(typeof(RoslynSentinel.Common.ToolSurfaceController)) is not RoslynSentinel.Common.ToolSurfaceController controller)
+            // TODO remove the HiddenSchemaParams fallback with the registry (stage E)
+            return RoslynSentinel.Common.HiddenSchemaParams.IsHidden(toolName, parameterName);
+
+        return controller.Current.Find(toolName)?.HiddenParameters.Contains(parameterName) ?? false;
+    }
+
     /// <summary>
     /// Repairs a call that passes one edit's fields flat (e.g. <c>filePath</c>, <c>oldContent</c>,
     /// <c>newContent</c>) to a tool whose only way to carry them is a batch-edit array: the flat keys
@@ -1054,7 +1067,7 @@ public static class ToolArgumentValidator
 
         // Copy first: the wrap removes keys from the dictionary being inspected.
         var flatKeys = arguments.Keys
-            .Where(key => !declared.Contains(key) && !RoslynSentinel.Common.HiddenSchemaParams.IsHidden(toolName, key))
+            .Where(key => !declared.Contains(key) && !IsHiddenParameter(server, toolName, key))
             .ToList();
         if (flatKeys.Count == 0)
             return null;
@@ -1291,14 +1304,14 @@ public static class ToolArgumentValidator
 
         // validateOnApply:false is refused where the lean profile hides the parameter: the compile gate
         // always validates on that profile, so the caller has no way to switch it off.
-        // The emitted schema is the authority: HiddenSchemaParams and SchemaCache are process-wide and keyed by
+        // Hidden names come from this server's snapshot. SchemaCache is still process-wide (stage E) and keyed by
         // tool name, so a world built with the parameter declared after a world with it hidden must not be refused.
         if (arguments is not null &&
             arguments.TryGetValue("validateOnApply", out var validateOnApplyArg) &&
             (validateOnApplyArg.ValueKind == System.Text.Json.JsonValueKind.False ||
              (validateOnApplyArg.ValueKind == System.Text.Json.JsonValueKind.String &&
               string.Equals(validateOnApplyArg.GetString(), "false", StringComparison.OrdinalIgnoreCase))) &&
-            RoslynSentinel.Common.HiddenSchemaParams.IsHidden(toolName, "validateOnApply") &&
+            IsHiddenParameter(server, toolName, "validateOnApply") &&
             !declared.Contains("validateOnApply"))
         {
             return $"validateOnApply:false is not available for tool '{toolName}' on this server's current schema configuration: " +
@@ -1318,7 +1331,7 @@ public static class ToolArgumentValidator
                 // A parameter the Lean schema profile stripped from the emitted schema is still bound
                 // by the C# method, so it is accepted (but never advertised in the lists below).
                 if (!declared.Contains(argument.Key) &&
-                    !RoslynSentinel.Common.HiddenSchemaParams.IsHidden(toolName, argument.Key))
+                    !IsHiddenParameter(server, toolName, argument.Key))
                     unknown.Add(argument.Key);
             }
 
