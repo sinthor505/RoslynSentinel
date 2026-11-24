@@ -38,7 +38,7 @@ public sealed class MemberLocalFunctionReplaceTests
         var text = workspace.ReadText("Order.cs");
         Assert.That(text, Does.Contain("            return 2;"));
         Assert.That(text, Does.Not.Contain("return 1;"));
-        Assert.That(text, Does.Contain("            int Helper()"));
+        Assert.That(text, Does.Contain("\r\n        int Helper()\r\n        {\r\n            return 2;\r\n        }\r\n"));
     }
 
     [Test]

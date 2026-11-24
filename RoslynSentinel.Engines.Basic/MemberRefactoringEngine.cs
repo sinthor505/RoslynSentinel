@@ -3102,6 +3102,7 @@ public class MemberRefactoringEngine
                     !(l.Location.SourceTree == memberTree && memberSpan.Contains(l.Location.SourceSpan))));
                 if (usageCount > 0)
                 {
+                    // TODO for a local-function target the hint's Search(mode: references, query: name) returns NotFound (Search cannot resolve local functions); list the usage lines in the message instead
                     throw new ToolTargetIneligibleException($"Cannot remove member '{memberName}' - it has {usageCount} usages in the solution (counted as semantic references by SymbolFinder, so a doc-comment cref counts). Call {ToolCallHint.Call("Search", ("mode", "references"), ("query", memberName))} to list them, update or remove those usages, then retry.");
                 }
             }
