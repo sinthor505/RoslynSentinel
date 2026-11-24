@@ -1,6 +1,5 @@
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
+using RoslynSentinel.Common.AgentLoop;
+using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Graders;
 
 namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.ToolUse;
 
@@ -14,31 +13,26 @@ internal static class LargeBlockRewriteScenario
 {
     private const string QuotePath = "ContosoOrders.Core/Evals/LargeBlockRewrite/QuoteCalculator.cs";
 
+    private const string VisibleTestsPath = "ContosoOrders.Tests/Evals/LargeBlockRewrite/QuoteCalculatorTests.cs";
+
     /// <summary>Number of weight brackets in the legacy table; 8 lines each, so the block is 120 lines.</summary>
     private const int BracketCount = 15;
 
     /// <summary>Content lines of the disabled-experiment comment block (the two marker lines come on top, 60 lines in all).</summary>
     private const int DeadCodeLineCount = 58;
 
-    private static readonly string[] Markers =
-    [
-        "BEGIN LEGACY TABLE",
-        "END LEGACY TABLE",
-        "BEGIN DISABLED EXPERIMENT",
-        "END DISABLED EXPERIMENT",
-    ];
-
     // Fields below are initialised in textual order; Definition (further down) reads both of these.
-    private static readonly string SeedSource = BuildSource(golden: false);
-    private static readonly string GoldenSource = BuildSource(golden: true);
+    private static readonly string SeedSource = BuildSource(replaceTable: false, removeExperiment: false);
+    private static readonly string GoldenSource = BuildSource(replaceTable: true, removeExperiment: true);
 
-    private const string HiddenTestSource = """
+    // Visible test file: red on the seed (the legacy prices differ from weight times rate), green on the golden.
+    private const string VisibleTestsSource = """
 using ContosoOrders.Evals.LargeBlockRewrite;
 using Xunit;
 
 namespace ContosoOrders.Tests.Evals.LargeBlockRewrite;
 
-public class LargeBlockRewriteStep1Tests
+public class QuoteCalculatorTests
 {
     [Theory]
     [InlineData(100, "domestic", 100)]
@@ -67,16 +61,21 @@ public class LargeBlockRewriteStep1Tests
 }
 """;
 
-    private const string StepPrompt = """
-In ContosoOrders.Core/Evals/LargeBlockRewrite/QuoteCalculator.cs make two changes:
-1. Delete the whole disabled-experiment comment block: the marker line "// BEGIN DISABLED EXPERIMENT", the marker line
-"// END DISABLED EXPERIMENT" and every line between them.
-2. In the method Quote, replace the whole legacy-table block: the marker line "// BEGIN LEGACY TABLE", the marker line
-"// END LEGACY TABLE" and every line between them, with the single statement `return weightGrams * RatePerGram(zone);`.
-Keep every other line of the file exactly as it is, including the methods RatePerGram and Describe. Edit no other file.
-Then confirm the project builds and the ContosoOrders tests pass.
-""";
+    private const string CannedReport = "DONE: deleted the disabled-experiment comment block and replaced the legacy-table block in Quote with one return statement; the build and the tests pass.";
 
+    // Expression-bodied on purpose: a static readonly field would render before the contract placement is known (initialisation order). The prompt names no tool.
+    private static string StepPrompt => EvalContractOptions.Render(new ScenarioTask(
+        Goal: "In ContosoOrders.Core/Evals/LargeBlockRewrite/QuoteCalculator.cs make two changes. " +
+            "1. Delete the whole disabled-experiment comment block: the marker line `// BEGIN DISABLED EXPERIMENT`, the marker line `// END DISABLED EXPERIMENT` and every line between them. " +
+            "2. In the method `Quote`, replace the whole legacy-table block (the marker line `// BEGIN LEGACY TABLE`, the marker line `// END LEGACY TABLE` and every line between them) " +
+            "with the single statement `return weightGrams * RatePerGram(zone);`.",
+        Files: "QuoteCalculator.cs only.",
+        Conditions: "Every other line of the file stays exactly as it is, including `RatePerGram`, `Describe`, the `throw` after the new return " +
+            "(it becomes unreachable; the compiler warning CS0162 is expected) and the blank lines around the deleted block.",
+        IfFails: EvalContractOptions.PlainIfFails,
+        DoneWhen: "The solution builds with 0 errors; all tests in ContosoOrders.Tests pass, including QuoteCalculatorTests."));
+
+    // The contract placement is read once per process, when this Definition initialises (StepPrompt renders then); one process runs one arm.
     public static ImplementationScenario Definition { get; } = new ImplementationScenario(
         "LargeBlockRewrite",
         "Delete one long comment block and replace one long block with a single statement, leaving the rest of the file alone",
@@ -85,6 +84,7 @@ Then confirm the project builds and the ContosoOrders tests pass.
         new Dictionary<string, string>
         {
             [QuotePath] = SeedSource,
+            [VisibleTestsPath] = VisibleTestsSource,
         },
         new[]
         {
@@ -95,14 +95,20 @@ Then confirm the project builds and the ContosoOrders tests pass.
                     [QuotePath] = GoldenSource,
                 },
                 AllowedPaths: new List<string> { QuotePath },
-                HiddenTestSource: HiddenTestSource,
-                ExtraCheck: static ctx => Task.FromResult<string?>(CheckBlocksRewritten(ctx)),
-                CannedFinalMessage: null),
+                HiddenTestSource: null,
+                ExtraCheck: static ctx => Task.FromResult<string?>(CheckExactFile(ctx)),
+                CannedFinalMessage: CannedReport,
+                Variants: BuildVariants(),
+                DoneWhenTests: new[] { "QuoteCalculatorTests" }),
         },
-        PreferredHost: "112");
+        PreferredHost: "112",
+        PrimaryAxis: EvalAxis.ToolUse);
 
-    /// <summary>The seed (legacy table and disabled block present) or the golden (both gone, one return statement).</summary>
-    private static string BuildSource(bool golden)
+    /// <summary>
+    /// The seed (legacy table and disabled block present), the golden (both gone, one return statement, the blank lines before and after
+    /// the deleted experiment block kept) or a half-done state (only one of the two changes made).
+    /// </summary>
+    private static string BuildSource(bool replaceTable, bool removeExperiment)
     {
         var lines = new List<string>
         {
@@ -115,7 +121,7 @@ Then confirm the project builds and the ContosoOrders tests pass.
             "    {",
         };
 
-        if (golden)
+        if (replaceTable)
         {
             lines.Add("        return weightGrams * RatePerGram(zone);");
         }
@@ -130,13 +136,15 @@ Then confirm the project builds and the ContosoOrders tests pass.
         lines.Add("    }");
         lines.Add("");
 
-        if (!golden)
+        if (!removeExperiment)
         {
             lines.Add("    // BEGIN DISABLED EXPERIMENT");
             lines.AddRange(DeadCodeLines());
             lines.Add("    // END DISABLED EXPERIMENT");
-            lines.Add("");
         }
+
+        // The blank line after the experiment block stays when the block is deleted (the brief says the blank lines around it stay).
+        lines.Add("");
 
         lines.AddRange(
         [
@@ -205,56 +213,92 @@ Then confirm the project builds and the ContosoOrders tests pass.
 
     private static string Normalize(string text) => text.Replace("\r\n", "\n");
 
-    private static string? MethodText(SyntaxTree tree, string name) =>
-        tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()
-            .FirstOrDefault(method => method.Identifier.ValueText == name)?.ToString();
-
     /// <summary>
-    /// No marker line, legacy-table line or dead-code line remains, and RatePerGram and Describe are byte-identical to the seed.
-    /// Scope (this one file only) is enforced by the framework from the step's allowed paths.
+    /// The task is a pure text transformation, so the exact file is the spec: the whole file, line endings normalised, equals the
+    /// golden (both blocks gone, every other line and blank line kept, including the now unreachable throw). The detail names the
+    /// first differing line. Scope (this one file only) is enforced by the framework from the step's allowed paths.
     /// </summary>
-    private static string? CheckBlocksRewritten(ImplementationScenarioCheckContext ctx)
+    private static string? CheckExactFile(ImplementationScenarioCheckContext ctx)
     {
         if (!ctx.Exists(QuotePath))
         {
             return $"missing: {QuotePath}";
         }
 
-        var text = ctx.ReadText(QuotePath);
-        foreach (var marker in Markers)
+        var actual = Normalize(ctx.ReadText(QuotePath)).Split('\n');
+        var expected = GoldenSource.Split('\n');
+        var common = Math.Min(actual.Length, expected.Length);
+        for (var index = 0; index < common; index++)
         {
-            if (text.Contains(marker, StringComparison.Ordinal))
+            if (!string.Equals(actual[index], expected[index], StringComparison.Ordinal))
             {
-                return $"the marker '{marker}' is still in {QuotePath}";
+                return $"{QuotePath} differs from the expected result at line {index + 1}: expected '{expected[index]}', found '{actual[index]}'";
             }
         }
 
-        if (text.Contains("weightGrams <=", StringComparison.Ordinal))
+        if (actual.Length != expected.Length)
         {
-            return $"lines of the legacy table are still in {QuotePath}";
-        }
-
-        if (text.Contains("surcharge +=", StringComparison.Ordinal))
-        {
-            return $"lines of the disabled experiment are still in {QuotePath}";
-        }
-
-        var actualTree = ctx.Syntax(QuotePath);
-        var seedTree = CSharpSyntaxTree.ParseText(ctx.SeedFiles[QuotePath]);
-        foreach (var name in new[] { "RatePerGram", "Describe" })
-        {
-            var actual = MethodText(actualTree, name);
-            if (actual is null)
-            {
-                return $"the method {name} is missing from {QuotePath}";
-            }
-
-            if (!string.Equals(Normalize(actual), Normalize(MethodText(seedTree, name)!), StringComparison.Ordinal))
-            {
-                return $"the method {name} differs from the seed (it had to stay exactly as it was)";
-            }
+            return $"{QuotePath} has {actual.Length} line(s) (counting the end), expected {expected.Length}: lines were added or removed after line {common}";
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The executable outcome table: each variant overlays QuoteCalculator.cs (the golden with one defect) on step 1 (golden) with a
+    /// DONE: final message; every failing row claims DONE, so its class is SilentIncomplete.
+    /// </summary>
+    private static IReadOnlyList<ScenarioVariant> BuildVariants()
+    {
+        // Throws when the golden no longer contains the text to edit, so a golden change cannot silently turn a variant into the golden.
+        static string Edited(string text, string oldText, string newText)
+        {
+            if (!text.Contains(oldText, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException($"LargeBlockRewrite variant edit: '{oldText}' is not in the golden.");
+            }
+
+            return text.Replace(oldText, newText, StringComparison.Ordinal);
+        }
+
+        const string Done = "DONE: deleted the experiment block and replaced the legacy table with one return statement.";
+        const string ReturnLine = "        return weightGrams * RatePerGram(zone);\n";
+
+        // Row 1: the unreachable throw after the new return deleted (the brief says it stays).
+        var throwDeleted = Edited(GoldenSource, ReturnLine + "        throw new ArgumentException(\"unknown zone\");\n", ReturnLine);
+
+        // Row 2: one of the two blank lines around the deleted experiment block deleted.
+        var blankLineDeleted = Edited(GoldenSource, "    }\n\n\n    public static decimal RatePerGram", "    }\n\n    public static decimal RatePerGram");
+
+        // Row 3: the legacy table replaced but the disabled experiment block left in place.
+        var onlyTableReplaced = BuildSource(replaceTable: true, removeExperiment: false);
+
+        return new[]
+        {
+            new ScenarioVariant(
+                Name: "ThrowDeleted",
+                BaseStep: 1,
+                Files: new Dictionary<string, string> { [QuotePath] = throwDeleted },
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "differs from the expected result"),
+            new ScenarioVariant(
+                Name: "BlankLineDeleted",
+                BaseStep: 1,
+                Files: new Dictionary<string, string> { [QuotePath] = blankLineDeleted },
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "differs from the expected result"),
+            new ScenarioVariant(
+                Name: "OnlyOneBlockRemoved",
+                BaseStep: 1,
+                Files: new Dictionary<string, string> { [QuotePath] = onlyTableReplaced },
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "differs from the expected result"),
+        };
     }
 }
