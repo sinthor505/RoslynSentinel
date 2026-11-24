@@ -313,6 +313,8 @@ public class OperationSummaryRetypeTests
 
     private const string PlainIfFails = "Make no further changes; list what you wrote.";
 
+    private const string CannedReport = "DONE: retyped ChangedContent to DocumentChangeSet? through a private ToChangeSet helper and left the constructor parameter, the From overloads and the TODO as they were.";
+
     // Expression-bodied on purpose: a static readonly field would render before the contract placement is known (initialisation order).
     private static string StepPrompt => EvalContractOptions.Render(new ScenarioTask(
         Goal: "In ContosoOrders.Core/Evals/PropertyFirstRetype make the public property `OperationSummary.ChangedContent` a `DocumentChangeSet?` " +
@@ -354,7 +356,7 @@ public class OperationSummaryRetypeTests
                 AllowedPaths: new List<string> { SummaryPath },
                 HiddenTestSource: null,
                 ExtraCheck: static ctx => Task.FromResult<string?>(CheckTodoAndHelper(ctx)),
-                CannedFinalMessage: null,
+                CannedFinalMessage: CannedReport,
                 Variants: BuildVariants(),
                 DoneWhenTests: new[] { "OperationSummaryRetypeTests", "OperationSummaryWireTests" }),
         },
