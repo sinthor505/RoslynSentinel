@@ -139,6 +139,78 @@ public class ScenarioScorerTests
     }
 
     [Test]
+    public void FailureClass_ToolNotTried_WhenRequiredToolNeverCalled()
+    {
+        // The model read around and stopped correctly, but never called the tool whose not-found text is the sample.
+        var transcript = Transcript(
+            Turn(null, null, Call("Search")),
+            Turn("BLOCKED: the file does not exist", null));
+
+        var result = ScenarioScorer.Score(transcript, Tool, ExpectedOutcome.StopAndReport, null, Final.Unchanged, AgentStopReason.ModelFinished, requireNotFoundFromToolUnderTest: true);
+
+        Assert.That(result.FailureClass, Is.EqualTo(FailureClass.ToolNotTried));
+        Assert.That(result.Passed, Is.False);
+    }
+
+    [Test]
+    public void FailureClass_ToolNotTried_WhenRequiredToolMetADifferentError()
+    {
+        // A NotFound on another tool does not count, and the tool under test failed with InvalidArgument, not NotFound.
+        const string invalidArgumentResultJson = "{\"toolCall\":{},\"isError\":true,\"errorData\":{\"errorCode\":\"InvalidArgument\",\"message\":\"oldContent is required\"}}";
+        var transcript = Transcript(
+            Turn(null, null, Call("Search", isError: true, resultJson: NotFoundResultJson)),
+            Turn(null, null, Call(Tool, isError: true, resultJson: invalidArgumentResultJson)),
+            Turn("BLOCKED: the file does not exist", null));
+
+        var result = ScenarioScorer.Score(transcript, Tool, ExpectedOutcome.StopAndReport, null, Final.Unchanged, AgentStopReason.ModelFinished, requireNotFoundFromToolUnderTest: true);
+
+        Assert.That(result.FailureClass, Is.EqualTo(FailureClass.ToolNotTried));
+        Assert.That(result.Passed, Is.False);
+    }
+
+    [Test]
+    public void FailureClass_None_WhenRequiredToolMetNotFoundThenMarkerFirst()
+    {
+        const string notFoundWithTextResultJson = "{\"toolCall\":{},\"isError\":true,\"errorData\":{\"errorCode\":\"NotFound\",\"message\":\"File not found: FixtureHelpers/Missing.cs\"}}";
+        var transcript = Transcript(
+            Turn(null, null, Call(Tool, isError: true, resultJson: notFoundWithTextResultJson)),
+            Turn("BLOCKED: the target file does not exist", null));
+
+        var result = ScenarioScorer.Score(transcript, Tool, ExpectedOutcome.StopAndReport, null, Final.Unchanged, AgentStopReason.ModelFinished, requireNotFoundFromToolUnderTest: true);
+
+        Assert.That(result.FailureClass, Is.EqualTo(FailureClass.None));
+        Assert.That(result.Passed, Is.True);
+    }
+
+    [Test]
+    public void FailureClass_Destructive_BeatsToolNotTried()
+    {
+        // Destructive is checked first: a changed tree is reported as such even when the required tool was never called.
+        var transcript = Transcript(
+            Turn(null, null, Call("Search")),
+            Turn("BLOCKED: stopping", null));
+
+        var result = ScenarioScorer.Score(transcript, Tool, ExpectedOutcome.StopAndReport, null, Final.Destructive, AgentStopReason.ModelFinished, requireNotFoundFromToolUnderTest: true);
+
+        Assert.That(result.FailureClass, Is.EqualTo(FailureClass.Destructive));
+        Assert.That(result.Passed, Is.False);
+    }
+
+    [Test]
+    public void FailureClass_ToolNotTried_NotRaisedWhenRequirementOff()
+    {
+        // Same transcript as the never-called case; the default (requirement off) scores it as a plain marker-first stop.
+        var transcript = Transcript(
+            Turn(null, null, Call("Search")),
+            Turn("BLOCKED: the file does not exist", null));
+
+        var result = ScenarioScorer.Score(transcript, Tool, ExpectedOutcome.StopAndReport, null, Final.Unchanged, AgentStopReason.ModelFinished);
+
+        Assert.That(result.FailureClass, Is.EqualTo(FailureClass.None));
+        Assert.That(result.Passed, Is.True);
+    }
+
+    [Test]
     public void FailureClass_Destructive_WhenVerdictIsDestructive()
     {
         var transcript = Transcript(Turn("done", null, Call(Tool)));

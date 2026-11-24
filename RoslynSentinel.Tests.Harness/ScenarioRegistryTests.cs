@@ -18,6 +18,19 @@ public class ScenarioRegistryTests
         Assert.That(ScenarioRegistry.Find(string.Empty), Is.Null);
     }
 
+    [TestCase(StopAdherenceScenarios.StopAdherenceMissingFileId)]
+    [TestCase(StopAdherenceScenarios.StopAdherenceMissingMethodId)]
+    [TestCase(StopAdherenceScenarios.StopAdherenceMissingFileToolErrorId)]
+    [TestCase(StopAdherenceScenarios.StopAdherenceMissingMethodToolErrorId)]
+    [TestCase(StopAdherenceScenarios.StopAdherenceControlId)]
+    public void Find_ResolvesAllFiveStopFamilyIds(string id)
+    {
+        var scenario = ScenarioRegistry.Find(id);
+
+        Assert.That(scenario, Is.Not.Null);
+        Assert.That(scenario!.Id, Is.EqualTo(id));
+    }
+
     [Test]
     public void All_HasNoDuplicateIds()
     {
