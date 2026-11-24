@@ -36,7 +36,7 @@ namespace ContosoOrders.Evals.WidenToReadOnlyDictionary;
 /// <summary>Validates a pending change set (path to new file content). Every method only reads the map.</summary>
 public static class ChangeValidator
 {
-    /// <summary>One error per empty path or empty content in <paramref name="changes"/>, a <see cref="Dictionary{FilePath, string}"/>.</summary>
+    /// <summary>One error per empty path or empty content in <paramref name="changes"/>, a <see cref="Dictionary{TKey, TValue}"/>.</summary>
     public static IReadOnlyList<string> Validate(Dictionary<FilePath, string> changes)
     {
         return Validate(changes, int.MaxValue);
@@ -65,7 +65,7 @@ public static class ChangeValidator
         return errors;
     }
 
-    /// <summary>Validates <paramref name="changes"/> (a <see cref="Dictionary{FilePath, string}"/>) as if <paramref name="candidate"/> were added.</summary>
+    /// <summary>Validates <paramref name="changes"/> (a <see cref="Dictionary{TKey, TValue}"/>) as if <paramref name="candidate"/> were added.</summary>
     public static IReadOnlyList<string> ValidateWithCandidate(Dictionary<FilePath, string> changes, FilePath candidate, string content)
     {
         return ValidateWithCandidate(changes, candidate, content, int.MaxValue);
@@ -107,7 +107,7 @@ public static class ChangeHelper
 
     public static bool Touches(Dictionary<FilePath, string> changes, FilePath path) => changes.ContainsKey(path);
 
-    /// <summary>Short text for logs; the argument is a <see cref="Dictionary{FilePath, string}"/>.</summary>
+    /// <summary>Short text for logs; the argument is a <see cref="Dictionary{TKey, TValue}"/>.</summary>
     public static string Describe(Dictionary<FilePath, string> changes)
     {
         return $"{Count(changes)} file(s), {TotalLength(changes)} character(s)";
@@ -327,8 +327,8 @@ public class ReadOnlyViewTests
         static IReadOnlyDictionary<string, string> Overlay(string validator, string helper) =>
             new Dictionary<string, string> { [ChangeValidatorPath] = validator, [ChangeHelperPath] = helper };
 
-        const string ProseCrefWidened = "<see cref=\"IReadOnlyDictionary{FilePath, string}\"/>";
-        const string ProseCrefPlain = "<see cref=\"Dictionary{FilePath, string}\"/>";
+        const string ProseCrefWidened = "<see cref=\"IReadOnlyDictionary{TKey, TValue}\"/>";
+        const string ProseCrefPlain = "<see cref=\"Dictionary{TKey, TValue}\"/>";
         const string DoneMessage = "DONE: retyped all ten parameters and respelled the crefs that stopped resolving.";
 
         var validator = Widen(ChangeValidatorSource);
@@ -428,7 +428,8 @@ public class ReadOnlyViewTests
     /// <summary>Seed text with the change-set parameter type widened (the golden step and its doc crefs).</summary>
     private static string Widen(string source) =>
         source.Replace("Dictionary<FilePath, string>", "IReadOnlyDictionary<FilePath, string>")
-            .Replace("Dictionary{FilePath, string}", "IReadOnlyDictionary{FilePath, string}");
+            .Replace("Dictionary{FilePath, string}", "IReadOnlyDictionary{FilePath, string}")
+            .Replace("cref=\"Dictionary{TKey, TValue}\"", "cref=\"IReadOnlyDictionary{TKey, TValue}\"");
 
     private const string CannedReport = """
 DONE: retyped all ten Dictionary<FilePath, string> parameters of ChangeValidator.cs and ChangeHelper.cs to IReadOnlyDictionary<FilePath, string> and respelled the doc crefs that named them; no other file changed.
