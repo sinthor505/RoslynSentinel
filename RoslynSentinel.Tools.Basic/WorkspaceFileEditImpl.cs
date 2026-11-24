@@ -1431,6 +1431,96 @@ public class WorkspaceFileEditImpl
     }
 
     /// <summary>
+    /// One batchEdits item's inserted text as it sits in the NEW (edited, EOL-normalised) text of <paramref name="FilePath"/>: the span a compile
+    /// diagnostic is tested against to name the item that introduced it. <paramref name="ItemIndex"/> is the item's ORIGINAL batchEdits index.
+    /// </summary>
+    private sealed record BatchItemSpan(int ItemIndex, string FilePath, LinePosition Start, LinePosition End);
+
+    /// <summary>
+    /// The new-text spans of one file's batch items. <paramref name="items"/> hold each item's baseline match start/length and its final inserted text;
+    /// the edits are applied in position order, so an item's new start is its baseline start plus the length change of every earlier item in the file.
+    /// Positions are converted through <paramref name="normalized"/> (the text that is written) because the compile gate reports against it.
+    /// </summary>
+    private static List<BatchItemSpan> BatchItemSpansInNewText(
+        string filePath, string spliced, string normalized, string targetEol, IReadOnlyList<(int ItemIndex, int Start, int Length, string Inserted)> items)
+    {
+        var lines = SourceText.From(normalized).Lines;
+        var result = new List<BatchItemSpan>();
+        var shift = 0;
+        foreach (var item in items.OrderBy(i => i.Start))
+        {
+            var start = item.Start + shift;
+            var end = start + item.Inserted.Length;
+            shift += item.Inserted.Length - item.Length;
+            result.Add(new BatchItemSpan(item.ItemIndex, filePath, ToPosition(start), ToPosition(end)));
+        }
+
+        return result;
+
+        LinePosition ToPosition(int position)
+        {
+            var inSpliced = Math.Min(position, spliced.Length);
+            var inNormalized = Math.Min(EolUtilities.NormalizeEol(spliced[..inSpliced], targetEol).Length, normalized.Length);
+            return lines.GetLinePosition(inNormalized);
+        }
+    }
+
+    /// <summary>
+    /// The facts line of a rejected batch: which batchEdits item(s) each new compiler error falls in (its start position inside the item's new-text span),
+    /// and the errors that fall outside every edited span (a callee or caller elsewhere). Null when there is no error diagnostic.
+    /// </summary>
+    private static string? DescribeBatchItemErrors(IReadOnlyList<DiagnosticInfo> diagnostics, IReadOnlyList<BatchItemSpan> itemSpans)
+    {
+        var errors = diagnostics.Where(d => d.Severity == "Error").ToList();
+        if (errors.Count == 0)
+            return null;
+
+        var multiFile = itemSpans.Select(s => s.FilePath).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1;
+        var byItem = new SortedDictionary<int, (string File, List<string> Ids)>();
+        var outside = new List<(string File, string Id)>();
+        foreach (var diagnostic in errors)
+        {
+            var diagnosticPath = diagnostic.FilePath.ToString();
+            var at = new LinePosition(Math.Max(diagnostic.StartLine - 1, 0), Math.Max(diagnostic.StartColumn - 1, 0));
+            var owner = itemSpans.FirstOrDefault(s => SamePath(s.FilePath, diagnosticPath) && s.Start <= at && (at < s.End || at == s.Start));
+            if (owner is null)
+            {
+                outside.Add((Path.GetFileName(diagnosticPath), diagnostic.Id));
+                continue;
+            }
+
+            if (!byItem.TryGetValue(owner.ItemIndex, out var entry))
+                byItem[owner.ItemIndex] = entry = (Path.GetFileName(owner.FilePath), []);
+            entry.Ids.Add(diagnostic.Id);
+        }
+
+        var parts = new List<string>();
+        foreach (var (itemIndex, entry) in byItem)
+            parts.Add($"batchEdits[{itemIndex}]{(multiFile ? $" ({entry.File})" : "")}: {DescribeIds(entry.Ids)}");
+        foreach (var fileGroup in outside.GroupBy(o => o.File, StringComparer.OrdinalIgnoreCase))
+            parts.Add($"outside every edited span: {DescribeIds(fileGroup.Select(o => o.Id))} in {fileGroup.Key}");
+
+        var note = "New errors by batch item: " + string.Join("; ", parts) + ".";
+        // Dropping items is only an option when some items are clean (otherwise nothing would be left to apply).
+        if (byItem.Count > 0 && byItem.Count < itemSpans.Select(s => s.ItemIndex).Distinct().Count())
+            note += " When only the named item(s) cause the errors, a batch without them is an option.";
+        return note;
+
+        static string DescribeIds(IEnumerable<string> ids) =>
+            string.Join(", ", ids.GroupBy(id => id, StringComparer.Ordinal).Select(g => g.Count() == 1 ? g.Key : $"{g.Key} x{g.Count()}"));
+
+        // A workspace-relative path matches an absolute one when the absolute path ends with it.
+        static bool SamePath(string a, string b)
+        {
+            a = a.Trim().Replace('/', '\\');
+            b = b.Trim().Replace('/', '\\');
+            return string.Equals(a, b, StringComparison.OrdinalIgnoreCase)
+                || a.EndsWith("\\" + b, StringComparison.OrdinalIgnoreCase)
+                || b.EndsWith("\\" + a, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    /// <summary>
     /// The <see cref="ToolErrorCode.ValidationFailed"/> error of a ReplaceSnippet whose edit matched but whose resulting code fails the compile gate, shared by
     /// apply and validate, single and batch alike (a validate that said only "validate failed: &lt;diagnostics&gt;" gave no file:line, no impact verdict, no
     /// RenameSymbol redirect and no compiler-error hint; eval 20261112-151531-550 T3, T4/T13, T28). Runs the edit-impact analysis for
@@ -1441,7 +1531,8 @@ public class WorkspaceFileEditImpl
     /// </summary>
     private async Task<ResultError> ComposeCompileRejectionAsync(
         string headline, bool isRepeat, string? liftText, Dictionary<FilePathWrapper, string> changes, DiagnosticReport validation,
-        IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>> editedSpans, IEnumerable<ImpactVerdict>? liftVerdicts, CancellationToken cancellationToken)
+        IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>> editedSpans, IEnumerable<ImpactVerdict>? liftVerdicts, CancellationToken cancellationToken,
+        IReadOnlyList<BatchItemSpan>? batchItemSpans = null)
     {
         var changedPaths = changes.Keys.Select(k => (string)k).ToList();
         var impact = await EditImpactGate.AnalyzeAsync(_workspaceManager, changes, validation, _activeToolSurface, cancellationToken: cancellationToken,
@@ -1450,8 +1541,9 @@ public class WorkspaceFileEditImpl
         var impactNote = impact?.Text;
         // The edit-impact report, when it can attribute the errors to unedited files, replaces the generic untouched-file sentence (it already covers it).
         var untouchedNote = impactNote
-            // TODO name which batchEdits item introduced each new error, so a model can drop just that item (INBOX 2026-11-23 08:20 ReplaceSnippet batchEdits)
             ?? ValidateAndApplyHelper.DescribeUntouchedFileErrors(changedPaths, validation.Diagnostics.Select(d => d.FilePath.ToString()), "one ReplaceSnippet call with batchEdits, one item per file, each with its own filePath");
+        // A batch only: which batchEdits item each new error falls in, so a model can drop just the item that caused it (INBOX 2026-11-23 08:20).
+        var batchNote = batchItemSpans is null ? null : DescribeBatchItemErrors(validation.Diagnostics, batchItemSpans);
         var repeatNote = isRepeat ? RepeatedRejectionNote + (impactNote is null ? RepeatedRejectionChangeApproach : RepeatedRejectionFollowNextStep) + " " : "";
         var nearMisses = await EditImpactGate.DetectNearMissesAsync(_workspaceManager, changes, validation.Diagnostics, cancellationToken);
         // A CS0103 for a name the edit renamed away is explained by the impact attribution, so the typo/closest-name text is dropped for it.
@@ -1461,9 +1553,10 @@ public class WorkspaceFileEditImpl
             repeatNote +
             (liftText is null ? "" : liftText + " ") +
             (untouchedNote is null ? "" : untouchedNote + " ") +
+            (batchNote is null ? "" : batchNote + " ") +
             (impactNote is null ? "Fix the issue(s) below and retry:\n" : "Compiler errors caused by this edit:\n") +
             "[COMPILER ERROR]\n" +
-            await CompilerErrorLookupHelper.DescribeAsync(validation, _symbolNavigationEngine, cancellationToken, changedPaths, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable, renamedAwayNames: renamedAwayNames),
+            await CompilerErrorLookupHelper.DescribeAsync(validation, _symbolNavigationEngine, cancellationToken, changedPaths, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable, renamedAwayNames: renamedAwayNames, isBatchEdit: batchItemSpans is not null),
             StructuredDetail: RejectionDetail(impact, liftVerdicts, validation.Diagnostics, nearMisses));
     }
 
@@ -1487,13 +1580,14 @@ public class WorkspaceFileEditImpl
     /// <param name="summaryPrefixNotes">Notes put before the apply summary, in order; null entries are skipped.</param>
     /// <param name="enableNearMissCorrection">false skips <see cref="NearMissAutoCorrector"/>.</param>
     /// <param name="enableRenameLift">false skips <see cref="TryLiftRenameAsync"/>.</param>
+    /// <param name="batchItemSpans">A batch's per-item spans in the new text, to name the item each new compile error falls in; ignored (the written text no longer matches them) after a near-miss correction or a rename lift.</param>
     /// <param name="editMemory">One (path, oldContent, newContent, inserted text) key per edit for <c>_rejectedEdits</c> (a repeat needs every key to repeat) and, for a key whose inserted text is not null, <c>_appliedEdits</c>; null skips both memories.</param>
     private async Task<SentinelCallToolResult<ReplaceSnippetResult>> ApplyEditTailAsync(
         string toolName, string operationKind, string targetPath, DocumentChangeSet initialChanges,
         IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>> editedSpans, string compileRejectionHeadline,
         IEnumerable<string?> summaryPrefixNotes, bool validateOnApply, bool returnDiff,
         bool enableNearMissCorrection, bool enableRenameLift, IReadOnlyList<(string Path, string? OldContent, string NewContent, string? InsertedText)>? editMemory,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, IReadOnlyList<BatchItemSpan>? batchItemSpans = null)
     {
         var snippetChanges = initialChanges;
         var liftSpans = editedSpans;
@@ -1553,7 +1647,8 @@ public class WorkspaceFileEditImpl
                     // Spans only for the model's own text: a lifted (merged) set was changed outside them.
                     // Batch H5 R5: after a lift the spans are the model's own line ranges mapped onto the merged text, so an error the rename left in the model's file but outside its edit is attributed.
                     liftNote is null ? liftSpans : await RenameLifter.MergedEditedSpansAsync(_workspaceManager, candidateChanges, snippetChanges, liftSpans, cancellationToken),
-                    liftVerdicts, cancellationToken)
+                    liftVerdicts, cancellationToken,
+                    batchItemSpans: liftNote is null && nearMissFindings is null ? batchItemSpans : null)
             };
         }
         if (!result.IsError)
@@ -2207,6 +2302,8 @@ public class WorkspaceFileEditImpl
         var finalContents = new DocumentChangeSet();
         // Per file, each edit's matched span in the baseline text and its replacement, for rename lifting.
         var liftSpans = new Dictionary<FilePathWrapper, IReadOnlyList<TextChange>>();
+        // Per file, each item's span in the NEW text, to name the batchEdits item a compile error falls in.
+        var batchItemSpans = new List<BatchItemSpan>();
         var newContentsByFile = new Dictionary<string, List<(string? OldContent, string NewContent)>>(StringComparer.OrdinalIgnoreCase);
         foreach (var fileGroup in editsByFile)
         {
@@ -2336,6 +2433,9 @@ public class WorkspaceFileEditImpl
             }
             finalContents[canonicalPath] = normalizedSpliced;
             liftSpans[canonicalPath] = resolved.Select((r, i) => new TextChange(new TextSpan(r.match.Start, r.match.Length), reindent.InsertedTexts[i])).ToList();
+            batchItemSpans.AddRange(BatchItemSpansInNewText(
+                (string)canonicalPath, spliced, normalizedSpliced, targetEol,
+                resolved.Select((r, i) => (r.index, r.match.Start, r.match.Length, reindent.InsertedTexts[i])).ToList()));
             newContentsByFile[(string)canonicalPath] = resolved.Select(r => (r.oldContent, r.newContent)).ToList();
         }
 
@@ -2368,7 +2468,7 @@ public class WorkspaceFileEditImpl
                     // A dry run: same impact/redirect/hint body as apply, but no _rejectedEdits record or repeat check and no rename lifting (nothing is written).
                     ErrorData = await ComposeCompileRejectionAsync(
                         "ReplaceSnippet batch validate: every edit matched, but the resulting code introduces new compiler errors (nothing was written; every file is exactly as you last read it). ",
-                        isRepeat: false, liftText: null, finalContents, validationResult, liftSpans, liftVerdicts: null, cancellationToken)
+                        isRepeat: false, liftText: null, finalContents, validationResult, liftSpans, liftVerdicts: null, cancellationToken, batchItemSpans)
                 };
         }
 
@@ -2382,7 +2482,7 @@ public class WorkspaceFileEditImpl
                 "ReplaceSnippet", "replace_snippet_batch", newContentsByFile.Keys.First(), finalContents, liftSpans,
                 "ReplaceSnippet batch: every edit matched, but the resulting code introduces new compiler errors, so nothing was changed; every file is exactly as you last read it. ",
                 selectorNotes, validateOnApply, returnDiff,
-                enableNearMissCorrection: true, enableRenameLift: true, batchEditKeys, cancellationToken);
+                enableNearMissCorrection: true, enableRenameLift: true, batchEditKeys, cancellationToken, batchItemSpans);
         }
         catch (Exception ex)
         {

@@ -408,4 +408,174 @@ public class ReplaceSnippetBatchTests
 
         Assert.That(workspace.ReadText(StatusRelativePath), Is.EqualTo(originalContent), "a rejected batch must not write anything");
     }
+
+    private const string CalcRelativePath = "ContosoOrders.Core/Calculator.cs";
+
+    private const string CallerRelativePath = "ContosoOrders.Core/Caller.cs";
+
+    private const string CalcSource = """
+    namespace ContosoOrders.Core;
+
+    public class Calculator
+    {
+        public int Add(int a, int b) => a + b;
+        public int Twice(int a) => a * 2;
+        public int Negate(int a) => -a;
+    }
+    """;
+
+    private const string CallerSource = """
+    namespace ContosoOrders.Core;
+
+    public class Caller
+    {
+        public int Run(Calculator c) => c.Add(1, 2);
+        public int Run2(Calculator c) => c.Twice(1);
+    }
+    """;
+
+    private static InMemoryWorkspace CreateCalculatorWorkspace() =>
+        InMemoryWorkspace.Create((CalcRelativePath, CalcSource), (CallerRelativePath, CallerSource));
+
+    // Batch item attribution of compile errors (INBOX 2026-11-23 08:20): batchEdits[0] edits a LATER line than batchEdits[1], so the original
+    // index differs from the position order. Only the faulty item is named.
+    [Test]
+    public async Task ReplaceSnippet_BatchRejectedByCompileGate_NamesTheFaultyItemByOriginalIndexAsync()
+    {
+        using var workspace = CreateCalculatorWorkspace();
+        var tools = BuildTools(workspace.Manager);
+        var calc = workspace.PathOf(CalcRelativePath);
+        var before = workspace.ReadText(CalcRelativePath);
+
+        var result = await tools.ReplaceSnippetTool(
+            reason: "test batch item attribution",
+            ProposedChangeAction.apply,
+            batchEdits:
+            [
+                new SnippetEdit { FilePath = calc, OldContent = "public int Negate(int a) => -a;", NewContent = "public int Negate(int a) => -a - 1;" },
+                new SnippetEdit { FilePath = calc, OldContent = "public int Twice(int a) => a * 2;", NewContent = "public int Twice(int a) => a * UnknownSymbolQ;" },
+            ]);
+
+        Assert.That(result.IsError, Is.True);
+        var message = result.ErrorData!.Message;
+        Assert.Multiple(() =>
+        {
+            Assert.That(message, Does.Contain("New errors by batch item: batchEdits[1]: CS0103"));
+            Assert.That(message, Does.Not.Contain("batchEdits[0]"));
+            Assert.That(message, Does.Not.Contain("outside every edited span"));
+            Assert.That(message, Does.Contain("a batch without them is an option"));
+            Assert.That(workspace.ReadText(CalcRelativePath), Is.EqualTo(before), "a rejected batch must not write");
+        });
+    }
+
+    // The diagnostics are reported against the NEW text, so an earlier item that lengthens the file must shift the later item's span.
+    [Test]
+    public async Task ReplaceSnippet_BatchEarlierItemLengthensText_StillNamesTheLaterFaultyItemAsync()
+    {
+        using var workspace = CreateCalculatorWorkspace();
+        var tools = BuildTools(workspace.Manager);
+        var calc = workspace.PathOf(CalcRelativePath);
+
+        var result = await tools.ReplaceSnippetTool(
+            reason: "test batch item attribution after a length change",
+            ProposedChangeAction.validate,
+            batchEdits:
+            [
+                new SnippetEdit
+                {
+                    FilePath = calc,
+                    OldContent = "public int Add(int a, int b) => a + b;",
+                    NewContent = "public int Add(int a, int b)\n    {\n        var first = a;\n        var second = b;\n        var sum = first + second;\n        return sum;\n    }",
+                },
+                new SnippetEdit { FilePath = calc, OldContent = "public int Negate(int a) => -a;", NewContent = "public int Negate(int a) => -UnknownSymbolQ;" },
+            ]);
+
+        Assert.That(result.IsError, Is.True);
+        var message = result.ErrorData!.Message;
+        Assert.Multiple(() =>
+        {
+            Assert.That(message, Does.Contain("batchEdits[1]: CS0103"));
+            Assert.That(message, Does.Not.Contain("batchEdits[0]"));
+            Assert.That(message, Does.Not.Contain("outside every edited span"));
+        });
+    }
+
+    [Test]
+    public async Task ReplaceSnippet_BatchBreaksCallerOutsideEveryEditedSpan_ReportsItAsOutsideAsync()
+    {
+        using var workspace = CreateCalculatorWorkspace();
+        var tools = BuildTools(workspace.Manager);
+        var calc = workspace.PathOf(CalcRelativePath);
+
+        // The declaration gains a parameter; Caller.cs (not in the batch) still calls Add(1, 2).
+        var result = await tools.ReplaceSnippetTool(
+            reason: "test batch error outside every edited span",
+            ProposedChangeAction.validate,
+            batchEdits:
+            [
+                new SnippetEdit { FilePath = calc, OldContent = "public int Add(int a, int b) => a + b;", NewContent = "public int Add(int a, int b, int c) => a + b + c;" },
+                new SnippetEdit { FilePath = calc, OldContent = "public int Negate(int a) => -a;", NewContent = "public int Negate(int a) => 0 - a;" },
+            ]);
+
+        Assert.That(result.IsError, Is.True);
+        var message = result.ErrorData!.Message;
+        Assert.Multiple(() =>
+        {
+            Assert.That(message, Does.Contain("outside every edited span: CS7036").Or.Contain("outside every edited span: CS1501"));
+            Assert.That(message, Does.Contain("in Caller.cs"));
+            Assert.That(message, Does.Not.Contain("batchEdits[0]:"));
+            Assert.That(message, Does.Not.Contain("batchEdits[1]:"));
+        });
+    }
+
+    [Test]
+    public async Task ReplaceSnippet_BatchAcrossTwoFiles_AttributesNewErrorsPerFileWithOriginalIndicesAsync()
+    {
+        using var workspace = CreateCalculatorWorkspace();
+        var tools = BuildTools(workspace.Manager);
+        var calc = workspace.PathOf(CalcRelativePath);
+        var caller = workspace.PathOf(CallerRelativePath);
+
+        var result = await tools.ReplaceSnippetTool(
+            reason: "test batch attribution across two files",
+            ProposedChangeAction.validate,
+            batchEdits:
+            [
+                new SnippetEdit { FilePath = calc, OldContent = "public int Twice(int a) => a * 2;", NewContent = "public int Twice(int a) => a * UnknownSymbolQ;" },
+                new SnippetEdit { FilePath = caller, OldContent = "public int Run(Calculator c) => c.Add(1, 2);", NewContent = "public int Run(Calculator c) => c.Add(3, 4);" },
+                new SnippetEdit { FilePath = caller, OldContent = "public int Run2(Calculator c) => c.Twice(1);", NewContent = "public int Run2(Calculator c) => c.Twice(\"x\");" },
+            ]);
+
+        Assert.That(result.IsError, Is.True);
+        var message = result.ErrorData!.Message;
+        Assert.Multiple(() =>
+        {
+            Assert.That(message, Does.Contain("batchEdits[0] (Calculator.cs): CS0103"));
+            Assert.That(message, Does.Contain("batchEdits[2] (Caller.cs): CS1503"));
+            Assert.That(message, Does.Not.Contain("batchEdits[1]"));
+        });
+    }
+
+    [Test]
+    public async Task ReplaceSnippet_SingleEditRejectedByCompileGate_HasNoBatchNoteAsync()
+    {
+        using var workspace = CreateCalculatorWorkspace();
+        var tools = BuildTools(workspace.Manager);
+
+        var result = await tools.ReplaceSnippetTool(
+            reason: "test single edit has no batch note",
+            ProposedChangeAction.validate,
+            filePath: workspace.PathOf(CalcRelativePath),
+            oldContent: "public int Twice(int a) => a * 2;",
+            newContent: "public int Twice(int a) => a * UnknownSymbolQ;");
+
+        Assert.That(result.IsError, Is.True);
+        var message = result.ErrorData!.Message;
+        Assert.Multiple(() =>
+        {
+            Assert.That(message, Does.Contain("CS0103"));
+            Assert.That(message, Does.Not.Contain("New errors by batch item"));
+            Assert.That(message, Does.Not.Contain("outside every edited span"));
+        });
+    }
 }
