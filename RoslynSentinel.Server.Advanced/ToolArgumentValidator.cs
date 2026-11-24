@@ -23,7 +23,9 @@ public static class ToolArgumentValidator
     /// schema cannot be resolved, in which case the caller must skip validation rather than guess.
     /// </summary>
     private static (System.Collections.Generic.HashSet<string> All, System.Collections.Generic.List<string> Required, System.Collections.Generic.Dictionary<string, System.Text.Json.JsonElement> Properties, System.Collections.Generic.Dictionary<string, string> CaseInsensitiveLookup)? TryGetSchemaParameters(
-        ModelContextProtocol.Server.McpServer? server, string? toolName)
+        ModelContextProtocol.Server.McpServer? server, string? toolName,
+        // surface is accepted but not read yet; Step 9 (caching) uses it.
+        RoslynSentinel.Common.ToolSurfaceSnapshot? surface = null)
     {
         if (server is null || string.IsNullOrEmpty(toolName))
             return null;
@@ -1020,17 +1022,24 @@ public static class ToolArgumentValidator
     /// </summary>
     private const string BatchEditsSuffix = "batchEdits";
 
-    /// <summary>True when <paramref name="parameterName"/> is hidden from the tool's emitted schema but still accepted. Reads this server's snapshot when a controller is registered.</summary>
-    private static bool IsHiddenParameter(ModelContextProtocol.Server.McpServer? server, string? toolName, string parameterName)
+    /// <summary>Resolves the surface a call reads: the captured snapshot when given, else this server's current one. A Version 0 snapshot (the static Empty, nothing built yet) resolves to null.</summary>
+    private static RoslynSentinel.Common.ToolSurfaceSnapshot? ResolveSurface(ModelContextProtocol.Server.McpServer? server, RoslynSentinel.Common.ToolSurfaceSnapshot? captured)
+    {
+        var resolved = captured ?? (server?.Services?.GetService(typeof(RoslynSentinel.Common.ToolSurfaceController)) as RoslynSentinel.Common.ToolSurfaceController)?.Current;
+        return resolved is { Version: > 0 } ? resolved : null;
+    }
+
+    /// <summary>True when <paramref name="parameterName"/> is hidden from the tool's emitted schema but still accepted. Reads the captured snapshot when one is given; the HiddenSchemaParams registry fallback applies only without one.</summary>
+    private static bool IsHiddenParameter(RoslynSentinel.Common.ToolSurfaceSnapshot? surface, ModelContextProtocol.Server.McpServer? server, string? toolName, string parameterName)
     {
         if (string.IsNullOrEmpty(toolName))
             return false;
 
-        if (server?.Services?.GetService(typeof(RoslynSentinel.Common.ToolSurfaceController)) is not RoslynSentinel.Common.ToolSurfaceController controller)
+        if (surface is null)
             // TODO remove the HiddenSchemaParams fallback with the registry (stage E)
             return RoslynSentinel.Common.HiddenSchemaParams.IsHidden(toolName, parameterName);
 
-        return controller.Current.Find(toolName)?.HiddenParameters.Contains(parameterName) ?? false;
+        return surface.Find(toolName)?.HiddenParameters.Contains(parameterName) ?? false;
     }
 
     /// <summary>
@@ -1050,16 +1059,19 @@ public static class ToolArgumentValidator
     /// not an inline object schema. Run after <see cref="ApplyParameterAliases"/>.
     /// </para>
     /// </summary>
+    /// <param name="surface">Captured tool-surface snapshot for this call; null resolves the server's current snapshot once at entry (none when no snapshot is built).</param>
     /// <returns>One note per wrapped call, or <see langword="null"/> when nothing changed.</returns>
     public static System.Collections.Generic.IReadOnlyList<string>? WrapFlatBatchParameters(
         ModelContextProtocol.Server.McpServer? server,
         string? toolName,
-        System.Collections.Generic.IDictionary<string, System.Text.Json.JsonElement>? arguments)
+        System.Collections.Generic.IDictionary<string, System.Text.Json.JsonElement>? arguments,
+        RoslynSentinel.Common.ToolSurfaceSnapshot? surface = null)
     {
+        surface = ResolveSurface(server, surface);
         if (arguments is null || arguments.Count == 0 || string.IsNullOrEmpty(toolName))
             return null;
 
-        var schema = TryGetSchemaParameters(server, toolName);
+        var schema = TryGetSchemaParameters(server, toolName, surface);
         if (schema is null)
             return null;
 
@@ -1067,7 +1079,7 @@ public static class ToolArgumentValidator
 
         // Copy first: the wrap removes keys from the dictionary being inspected.
         var flatKeys = arguments.Keys
-            .Where(key => !declared.Contains(key) && !IsHiddenParameter(server, toolName, key))
+            .Where(key => !declared.Contains(key) && !IsHiddenParameter(surface, server, toolName, key))
             .ToList();
         if (flatKeys.Count == 0)
             return null;
@@ -1289,14 +1301,17 @@ public static class ToolArgumentValidator
     /// </para>
     /// </summary>
     /// <param name="isCallable">The active surface's callable test; null means every tool is callable (the full surface). A discovery tool is named in a hint only when it is callable.</param>
+    /// <param name="surface">Captured tool-surface snapshot for this call; null resolves the server's current snapshot once at entry (none when no snapshot is built).</param>
     /// <returns>An error message to return to the caller, or null when the arguments are valid.</returns>
     public static string? Validate(
         ModelContextProtocol.Server.McpServer? server,
         string? toolName,
         System.Collections.Generic.IDictionary<string, System.Text.Json.JsonElement>? arguments,
-        System.Func<string, bool>? isCallable = null)
+        System.Func<string, bool>? isCallable = null,
+        RoslynSentinel.Common.ToolSurfaceSnapshot? surface = null)
     {
-        var schema = TryGetSchemaParameters(server, toolName);
+        surface = ResolveSurface(server, surface);
+        var schema = TryGetSchemaParameters(server, toolName, surface);
         if (schema is null)
             return null;
 
@@ -1311,7 +1326,7 @@ public static class ToolArgumentValidator
             (validateOnApplyArg.ValueKind == System.Text.Json.JsonValueKind.False ||
              (validateOnApplyArg.ValueKind == System.Text.Json.JsonValueKind.String &&
               string.Equals(validateOnApplyArg.GetString(), "false", StringComparison.OrdinalIgnoreCase))) &&
-            IsHiddenParameter(server, toolName, "validateOnApply") &&
+            IsHiddenParameter(surface, server, toolName, "validateOnApply") &&
             !declared.Contains("validateOnApply"))
         {
             return $"validateOnApply:false is not available for tool '{toolName}' on this server's current schema configuration: " +
@@ -1331,7 +1346,7 @@ public static class ToolArgumentValidator
                 // A parameter the Lean schema profile stripped from the emitted schema is still bound
                 // by the C# method, so it is accepted (but never advertised in the lists below).
                 if (!declared.Contains(argument.Key) &&
-                    !IsHiddenParameter(server, toolName, argument.Key))
+                    !IsHiddenParameter(surface, server, toolName, argument.Key))
                     unknown.Add(argument.Key);
             }
 
