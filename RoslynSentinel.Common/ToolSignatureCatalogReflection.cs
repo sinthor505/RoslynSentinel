@@ -51,6 +51,7 @@ public static class ToolSignatureCatalogReflection
     {
         LoadToolAssemblies();
         var pairs = new List<KeyValuePair<string, JsonElement>>();
+        var hiddenByToolName = new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal);
         foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
         {
             if (assembly.IsDynamic)
@@ -76,6 +77,12 @@ public static class ToolSignatureCatalogReflection
                     {
                         var tool = McpToolSchemaPatcher.CreateSentinelTool(method, type, services: null!);
                         pairs.Add(new KeyValuePair<string, JsonElement>(tool.ProtocolTool.Name, tool.ProtocolTool.InputSchema));
+                        var stripped = StrippedToolParameters.For(tool);
+                        if (stripped is { Count: > 0 })
+                        {
+                            // The strips belong to the schema this catalog holds, so the pair is consistent.
+                            hiddenByToolName.TryAdd(tool.ProtocolTool.Name, stripped);
+                        }
                     }
                     catch (Exception)
                     {
@@ -85,6 +92,6 @@ public static class ToolSignatureCatalogReflection
             }
         }
 
-        return ToolSignatureCatalog.FromSchemas(pairs);
+        return ToolSignatureCatalog.FromSchemas(pairs, hiddenByToolName);
     }
 }

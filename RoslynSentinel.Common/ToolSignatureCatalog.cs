@@ -15,17 +15,20 @@ public sealed class ToolSignatureCatalog
 {
     private readonly IReadOnlyDictionary<string, IReadOnlyList<ToolParameterSpec>> _tools;
     private readonly IReadOnlyCollection<string> _toolNames;
+    private readonly IReadOnlyDictionary<string, FrozenSet<string>> _hiddenParameters;
 
-    private ToolSignatureCatalog(IReadOnlyDictionary<string, IReadOnlyList<ToolParameterSpec>> tools, IReadOnlyCollection<string> toolNames)
+    private ToolSignatureCatalog(IReadOnlyDictionary<string, IReadOnlyList<ToolParameterSpec>> tools, IReadOnlyCollection<string> toolNames, IReadOnlyDictionary<string, FrozenSet<string>> hiddenParameters)
     {
         _tools = tools;
         _toolNames = toolNames;
+        _hiddenParameters = hiddenParameters;
     }
 
     /// <summary>A catalog with no tools.</summary>
     public static ToolSignatureCatalog Empty { get; } = new(
         new Dictionary<string, IReadOnlyList<ToolParameterSpec>>(StringComparer.Ordinal).ToFrozenDictionary(StringComparer.Ordinal),
-        Array.Empty<string>());
+        Array.Empty<string>(),
+        new Dictionary<string, FrozenSet<string>>(StringComparer.Ordinal).ToFrozenDictionary(StringComparer.Ordinal));
 
     /// <summary>Tool names in input order.</summary>
     public IReadOnlyCollection<string> ToolNames => _toolNames;
@@ -33,7 +36,12 @@ public sealed class ToolSignatureCatalog
     /// <summary>
     /// Builds a catalog from (tool name, InputSchema) pairs. Malformed schema shapes are skipped, never thrown.
     /// </summary>
-    public static ToolSignatureCatalog FromSchemas(IEnumerable<KeyValuePair<string, JsonElement>> inputSchemasByToolName)
+    public static ToolSignatureCatalog FromSchemas(IEnumerable<KeyValuePair<string, JsonElement>> inputSchemasByToolName) => FromSchemas(inputSchemasByToolName, null);
+
+    /// <summary>
+    /// Builds a catalog from (tool name, InputSchema) pairs plus, per tool, the parameter names stripped from that schema but still accepted. A null map means no hidden parameters.
+    /// </summary>
+    public static ToolSignatureCatalog FromSchemas(IEnumerable<KeyValuePair<string, JsonElement>> inputSchemasByToolName, IReadOnlyDictionary<string, IReadOnlyCollection<string>>? hiddenParametersByToolName)
     {
         ArgumentNullException.ThrowIfNull(inputSchemasByToolName);
 
@@ -50,18 +58,41 @@ public sealed class ToolSignatureCatalog
             names.Add(pair.Key);
         }
 
-        return new ToolSignatureCatalog(tools.ToFrozenDictionary(StringComparer.Ordinal), names.AsReadOnly());
-    }
+        var hidden = new Dictionary<string, FrozenSet<string>>(StringComparer.Ordinal);
+        if (hiddenParametersByToolName is not null)
+        {
+            foreach (var entry in hiddenParametersByToolName)
+            {
+                if (string.IsNullOrEmpty(entry.Key) || entry.Value is null)
+                {
+                    continue;
+                }
 
-    /// <summary>
-    /// Builds a catalog from (tool name, InputSchema) pairs plus, per tool, the parameter names stripped from that schema but still accepted. A null map means no hidden parameters.
-    /// </summary>
-    public static ToolSignatureCatalog FromSchemas(IEnumerable<KeyValuePair<string, JsonElement>> inputSchemasByToolName, IReadOnlyDictionary<string, IReadOnlyCollection<string>>? hiddenParametersByToolName) => throw new NotImplementedException(); // TODO implement (Step 3)
+                var parameters = entry.Value
+                    .Where(name => !string.IsNullOrEmpty(name))
+                    .ToHashSet(StringComparer.Ordinal);
+                if (parameters.Count > 0)
+                {
+                    hidden[entry.Key] = parameters.ToFrozenSet(StringComparer.Ordinal);
+                }
+            }
+        }
+
+        return new ToolSignatureCatalog(tools.ToFrozenDictionary(StringComparer.Ordinal), names.AsReadOnly(), hidden.ToFrozenDictionary(StringComparer.Ordinal));
+    }
 
     /// <summary>
     /// True when parameterName was stripped from toolName's schema in this catalog but is still accepted (ordinal, both names).
     /// </summary>
-    public bool IsHidden(string toolName, string parameterName) => throw new NotImplementedException(); // TODO implement (Step 3)
+    public bool IsHidden(string toolName, string parameterName)
+    {
+        if (toolName is null || parameterName is null || !_tools.ContainsKey(toolName))
+        {
+            return false;
+        }
+
+        return _hiddenParameters.TryGetValue(toolName, out var parameters) && parameters.Contains(parameterName);
+    }
 
     public bool Contains(string toolName) => toolName is not null && _tools.ContainsKey(toolName);
 
