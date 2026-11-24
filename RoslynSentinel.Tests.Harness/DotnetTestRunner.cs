@@ -73,9 +73,10 @@ public static class DotnetTestRunner
             RawOutput: output);
     }
 
+    // The console logger prints one line per failed test: "  Failed <TestName> [12 ms]" (names have no spaces; a parameterised test ends at its closing parenthesis).
+    private static readonly Regex FailedTestLineRegex = new(@"^\s*Failed\s+(?<name>\S+)\s+\[", RegexOptions.Compiled | RegexOptions.Multiline);
+
     // internal, not private as the plan text says: DotnetTestResult (a separate type) calls it from FailedTests.
-    internal static IReadOnlyList<string> ParseFailedTests(string rawOutput)
-    {
-        throw new NotImplementedException(); // TODO implement (Step 5)
-    }
+    internal static IReadOnlyList<string> ParseFailedTests(string rawOutput) =>
+        FailedTestLineRegex.Matches(rawOutput).Select(match => match.Groups["name"].Value).ToList();
 }

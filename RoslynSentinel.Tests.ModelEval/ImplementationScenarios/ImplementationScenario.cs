@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 
 using Microsoft.CodeAnalysis;
@@ -155,6 +156,24 @@ internal sealed record ImplementationScenarioCheckContext(
     }
 
     public SyntaxTree Syntax(string relativePath) => CSharpSyntaxTree.ParseText(ReadText(relativePath));
+
+    // The per-folder cache lives in a side table keyed by this instance, not in a record field: a private instance field would join the
+    // synthesized Equals/GetHashCode (two equal contexts would compare unequal) and a with-expression would share the cache.
+    private static readonly ConditionalWeakTable<ImplementationScenarioCheckContext, Dictionary<string, ScenarioCompilation>> CompilationCaches = new();
+
+    /// <summary>The compilation over the scenario folder (solution-relative, for example ContosoOrders.Core/Evals/X); built once per folder and context.</summary>
+    public ScenarioCompilation Compile(string relativeFolder)
+    {
+        var cache = CompilationCaches.GetValue(this, _ => new Dictionary<string, ScenarioCompilation>(StringComparer.OrdinalIgnoreCase));
+        var key = relativeFolder.Replace('\\', '/');
+        if (!cache.TryGetValue(key, out var compilation))
+        {
+            compilation = ScenarioCompilation.Create(SolutionDirectory, key);
+            cache[key] = compilation;
+        }
+
+        return compilation;
+    }
 
     /// <summary>True when the final message exists and contains every fragment (ordinal, case-insensitive).</summary>
     public bool FinalMessageMentions(params string[] fragments)
