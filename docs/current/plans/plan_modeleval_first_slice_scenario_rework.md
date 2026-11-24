@@ -1,6 +1,6 @@
 # Plan: rework the 18 first-slice eval scenarios into realistic briefs with behavioural acceptance tests (proposal Phasing step 3)
 
-**Status:** IN PROGRESS 2026-11-23. Steps 54-59 done (7d94a62c..76df6d43); Steps 1-11 done (2b578dea..5765c966); Steps 12-21 done (7cbfc4d9..3db4c7c0). Approved 2c34a882; review amendments and the owner's answers are Decision 13 (overrides step text); Batched mode, owner present. Phasing step 3 of [proposal_modeleval_standing_workflow_contract.md](../proposals/proposal_modeleval_standing_workflow_contract.md), written from [finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md](../findings/finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md). Depends on [plan_modeleval_workflow_contract_phase1.md](./closed/plan_modeleval_workflow_contract_phase1.md) (called "P1" below).
+**Status:** IN PROGRESS 2026-11-23. Steps 54-59 done (7d94a62c..76df6d43); Steps 1-11 done (2b578dea..5765c966); Steps 12-21 done (7cbfc4d9..3db4c7c0); Steps 22-26 done (b5d6d45d..0d6ee1e0). Approved 2c34a882; review amendments and the owner's answers are Decision 13 (overrides step text); Batched mode, owner present. Phasing step 3 of [proposal_modeleval_standing_workflow_contract.md](../proposals/proposal_modeleval_standing_workflow_contract.md), written from [finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md](../findings/finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md). Depends on [plan_modeleval_workflow_contract_phase1.md](./closed/plan_modeleval_workflow_contract_phase1.md) (called "P1" below).
 
 ## Problem
 
@@ -35,6 +35,8 @@ The audit of the 18 first-slice prompts found 41 of 117 outcome rows mismatched:
     - (m) Step 53 (owner, after Batch A): `Files_NamesEveryAllowedPath` (Step 8) calls `Assert.Ignore` while a prompt has no `Files:` line; Step 53 turns that ignore into `Assert.Fail` once every prompt is reworked.
     - (n) Batch B grading details accepted as built (owner, after Batch B): S3 `CheckOutcome` fails on writes inside Files only (a change outside Files is the scope check's OutOfScopeEdit, class still Bypass); S3's report check counts any extra listed `.cs` file as a false report; S6 also accepts site names on the `DONE:` line (its IfFails says to name them there); the S2 cref fix keeps R8's sentence.
     - (o) Variant tag asserted (owner, after Batch B): `ScenarioVariant` gains an optional trailing `ExpectedVariantTag` (string?, default null) and `Variant_OutcomeMatchesTable` asserts it against the verdict's `variant=` value when set; the existing tagged variants (S3 `overload`, `report`, and any other tag a Batch B grader emits) set it. One slice, first in Batch D (before Step 27), files `Graders/ScenarioVariant.cs` (or wherever the record lives), `ImplementationScenarioGoldenTests.cs`, `InstructionAdherence/WideningRejectedByGateScenario.cs`; later scenario slices set the tag on their tagged variants.
+    - (p) S1 (owner, after Batch C): the review grader has no "ChangedPaths > 0 fails" rule (Step 23 text); the empty `AllowedPaths` scope check already grades an edit Bypass, and that variant passes.
+    - (q) `PlainIfFails` (owner, after Batch C): one shared `public const string PlainIfFails` in `EvalContractOptions` (Tests.Harness) beside `Render`; S7's private copy is replaced by it; every later brief uses it. Lands in the Decision 13 (o) slice, first in Batch D.
     - (l) "Left for the owner" items 1 (RenameSymbol), 2 (narrow budget exclusion) and 4 (control restore per sample) accepted as recommended; item 3 replaced by (e).
 
 NEW-DTO blocks (test-harness records; give them in the `reason` if the hook asks, the paths are test projects):
@@ -638,6 +640,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 ### Batch C - review and PropertyFirstRetype (Steps 22-26)
 
 ### Step 22 - S1 PlanStalenessReview: brief and canned review
+- Done: b5d6d45d
 - Files: RoslynSentinel.Tests.ModelEval/ImplementationScenarios/AmbiguityResolution/PlanStalenessReviewScenario.cs
 - Depends on: 2; P1 Steps 1, 3, 5
 - Effect: behaviour-changing.
@@ -646,6 +649,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~4 edits).
 
 ### Step 23 - S1: grader and variants
+- Done: 09e0e435
 - Files: PlanStalenessReviewScenario.cs, RoslynSentinel.Tests.ModelEval/PlanStalenessReviewCheckTests.cs (deleted)
 - Depends on: 22, 4, 8, 55
 - Effect: behaviour-changing.
@@ -654,6 +658,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~10 edits).
 
 ### Step 24 - S7 PropertyFirstRetype: brief, fixture fix, tests
+- Done: 519da37c
 - Files: RoslynSentinel.Tests.ModelEval/ImplementationScenarios/InstructionAdherence/PropertyFirstRetypeScenario.cs
 - Depends on: 2; P1 Steps 1, 3, 5
 - Effect: behaviour-changing.
@@ -662,6 +667,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~6 edits).
 
 ### Step 25 - S7: grader and variants
+- Done: 34a34676
 - Files: PropertyFirstRetypeScenario.cs
 - Depends on: 24, 5, 8
 - Effect: behaviour-changing.
@@ -670,6 +676,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~7 edits).
 
 ### Step 26 - Batch C gate
+- Done: gate passed, fix 0d6ee1e0 (S7 golden lacked a `DONE:` canned message)
 - Files: none edited
 - Depends on: 22-25
 - Effect: text-neutral.
