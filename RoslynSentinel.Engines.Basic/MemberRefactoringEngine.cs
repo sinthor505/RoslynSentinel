@@ -2522,9 +2522,74 @@ public class MemberRefactoringEngine
         };
     }
 
+    /// <summary>
+    /// Member(replace) for a local-function target: newMemberSource must be exactly one local function statement (nothing after it, no
+    /// access modifiers, no diagnostics). Replaces through the same formatting path and AlreadyInTargetState check as members.
+    /// </summary>
+    private async Task<DocumentEditResult> ReplaceLocalFunctionAsync(FilePathWrapper filePath, Document document, SyntaxNode root, LocalFunctionStatementSyntax target, string newSource, string memberName, string? snippetWarning, string? shadowedLocalFunctionHint, CancellationToken cancellationToken)
+    {
+        var owner = DescribeLocalFunctionOwner(target);
+        var trimmed = newSource.Trim();
+        var parsed = SyntaxFactory.ParseStatement(trimmed);
+        var hasAccessModifier = parsed is LocalFunctionStatementSyntax parsedLocal && parsedLocal.Modifiers.Any(m =>
+            m.IsKind(SyntaxKind.PublicKeyword) || m.IsKind(SyntaxKind.PrivateKeyword) || m.IsKind(SyntaxKind.ProtectedKeyword) || m.IsKind(SyntaxKind.InternalKeyword));
+        if (parsed is not LocalFunctionStatementSyntax newLocal || parsed.FullSpan.Length != trimmed.Length || parsed.GetDiagnostics().Any() || hasAccessModifier)
+        {
+            throw new ToolInvalidArgumentException($"'{memberName}' is a local function inside {owner}; newMemberSource must be exactly one local function statement (no access modifiers, no extra declarations).");
+        }
+
+        var description = $"local function '{newLocal.Identifier.ValueText}' inside {owner}";
+        var replacedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, target, newLocal,
+            await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken,
+            RoslynFormattingHelper.TriviaEditIntent.PreserveOld);
+        if (string.Equals(replacedText, root.ToFullString(), StringComparison.Ordinal))
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.AlreadyInTargetState,
+                FilePath = filePath,
+                Message = $"// No change: the member already matches the requested declaration ({description}).",
+                UpdatedText = root.ToFullString()
+            };
+        }
+
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = $"// Replaced with {description}.",
+            UpdatedText = replacedText,
+            Warnings = ReplaceWarnings(snippetWarning, shadowedLocalFunctionHint)
+        };
+    }
+
+    /// <summary>"Type.Member" naming the type and member that hold a local function; a part is omitted when absent.</summary>
+    private static string DescribeLocalFunctionOwner(LocalFunctionStatementSyntax localFunction)
+    {
+        var ownerMember = localFunction.Ancestors().OfType<MemberDeclarationSyntax>().FirstOrDefault();
+        var ownerType = localFunction.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
+        var memberName = ownerMember == null ? null : SyntaxTargetResolver.GetMemberName(ownerMember);
+        return string.Join(".", new[] { ownerType?.Identifier.ValueText, memberName }.Where(part => !string.IsNullOrEmpty(part)));
+    }
+
+    /// <summary>Warnings for a Member(replace) response: the snippet-resolution warning and the shadowed local function hint, when present.</summary>
+    private static string[]? ReplaceWarnings(string? snippetWarning, string? shadowedLocalFunctionHint)
+    {
+        var warnings = new List<string>();
+        if (snippetWarning != null) warnings.Add(snippetWarning);
+        if (shadowedLocalFunctionHint != null) warnings.Add(shadowedLocalFunctionHint);
+        return warnings.Count == 0 ? null : warnings.ToArray();
+    }
+
     public async Task<DocumentEditResult> ReplaceMemberAsync(FilePathWrapper filePath, string memberName, string newSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containerName = null, CancellationToken cancellationToken = default)
     {
-        var (_, document, root, member, snippetWarning) = await ResolveReplaceTargetAsync(filePath, memberName, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken);
+        var (_, document, root, member, snippetWarning, shadowedLocalFunctionHint) = await ResolveReplaceTargetAsync(filePath, memberName, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken);
+
+        // A local function has its own grammar (one local function statement), so it is checked before the member-shaped rules below.
+        if (member is LocalFunctionStatementSyntax localFunction)
+        {
+            return await ReplaceLocalFunctionAsync(filePath, document, root, localFunction, newSource, memberName, snippetWarning, shadowedLocalFunctionHint, cancellationToken);
+        }
 
         // Must run before the ContainsDiagnostics check below: a multi-member source always has
         // parse diagnostics (the 2nd declaration is skipped-token trivia on the 1st), so checking
@@ -2585,7 +2650,7 @@ public class MemberRefactoringEngine
             FilePath = filePath,
             Message = $"// Replaced with {DescribeParsedMember(newMember)}.",
             UpdatedText = replacedText,
-            Warnings = snippetWarning == null ? null : new[] { snippetWarning }
+            Warnings = ReplaceWarnings(snippetWarning, shadowedLocalFunctionHint)
         };
     }
 
@@ -2594,7 +2659,7 @@ public class MemberRefactoringEngine
     /// contextSnippet/lineBefore/lineAfter), shared by <see cref="ReplaceMemberAsync"/> and <see cref="ReplaceMemberWithAdditionsAsync"/>.
     /// The anchor is resolved against the file as it is now, so it can only ever name an existing member, never one being added.
     /// </summary>
-    private async Task<(Solution Solution, Document Document, SyntaxNode Root, SyntaxNode Member, string? SnippetWarning)> ResolveReplaceTargetAsync(FilePathWrapper filePath, string memberName, string? contextSnippet, string? lineBefore, string? lineAfter, string? containerName, CancellationToken cancellationToken)
+    private async Task<(Solution Solution, Document Document, SyntaxNode Root, SyntaxNode Member, string? SnippetWarning, string? ShadowedLocalFunctionHint)> ResolveReplaceTargetAsync(FilePathWrapper filePath, string memberName, string? contextSnippet, string? lineBefore, string? lineAfter, string? containerName, CancellationToken cancellationToken)
     {
         // excludeInterfaceMembers: false -- replace must be able to target an interface's own
         // member declaration (e.g. ISolutionProvider.CurrentSolution), not just implementers.
@@ -2613,10 +2678,18 @@ public class MemberRefactoringEngine
             throw new ToolInvalidArgumentException($"Could not read '{filePath}' as a C# syntax tree, so Member cannot replace the member. It may not be a C# document in the loaded solution: check the path with {ToolCallHint.Call("ReadFile", ("filePath", filePath.ToString()))}, or reload with {ToolCallHint.Call("LoadSolution", ("forceReload", "true"))}.");
         }
 
-        var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.ResolveCandidates(root, sourceText, memberName, cancellationToken)
+        // Local functions are opt-in here; a member or type of the same name in the container wins over them (types count).
+        var allNameCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, memberName, cancellationToken, includeLocalFunctions: true);
+        var memberMatches = SyntaxTargetResolver.FilterByContainingType(SyntaxTargetResolver.PreferNonInterfaceMember(allNameCandidates
             .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember))
-            .ToList());
-        memberCandidates = SyntaxTargetResolver.FilterByContainingType(memberCandidates, containerName);
+            .ToList()), containerName);
+        var typeMatches = SyntaxTargetResolver.FilterByContainingType(allNameCandidates
+            .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+            .ToList(), containerName);
+        var combined = memberMatches.Concat(typeMatches).ToList();
+        var shadowedLocalFunctionHint = SyntaxTargetResolver.BuildShadowedLocalFunctionHint(combined, sourceText);
+        var kept = SyntaxTargetResolver.PreferMembersOverLocalFunctions(combined);
+        var memberCandidates = memberMatches.Where(kept.Contains).ToList();
         var resolved = SyntaxTargetResolver.ResolveBySnippetWithWarning(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
             (candidates, matches, failureMode) => SyntaxTargetResolver.BuildOverloadHintForCandidates(candidates, matches, failureMode, sourceText, document.FilePath ?? string.Empty, "replace", memberName), trustSingleCandidate: true, filePath: document.FilePath ?? string.Empty);
         var member = resolved.Candidate?.Node;
@@ -2625,7 +2698,7 @@ public class MemberRefactoringEngine
             throw new ToolNotFoundException(await MemberNotFoundDetail.BuildAsync(document, root, memberName, containerName, includeHead: true, cancellationToken), MissingTargetKinds.Member, memberName);
         }
 
-        return (solution, document, root, member, resolved.Warning);
+        return (solution, document, root, member, resolved.Warning, shadowedLocalFunctionHint);
     }
 
     /// <summary>
@@ -2646,7 +2719,12 @@ public class MemberRefactoringEngine
             return await ReplaceMemberAsync(filePath, memberName, newSource, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken);
         }
 
-        var (solution, document, root, resolvedTarget, snippetWarning) = await ResolveReplaceTargetAsync(filePath, memberName, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken);
+        var (solution, document, root, resolvedTarget, snippetWarning, shadowedLocalFunctionHint) = await ResolveReplaceTargetAsync(filePath, memberName, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken);
+
+        if (resolvedTarget is LocalFunctionStatementSyntax localTarget)
+        {
+            throw new ToolInvalidArgumentException($"'{memberName}' is a local function inside {DescribeLocalFunctionOwner(localTarget)}, so extra declarations cannot follow it. newMemberSource must be exactly one local function statement.");
+        }
 
         // Every declaration is parsed and guarded before anything is built, so a bad one rejects the whole call.
         var declarations = SplitMemberDeclarations(newSource);
@@ -2714,7 +2792,7 @@ public class MemberRefactoringEngine
             FilePath = filePath,
             Message = $"// Replaced with {DescribeParsedMember(replacement)}; added {DescribeAddedMembers(additions)} after it.",
             UpdatedText = updatedText,
-            Warnings = snippetWarning == null ? null : new[] { snippetWarning }
+            Warnings = ReplaceWarnings(snippetWarning, shadowedLocalFunctionHint)
         };
     }
 
