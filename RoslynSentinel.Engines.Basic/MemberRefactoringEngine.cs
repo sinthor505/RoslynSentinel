@@ -3098,11 +3098,26 @@ public class MemberRefactoringEngine
                 // Self-references inside the removed member's own span (e.g. a recursive helper) do not block its removal.
                 var memberTree = member.SyntaxTree;
                 var memberSpan = member.Span;
-                var usageCount = references.Sum(r => r.Locations.Count(l =>
-                    !(l.Location.SourceTree == memberTree && memberSpan.Contains(l.Location.SourceSpan))));
+                var usageLocations = references.SelectMany(r => r.Locations).Where(l =>
+                    !(l.Location.SourceTree == memberTree && memberSpan.Contains(l.Location.SourceSpan))).ToList();
+                var usageCount = usageLocations.Count;
+                if (usageCount > 0 && member is LocalFunctionStatementSyntax usedLocalFunction)
+                {
+                    // Search cannot resolve a local function by name, so the usage lines go in the message instead of a
+                    // Search(mode: references) hint; a local function's usages are all in its enclosing member, this file.
+                    const int maxListedLines = 10;
+                    var usageLines = usageLocations
+                        .Select(l => l.Location.GetLineSpan().StartLinePosition.Line + 1)
+                        .Distinct()
+                        .OrderBy(line => line)
+                        .ToList();
+                    var listedLines = string.Join(", ", usageLines.Take(maxListedLines));
+                    var moreLines = usageLines.Count > maxListedLines ? $" and {usageLines.Count - maxListedLines} more" : string.Empty;
+                    throw new ToolTargetIneligibleException($"Cannot remove local function '{memberName}' inside {DescribeLocalFunctionOwner(usedLocalFunction)} - it has {usageCount} usages (semantic references), at {(usageLines.Count == 1 ? "line" : "lines")} {listedLines}{moreLines} of this file. Update or remove those usages, then retry.");
+                }
+
                 if (usageCount > 0)
                 {
-                    // TODO for a local-function target the hint's Search(mode: references, query: name) returns NotFound (Search cannot resolve local functions); list the usage lines in the message instead
                     throw new ToolTargetIneligibleException($"Cannot remove member '{memberName}' - it has {usageCount} usages in the solution (counted as semantic references by SymbolFinder, so a doc-comment cref counts). Call {ToolCallHint.Call("Search", ("mode", "references"), ("query", memberName))} to list them, update or remove those usages, then retry.");
                 }
             }

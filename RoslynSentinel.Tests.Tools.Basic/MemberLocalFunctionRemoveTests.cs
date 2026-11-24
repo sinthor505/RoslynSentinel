@@ -37,6 +37,8 @@ public sealed class MemberLocalFunctionRemoveTests
         var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Order.cs"), MemberAction.remove, memberName: "Helper");
         Assert.That(result.IsError, Is.True, "A local function with a call inside its enclosing method must not be removed.");
         Assert.That(result.ErrorData?.Message, Does.Contain("usages"), "The refusal must name the usage.");
+        Assert.That(result.ErrorData?.Message, Does.Contain("inside Order.Run").And.Contain("at line 6 of this file"), "The refusal lists the usage lines.");
+        Assert.That(result.ErrorData?.Message, Does.Not.Contain("Search("), "Search cannot resolve a local function, so the refusal must not point at it.");
         var orderText = workspace.ReadText("Order.cs");
         Assert.That(orderText, Does.Contain("int Helper() => 1;"));
         Assert.That(orderText, Does.Contain("return Helper();"));
