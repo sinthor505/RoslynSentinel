@@ -1,6 +1,6 @@
 # Replace RunTest's RunSucceeded/RunCompleted bools with a TestRunOutcome enum
 
-**Status:** APPROVED 2026-11-23. Decided in todo review 2026-11-23; not built.
+**Status:** IMPLEMENTED 2026-11-24 (04cfe1a7, punchlist #18) without `BuildFailed` (not structurally detectable, see Proposal). Decided in todo review 2026-11-23.
 
 ## Motivation
 

@@ -8,6 +8,24 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## RunTest fast suite silently skips [Explicit] fixtures (punchlist #12) - resolved (2026-11-24)
+
+RunTest `fast` suite silently skips `[Explicit]` fixtures selected by the filter (2026-11-23) - `FullyQualifiedName~ImplementationScenarioGoldenTests.Budget_`: fast 15 skipped ("No model needed", exit 0), full 15 passed; the fast suite's added TestCategory condition stops the NUnit adapter treating the filter as an explicit selection; Small
+
+Evidence: 33195e71; owner ruling: composition kept, note added when every matched test was skipped; TestSuiteFilterTests green in worktree run 80e47c8c
+
+## RunTest reports an invalid --filter as zero matches (punchlist #9) - resolved (2026-11-24)
+
+RunTest reports an invalid `--filter` as zero matches (2026-11-23) - NUnit adapter "Incorrect format for TestCaseFilter Missing Operator '|' or '&'" surfaces as "0 tests matched filter ... Confirm the test name exists with Search" with the cause only in stderrTail, although the description promises a distinct error; Small
+
+Evidence: 2a5681b9, 80e47c8c; verified by hand: malformed filter exits 1 with an empty TRX and the NUnit "Incorrect format for TestCaseFilter" stderr line; TestRunOutcomeTests (InvalidFilterDetail) green; end-to-end branch untested (INBOX line)
+
+## TestRunResult outcome enum (punchlist #18) - resolved (2026-11-24)
+
+`TestRunResult` outcome enum (2026-11-23) - replace `RunSucceeded`/`RunCompleted` with a positional `TestRunOutcome` (Passed, TestsFailed, NoTestsMatched, BuildFailed, TimedOut, RunError; mapping, IsError and readers in the proposal; decided in todo review 2026-11-23); Medium - [proposal](proposals/proposal_test_run_outcome_enum.md)
+
+Evidence: 04cfe1a7 (without BuildFailed: not structurally detectable, no-TRX maps to RunError; recorded in the proposal); TestRunOutcomeTests, ResultStatusTests, RunTestTests green in worktree run 04cfe1a7
+
 ## Saved-transcript scoring never checks ToolNotTried (punchlist #10) - resolved (2026-11-23)
 
 Saved-transcript scoring never checks ToolNotTried (2026-11-23) - ScenarioId is the synthetic `saved:<folder>`, so `ScenarioRegistry.Find` cannot resolve it in `SavedTranscriptScoring.ScoreFile` (code TODO there); Small

@@ -647,6 +647,7 @@ public class TestRunEngine
             var failedCount = failedResults.Count;
             var skippedCount = allResults.Count(r => r.Outcome is TestOutcome.Skipped or TestOutcome.NotExecuted);
 
+            // TODO no automated test drives this branch end to end: the TestSolutionFixture project uses xunit, which reports a malformed filter as 0 matched, so only InvalidFilterDetail is unit tested (NUnit cause verified by hand 2026-11-24 on Tests.Asyncify)
             var invalidFilterDetail = totalCount == 0 ? InvalidFilterDetail(filter, process.ExitCode, stdoutText, stderrText) : null;
             string? detail = lockDetail ?? invalidFilterDetail;
             if (detail is null && totalCount == 0)
