@@ -61,6 +61,9 @@ public class CreateProjectOwnWritesTests
         Assert.That(workspaceManager.IsSessionHalted(), Is.False);
     }
 
+    // FLAKY on full-suite runs: failed once in the full worktree run at 59a00fc1 ("CreateProject's own project files
+    // must not be flagged") and passed alone at the same commit (results c:\tmp\rs-testtrees\_results\59a00fc1-20261124-003250-38760);
+    // likely load-sensitive; re-run alone before treating it as new.
     [Test]
     public async Task CreateProject_UnrelatedExternalEdit_StaysFlaggedAndProjectPathsAreNotAsync()
     {
