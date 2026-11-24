@@ -628,8 +628,8 @@ public static class McpToolSchemaPatcher
     /// Only the top-level <c>properties</c> object is touched: nested item schemas (e.g.
     /// <c>batchEdits</c> items, which carry their own <c>lineBefore</c>/<c>lineAfter</c>) are left
     /// alone. The C# method keeps every parameter, so runtime binding is unchanged; the names that were
-    /// actually stripped are recorded per tool instance in <see cref="StrippedToolParameters"/> (the snapshot's source)
-    /// and mirrored into <see cref="HiddenSchemaParams"/> for ToolCallHint, so the argument validator,
+    /// actually stripped are recorded per tool instance in <see cref="StrippedToolParameters"/> (the snapshot's and the hint catalog's source)
+    /// so the argument validator,
     /// which treats the emitted schema as its allow-list, still accepts them at call time.
     /// </remarks>
     internal static void ApplyHiddenParameters(McpServerTool tool, MethodInfo toolMethod, ParameterSurface surface)
@@ -679,10 +679,5 @@ public static class McpToolSchemaPatcher
 
         tool.ProtocolTool.InputSchema = JsonSerializer.SerializeToElement(schemaNode);
         StrippedToolParameters.Record(tool, removed);
-        // TODO HiddenSchemaParams is the ToolCallHint mirror; remove with ToolCallHint's move to the snapshot (stage E)
-#pragma warning disable CS0618
-        // The only intended production write to the obsolete mirror (ToolCallHint reads it until stage E).
-        HiddenSchemaParams.Register(tool.ProtocolTool.Name, removed);
-#pragma warning restore CS0618
     }
 }

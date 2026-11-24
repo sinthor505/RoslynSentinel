@@ -131,13 +131,6 @@ public static class ToolArgumentValidator
     }
 
     /// <summary>
-    /// No-op, kept until its last callers are gone. Schema caches are per tool-surface snapshot
-    /// now: a new snapshot gets a fresh table, so there is nothing to clear.
-    /// </summary>
-    [Obsolete("Schema caches are per tool-surface snapshot; nothing to clear.")]
-    public static void ClearSchemaCacheForTests() { }
-
-    /// <summary>
     /// Nearest declared parameter to <paramref name="unknown"/>, or null when nothing is close
     /// enough to suggest. Turns "that parameter doesn't exist" into "you meant this one", which is
     /// the difference between an error the caller can act on immediately and one that costs a
