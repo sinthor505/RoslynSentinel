@@ -3169,7 +3169,7 @@ public class SymbolNavigationEngine
             memberName = memberName.Substring(dotIndex + 1);
         }
 
-        var allNameCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, memberName, cancellationToken);
+        var allNameCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, memberName, cancellationToken, includeLocalFunctions: true);
         var typeNameCandidates = allNameCandidates
             .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
             .ToList();
@@ -3206,13 +3206,31 @@ public class SymbolNavigationEngine
             memberCandidates = SyntaxTargetResolver.FilterByContainingType(memberCandidates, containerName);
         }
 
+        // Local functions rank below members and types (PreferMembersOverLocalFunctions). When one is dropped,
+        // shadowHint names it so the caller can retry with containerName.
+        string? shadowHint = null;
+        if (memberCandidates.Any(c => c.Kind == CandidateKind.LocalFunction))
+        {
+            var typesInScope = string.IsNullOrWhiteSpace(containerName)
+                ? typeNameCandidates
+                : SyntaxTargetResolver.FilterByContainingType(typeNameCandidates, containerName);
+            var beforePrecedence = memberCandidates.Concat(typesInScope).ToList();
+            shadowHint = SyntaxTargetResolver.BuildShadowedLocalFunctionHint(beforePrecedence, sourceText);
+            if (SyntaxTargetResolver.PreferMembersOverLocalFunctions(beforePrecedence).Count < beforePrecedence.Count)
+            {
+                memberCandidates = memberCandidates.Where(c => c.Kind != CandidateKind.LocalFunction).ToList();
+            }
+        }
+
+        // Local functions never feed the type fallback: a type declaration wins, else the not-found error.
+        var typeFallbackSource = allNameCandidates.Where(c => c.Kind != CandidateKind.LocalFunction).ToList();
         if (memberCandidates.Count == 0)
         {
-            if (allNameCandidates.Count > 0)
+            if (typeFallbackSource.Count > 0)
             {
                 // A type declaration is returned whole (owner ruling): prefer the type(s) inside containerName, else every name match.
-                var typeCandidates = SyntaxTargetResolver.FilterByContainingType(allNameCandidates.ToList(), containerName);
-                memberCandidates = typeCandidates.Count > 0 ? typeCandidates : allNameCandidates.ToList();
+                var typeCandidates = SyntaxTargetResolver.FilterByContainingType(typeFallbackSource, containerName);
+                memberCandidates = typeCandidates.Count > 0 ? typeCandidates : typeFallbackSource;
             }
             else
             {
@@ -3291,6 +3309,7 @@ public class SymbolNavigationEngine
             CandidateKind.Struct => "struct",
             CandidateKind.Record => "record",
             CandidateKind.Enum => "enum",
+            CandidateKind.LocalFunction => "localFunction",
             _ => resolved.Kind.ToString()
         };
 
@@ -3300,6 +3319,17 @@ public class SymbolNavigationEngine
         if (resolved.Kind == CandidateKind.Constructor && allNameCandidates.Any(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum))
         {
             hint = $"'{memberName}' also names the type {memberName}; preferredTarget: class returns the type's source.";
+        }
+
+        if (resolved.Kind == CandidateKind.LocalFunction)
+        {
+            var owner = string.IsNullOrEmpty(resolved.ContainingTypeName) ? resolved.EnclosingMemberName : $"{resolved.ContainingTypeName}.{resolved.EnclosingMemberName}";
+            hint = $"'{memberName}' is a local function inside {owner} (lines {resolved.StartLine}-{resolved.EndLine}).";
+        }
+
+        if (shadowHint is not null)
+        {
+            hint = hint is null ? shadowHint : hint + " " + shadowHint;
         }
 
         return (EditOutcome.Modified, hint, null, info);
