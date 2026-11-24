@@ -2938,15 +2938,9 @@ public class MemberRefactoringEngine
 
         SyntaxNode? member;
         List<SyntaxNodeCandidate>? typeKindCandidatesForHint = null;
-        var allNameCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, memberName, cancellationToken);
-        var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(allNameCandidates
-            .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember))
-            .ToList());
-        // Snippets are not passed: a snippet quoting the type's own declaration line must still remove the type
-        // (it would match no constructor). containerName = the type reaches the constructor instead.
-        memberCandidates = PreferTypeOverOwnConstructors(allNameCandidates, memberCandidates, memberName, containerName, null, null, null);
-        memberCandidates = SyntaxTargetResolver.FilterByContainingType(memberCandidates, containerName);
-        member = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+        var allNameCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, memberName, cancellationToken, includeLocalFunctions: true);
+        var (removalCandidates, shadowedLocalFunctionHint) = BuildRemovalCandidates(allNameCandidates, memberName, containerName, sourceText);
+        member = SyntaxTargetResolver.ResolveBySnippetOrThrow(removalCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
             (candidates, matches, failureMode) => SyntaxTargetResolver.BuildOverloadHintForCandidates(candidates, matches, failureMode, sourceText, document.FilePath ?? string.Empty, "remove", memberName))?.Node;
 
         // Member(remove) only ever operates on class-level members (methods, properties,
@@ -3040,6 +3034,7 @@ public class MemberRefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Member removed.",
+            Warnings = shadowedLocalFunctionHint is null ? null : new[] { shadowedLocalFunctionHint },
             UpdatedText = await RoslynFormattingHelper.RemoveNodePreservingTriviaAsync(document, root, member, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken: cancellationToken)
         };
     }
@@ -3079,12 +3074,69 @@ public class MemberRefactoringEngine
     }
 
     /// <summary>
+    /// True when RemoveMemberAsync would remove a local function for <paramref name="memberName"/>: the same candidate
+    /// filtering and local-function precedence, and the chosen node is a LocalFunctionStatementSyntax. The tool layer
+    /// uses this to skip its name-based caller/implementation precheck and to opt the post-removal lookup into local
+    /// functions. Never throws; false when the file or name does not resolve.
+    /// </summary>
+    public async Task<bool> IsLocalFunctionRemovalTargetAsync(FilePathWrapper filePath, string memberName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containerName = null, CancellationToken cancellationToken = default)
+    {
+        // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
+        var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var document = DocumentLookup.FindDocumentOrNull(solution, filePath);
+        if (document == null)
+            return false;
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+            return false;
+
+        var allNameCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, memberName, cancellationToken, includeLocalFunctions: true);
+        var (removalCandidates, _) = BuildRemovalCandidates(allNameCandidates, memberName, containerName, sourceText);
+        if (removalCandidates.Count == 0)
+            return false;
+        try
+        {
+            var node = SyntaxTargetResolver.ResolveBySnippetOrThrow(removalCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node;
+            return node is LocalFunctionStatementSyntax;
+        }
+        catch (ToolException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The member candidates RemoveMemberAsync chooses from, after the container filter and the local-function precedence:
+    /// a local function yields to any member or type of the same name in that container. Also returns the shadowed-local-function
+    /// hint built before the precedence was applied (null when no local function was shadowed).
+    /// </summary>
+    private static (List<SyntaxNodeCandidate> Candidates, string? ShadowedLocalFunctionHint) BuildRemovalCandidates(List<SyntaxNodeCandidate> allNameCandidates, string memberName, string? containerName, SourceText sourceText)
+    {
+        var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(allNameCandidates
+            .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember))
+            .ToList());
+        // Snippets are not passed: a snippet quoting the type's own declaration line must still remove the type
+        // (it would match no constructor). containerName = the type reaches the constructor instead.
+        memberCandidates = PreferTypeOverOwnConstructors(allNameCandidates, memberCandidates, memberName, containerName, null, null, null);
+        var memberMatches = SyntaxTargetResolver.FilterByContainingType(memberCandidates, containerName);
+        var typeMatches = SyntaxTargetResolver.FilterByContainingType(allNameCandidates
+            .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+            .ToList(), containerName);
+        var combined = memberMatches.Concat(typeMatches).ToList();
+        var shadowedHint = SyntaxTargetResolver.BuildShadowedLocalFunctionHint(combined, sourceText);
+        var kept = SyntaxTargetResolver.PreferMembersOverLocalFunctions(combined);
+        return (memberMatches.Where(kept.Contains).ToList(), shadowedHint);
+    }
+
+    /// <summary>
     /// Repeats the name lookup used by RemoveMemberAsync against the committed document after a
     /// removal. Returns false when the lookup finds no declaration (removed), true when a
     /// declaration still resolves (possibly an overload or another same-named member), or null
     /// when the check cannot run. Uses all candidate kinds so removed type declarations are seen. An ambiguous lookup (several same-named declarations) counts as still present.
     /// </summary>
-    public async Task<bool?> IsDeclarationStillPresentAsync(FilePathWrapper filePath, string memberName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containerName = null, CancellationToken cancellationToken = default)
+    public async Task<bool?> IsDeclarationStillPresentAsync(FilePathWrapper filePath, string memberName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containerName = null, CancellationToken cancellationToken = default, bool includeLocalFunctions = false)
     {
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = DocumentLookup.FindDocumentOrNull(solution, filePath);
@@ -3102,8 +3154,13 @@ public class MemberRefactoringEngine
 
         try
         {
-            var allCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, memberName, cancellationToken);
+            var allCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, memberName, cancellationToken, includeLocalFunctions: includeLocalFunctions);
             var filtered = SyntaxTargetResolver.FilterByContainingType(allCandidates, containerName);
+            if (includeLocalFunctions)
+            {
+                // Same precedence as RemoveMemberAsync: a surviving member or type of that name hides a local function.
+                filtered = SyntaxTargetResolver.PreferMembersOverLocalFunctions(filtered);
+            }
             var node = SyntaxTargetResolver.ResolveBySnippetOrThrow(filtered, sourceText, contextSnippet, lineBefore, lineAfter,
                 (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node;
             return node != null;

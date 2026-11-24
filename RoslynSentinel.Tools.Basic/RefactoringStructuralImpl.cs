@@ -759,7 +759,10 @@ public class RefactoringStructuralImpl
         // A type declaration (class/interface/struct/record/enum) is removed through SafeDeleteSymbolAsync, which has its own usage check
         // that ignores references inside the type's own span; the caller/implementation precheck below is member-oriented and would count those self-references.
         var isTypeTarget = !skipPrecheck && await _memberRefactoringEngine.IsTypeRemovalTargetAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken);
-        if (!skipPrecheck && !isTypeTarget)
+        // A local function is covered by the engine's semantic usage check (SymbolFinder over the solution). The name-based
+        // caller/implementation precheck below could match a same-named member elsewhere, so it is skipped for a local function.
+        var isLocalFunctionTarget = await _memberRefactoringEngine.IsLocalFunctionRemovalTargetAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken);
+        if (!skipPrecheck && !isTypeTarget && !isLocalFunctionTarget)
         {
             var callers = await _symbolNavigationEngine.FindCallersAsync(filePathResolved, memberName, contextSnippet: contextSnippet, lineBefore: lineBefore, lineAfter: lineAfter, cancellationToken: cancellationToken);
             var implementations = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePathResolved, memberName, contextSnippet: contextSnippet, lineBefore: lineBefore, lineAfter: lineAfter, cancellationToken: cancellationToken);
@@ -819,7 +822,7 @@ public class RefactoringStructuralImpl
         string? removeWarning = null;
         if (!apply.DryRun)
         {
-            var stillPresent = await _memberRefactoringEngine.IsDeclarationStillPresentAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken);
+            var stillPresent = await _memberRefactoringEngine.IsDeclarationStillPresentAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken, includeLocalFunctions: isLocalFunctionTarget);
             if (stillPresent == false)
             {
                 removeMessage += $" Verified: a repeat lookup for '{memberName}' finds no declaration. To double-check, call {ToolCallHint.Call("GetFileOutline")} on the file.";
