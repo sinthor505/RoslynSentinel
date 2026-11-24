@@ -534,15 +534,16 @@ public class McpToolsetControlTests
     }
 
     [Test]
-    public async Task PlainStart_SendsNone()
+    public async Task PlainStart_SendsOneToolListChangedAfterInitialized()
     {
         var stateDir = Path.Combine(Path.GetTempPath(), "rs-tabstate-" + Guid.NewGuid().ToString("N"));
         try
         {
             var store = new TabToolsetStateStore(stateDir, null) { RestoredAtStartup = false };
             await using var live = await LiveServer.StartAsync(advanced: true, "claude-lean", tabState: store);
-            await Task.Delay(1000);
-            Assert.That(live.ListChangedCount, Is.EqualTo(0), "a start that did not restore toolsets must not send tools/list_changed");
+            Assert.That(await live.WaitForListChangedAsync(TimeSpan.FromSeconds(10)), Is.True, "a launcher-started tab start with no restore must still send tools/list_changed after initialized");
+            await Task.Delay(500);
+            Assert.That(live.ListChangedCount, Is.EqualTo(1), "exactly one notification per host");
         }
         finally
         {

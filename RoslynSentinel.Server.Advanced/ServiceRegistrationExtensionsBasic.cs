@@ -121,9 +121,10 @@ public static class RoslynSentinelServiceExtensionsBasic
 
     /// <summary>
     /// Registers the incoming-message filter that sends one <c>tools/list_changed</c> after the client's <c>initialized</c>
-    /// notification when toolsets were restored from tab state at startup (plan_tab_scoped_toolset_persistence Step 7), so the
-    /// client re-lists the tools it had before the restart. Pass-through for every other message, for a start that did not
-    /// restore, and after the first send. A failed send is logged as a warning and never breaks the message pipeline.
+    /// notification when a <c>TabToolsetStateStore</c> exists in the host (a launcher-started tab start: a restored start, or a
+    /// start after <c>StopServer(keepToolsets: false)</c>, where the client must re-list to drop the removed toolset tools).
+    /// Pass-through for every other message, for a host with no store, and after the first send. A failed send is logged as a
+    /// warning and never breaks the message pipeline.
     /// </summary>
     private static void AddRestoredToolsetListChangedMessageFilter(IMcpServerBuilder mcpBuilder)
     {
@@ -133,10 +134,9 @@ public static class RoslynSentinelServiceExtensionsBasic
         {
             await next(context, cancellationToken).ConfigureAwait(false);
 
-            // TODO Send after every launcher-started (tab state) start, not only a restored one: after StopServer(keepToolsets: false) the client keeps listing the dropped toolset tools until some later list_changed (Step 9 case D, 2026-11-23).
             if (context.JsonRpcMessage is not JsonRpcNotification notification
                 || notification.Method != NotificationMethods.InitializedNotification
-                || context.Services?.GetService<TabToolsetStateStore>()?.RestoredAtStartup != true
+                || context.Services?.GetService<TabToolsetStateStore>() is null
                 || Interlocked.CompareExchange(ref sent, 1, 0) != 0)
             {
                 return;
@@ -146,11 +146,11 @@ public static class RoslynSentinelServiceExtensionsBasic
             try
             {
                 await context.Server.SendNotificationAsync(NotificationMethods.ToolListChangedNotification, cancellationToken).ConfigureAwait(false);
-                logger?.LogInformation("Sent tools/list_changed after initialized: toolsets were restored from tab state.");
+                logger?.LogInformation("Sent tools/list_changed after initialized: a tab-state store exists (launcher-started tab start).");
             }
             catch (Exception ex)
             {
-                logger?.LogWarning(ex, "Failed to send tools/list_changed after initialized for restored toolsets.");
+                logger?.LogWarning(ex, "Failed to send tools/list_changed after initialized for a launcher-started tab start.");
             }
         }));
     }
