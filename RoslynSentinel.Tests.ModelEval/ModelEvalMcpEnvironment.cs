@@ -115,12 +115,9 @@ internal sealed class ModelEvalMcpEnvironment : IAsyncDisposable
         mcpBuilder.WithTasks(
             new InMemoryMcpTaskStore(),
             o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
-        // Hidden-parameter rules are per host now (the ParameterSurface registered below). The ToolCallHint mirror (HiddenSchemaParams)
-        // and the validator schema cache are still process-static (stage E), so a world built later resets them. Tools are built lazily
-        // at host start, so these registrations stay before the host starts. The ModelEval assembly runs its fixtures sequentially,
-        // which is why resetting the statics per world is safe.
-        RoslynSentinel.Common.HiddenSchemaParams.Clear();
-        RoslynSentinel.Server.Advanced.ToolArgumentValidator.ClearSchemaCacheForTests();
+        // Hidden-parameter rules (the ParameterSurface registered below), the hint catalog's hidden map and the validator
+        // schema cache are per host or per tool-surface snapshot, so a later world needs no reset; SchemaOptions is still
+        // process-static. Tools are built lazily at host start, so these registrations stay before the host starts.
         // ConfigureHiddenParameters used to replace the explicit (--hide-params) set, so the EnvOrFlag layer is dropped and
         // the Profile layer kept; fullToolSchema adds no rule. Exactly the old effective list (R6).
         var rules = RoslynSentinel.Common.ToolParameterSurfaceOptions.FromStartup().Visibility
