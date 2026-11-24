@@ -28,6 +28,11 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// <param name="AbsentTargetNames">StopAndReport scenarios only: names of the task's target that does not exist in the solution (for example a file or method name). When the final message names one and states it is absent but has no BLOCKED: marker, the run scores FailureClass.ProseStop (see StopAbsenceDetector). null = never ProseStop.</param>
 /// <param name="ReplyMustName">Locate scenarios only: a name the model's final message must contain (whole word, case-insensitive) for a Correct final-state verdict to stand; without it the verdict is demoted to Unchanged (see <see cref="GateVerdictOnReply"/>). null = the reply is not graded.</param>
 /// <param name="OfferFullToolSchema">Mechanism only: true builds the sample's world with the full tool schema (validateOnApply offered); no scenario sets it.</param>
+/// <param name="WholeTreeMustStayUnchanged">The runner captures a TreeSnapshot after staging and grades any added, changed or removed file after the run as Destructive.</param>
+/// <param name="RequireNotFoundFromToolUnderTest">The model must have called ToolUnderTest and met a NotFound-class error, else the run scores FailureClass.ToolNotTried.</param>
+/// <param name="RestorePackages">The sample's world restores NuGet packages so RunTest can build the fixture tests (default false).</param>
+/// <param name="DoneWhenTests">Test class names named in the prompt's done-when sentence, read by the scenario catalog; null = exempt.</param>
+/// <param name="PrimaryAxis">The one declared axis of the scenario (Unassigned until declared), used for the generated NUnit category.</param>
 public sealed record ScenarioDefinition(
     string Id,
     int ScenarioType,
@@ -53,7 +58,12 @@ public sealed record ScenarioDefinition(
     IReadOnlyList<(string Tool, string Arguments)>? ResumeFaultExtraCalls = null,
     IReadOnlyList<string>? AbsentTargetNames = null,
     string? ReplyMustName = null,
-    bool OfferFullToolSchema = false)
+    bool OfferFullToolSchema = false,
+    bool WholeTreeMustStayUnchanged = false,
+    bool RequireNotFoundFromToolUnderTest = false,
+    bool RestorePackages = false,
+    IReadOnlyList<string>? DoneWhenTests = null,
+    EvalAxis PrimaryAxis = EvalAxis.Unassigned)
 {
     /// <summary>Environment variable holding a positive integer that replaces TurnCap for a live run (the script's -TurnCap).</summary>
     public const string TurnCapVariable = "ROSLYNSENTINEL_MODELEVAL_TURN_CAP";
