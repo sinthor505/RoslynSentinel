@@ -20,9 +20,15 @@ public class FinalOutcomeTokenTests
     }
 
     [Test]
-    public void Parse_TokenAfterPreamble_IsNone()
+    public void Parse_TokenOnLastLine_IsDone()
     {
-        Assert.That(FinalOutcomeToken.Parse("I checked the tree.\nDONE: finished the change"), Is.EqualTo(FinalOutcome.None));
+        Assert.That(FinalOutcomeToken.Parse("I checked the tree.\nDONE: finished the change"), Is.EqualTo(FinalOutcome.Done));
+    }
+
+    [Test]
+    public void Parse_BlockedOnLastLineAfterReport_IsBlocked()
+    {
+        Assert.That(FinalOutcomeToken.Parse("Tried RenameSymbol on Foo.\nIt failed: SymbolNotFound.\n\n**BLOCKED:** Foo does not exist\n"), Is.EqualTo(FinalOutcome.Blocked));
     }
 
     [TestCase((string?)null)]

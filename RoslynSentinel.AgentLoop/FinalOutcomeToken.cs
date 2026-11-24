@@ -2,7 +2,7 @@ using System.Text.RegularExpressions;
 
 namespace RoslynSentinel.Common.AgentLoop;
 
-/// <summary>The leading outcome token of a model's final message: DONE:, BLOCKED: or neither.</summary>
+/// <summary>The outcome token on the first or last non-blank line of a model's final message: DONE:, BLOCKED: or neither.</summary>
 public enum FinalOutcome
 {
     None,
@@ -10,7 +10,7 @@ public enum FinalOutcome
     Blocked
 }
 
-/// <summary>Reads the DONE:/BLOCKED: token that starts a final message. Pure functions, no state.</summary>
+/// <summary>Reads the DONE:/BLOCKED: token that starts the first or last non-blank line of a final message. Pure functions, no state.</summary>
 public static class FinalOutcomeToken
 {
     // Mirrors StopMarker.LeadingMarkerRegex (StopMarker keeps its regex private; BLOCKED: itself is read through StopMarker.IsLeading):
@@ -19,7 +19,7 @@ public static class FinalOutcomeToken
         @"^\s*(?:#+\s*)?[*_`]*DONE[*_`]*:",
         RegexOptions.CultureInvariant);
 
-    /// <summary>Done or Blocked when the first non-blank line starts with that token; otherwise None (a null or blank message is None).</summary>
+    /// <summary>Done or Blocked when the first or last non-blank line starts with that token; when both carry one, the first line wins. Otherwise None (a null or blank message is None).</summary>
     public static FinalOutcome Parse(string? message)
     {
         if (string.IsNullOrWhiteSpace(message))
@@ -32,6 +32,28 @@ public static class FinalOutcomeToken
             return FinalOutcome.Blocked;
         }
 
-        return LeadingDoneRegex.IsMatch(message) ? FinalOutcome.Done : FinalOutcome.None;
+        if (LeadingDoneRegex.IsMatch(message))
+        {
+            return FinalOutcome.Done;
+        }
+
+        string[] lines = message.Split('\n');
+        for (int i = lines.Length - 1; i >= 0; i--)
+        {
+            string line = lines[i].TrimEnd('\r');
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            if (StopMarker.IsLeading(line))
+            {
+                return FinalOutcome.Blocked;
+            }
+
+            return LeadingDoneRegex.IsMatch(line) ? FinalOutcome.Done : FinalOutcome.None;
+        }
+
+        return FinalOutcome.None;
     }
 }

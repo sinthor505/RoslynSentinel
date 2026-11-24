@@ -199,13 +199,14 @@ public static class AgentSystemPrompts
         already correct.
 
         ## Endings
-        Your last message has no tool call and starts with DONE: or BLOCKED:.
-        - DONE: every Done-when check passed. List what you changed, the build result, and
-          everything the task's Report line asks for.
-        - BLOCKED: some part of the task cannot be completed as described. Say what you tried,
-          what fails and where (file, error). Leave files as the task's If-a-condition-fails line
-          says, list every change already written (or "no changes"), and include everything the
-          Report line asks for.
+        Your last message has no tool call. Write the report first, then end the message with
+        one line that starts with DONE: or BLOCKED: and sums up the outcome.
+        - DONE: every Done-when check passed. The report lists what you changed, the build
+          result, and everything the task's Report line asks for.
+        - BLOCKED: some part of the task cannot be completed as described. The report says what
+          you tried, what fails and where (file, error). Leave files as the task's
+          If-a-condition-fails line says, list every change already written (or "no changes"),
+          and include everything the Report line asks for.
         """;
 
     /// <summary>
@@ -215,13 +216,14 @@ public static class AgentSystemPrompts
     /// </summary>
     public const string CodingAgentContractEndings = """
         ## Endings
-        Your last message has no tool call and starts with DONE: or BLOCKED:.
-        - DONE: every Done-when check passed. List what you changed, the build result, and
-          everything the task's Report line asks for.
-        - BLOCKED: some part of the task cannot be completed as described. Say what you tried,
-          what fails and where (file, error). Leave files as the task's If-a-condition-fails line
-          says, list every change already written (or "no changes"), and include everything the
-          Report line asks for.
+        Your last message has no tool call. Write the report first, then end the message with
+        one line that starts with DONE: or BLOCKED: and sums up the outcome.
+        - DONE: every Done-when check passed. The report lists what you changed, the build
+          result, and everything the task's Report line asks for.
+        - BLOCKED: some part of the task cannot be completed as described. The report says what
+          you tried, what fails and where (file, error). Leave files as the task's
+          If-a-condition-fails line says, list every change already written (or "no changes"),
+          and include everything the Report line asks for.
         """;
 
     /// <summary>
