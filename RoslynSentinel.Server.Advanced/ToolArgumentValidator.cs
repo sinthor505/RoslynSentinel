@@ -1038,15 +1038,14 @@ public static class ToolArgumentValidator
         return resolved is { Version: > 0 } ? resolved : null;
     }
 
-    /// <summary>True when <paramref name="parameterName"/> is hidden from the tool's emitted schema but still accepted. Reads the captured snapshot when one is given; the HiddenSchemaParams registry fallback applies only without one.</summary>
-    private static bool IsHiddenParameter(RoslynSentinel.Common.ToolSurfaceSnapshot? surface, ModelContextProtocol.Server.McpServer? server, string? toolName, string parameterName)
+    /// <summary>True when <paramref name="parameterName"/> is hidden from the tool's emitted schema but still accepted. Reads the captured snapshot; without one nothing is hidden.</summary>
+    private static bool IsHiddenParameter(RoslynSentinel.Common.ToolSurfaceSnapshot? surface, string? toolName, string parameterName)
     {
         if (string.IsNullOrEmpty(toolName))
             return false;
 
         if (surface is null)
-            // TODO remove the HiddenSchemaParams fallback with the registry (stage E)
-            return RoslynSentinel.Common.HiddenSchemaParams.IsHidden(toolName, parameterName);
+            return false;
 
         return surface.Find(toolName)?.HiddenParameters.Contains(parameterName) ?? false;
     }
@@ -1088,7 +1087,7 @@ public static class ToolArgumentValidator
 
         // Copy first: the wrap removes keys from the dictionary being inspected.
         var flatKeys = arguments.Keys
-            .Where(key => !declared.Contains(key) && !IsHiddenParameter(surface, server, toolName, key))
+            .Where(key => !declared.Contains(key) && !IsHiddenParameter(surface, toolName, key))
             .ToList();
         if (flatKeys.Count == 0)
             return null;
@@ -1337,7 +1336,7 @@ public static class ToolArgumentValidator
             (validateOnApplyArg.ValueKind == System.Text.Json.JsonValueKind.False ||
              (validateOnApplyArg.ValueKind == System.Text.Json.JsonValueKind.String &&
               string.Equals(validateOnApplyArg.GetString(), "false", StringComparison.OrdinalIgnoreCase))) &&
-            IsHiddenParameter(surface, server, toolName, "validateOnApply") &&
+            IsHiddenParameter(surface, toolName, "validateOnApply") &&
             !declared.Contains("validateOnApply"))
         {
             return $"validateOnApply:false is not available for tool '{toolName}' on this server's current schema configuration: " +
@@ -1357,7 +1356,7 @@ public static class ToolArgumentValidator
                 // A parameter the Lean schema profile stripped from the emitted schema is still bound
                 // by the C# method, so it is accepted (but never advertised in the lists below).
                 if (!declared.Contains(argument.Key) &&
-                    !IsHiddenParameter(surface, server, toolName, argument.Key))
+                    !IsHiddenParameter(surface, toolName, argument.Key))
                     unknown.Add(argument.Key);
             }
 

@@ -1,6 +1,6 @@
 // Coverage for the --hide-params / ROSLYNSENTINEL_HIDE_PARAMS option (plan_modeleval_workflow_contract_phase1 Step 19):
 // an explicit list of tool parameters hidden from the top level of tools/list input schemas, composed with the Lean
-// profile. The server still accepts a hidden name at call time (HiddenSchemaParams), and validateOnApply:false is
+// profile. The server still accepts a hidden name at call time, and validateOnApply:false is
 // refused only where the emitted schema hides the parameter. Same in-process MCP host shape as SchemaLeanProfileTests.cs;
 // no solution load is needed. Schema tests run for ReplaceSnippet and ApplyDiff (the WholeFileWrite mode).
 using System.IO.Pipelines;
@@ -20,7 +20,7 @@ using RoslynSentinel.Server.Advanced;
 namespace RoslynSentinel.Tests.Server;
 
 [TestFixture]
-[NonParallelizable] // mutates the process-wide SchemaOptions (HiddenParameters), HiddenSchemaParams and the validator schema cache
+[NonParallelizable] // mutates the process-wide SchemaOptions (HiddenParameters)
 public class SchemaHiddenParametersTests
 {
     private const string HideParamsEnvVar = "ROSLYNSENTINEL_HIDE_PARAMS";
@@ -38,12 +38,9 @@ public class SchemaHiddenParametersTests
 
     private static void ResetStatics()
     {
-        // All four are process-static: the profile and explicit hidden list, the hidden-name registry, and the
-        // validator's per-tool schema cache (which would otherwise keep validating against a stale schema).
+        // The profile and explicit hidden list are process-static, so reset them between tests.
         SchemaOptions.Configure([]);
         SchemaOptions.ConfigureHiddenParameters([]);
-        HiddenSchemaParams.Clear();
-        ToolArgumentValidator.ClearSchemaCacheForTests();
     }
 
     private static async Task<T> WithClientAsync<T>(string[] startupArgs, Func<McpClient, Task<T>> action)
@@ -89,6 +86,47 @@ public class SchemaHiddenParametersTests
             // Clone so the elements outlive the client/host disposal.
             return tools.Select(t => (t.Name, t.ProtocolTool.InputSchema.Clone())).ToList();
         });
+
+    // Same host as ListInputSchemasAsync, but also returns the host's ToolSurfaceController snapshot. The controller's
+    // first read forces the snapshot build, so it is read after the client has listed tools and before the host is disposed.
+    private static async Task<(List<(string Name, JsonElement InputSchema)> Schemas, RoslynSentinel.Common.ToolSurfaceSnapshot Snapshot)> ListInputSchemasWithSnapshotAsync(params string[] startupArgs)
+    {
+        SchemaOptions.Configure(startupArgs);
+
+        var clientToServer = new Pipe();
+        var serverToClient = new Pipe();
+
+        var services = new ServiceCollection();
+        services.AddRoslynSentinelEnginesBasic();
+
+        var mcpBuilder = services.AddMcpServer();
+        mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
+        mcpBuilder.AddRoslynSentinelToolsBasic(services, ActiveModes);
+
+        var hostBuilder = Host.CreateApplicationBuilder();
+        foreach (var descriptor in services)
+        {
+            hostBuilder.Services.Add(descriptor);
+        }
+
+        using var host = hostBuilder.Build();
+        var hostRun = host.RunAsync();
+
+        var clientTransport = new StreamClientTransport(
+            serverInput: clientToServer.Writer.AsStream(),
+            serverOutput: serverToClient.Reader.AsStream(),
+            loggerFactory: NullLoggerFactory.Instance);
+
+        await using var client = await McpClient.CreateAsync(clientTransport, cancellationToken: TestContext.CurrentContext.CancellationToken);
+        var tools = await client.ListToolsAsync(cancellationToken: TestContext.CurrentContext.CancellationToken);
+
+        // Clone so the elements outlive the client/host disposal.
+        var schemas = tools.Select(t => (t.Name, t.ProtocolTool.InputSchema.Clone())).ToList();
+        var snapshot = host.Services.GetRequiredService<RoslynSentinel.Common.ToolSurfaceController>().Current;
+        await host.StopAsync();
+        await hostRun;
+        return (schemas, snapshot);
+    }
 
     private static List<JsonElement> SchemasFor(List<(string Name, JsonElement InputSchema)> schemas, string toolName)
     {
@@ -176,10 +214,11 @@ public class SchemaHiddenParametersTests
     [Test]
     public async Task HideParams_RegistersExactlyValidateOnApply()
     {
-        await ListInputSchemasAsync("--hide-params=validateOnApply");
+        var (_, snapshot) = await ListInputSchemasWithSnapshotAsync("--hide-params=validateOnApply");
 
-        Assert.That(HiddenSchemaParams.IsHidden("ReplaceSnippet", "validateOnApply"), Is.True);
-        Assert.That(HiddenSchemaParams.IsHidden("ReplaceSnippet", "returnDiff"), Is.False, "returnDiff was not named, so it is not registered.");
+        var hidden = snapshot.Find("ReplaceSnippet")!.HiddenParameters;
+        Assert.That(hidden.Contains("validateOnApply"), Is.True);
+        Assert.That(hidden.Contains("returnDiff"), Is.False, "returnDiff was not named, so it is not hidden.");
     }
 
     // ---- call-time refusal and acceptance ----
@@ -259,20 +298,6 @@ public class SchemaHiddenParametersTests
             new Dictionary<string, object?> { ["validateOnApply"] = false });
 
         Assert.That(SchemaOptions.HiddenParameters, Is.Empty);
-        Assert.That(text, Does.Not.Contain("is not available for tool"), text);
-    }
-
-    [Test]
-    public async Task Refusal_WhenSchemaDeclaresTheParameter_IgnoresAStaleHiddenRegistration()
-    {
-        // Simulate a registration left behind by an earlier hidden world; the Full world below declares the parameter.
-        HiddenSchemaParams.Register("ReplaceSnippet", ["validateOnApply"]);
-
-        var text = await CallReplaceSnippetAsync(
-            [],
-            "Verify a stale hidden registration does not refuse a declared parameter",
-            new Dictionary<string, object?> { ["validateOnApply"] = false });
-
         Assert.That(text, Does.Not.Contain("is not available for tool"), text);
     }
 

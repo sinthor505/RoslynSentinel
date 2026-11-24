@@ -197,7 +197,7 @@ public class ToolSurfaceParameterTests
         Assert.That(rowA, Is.Not.Null);
         Assert.That(rowA!.HiddenParameters, Does.Contain("validateOnApply"));
 
-        // No HiddenSchemaParams.Clear() between the hosts: the per-host snapshot alone must decide host B's row.
+        // There is no reset between the hosts: the per-host snapshot alone must decide host B's row.
         SchemaOptions.Configure([]);
         SchemaOptions.ConfigureHiddenParameters([]);
         using var hostB = BuildHarness();
@@ -244,19 +244,6 @@ public class ToolSurfaceParameterTests
         Assert.That(TopLevelProperties(schema), Does.Not.Contain("returnDiff"));
         Assert.That(text, Does.Not.Contain("Unknown parameter"), text);
         Assert.That(text, Does.Not.Contain("is not available for tool"), text);
-    }
-
-    [Test]
-    public async Task StaleRegistryEntry_IsIgnored_WhenAControllerIsRegistered()
-    {
-        using var harness = BuildHarness();
-        _ = harness.Host.Services.GetRequiredService<ToolSurfaceController>().Current;
-
-        // A stale registration left behind by an earlier hidden world. The controller snapshot hides nothing here.
-        HiddenSchemaParams.Register("ReplaceSnippet", ["notAParameter"]);
-
-        var text = await CallReplaceSnippetAsync(harness, new Dictionary<string, object?> { ["notAParameter"] = true });
-        Assert.That(text, Does.Contain("Unknown parameter"), text);
     }
 
     [Test]
