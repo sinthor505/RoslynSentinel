@@ -675,6 +675,9 @@ Suggested orchestrator batches:
   SubAgent A/B series continuous and still ships the fix to main sessions; switching children over later is a deliberate, dated
   eval decision. The flag must survive `plan_json_toolset_definitions.md` Step 19, which replaces the child's `--mode=Claude-Lean`
   with `--toolset=subagent-child` (R9). Not run overnight.
+  **Owner 2026-11-24: (a).** The SubAgent tool is rarely used and has no evals, so no A/B series needs continuity; a
+  per-call `SubAgent` parameter was considered and rejected (claude-lean schema cost, no user). Steps 17-18 run; the eval
+  procedure records the Step 17 commit as the boundary.
 - **R9. Overlap with other plans.** `plan_json_toolset_definitions.md` (DRAFT, not started): Step 22 adds constructor parameters to
   `ActiveToolSurface` (`WithLiveSnapshot` is a with-copy, so they carry over); Step 21 edits `ModelEvalMcpEnvironment.cs` (Step 15
   here; its anchors there are already stale) and **deletes `ChainEvalToolSurface.NewHiddenTools`**, which Step 5's new

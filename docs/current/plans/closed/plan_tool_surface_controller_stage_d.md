@@ -647,6 +647,7 @@ Batches for the run:
   `hiddenParameters` strings - changes the meaning of an existing wire field. Recommendation: (a) for the overnight run,
   then (b) if the owner wants status provenance now. Not an eval-surface change (`McpServerStatus` is hidden on both eval
   arms), but a budget raise is the owner's call, so the run skips Steps 14-15 and Step 18 records them in INBOX.
+  **Owner 2026-11-24: (b), raise the budget; Steps 14-15 run.**
 - **R4. Aliases (paused Steps 11-14): deferred (taken).** The alias tables (`ToolArgumentValidator.cs:612`, `:728`,
   `:741`) have one source and their targets are already checked by
   `ToolParameterAliasTests.EveryAliasEntry_ForAnActiveTool_PointsAtADeclaredParameter_AndIsNotItselfDeclared` and
