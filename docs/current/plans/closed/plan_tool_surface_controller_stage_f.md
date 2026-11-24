@@ -1,13 +1,12 @@
 # Plan: Tool-surface controller stage F - the controller fills the tool collection at startup; per-class DI blocks and WithSentinelTools go
 
-**Status:** IMPLEMENTED on branch tool-surface-stage-f (unmerged, for owner review) 2026-11-24: 1be4aa87..afb49bbb in worktree c:\tmp\rs-stage-f; full run green at afb49bbb (c:\tmp\rs-testtrees\_results\afb49bbb-20261124-062801-404), ModelEval gate 71/71; live check A-F ok. Owner review 2026-11-24: master merged in (5cb1930e, goldens unchanged) and review fixes applied (13d3fe86, 28012d18, fc4356e6, 45effcdb, 847dd027; filtered runs green apart from the pre-existing stale modeleval_scenarios.md check, summary c:\tmp\rs-testtrees\_results\847dd027-20261124-110512-66308). Close after the merge (the merge or the first master commit after it carries Closes:). Approved 2026-11-24: Stage F: the controller fills the tool collection at startup from ordered registry tables; per-class DI blocks and WithSentinelTools removed. Implemented on branch tool-surface-stage-f (worktree), unmerged, for owner review. Review fixes applied; decisions taken at recommendation (owner away).
+**Status:** IMPLEMENTED 2026-11-24, merged to master in eafe6bf3 (parity tests and ratchets green on the merge: Harness 40/40, Server 42/42, Basic 34/34, Tools.Basic 2/2, ModelEval EvalToolSurfaceParityTests 13/13). Branch history: 1be4aa87..afb49bbb in worktree c:\tmp\rs-stage-f; full run green at afb49bbb (c:\tmp\rs-testtrees\_results\afb49bbb-20261124-062801-404), ModelEval gate 71/71; live check A-F ok. Owner review 2026-11-24: master merged in (5cb1930e, goldens unchanged) and review fixes applied (13d3fe86, 28012d18, fc4356e6, 45effcdb, 847dd027; filtered runs green apart from the pre-existing stale modeleval_scenarios.md check, summary c:\tmp\rs-testtrees\_results\847dd027-20261124-110512-66308). Approved 2026-11-24: Stage F: the controller fills the tool collection at startup from ordered registry tables; per-class DI blocks and WithSentinelTools removed. Review fixes applied; decisions taken at recommendation (owner away).
 
-Stage 5 of [proposal_tool_surface_controller.md](../proposals/proposal_tool_surface_controller.md). Follows phase A/B
-([closed/plan_tool_surface_controller.md](closed/plan_tool_surface_controller.md)), stage C
-([closed/plan_tool_surface_controller_stage_c.md](closed/plan_tool_surface_controller_stage_c.md)), stage D
-([closed/plan_tool_surface_controller_stage_d.md](closed/plan_tool_surface_controller_stage_d.md)) and stage E
-([closed/plan_tool_surface_controller_stage_e.md](closed/plan_tool_surface_controller_stage_e.md); being implemented on master
-on 2026-11-24, its Steps 17-18 on HOLD). Phase A/B's risk "Empty startup leaves no collection" and stage E's R5 hand the
+Stage 5 of [proposal_tool_surface_controller.md](../../proposals/proposal_tool_surface_controller.md). Follows phase A/B
+([closed/plan_tool_surface_controller.md](plan_tool_surface_controller.md)), stage C
+([closed/plan_tool_surface_controller_stage_c.md](plan_tool_surface_controller_stage_c.md)), stage D
+([closed/plan_tool_surface_controller_stage_d.md](plan_tool_surface_controller_stage_d.md)) and stage E
+([closed/plan_tool_surface_controller_stage_e.md](plan_tool_surface_controller_stage_e.md)). Phase A/B's risk "Empty startup leaves no collection" and stage E's R5 hand the
 empty-collection case to this stage.
 
 ## Problem
