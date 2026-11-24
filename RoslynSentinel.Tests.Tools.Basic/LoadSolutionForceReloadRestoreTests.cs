@@ -139,6 +139,63 @@ public class LoadSolutionForceReloadRestoreTests
         }
     }
 
+    [Test]
+    public async Task LoadSolution_FirstLoadRestoreFails_StillLoadsAndAppendsTheForceReloadHintWithoutBuildAdvice()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        var tool = CreateImpl(workspaceManager, (_, _, _) =>
+            Task.FromResult(new SolutionRestoreResult(false, true, false, 1, "", TimeSpan.FromSeconds(2))));
+
+        var result = await tool.LoadSolution(new ToolCallReason("first load of an unrestored solution, restore fails"), fixture.SolutionPath, timeoutSeconds: 120);
+
+        Assert.That(result.IsError, Is.False, "a restore failure must not block the load");
+        var text = result.SuccessData?.ToString();
+        Assert.That(text, Does.Contain("ended with exit code 1").And.Contain("the existing restore state was kept"));
+        Assert.That(text, Does.Contain("Unrestored project(s)").And.Contain("forceReload"));
+        Assert.That(text, Does.Not.Contain("Build(").And.Not.Contain("dotnet restore"));
+    }
+
+    [Test]
+    public async Task LoadSolution_ProjectsAlreadyRestored_NoForceReload_NeverRestores()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        foreach (var csproj in SolutionProjectPaths.Read(fixture.SolutionPath))
+        {
+            var objDir = Path.Combine(Path.GetDirectoryName(csproj)!, "obj");
+            Directory.CreateDirectory(objDir);
+            var assets = Path.Combine(objDir, "project.assets.json");
+            File.WriteAllText(assets, "{}");
+            File.SetLastWriteTimeUtc(assets, DateTime.UtcNow.AddMinutes(5));
+        }
+        var restoreCalls = 0;
+        var tool = CreateImpl(workspaceManager, (_, _, _) =>
+        {
+            restoreCalls++;
+            return Task.FromResult(Ok());
+        });
+
+        var result = await tool.LoadSolution(new ToolCallReason("load with every project already restored"), fixture.SolutionPath, timeoutSeconds: 120);
+
+        Assert.That(result.IsError, Is.False);
+        Assert.That(restoreCalls, Is.EqualTo(0), "a solution whose projects all have a current assets file must not restore");
+        Assert.That(result.SuccessData?.ToString(), Does.Not.Contain("Restored"));
+    }
+
+    [Test]
+    public async Task AmbientDefault_UnderATestAssembly_IsTheNoOpRestore()
+    {
+        Assert.That(SolutionRestore.AmbientRestore, Is.Not.Null);
+        var restore = SolutionRestore.ResolveDefault();
+        Assert.That(restore.Method.Name, Is.EqualTo(nameof(SolutionRestore.NoOpRestoreForTests)));
+
+        var result = await restore(Path.Combine(Path.GetTempPath(), "does-not-exist.sln"), TimeSpan.FromSeconds(1), CancellationToken.None);
+
+        Assert.That(result.Succeeded, Is.True);
+        Assert.That(result.Duration, Is.EqualTo(TimeSpan.Zero), "the test default spawns no process, so it takes no time");
+    }
+
     private static WorkspaceProjectManagementImpl CreateImpl(PersistentWorkspaceManager workspaceManager, Func<string, TimeSpan, CancellationToken, Task<SolutionRestoreResult>> restore)
     {
         var config = Battery.Basic.TestEngines.SentinelConfiguration();
