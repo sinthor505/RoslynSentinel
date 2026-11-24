@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios;
+namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Graders;
 
 /// <summary>
 /// Grades one step of an implementation scenario, in order: hidden xUnit test file plus an unfiltered test run

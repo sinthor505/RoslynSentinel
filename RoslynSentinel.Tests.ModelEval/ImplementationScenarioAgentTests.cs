@@ -7,6 +7,7 @@ using RoslynSentinel.Common.AgentLoop;
 using RoslynSentinel.Tests.Battery.Basic;
 using RoslynSentinel.Tests.ModelEval.Fixtures;
 using RoslynSentinel.Tests.ModelEval.ImplementationScenarios;
+using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Graders;
 
 namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 
