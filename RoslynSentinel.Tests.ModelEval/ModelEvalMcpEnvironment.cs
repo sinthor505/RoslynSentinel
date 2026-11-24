@@ -127,6 +127,7 @@ internal sealed class ModelEvalMcpEnvironment : IAsyncDisposable
             .Where(r => r.Source != RoslynSentinel.Common.ParameterRuleSource.EnvOrFlag).ToList();
         if (!fullToolSchema)
             rules.Add(new RoslynSentinel.Common.ParameterVisibilityRule(null, "validateOnApply", RoslynSentinel.Common.ParameterVisibility.Hide, RoslynSentinel.Common.ParameterRuleSource.Harness, "ModelEvalMcpEnvironment"));
+        // Deliberately not restored afterwards: a toolset enabled later in the same world builds tools with the same setting (this singleton lives as long as the world's host).
         services.AddSingleton(new RoslynSentinel.Common.ParameterSurface(new RoslynSentinel.Common.ToolParameterSurfaceOptions(rules)));
 
         if (configureToolSurface is null)
