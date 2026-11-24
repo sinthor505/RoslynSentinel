@@ -23,7 +23,8 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// <see cref="ModelAgentRunner"/> with a scripted model whose streamed responses never finish cleanly. Every chat request
 /// streams a tool call with placeholder arguments, which <see cref="LmStudioAgentClient"/> treats as a runaway: the runner must
 /// stop as <see cref="AgentStopReason.StreamRunaway"/> after the client's single retry. A stream that ends without
-/// <c>response.completed</c> must stop as <see cref="AgentStopReason.StreamTruncated"/> the same way. A further case checks that a model call
+/// <c>response.completed</c> must stop as <see cref="AgentStopReason.StreamTruncated"/> the same way. A host that echoes a sampler value
+/// other than the one sent must stop as <see cref="AgentStopReason.SamplerMismatch"/> without a retry. A further case checks that a model call
 /// outlasting the wall-clock cap is cancelled. No LM Studio needed.
 /// </summary>
 [TestFixture]
@@ -96,6 +97,28 @@ public class StreamRunawayRunnerTests
     }
 
     [Test]
+    public async Task SamplerValueEchoedDifferently_StopsWithSamplerMismatch_NoException()
+    {
+        // The run sends temperature 0.7; the host echoes 0.3 in response.completed. LmStudioAgentClient throws SamplerMismatchException,
+        // which is not an InvalidOperationException, so there is no retry; the runner must end the run with a transcript instead of
+        // letting the exception escape to RunAsync.
+        var handler = new SamplerEchoHandler(echoedTemperature: 0.3);
+        var runner = NewRunner(handler: handler, temperature: "0.7");
+
+        var result = await runner.RunAsync("system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.StopReason, Is.EqualTo(AgentStopReason.SamplerMismatch));
+            Assert.That(result.Converged, Is.False);
+            Assert.That(handler.ResponsesRequests, Is.EqualTo(1));
+            Assert.That(result.Transcript, Is.Not.Null);
+            Assert.That(result.Transcript.StopReason, Is.EqualTo(AgentStopReason.SamplerMismatch));
+            Assert.That(result.Transcript.Turns, Is.Empty);
+        });
+    }
+
+    [Test]
     public async Task ModelCallOutlastingTheWallClockCap_IsCancelled_StopsWithWallClockCapExceeded()
     {
         // The chat request never answers; the runner's per-call deadline (the 1 s cap) must cancel it instead of waiting out the 30 s delay.
@@ -113,9 +136,12 @@ public class StreamRunawayRunnerTests
         });
     }
 
-    private ModelAgentRunner NewRunner(HttpMessageHandler handler, TimeSpan? wallClockCap = null)
+    private ModelAgentRunner NewRunner(HttpMessageHandler handler, TimeSpan? wallClockCap = null, string? temperature = null)
     {
-        LlmOptions.Configure(["--llm-model", ModelId]);
+        // LlmOptions is static: each call reconfigures it, so a test that needs a sent temperature passes it explicitly.
+        LlmOptions.Configure(temperature is null
+            ? ["--llm-model", ModelId]
+            : ["--llm-model", ModelId, "--llm-temperature", temperature]);
         var httpClient = new HttpClient(handler)
         {
             BaseAddress = new Uri("http://localhost/v1/"),
@@ -197,6 +223,42 @@ public class StreamRunawayRunnerTests
             {
                 Content = new StringContent(
                     $"event: response.output_text.delta\ndata: {payload}\n\n", Encoding.UTF8, "text/event-stream"),
+            });
+        }
+    }
+
+    /// <summary>
+    /// Every /responses POST streams one response.completed event whose response echoes a temperature other than the one the
+    /// run sent. The models endpoint answers 404. Counts the /responses POSTs so a test can assert there was no retry.
+    /// </summary>
+    private sealed class SamplerEchoHandler(double echoedTemperature) : HttpMessageHandler
+    {
+        public int ResponsesRequests
+        {
+            get; private set;
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (!request.RequestUri!.AbsolutePath.EndsWith("/responses", StringComparison.Ordinal))
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+            }
+
+            ResponsesRequests++;
+            var payload = JsonSerializer.Serialize(new
+            {
+                response = new
+                {
+                    output = new[] { new { type = "message", content = new[] { new { type = "output_text", text = "done" } } } },
+                    temperature = echoedTemperature,
+                },
+            });
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    $"event: response.completed\ndata: {payload}\n\n", Encoding.UTF8, "text/event-stream"),
             });
         }
     }

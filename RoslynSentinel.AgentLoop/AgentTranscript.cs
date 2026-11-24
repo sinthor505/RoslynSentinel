@@ -586,6 +586,13 @@ public enum AgentStopReason
     /// as numbers in transcript.json, so inserting a member earlier would renumber the stored ones.
     /// </summary>
     StreamTruncated,
+
+    /// <summary>
+    /// The host echoed a sampler value (temperature or top_p) different from the one the run sent, so the run was refused;
+    /// nothing from the model was recorded or executed; not a genuine finish. Declared last on purpose: stop reasons are persisted
+    /// as numbers in transcript.json, so inserting a member earlier would renumber the stored ones.
+    /// </summary>
+    SamplerMismatch,
 }
 
 /// <summary>

@@ -417,6 +417,13 @@ public sealed class ModelAgentRunner
                     turnNumber);
                 break;
             }
+            catch (SamplerMismatchException ex)
+            {
+                // The host echoed a different sampler value than the one sent; the run is refused. Nothing from the model was recorded or executed; no retry.
+                stopReason = AgentStopReason.SamplerMismatch;
+                _logger.LogWarning(ex, "Turn {Turn}: {Message}; no call was executed, stopping.", turnNumber, ex.Message);
+                break;
+            }
             catch (ContextSizeExceededException ex)
             {
                 // TODO force a reasoning drop (policy DroppedTurns) and retry once before ending the run as ContextExhausted (plan_reasoning_replay_pressure_policy, out of scope).
