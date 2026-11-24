@@ -44,7 +44,18 @@ public static class HiddenSchemaParams
     }
 
     /// <summary>Sorted copy of the parameter names stripped from toolName's schema; empty when none.</summary>
-    public static IReadOnlyList<string> HiddenFor(string toolName) => throw new NotImplementedException();
+    public static IReadOnlyList<string> HiddenFor(string toolName)
+    {
+        if (string.IsNullOrEmpty(toolName) || !Hidden.TryGetValue(toolName, out var set))
+        {
+            return [];
+        }
+
+        lock (set)
+        {
+            return set.OrderBy(n => n, StringComparer.Ordinal).ToArray();
+        }
+    }
 
     /// <summary>Empties the registry. Intended for tests.</summary>
     public static void Clear() => Hidden.Clear();

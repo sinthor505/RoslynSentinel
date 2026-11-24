@@ -203,9 +203,11 @@ public sealed class ToolsetService
                             unavailable.Add(tool.ProtocolTool.Name);
                         }
                     }
-                }
 
-                _enabled[toolSet] = built.Where(t => added.Contains(t.ProtocolTool.Name)).ToList();
+                    // The state must be updated before the scope is disposed: disposing raises
+                    // ToolCollection.Changed, and the ToolSurfaceController's handler reads EnabledToolSets/DynamicToolNames.
+                    _enabled[toolSet] = built.Where(t => added.Contains(t.ProtocolTool.Name)).ToList();
+                }
             }
             else if (!enabled && isOn)
             {
@@ -218,9 +220,10 @@ public sealed class ToolsetService
                             removed.Add(tool.ProtocolTool.Name);
                         }
                     }
-                }
 
-                _enabled.Remove(toolSet);
+                    // Same ordering as the enable branch: state is updated before the scope is disposed.
+                    _enabled.Remove(toolSet);
+                }
             }
 
             if (added.Count + removed.Count > 0)

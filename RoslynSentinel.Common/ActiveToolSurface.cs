@@ -69,7 +69,7 @@ public record ActiveToolSurface
 
     /// <summary>Tool name -> declaring class name, reflected once per set of loaded RoslynSentinel assemblies
     /// (the same discovery McpServerStatus runs); rebuilt only if an assembly loads later.</summary>
-    private static IReadOnlyDictionary<string, string> DeclaringClassByTool()
+    internal static IReadOnlyDictionary<string, string> DeclaringClassByTool()
     {
         var assemblies = AppDomain.CurrentDomain.GetAssemblies()
             .Where(a => a.GetName().Name?.StartsWith("RoslynSentinel", StringComparison.Ordinal) == true)
