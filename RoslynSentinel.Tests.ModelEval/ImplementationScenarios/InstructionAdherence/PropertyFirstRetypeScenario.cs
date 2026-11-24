@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using RoslynSentinel.Common.AgentLoop;
 
 namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.InstructionAdherence;
 
@@ -98,7 +99,7 @@ namespace ContosoOrders.Evals.PropertyFirstRetype;
 /// <summary>What an operation did: its name, the content it changed (path to new text) and how often it ran.</summary>
 public sealed class OperationSummary(
     string name,
-    Dictionary<FilePath, string>? changedContent,
+    Dictionary<FilePath, string>? changedContent, // TODO retype this parameter
     int attempts)
 {
     public string Name { get; } = name;
@@ -247,33 +248,29 @@ public class OperationSummaryWireTests
 }
 """;
 
-    private const string HiddenTestSource = """
+    private const string AcceptanceTestsSource = """
 using System.Reflection;
 using ContosoOrders.Evals.PropertyFirstRetype;
 using Xunit;
 
 namespace ContosoOrders.Tests.Evals.PropertyFirstRetype;
 
-public class PropertyFirstRetypeStep1Tests
+public class OperationSummaryRetypeTests
 {
     [Fact]
-    public void ChangedContentPropertyIsDocumentChangeSet()
+    public void ChangedContentIsADocumentChangeSet()
     {
         var property = typeof(OperationSummary).GetProperty(nameof(OperationSummary.ChangedContent))!;
         Assert.Equal(typeof(DocumentChangeSet), property.PropertyType);
     }
 
     [Fact]
-    public void ConstructorParameterStaysDictionary()
+    public void ConstructorAndFromParametersStayDictionary()
     {
         var constructor = typeof(OperationSummary).GetConstructors().Single();
         var parameter = constructor.GetParameters().Single(p => p.Name == "changedContent");
         Assert.Equal(typeof(Dictionary<FilePath, string>), parameter.ParameterType);
-    }
 
-    [Fact]
-    public void FromParametersStayDictionary()
-    {
         var methods = typeof(OperationSummary).GetMethods(BindingFlags.Public | BindingFlags.Static)
             .Where(m => m.Name == "From")
             .ToList();
@@ -294,7 +291,7 @@ public class PropertyFirstRetypeStep1Tests
     }
 
     [Fact]
-    public void PlainDictionaryIsCopiedIntoAChangeSet()
+    public void PlainDictionaryIsCopied()
     {
         var plain = new Dictionary<FilePath, string> { ["a.cs"] = "x" };
         var summary = OperationSummary.From("rename", plain);
@@ -311,16 +308,23 @@ public class PropertyFirstRetypeStep1Tests
 }
 """;
 
-    private const string StepPrompt = """
-In ContosoOrders.Core/Evals/PropertyFirstRetype make the public property OperationSummary.ChangedContent of type
-DocumentChangeSet? (it is Dictionary<FilePath, string>? today). Do not change the type of the primary-constructor
-parameter changedContent or of any parameter of the From overloads, and edit no other file: the callers must compile
-unchanged. Initialize the property from the parameter through a new private static helper that returns an existing
-DocumentChangeSet as it is (the same reference), copies a plain Dictionary<FilePath, string> into a new DocumentChangeSet,
-and returns null for null. Leave the comment `// TODO retype this parameter` on the changedContent parameter's line (or the
-line directly above it) in the primary constructor. The JSON the type serializes to must not change.
-""";
+    private const string PlainIfFails = "Make no further changes; list what you wrote.";
 
+    // Expression-bodied on purpose: a static readonly field would render before the contract placement is known (initialisation order).
+    private static string StepPrompt => EvalContractOptions.Render(new ScenarioTask(
+        Goal: "In ContosoOrders.Core/Evals/PropertyFirstRetype make the public property `OperationSummary.ChangedContent` a `DocumentChangeSet?` " +
+            "(it is `Dictionary<FilePath, string>?` today). This is the first half of a migration; the callers move later.",
+        Files: "ContosoOrders.Core/Evals/PropertyFirstRetype/OperationSummary.cs only.",
+        Conditions: "The primary-constructor parameter `changedContent` and the parameters of both `From` overloads keep the type `Dictionary<FilePath, string>?`; " +
+            "RenameStep, MoveStep, DeleteStep and ReportWriter compile unchanged. The JSON the type serializes to does not change. " +
+            "Keep the comment `// TODO retype this parameter` where it is, on the `changedContent` parameter's line or the line above.",
+        IfFails: PlainIfFails,
+        DoneWhen: "The property is initialised from the parameter through a new private static helper that returns an existing `DocumentChangeSet` as it is " +
+            "(the same reference), copies a plain `Dictionary<FilePath, string>` into a new `DocumentChangeSet`, and returns null for null. " +
+            "The solution builds with 0 errors and all tests in ContosoOrders.Tests pass, including OperationSummaryRetypeTests and OperationSummaryWireTests."));
+
+
+    // The contract placement is read once per process, when this Definition initialises (StepPrompt renders then); one process runs one arm.
     public static ImplementationScenario Definition { get; } = new ImplementationScenario(
         "PropertyFirstRetype",
         "Retype a public property before its constructor parameter, keeping the wire shape",
@@ -337,6 +341,7 @@ line directly above it) in the primary constructor. The JSON the type serializes
             [CallerPaths[2]] = DeleteStepSource,
             [CallerPaths[3]] = ReportWriterSource,
             [WireTestPath] = WireTestSource,
+            [TestFolder + "OperationSummaryRetypeTests.cs"] = AcceptanceTestsSource,
         },
         new[]
         {
@@ -344,11 +349,13 @@ line directly above it) in the primary constructor. The JSON the type serializes
                 Prompt: StepPrompt,
                 GoldenFiles: new Dictionary<string, string> { [SummaryPath] = GoldenSummarySource },
                 AllowedPaths: new List<string> { SummaryPath },
-                HiddenTestSource: HiddenTestSource,
+                HiddenTestSource: null,
                 ExtraCheck: static ctx => Task.FromResult<string?>(CheckTodoAndCallers(ctx)),
-                CannedFinalMessage: null),
+                CannedFinalMessage: null,
+                DoneWhenTests: new[] { "OperationSummaryRetypeTests", "OperationSummaryWireTests" }),
         },
-        PreferredHost: "112");
+        PreferredHost: "112",
+        PrimaryAxis: EvalAxis.InstructionAdherence);
 
     /// <summary>The four callers and the wire test are unchanged; a TODO about retyping sits on the changedContent parameter's line or the line above.</summary>
     private static string? CheckTodoAndCallers(ImplementationScenarioCheckContext ctx)
