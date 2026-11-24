@@ -1,6 +1,6 @@
 # Plan: Tool-surface controller stage E - caches keyed by snapshot, one captured snapshot per call, runtime-toolset tools callable
 
-**Status:** IMPLEMENTED 2026-11-24 (Steps 17-18 DEFERRED for the owner, R8; INBOX line). 07a48893, ef86f1c9, 16863873, b91f9439, c5594d85, b1dda85a, d2c8a06a, 5413d71b, eee9c423, 91bd37d6, 0971300a, d3ef14ae, 53f95fa8, 8484a2b4, 95ec7e20, 86b74f2a, 615805a8, 99331b10; full run green at 615805a8 (1,331 s, 0 failures). Approved 2026-11-24: Stage E: validator and hints read the snapshot, schema cache keyed per snapshot, HiddenSchemaParams deleted; Steps 17-18 (runtime-toolset tools callable) on HOLD for the owner (R8, SubAgent children are eval surfaces). Review fixes applied; other decisions taken at recommendation (owner away).
+**Status:** IMPLEMENTED 2026-11-24. Steps 17-18 done later the same day after the owner's R8 decision (a) (e622f7cb, b4661b98). 07a48893, ef86f1c9, 16863873, b91f9439, c5594d85, b1dda85a, d2c8a06a, 5413d71b, eee9c423, 91bd37d6, 0971300a, d3ef14ae, 53f95fa8, 8484a2b4, 95ec7e20, 86b74f2a, 615805a8, 99331b10; full run green at 615805a8 (1,331 s, 0 failures). Approved 2026-11-24: Stage E: validator and hints read the snapshot, schema cache keyed per snapshot, HiddenSchemaParams deleted; Steps 17-18 (runtime-toolset tools callable) on HOLD for the owner (R8, SubAgent children are eval surfaces). Review fixes applied; other decisions taken at recommendation (owner away).
 
 Stage 4 of [proposal_tool_surface_controller.md](../../proposals/proposal_tool_surface_controller.md). Follows phase A/B
 ([closed/plan_tool_surface_controller.md](plan_tool_surface_controller.md)), stage C
@@ -482,8 +482,8 @@ Suggested orchestrator batches:
   pre-commit gate: standard gate plus `SchemaLeanProfileTests`, `SchemaHiddenParametersTests`, `ToolSurfaceParameterTests`,
   `ToolCallHintTests`, `ToolSurfaceCacheTests`: all pass.
 
-### Step 17 - HOLD (owner decision R8), BEHAVIOUR-CHANGING: IsCallable counts runtime-toolset tools
-- Done: DEFERRED (HOLD, owner decision R8; INBOX line)
+### Step 17 - BEHAVIOUR-CHANGING: IsCallable counts runtime-toolset tools (owner decision R8: a)
+- Done: e622f7cb (gate 144/144; eval boundary recorded in reference_model_eval_procedure.md)
 - Files: `RoslynSentinel.Common/ActiveToolSurface.cs` (plus the R8 option's files: (b) adds the launcher flag, (c) adds the Harness
   pin test as a prerequisite step)
 - Depends on: 4, 5 (landed and green); **owner approval of R8**. Not run overnight.
@@ -506,8 +506,8 @@ Suggested orchestrator batches:
   `SurfaceAwareHintsSymbolResolverTests`, `RejectedSnippetEditTests`, `McpToolsetControlTests`, `ToolSurfaceControllerWiringTests`:
   all pass.
 
-### Step 18 - HOLD (with Step 17): callability tests
-- Done: DEFERRED (HOLD, depends on 17)
+### Step 18 - callability tests
+- Done: b4661b98 (4 + 2 tests)
 - Files: `RoslynSentinel.Tests.Server/ActiveToolSurfaceLiveTests.cs` (new), `RoslynSentinel.Tests.Tools.Basic/CallableToolHintLiveSurfaceTests.cs` (new)
 - Depends on: 17
 - Effect: text-neutral
@@ -526,7 +526,7 @@ Suggested orchestrator batches:
 - Done when: dispatcher runs `ActiveToolSurfaceLiveTests` and `CallableToolHintLiveSurfaceTests`: all pass.
 
 ### Step 19 - LIVE check
-- Done: 2026-11-24 on servedSha 615805a8: A ok-fresh (v1 startup, ListSolutionItems inactive with hint), B ok-rejected (Unknown parameter bogusParam on runtime tool ListSolutionItems), C ok-rejected (validateOnApply on Search), D n/a (held; baseline: ReadFile not-found hint does not name ListSolutionItems with projectAdmin on), E restored (projectAdmin off)
+- Done: 2026-11-24 on servedSha 615805a8: A ok-fresh (v1 startup, ListSolutionItems inactive with hint), B ok-rejected (Unknown parameter bogusParam on runtime tool ListSolutionItems), C ok-rejected (validateOnApply on Search), D n/a (held; baseline: ReadFile not-found hint does not name ListSolutionItems with projectAdmin on), E restored (projectAdmin off). After Steps 17-18, 2026-11-24 on servedSha 2b19c9f7: D ok via the directory branch (`ReadFile(filePath: "RoslynSentinel.Common")` names `ListSolutionItems(kind: all)` with projectAdmin on, omits it after the disable). The planned NoSuchFolder probe cannot show it: on a current workspace the no-match text comes from `WorkspaceCurrentNoMatchText` and never names ListSolutionItems (`FileNotFoundMessage.cs:177` is reached only for a stale workspace)
 - Files: none
 - Depends on: Steps 1-16 committed (17-18 are held: cases that need them record `n/a (held)`); own-server restart (`McpServerControl(StopServer)`, then `LoadSolution`);
   no subagent mid-operation

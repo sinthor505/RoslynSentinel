@@ -1,6 +1,6 @@
 # Plan: Tool-surface controller stage D - parameter rules become a controller input; the snapshot owns hidden parameters
 
-**Status:** IMPLEMENTED 2026-11-24 (Steps 14-15 DEFERRED for the owner, R3; INBOX line). 1df39603, 0acb22ec, 40d0eb26, 8511eda7, 779ddd51, 7f25720f, 056fabaf, b775ae9d, 1c585b6c, e3227a76, d23875b0, 197c56d9, 290eaa9d, 68d0bf23, 99a2b7ca, 3299ae3c; full run green at 99a2b7ca (1,346 s, 0 failures). Approved 2026-11-24: Stage D: parameter rules as a ParameterSurface input of the controller; HiddenParametersPatch, snapshot and validator read it; Steps 14-15 on HOLD for the owner (R3). Review fixes applied; other decisions taken at recommendation (owner away).
+**Status:** IMPLEMENTED 2026-11-24. Steps 14-15 done later the same day after the owner's R3 decision (b) (4e540186; budget not exceeded: 48492 of 48500, no raise). 1df39603, 0acb22ec, 40d0eb26, 8511eda7, 779ddd51, 7f25720f, 056fabaf, b775ae9d, 1c585b6c, e3227a76, d23875b0, 197c56d9, 290eaa9d, 68d0bf23, 99a2b7ca, 3299ae3c; full run green at 99a2b7ca (1,346 s, 0 failures). Approved 2026-11-24: Stage D: parameter rules as a ParameterSurface input of the controller; HiddenParametersPatch, snapshot and validator read it; Steps 14-15 on HOLD for the owner (R3). Review fixes applied; other decisions taken at recommendation (owner away).
 
 Stage 3 of [proposal_tool_surface_controller.md](../../proposals/proposal_tool_surface_controller.md); follows phase A/B ([closed/plan_tool_surface_controller.md](plan_tool_surface_controller.md)) and stage C ([plan_tool_surface_controller_stage_c.md](plan_tool_surface_controller_stage_c.md), aadefa7c..309e94c1); reshapes the paused [plan_tool_parameter_surface_options.md](plan_tool_parameter_surface_options.md) Steps 4-15 (see "What happened to the paused plan").
 
@@ -525,8 +525,8 @@ Batches for the run:
   "Unknown parameter").
 - Done when: dispatcher runs `SchemaHiddenParametersTests`: all pass.
 
-### Step 14 - HOLD (owner decision R3): McpServerStatus reports parameter provenance
-- Done: DEFERRED (HOLD, owner decision R3; INBOX line)
+### Step 14 - McpServerStatus reports parameter provenance (owner decision R3: b)
+- Done: 4e540186 (claude-lean total 48492 of 48500, so no budget raise was needed; live 2026-11-24 on servedSha 2b19c9f7: fields null with nothing hidden)
 - Files: `RoslynSentinel.Tools.Basic/ServerStatusTools.cs`, `RoslynSentinel.Tests.Server/ClaudeLeanSchemaBudgetTests.cs`
 - Depends on: 8; owner approval of R3
 - Effect: **behaviour-changing (wire)**: `toolSurface` gains `hiddenParameterGroups` and `unmatchedHideRules`, filled from the
@@ -541,8 +541,8 @@ Batches for the run:
   report (do not add a converter in this step). Budget: as approved in R3.
 - Done when: `Build` 0 errors; dispatcher runs `McpServerStatusToolListingTests`, `ClaudeLeanSchemaBudgetTests`: all pass.
 
-### Step 15 - HOLD (with Step 14): status tests
-- Done: DEFERRED (HOLD, owner decision R3; INBOX line)
+### Step 15 - status tests
+- Done: 4e540186 (three named tests plus an enum-as-string wire pin)
 - Files: `RoslynSentinel.Tests.Tools.Basic/McpServerStatusToolListingTests.cs`
 - Depends on: 14
 - Effect: text-neutral

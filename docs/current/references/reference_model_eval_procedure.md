@@ -486,6 +486,13 @@ Data-driven family of small implementation tasks distilled from real plan and pu
   and log it with the run's results); `McpServerStatus` shows the same list as `toolSurface.schemaPatches`,
   but eval surfaces hide that tool.
 
+## Comparability boundaries (commits that change what models under test see)
+
+- **e622f7cb (2026-11-24), claude-lean runtime toolsets.** After a model enables a toolset with `McpToolsetControl`,
+  hint and error text may name that set's tools (for example the ReadFile directory hint names `ListSolutionItems`
+  once `projectAdmin` is on). Affects SubAgent/SubAgentEval child servers only; in-process ModelEval and Harness hosts
+  and PlanStepRunner have no runtime toolsets. Do not compare SubAgent runs across this commit.
+
 ## Where output goes
 
 - The scratch root is env `ROSLYNSENTINEL_SCRATCH_ROOT` (absolute), else `<parent of the repo>\RoslynSentinel-ScratchDir`.
