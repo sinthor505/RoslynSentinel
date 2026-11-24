@@ -25,6 +25,43 @@ public class TestRunOutcomeTests
         Assert.That(TestRunEngine.ClassifyOutcome(exitCode, failedCount, totalCount, hung, timedOut, trxExists), Is.EqualTo(expected));
     }
 
+    [TestCase("", "")]
+    [TestCase("  \r\n", "\t")]
+    [Category("NoTrxDetail")]
+    public void NoTrxDetail_SilentExit_NamesExitCodeKnownCauseAndOptions(string stdout, string stderr)
+    {
+        var detail = TestRunEngine.NoTrxDetail(1, stdout, stderr);
+
+        Assert.That(detail, Does.StartWith("No TRX result file was produced"));
+        Assert.That(detail, Does.Contain("dotnet test exited with code 1"));
+        Assert.That(detail, Does.Contain("printed nothing to stdout or stderr"));
+        Assert.That(detail, Does.Contain("MSBuild worker node handshake failure"));
+        Assert.That(detail, Does.Contain("global.json"));
+        Assert.That(detail, Does.Contain("MSBUILDDEBUGCOMM"));
+    }
+
+    [TestCase("Build FAILED.", "")]
+    [TestCase("", "error MSB1009: Project file does not exist.")]
+    [Category("NoTrxDetail")]
+    public void NoTrxDetail_RunThatPrintedOutput_NamesExitCodeAndNoSilentCause(string stdout, string stderr)
+    {
+        var detail = TestRunEngine.NoTrxDetail(2, stdout, stderr);
+
+        Assert.That(detail, Does.Contain("dotnet test exited with code 2"));
+        Assert.That(detail, Does.Not.Contain("handshake"));
+        Assert.That(detail, Does.Not.Contain("MSBUILDDEBUGCOMM"));
+    }
+
+    // Facts and options only (reference_tool_error_text_facts_options_policy.md): no imperative about what the caller should do with the result.
+    [Test]
+    [Category("NoTrxDetail")]
+    public void NoTrxDetail_CarriesNoPolicyWords()
+    {
+        var detail = TestRunEngine.NoTrxDetail(1, "", "");
+
+        Assert.That(detail, Does.Not.Match(@"(?i)\b(must|stop|do not|never|always|report)\b"));
+    }
+
     [Test]
     public void AggregateOutcome_TimedOutBeatsEverything()
     {

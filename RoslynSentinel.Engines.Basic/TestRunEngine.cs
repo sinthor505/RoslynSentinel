@@ -518,6 +518,21 @@ public class TestRunEngine
         return $"The test adapter rejected the filter '{filter}' (dotnet test exited with code {exitCode}); no test ran. Adapter message: {line} The filter is a `dotnet test --filter` expression such as FullyQualifiedName~ClassName or FullyQualifiedName~Namespace.Class.Method.";
     }
 
+    /// <summary>The detail text for a run that exited without writing a TRX (and had no file lock or rejected filter to name): the exit code,
+    /// and when stdout and stderr were both empty the known cause of a silent exit plus the ways to confirm it. Facts and options only.</summary>
+    public static string NoTrxDetail(int exitCode, string stdout, string stderr)
+    {
+        var detail = $"No TRX result file was produced - the run failed before any test adapter reported results. dotnet test exited with code {exitCode}.";
+        if (string.IsNullOrWhiteSpace(stdout) && string.IsNullOrWhiteSpace(stderr))
+        {
+            detail += " It printed nothing to stdout or stderr. One known cause of a silent exit is an MSBuild worker node handshake failure when the SDK dotnet runs differs from the SDK its MSBuild nodes start from"
+                + " (for example a worktree without global.json, which runs the newest installed SDK). Options: `dotnet --version` in the project directory shows the SDK dotnet selects, and global.json in the repo or worktree decides it;"
+                + " RunTest(environment: {\"MSBUILDDEBUGCOMM\": \"1\", \"MSBUILDDEBUGPATH\": \"<folder>\"}) writes each node's handshake trace into that folder.";
+        }
+
+        return detail;
+    }
+
     /// <summary>Runs `dotnet test` against a single project with its own dedicated TRX file, and
     /// parses the result. Never throws -> timeouts, missing TRX, and process failures are all
     /// reported via <see cref="TestRunResult.Outcome"/> and <see cref="TestRunResult.Detail"/>
@@ -626,7 +641,7 @@ public class TestRunEngine
 
             if (!File.Exists(trxPath))
             {
-                var noTrxDetail = lockDetail ?? InvalidFilterDetail(filter, process.ExitCode, stdoutText, stderrText) ?? "No TRX result file was produced - the run failed before any test adapter reported results.";
+                var noTrxDetail = lockDetail ?? InvalidFilterDetail(filter, process.ExitCode, stdoutText, stderrText) ?? NoTrxDetail(process.ExitCode, stdoutText, stderrText);
                 return new TestRunResult(
                     Outcome: ClassifyOutcome(exitCode: process.ExitCode, failedCount: 0, totalCount: 0, hung: hungTestName is not null, timedOut: false, trxExists: false),
                     ExitCode: process.ExitCode,
