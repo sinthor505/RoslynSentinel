@@ -45,14 +45,21 @@ public record ActiveToolSurface
 
     public bool IsToolAllowed(string toolName) => AllowedToolNames is null || AllowedToolNames.Contains(toolName);
 
-    /// <summary>True when a call to <paramref name="toolName"/> can be served by this server: a class declaring
-    /// that tool is in <see cref="ActiveToolClasses"/> AND <see cref="IsToolAllowed"/> accepts the name. This is
-    /// the rule McpServerStatus uses for ActiveForThisMode (ServerStatusTools.McpServerStatusTool), not a second
-    /// one; two differences are deliberate: it does not see tools a caller switched on at runtime through
-    /// McpToolsetControl, and it does not special-case the always-on ServerStatusTools class. Both only make it
-    /// answer false for a tool that is in fact callable, so a hint built from it errs by leaving a tool name out.
-    /// Error and hint text uses it to avoid telling a model to call a tool it cannot see.</summary>
+    /// <summary>True when a call to <paramref name="toolName"/> can be served by this server. Two rules, either suffices:
+    /// the startup rule (a class declaring the tool is in <see cref="ActiveToolClasses"/> AND <see cref="IsToolAllowed"/>
+    /// accepts the name), or, once the live snapshot is built, a snapshot row for the tool whose origin is a runtime
+    /// toolset (switched on through McpToolsetControl or restored at startup by --toolsets). Before the first snapshot
+    /// (or on a surface not bound with <see cref="WithLiveSnapshot"/>) only the startup rule applies. McpServerStatus
+    /// uses the same snapshot for ActiveForThisMode; the one deliberate difference left is that this does not
+    /// special-case the always-on ServerStatusTools class, so it answers false for that tool and a hint built from it
+    /// errs by leaving the name out. Error and hint text uses it to avoid telling a model to call a tool it cannot see.</summary>
     public bool IsCallable(string toolName)
+    {
+        return IsCallableByStartupConfiguration(toolName)
+            || _liveSnapshot?.Invoke()?.Find(toolName) is { Origin: ToolSurfaceOrigin.RuntimeToolset };
+    }
+
+    private bool IsCallableByStartupConfiguration(string toolName)
     {
         if (!IsToolAllowed(toolName))
         {
@@ -70,7 +77,7 @@ public record ActiveToolSurface
 
     // A with-copy, so constructor parameters a later plan adds (plan_json_toolset_definitions.md Step 22) carry over.
     // Record equality now includes the delegate; nothing compares ActiveToolSurface values.
-    // Nothing reads this field yet (IsCallable is unchanged until a later step).
+    // Read by IsCallable for the runtime-toolset rule.
     private Func<ToolSurfaceSnapshot?>? _liveSnapshot;
 
     private static readonly object DeclaringClassesLock = new();
