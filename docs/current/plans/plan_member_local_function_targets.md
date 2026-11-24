@@ -1,6 +1,6 @@
 # Plan: Member view/replace/remove can target a local function
 
-**Status:** APPROVED 2026-11-24 (owner; to be run in a fresh session with the implement-plan skill). Owner decisions A (ReadFile inherits view), B (containerName also names the enclosing method) and C (plan doc first) settled in session 30a40d85.
+**Status:** APPROVED 2026-11-24. Reviewed against source; precedence (types win, shadowed-local-function hint), schema budget raise and Direct mode settled with the owner (Decision section).
 
 ## Problem
 
@@ -45,6 +45,20 @@ Further blockers found by investigation:
   local function. Remove checks usages semantically, and the post-remove check opts in.
 - Edit-effect facts record a removed local function with a display name and no docCommentId (local
   functions have none); accepted.
+- 2026-11-24 (owner, implement-plan review): **types count as real members.** Any member or type
+  candidate beats a local function (so `Member(view, memberName: "X")` keeps returning class X). When a
+  local function was dropped this way, the response adds a hint naming it with a
+  `containerName: "<enclosing member>"` retry (`BuildShadowedLocalFunctionHint`, Step 1). The retry
+  reaches it for view, replace and remove because a type never matches an enclosing-member name.
+- 2026-11-24 (owner): **schema budget raised.** `ClaudeLeanSchemaBudgetTests` `AdvancedTotalBudget` and
+  `BasicTotalBudget` go from 48500 to 49000 (headroom was 8 chars); both description additions land.
+- 2026-11-24 (dispatcher, review findings): `GetMemberName` takes `MemberDeclarationSyntax`, so the local
+  function name comes from a new private overload, not a `case`. Remove's post-check opts in only when
+  the removed target was a local function (otherwise removing method X would now warn about an unrelated
+  local function X). Replace's local-function branch runs before the member-shaped diagnostics
+  (`DetectMultipleMemberDeclarations` etc.) and rejects modifiers explicitly (`ParseStatement` reports
+  no syntax diagnostic for `public`; CS0106 is a binder error).
+- 2026-11-24 (owner): run mode Direct; owner present.
 
 ## Execution rules
 
@@ -75,7 +89,8 @@ Further blockers found by investigation:
     `ContainingTypeName` as today, and `EnclosingMemberName` = nearest ancestor `MemberDeclarationSyntax`
     name (via `GetMemberName`). Replace the `// TODO local functions are never candidates` line with a
     doc-comment sentence on the parameter.
-  - `GetMemberName` (`:457`): add a `LocalFunctionStatementSyntax` case returning its identifier.
+  - `GetMemberName` (`:457`) takes `MemberDeclarationSyntax`, so add a private overload
+    `GetMemberName(LocalFunctionStatementSyntax)` returning its identifier (a `case` would not compile).
   - `CandidateMatchesContainer(SyntaxNodeCandidate candidate, string containerName)` (new, public static):
     for `LocalFunction` candidates true when `ContainingTypeMatches(candidate.ContainingTypeName, containerName)`
     or the last dotted segment equals `EnclosingMemberName` (and any prefix matches the type via
@@ -84,14 +99,23 @@ Further blockers found by investigation:
     `CandidateMatchesContainer` for `LocalFunction` candidates only; member candidates keep the current
     expressions unchanged.
   - `PreferMembersOverLocalFunctions(List<SyntaxNodeCandidate> candidates)` (new, public static): drop
-    `LocalFunction` candidates when any other kind is present.
+    `LocalFunction` candidates when any other kind is present, types included. Callers pass the full
+    candidate list (before any type/member split).
+  - `BuildShadowedLocalFunctionHint(IReadOnlyList<SyntaxNodeCandidate> candidates, SourceText sourceText)`
+    (new, public static, returns `string?`): null unless the list holds both `LocalFunction` and other
+    candidates; else one line per local function:
+    `Also a local function 'X' inside <Type>.<EnclosingMember> (lines S-E); retry with containerName: "<EnclosingMember>".`
   - `BuildHintForCandidates` (`:390`) and `BuildOverloadHintForCandidates` (`:413`): for a `LocalFunction`
     candidate, describe it as `local function inside <Type>.<EnclosingMember> (lines S-E)` and offer a
     retry with `containerName` = `EnclosingMemberName`.
   - Tests (`LocalFunctionCandidateTests`, follow `GenericContainerNameTests` style): default call returns no
     local functions; opt-in returns one with `EnclosingMemberName`; `CandidateMatchesContainer` accepts
     `Outer`, `Type.Outer` and the type name; `PreferMembersOverLocalFunctions` drops the local function when a
-    same-named method exists.
+    same-named method exists and when a same-named class exists; `BuildShadowedLocalFunctionHint` returns
+    null for local-only and member-only lists and names the enclosing member otherwise.
+- Split (2026-11-24, ~13 edits): slice 1a = kind, record field, opt-in, name overload,
+  `CandidateMatchesContainer`, both filters, `PreferMembersOverLocalFunctions` and their tests; slice 1b =
+  the two hint builders and `BuildShadowedLocalFunctionHint` and their tests.
 - Done when: `Build` 0 errors.
 
 ### Step 2 - View (and ReadFile memberName) opt in
@@ -101,13 +125,18 @@ Further blockers found by investigation:
 - Effect: behaviour-changing: `Member(view, memberName: X)` and `ReadFile(memberName: X)` return a local
   function's source when no member is named X, with a `MemberSource` finding
 - Lane: `implementer` (D1)
-- Change: in `GetMemberSourceAsync` (`SymbolNavigationEngine.cs:3145`) pass `includeLocalFunctions: true`
-  to the resolution that picks the target (not to the qualified-name probes at `:3165-3166`), apply
-  `PreferMembersOverLocalFunctions` after the container filter, and when the chosen node is a local
-  function set the returned message to `'X' is a local function inside <Type>.<EnclosingMember> (lines S-E).`
-  (`MemberViewAsync` already turns the message into a `Finding("MemberSource", ...)`).
+- Change: in `GetMemberSourceAsync` (`SymbolNavigationEngine.cs`, by name; body ~`:3149`) pass
+  `includeLocalFunctions: true` to the `allNameCandidates` resolution (~`:3172`; not to the qualified-name
+  probes at `:3165-3166`). The type/member split at ~`:3173-3179` must keep local functions out of the
+  type list and treat them as member candidates; after the container filter apply
+  `PreferMembersOverLocalFunctions` over members plus types, so a type or member X still wins. When the
+  chosen node is a local function set the returned message (the tuple's `hint`, ~`:3299`) to
+  `'X' is a local function inside <Type>.<EnclosingMember> (lines S-E).`; when a local function was
+  dropped, append `BuildShadowedLocalFunctionHint` to the message (`MemberViewAsync` already turns the
+  message into a `Finding("MemberSource", ...)`).
   Tests: unique local function returns its source and the note; a same-named method wins over a local
-  function; two local functions without `containerName` -> ambiguity naming both enclosing members;
+  function and the message carries the shadowed hint; a same-named class wins over a local function;
+  two local functions without `containerName` -> ambiguity naming both enclosing members;
   `containerName: "<enclosing method>"` picks one; `ReadFile(memberName:)` returns the local function.
 - Done when: `Build` 0 errors.
 
@@ -120,11 +149,14 @@ Further blockers found by investigation:
 - Lane: `implementer` (D1)
 - Change:
   - `RemoveMemberAsync` (`MemberRefactoringEngine.cs:2921`): opt in, `PreferMembersOverLocalFunctions`
-    after the container filter. For a local-function target the usage check binds it
-    (`semanticModel.GetDeclaredSymbol`) and refuses when it has references inside its enclosing member
-    (`SymbolFinder.FindReferencesAsync` if it reports local-function references, else a bound
-    identifier scan of the enclosing member; see Risks). Removal keeps `RemoveNodePreservingTriviaAsync`.
-  - `IsDeclarationStillPresentAsync` (`:3087`): opt in and apply the same precedence.
+    after the container filter (types count, so the type-removal route still wins). For a local-function
+    target the existing usage check (~`:3022-3036`: `GetDeclaredSymbol` + `SymbolFinder.FindReferencesAsync`,
+    ignoring references inside the target's own span) should already apply; verify with the "used one
+    refused" test, and fall back to a bound identifier scan of the enclosing member only if SymbolFinder
+    reports no local-function references. Removal keeps `RemoveNodePreservingTriviaAsync`. Append
+    `BuildShadowedLocalFunctionHint` to the success message when a local function was dropped.
+  - `IsDeclarationStillPresentAsync` (`:3087`): opt in (with the same precedence) only when the removed
+    target was a local function, so plain member removals keep today's post-check.
   - `IsLocalFunctionRemovalTargetAsync(FilePathWrapper filePath, string memberName, string? contextSnippet, string? lineBefore, string? lineAfter, string? containerName, CancellationToken cancellationToken)` (new, beside `IsTypeRemovalTargetAsync` at `:3053`).
   - `MemberRemoveAsync` (`RefactoringStructuralImpl.cs:744`): skip the name-based caller/implementation
     precheck when `IsLocalFunctionRemovalTargetAsync` is true (comment: the engine's semantic check covers it).
@@ -140,12 +172,17 @@ Further blockers found by investigation:
 - Lane: `implementer` (D1)
 - Change:
   - `ResolveReplaceTargetAsync` (`:2597`): opt in; `PreferMembersOverLocalFunctions` after `FilterByContainingType`.
-  - `ReplaceMemberAsync` (`:2525`): when the target is a `LocalFunctionStatementSyntax`, parse `newSource`
-    with `SyntaxFactory.ParseStatement`; it must be one `LocalFunctionStatementSyntax` without
-    diagnostics, else `ToolInvalidArgumentException` stating that the target is a local function and the
-    source must be one local function statement. Replace through
+  - `ReplaceMemberAsync` (`:2525`): when the target is a `LocalFunctionStatementSyntax`, branch BEFORE
+    the member-shaped checks (`DetectMultipleMemberDeclarations`, `DetectUnbalancedClosingBrace`,
+    `ParseMemberDeclaration`, ~`:2531-2549`) and parse `newSource` with `SyntaxFactory.ParseStatement`;
+    it must be one `LocalFunctionStatementSyntax` consuming the whole text, without diagnostics and
+    without access modifiers (`public`/`private`/`protected`/`internal`: checked explicitly, since
+    `ParseStatement` reports none), else `ToolInvalidArgumentException` stating that the target is a local
+    function and the source must be one local function statement. Replace through
     `RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync` (takes `SyntaxNode`), keeping the
-    existing AlreadyInTargetState and message shape.
+    existing AlreadyInTargetState and message shape; `DescribeParsedMember` (`:2219`) takes
+    `MemberDeclarationSyntax`, so describe the local function in the message directly. Append
+    `BuildShadowedLocalFunctionHint` when a local function was dropped.
   - `ReplaceMemberWithAdditionsAsync` (`:2640`): for a local-function target, state that extra
     declarations cannot follow a local function (one local function statement only).
   - Tests: body change applied and re-indented; rename inside newSource that breaks a call site is
@@ -154,11 +191,12 @@ Further blockers found by investigation:
 - Done when: `Build` 0 errors.
 
 ### Step 5 - Tool parameter descriptions
-- Files: `RoslynSentinel.Tools.Basic/RefactoringStructuralTools.cs`
+- Files: `RoslynSentinel.Tools.Basic/RefactoringStructuralTools.cs`, `ClaudeLeanSchemaBudgetTests` (RoslynSentinel.Tests.Server)
 - Depends on: Steps 2-4
 - Effect: behaviour-changing (schema text)
 - Lane: main session (one small edit) or `implementer` (D0)
-- Change: `memberName` description `"The member to target. For overloads, combine with contextSnippet/lineBefore/lineAfter."`
+- Change: raise `AdvancedTotalBudget` and `BasicTotalBudget` 48500 -> 49000 (owner 2026-11-24, comment
+  naming this plan). `memberName` description `"The member to target. For overloads, combine with contextSnippet/lineBefore/lineAfter."`
   gains `" A local function matches when no member has that name."`; `containerName`
   `"The type that holds the member."` becomes `"The type that holds the member (for a local function, its type or enclosing method)."`.
   Regenerate `docs/generated/` tool tables if a generator covers descriptions.
@@ -170,8 +208,8 @@ Further blockers found by investigation:
 - Effect: none
 - Change: dispatcher runs `LocalFunctionCandidateTests`, `MemberLocalFunctionViewTests`,
   `MemberLocalFunctionRemoveTests`, `MemberLocalFunctionReplaceTests`, `GenericContainerNameTests`,
-  `SymbolNavigationMissTests`, `MemberViewAmbiguityToolTests`, `GetMethodSourceTests`, `MemberRefactoringTests`
-  with `-WithRatchets`, then one `-Suite fast` run. Restart the server, then live: `Member(view, memberName: "Verdict")`
+  `SymbolNavigationMissTests`, `MemberViewAmbiguityToolTests`, `GetMethodSourceTests`, `MemberRefactoringTests`,
+  `MemberRemoveTests`, `ClaudeLeanSchemaBudgetTests` with `-WithRatchets`, then one `-Suite fast` run. Restart the server, then live: `Member(view, memberName: "Verdict")`
   on `RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Graders/ImplementationScenarioChecks.cs`
   (expect source + note) and `Member(remove, memberName: "Verdict", dryRun: true)` (expect a refusal naming
   the usage). Delete the 2026-11-24 18:00 INBOX line; status IMPLEMENTED with hashes; move to `plans/closed/`.
@@ -191,10 +229,9 @@ Further blockers found by investigation:
 - **SymbolFinder and local functions (Step 3).** Unverified whether `SymbolFinder.FindReferencesAsync`
   reports references to a local-function symbol. The step names the fallback (bound identifier scan of the
   enclosing member); the implementer checks with one test before choosing.
-- **Schema budget (Step 5).** INBOX notes the claude-lean schema budget has no headroom (stage D R3). If the
-  description additions fail a schema-size test, options: (a) shorten to the `containerName` change only,
-  (b) put the local-function fact in the not-found error text instead of the description, (c) raise the
-  budget (owner decision). Recommendation: (a), then (b).
+- **Schema budget (Step 5).** Settled 2026-11-24: budget raised to 49000 (see Decision).
+- **SymbolFinder partly answered.** `RemoveMemberAsync` already binds and calls `SymbolFinder`; whether it
+  reports local-function references is still to be confirmed by Step 3's first test.
 - **Ambiguity hint shape (Step 1).** The hint builders are shared by every Member ambiguity; the change must
   only add text for `LocalFunction` candidates. Pins in `MemberViewAmbiguityToolTests` guard the rest.
 - **Edit-effect facts.** `MemberEditEffectFacts.DescribeExistingAsync` records a null docCommentId for a
