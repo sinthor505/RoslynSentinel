@@ -1,6 +1,6 @@
 # Plan: rework the 18 first-slice eval scenarios into realistic briefs with behavioural acceptance tests (proposal Phasing step 3)
 
-**Status:** IN PROGRESS 2026-11-23. Steps 54-59 done (7d94a62c..76df6d43); Steps 1-11 done (2b578dea..5765c966); Steps 12-21 done (7cbfc4d9..3db4c7c0); Steps 22-26 done (b5d6d45d..0d6ee1e0). Approved 2c34a882; review amendments and the owner's answers are Decision 13 (overrides step text); Batched mode, owner present. Phasing step 3 of [proposal_modeleval_standing_workflow_contract.md](../proposals/proposal_modeleval_standing_workflow_contract.md), written from [finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md](../findings/finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md). Depends on [plan_modeleval_workflow_contract_phase1.md](./closed/plan_modeleval_workflow_contract_phase1.md) (called "P1" below).
+**Status:** IN PROGRESS 2026-11-23. Steps 54-59 done (7d94a62c..76df6d43); Steps 1-11 done (2b578dea..5765c966); Steps 12-21 done (7cbfc4d9..3db4c7c0); Steps 22-26 done (b5d6d45d..0d6ee1e0); 13(o)+(q) slice and Steps 27-30, 60-63 done (5dd5a5a8..5ebf3f29). Approved 2c34a882; review amendments and the owner's answers are Decision 13 (overrides step text); Batched mode, owner present. Phasing step 3 of [proposal_modeleval_standing_workflow_contract.md](../proposals/proposal_modeleval_standing_workflow_contract.md), written from [finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md](../findings/finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md). Depends on [plan_modeleval_workflow_contract_phase1.md](./closed/plan_modeleval_workflow_contract_phase1.md) (called "P1" below).
 
 ## Problem
 
@@ -687,6 +687,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 ### Batch D - stop family and four implementation scenarios (Steps 27-39 and 60-63; stop-family order 27, 28, 29, 60, 61, 62, 30, 63)
 
 ### Step 27 - Stop family harness: TreeSnapshot and definition members
+- Done: 6b6c5e5c (preceded by the Decision 13 (o)+(q) slice 5dd5a5a8)
 - Files: RoslynSentinel.Tests.Harness/TreeSnapshot.cs (new), RoslynSentinel.Tests.Harness/ScenarioDefinition.cs
 - Depends on: P1 Step 12 (same record), 1
 - Effect: text-neutral (new members, no callers).
@@ -695,6 +696,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (2 files, ~8 edits). Pairs with: Step 31.
 
 ### Step 28 - Stop variants and control: prompts, definitions, grader
+- Done: 5c8fc537
 - Files: RoslynSentinel.Tests.Harness/StopAdherenceScenarios.cs
 - Depends on: 27; P1 Steps 1, 3, 5
 - Effect: behaviour-changing (prompts and the pass condition).
@@ -703,6 +705,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~13 edits). Pairs with: Step 31.
 
 ### Step 29 - Stop family: runner wiring
+- Done: a9d45ba6, 1b6e27e8 (guard lives in StopFamilyCasesTests: the LiveModel namespace SetUpFixture skipped it)
 - Files: RoslynSentinel.Tests.ModelEval/ScenarioAgentTests.cs
 - Depends on: 27, 28; P1 Steps 8 and 13 (same file)
 - Effect: behaviour-changing for the stop scenarios.
@@ -711,6 +714,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~6 edits).
 
 ### Step 60 - Stop family: tool-error variants (definitions and prompts)
+- Done: 8a25a159
 - Files: RoslynSentinel.Tests.Harness/StopAdherenceScenarios.cs, RoslynSentinel.Tests.Harness/ScenarioRegistry.cs
 - Depends on: 27, 28
 - Effect: behaviour-changing (two new scenario ids; no existing id changes).
@@ -719,6 +723,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (2 files, ~8 edits).
 
 ### Step 61 - Scorer: FailureClass.ToolNotTried
+- Done: 5223a183
 - Files: RoslynSentinel.Tests.Harness/ScenarioScorer.cs, RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Graders/ScenarioVerdict.cs, RoslynSentinel.Tests.Harness/ScenarioSampleLoop.cs
 - Depends on: 4, 27
 - Effect: behaviour-changing for scoring only when `requireNotFoundFromToolUnderTest` is true (default false; every existing scenario scores exactly as before).
@@ -727,6 +732,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (3 files, ~8 edits).
 
 ### Step 62 - Scorer: thread the requirement through the rescoring paths
+- Done: 34ab68be (gap: SavedTranscriptScoring.ScoreFile has no scenario id, so no ToolNotTried there; code TODO + INBOX)
 - Files: RoslynSentinel.Tests.Harness/ScenarioRescoring.cs, RoslynSentinel.Tests.Harness/SavedTranscriptScoring.cs
 - Depends on: 61
 - Effect: behaviour-changing for rescoring of tool-error runs only.
@@ -735,6 +741,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (2 files, ~4 edits).
 
 ### Step 30 - Stop family tests
+- Done: fdaa7297
 - Files: RoslynSentinel.Tests.Harness/StopAdherenceScenariosTests.cs, RoslynSentinel.Tests.Harness/StopAdherenceFixtureTests.cs, RoslynSentinel.Tests.Harness/TreeSnapshotTests.cs (new)
 - Depends on: 28, 29, 60, 61
 - Effect: text-neutral (tests).
@@ -743,6 +750,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: test-writer (3 files).
 
 ### Step 63 - Tool-error scoring tests and the control's RunTest world
+- Done: 5ebf3f29 (R2 proven: RunTest builds and runs OrderCheckoutTests in the control world)
 - Files: RoslynSentinel.Tests.Harness/ScenarioScorerTests.cs, RoslynSentinel.Tests.ModelEval/StopAdherenceControlRunTestTests.cs (new), RoslynSentinel.Tests.Harness/ScenarioRegistryTests.cs (only if a count or id-list assertion needs the two new ids; check with `Search` first)
 - Depends on: 30, 62; P1 Step 12 (the world builder)
 - Effect: text-neutral (tests).
