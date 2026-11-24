@@ -558,15 +558,17 @@ public static class ToolArgumentValidator
     /// </description></item>
     /// </list>
     /// </summary>
+    /// <param name="surface">Captured tool-surface snapshot for this call; null resolves the server's current snapshot once at entry (none when no snapshot is built).</param>
     public static void NormalizeParameterCase(
         ModelContextProtocol.Server.McpServer? server,
         string? toolName,
-        System.Collections.Generic.IDictionary<string, System.Text.Json.JsonElement>? arguments)
+        System.Collections.Generic.IDictionary<string, System.Text.Json.JsonElement>? arguments,
+        RoslynSentinel.Common.ToolSurfaceSnapshot? surface = null)
     {
         if (arguments is null || arguments.Count == 0)
             return;
 
-        var schema = TryGetSchemaParameters(server, toolName);
+        var schema = TryGetSchemaParameters(server, toolName, ResolveSurface(server, surface));
         if (schema is null)
             return;
 
@@ -766,15 +768,17 @@ public static class ToolArgumentValidator
     /// Run before <see cref="ApplyParameterAliases"/>.
     /// </para>
     /// </summary>
+    /// <param name="surface">Captured tool-surface snapshot for this call; null resolves the server's current snapshot once at entry (none when no snapshot is built).</param>
     public static System.Collections.Generic.IReadOnlyList<string>? NormalizeEnumCase(
         ModelContextProtocol.Server.McpServer? server,
         string? toolName,
-        System.Collections.Generic.IDictionary<string, System.Text.Json.JsonElement>? arguments)
+        System.Collections.Generic.IDictionary<string, System.Text.Json.JsonElement>? arguments,
+        RoslynSentinel.Common.ToolSurfaceSnapshot? surface = null)
     {
         if (arguments is null || arguments.Count == 0 || string.IsNullOrEmpty(toolName))
             return null;
 
-        var schema = TryGetSchemaParameters(server, toolName);
+        var schema = TryGetSchemaParameters(server, toolName, ResolveSurface(server, surface));
         if (schema is null)
             return null;
 
@@ -867,10 +871,12 @@ public static class ToolArgumentValidator
     /// Run after <see cref="NormalizeParameterCase"/> and <see cref="NormalizeEnumCase"/>.
     /// </para>
     /// </summary>
+    /// <param name="surface">Captured tool-surface snapshot for this call; null resolves the server's current snapshot once at entry (none when no snapshot is built).</param>
     public static System.Collections.Generic.IReadOnlyList<string>? ApplyParameterAliases(
         ModelContextProtocol.Server.McpServer? server,
         string? toolName,
-        System.Collections.Generic.IDictionary<string, System.Text.Json.JsonElement>? arguments)
+        System.Collections.Generic.IDictionary<string, System.Text.Json.JsonElement>? arguments,
+        RoslynSentinel.Common.ToolSurfaceSnapshot? surface = null)
     {
         if (arguments is null || arguments.Count == 0 || string.IsNullOrEmpty(toolName))
             return null;
@@ -878,7 +884,7 @@ public static class ToolArgumentValidator
         // Per-tool aliases are optional: a tool with none can still take a global alias such as file_path.
         ParameterAliases.TryGetValue(toolName, out var aliases);
 
-        var schema = TryGetSchemaParameters(server, toolName);
+        var schema = TryGetSchemaParameters(server, toolName, ResolveSurface(server, surface));
         if (schema is null)
             return null;
 
@@ -991,18 +997,20 @@ public static class ToolArgumentValidator
     /// be resolved, or anything throws: a throw here would skip <see cref="Validate"/> in the filter, so this
     /// never throws.
     /// </summary>
+    /// <param name="surface">Captured tool-surface snapshot for this call; null resolves the server's current snapshot once at entry (none when no snapshot is built).</param>
     public static System.Collections.Generic.IReadOnlyList<string>? ApplyArgumentRewrites(
         ModelContextProtocol.Server.McpServer? server,
         string? toolName,
         System.Collections.Generic.IDictionary<string, System.Text.Json.JsonElement>? arguments,
-        string? solutionRoot)
+        string? solutionRoot,
+        RoslynSentinel.Common.ToolSurfaceSnapshot? surface = null)
     {
         try
         {
             if (arguments is null)
                 return null;
 
-            var schema = TryGetSchemaParameters(server, toolName);
+            var schema = TryGetSchemaParameters(server, toolName, ResolveSurface(server, surface));
             if (schema is null)
                 return null;
 
@@ -1135,16 +1143,18 @@ public static class ToolArgumentValidator
     /// untouched and no note is added, so <see cref="Validate"/> rejects it with the expected shape.
     /// </para>
     /// </summary>
+    /// <param name="surface">Captured tool-surface snapshot for this call; null resolves the server's current snapshot once at entry (none when no snapshot is built).</param>
     /// <returns>One note per call listing the coerced parameters, or <see langword="null"/> when nothing changed.</returns>
     public static System.Collections.Generic.IReadOnlyList<string>? CoerceStringToStructured(
         ModelContextProtocol.Server.McpServer? server,
         string? toolName,
-        System.Collections.Generic.IDictionary<string, System.Text.Json.JsonElement>? arguments)
+        System.Collections.Generic.IDictionary<string, System.Text.Json.JsonElement>? arguments,
+        RoslynSentinel.Common.ToolSurfaceSnapshot? surface = null)
     {
         if (arguments is null || arguments.Count == 0 || string.IsNullOrEmpty(toolName))
             return null;
 
-        var schema = TryGetSchemaParameters(server, toolName);
+        var schema = TryGetSchemaParameters(server, toolName, ResolveSurface(server, surface));
         if (schema is null)
             return null;
 
