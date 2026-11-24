@@ -1,11 +1,10 @@
-using System.Text;
 using System.Text.RegularExpressions;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.Text;
-using RoslynSentinel.Common;
 
 using static RoslynSentinel.Engines.Basic.CopyAndObsoleteEdits;
 
@@ -617,8 +616,4 @@ public static class CopyAndObsoleteCallerRewrite
         var lineStart = position == 0 ? 0 : text.LastIndexOf('\n', position - 1) + 1;
         return Math.Max(lineStart, bomOffset);
     }
-
-
-
-
 }

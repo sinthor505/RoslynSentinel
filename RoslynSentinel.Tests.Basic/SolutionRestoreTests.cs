@@ -77,6 +77,6 @@ public class SolutionRestoreTests
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        await Assert.CatchAsync<OperationCanceledException>(() => SolutionRestore.RestoreAsync(csproj, TimeSpan.FromMinutes(3), cts.Token));
+        await Assert.CatchAsync<OperationCanceledException>(async () => await SolutionRestore.RestoreAsync(csproj, TimeSpan.FromMinutes(3), cts.Token));
     }
 }

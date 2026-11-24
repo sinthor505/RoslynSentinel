@@ -117,10 +117,10 @@ public static class CarrierSelector
     {
         _repository!.CheckoutStep(4, "verify/inline-pair");
         var shippingDir = Path.Combine(_fixture!.SolutionDirectory, "ContosoOrders.Core", "Shipping");
-        File.WriteAllText(
+        await File.WriteAllTextAsync(
             Path.Combine(shippingDir, "DeliveryEstimator.cs"),
             InlinePairDeliveryEstimatorSource.Replace("\r\n", "\n").Replace("\n", "\r\n"));
-        File.WriteAllText(
+        await File.WriteAllTextAsync(
             Path.Combine(shippingDir, "CarrierSelector.cs"),
             InlinePairCarrierSelectorSource.Replace("\r\n", "\n").Replace("\n", "\r\n"));
         try
@@ -149,7 +149,7 @@ public static class CarrierSelector
             .Single(entry => entry.Key.EndsWith("ShippingBehaviourTests.cs", StringComparison.Ordinal));
         var visibleTestsPath = Path.Combine(_fixture!.SolutionDirectory, visibleTests.Key.Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(visibleTestsPath)!);
-        File.WriteAllText(visibleTestsPath, visibleTests.Value);
+        await File.WriteAllTextAsync(visibleTestsPath, visibleTests.Value);
         try
         {
             var (outcome, detail) = await ShippingKindStepChecks.CheckAsync(

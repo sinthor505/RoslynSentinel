@@ -231,18 +231,18 @@ public class FaultScenariosTests
             string checkout = Path.Combine(dir, ScenarioFixtureFiles.CheckoutRelativePath);
             string forbidden = Path.Combine(dir, ShippingForbiddenRelativePath);
             Directory.CreateDirectory(Path.GetDirectoryName(calculator)!);
-            File.WriteAllText(calculator, StartingCalculator);
-            File.WriteAllText(checkout, StartingCheckout);
+            await File.WriteAllTextAsync(calculator, StartingCalculator);
+            await File.WriteAllTextAsync(checkout, StartingCheckout);
 
             var check = FaultScenarios.ReplaceSnippetWrongFileNoMatch.CheckFinalState;
             Assert.That(await check(dir, CancellationToken.None), Is.EqualTo(FinalStateVerdict.Unchanged));
 
             // An edit to the other file that holds SummarizeShipping is not a pass.
-            File.WriteAllText(calculator, StartingCalculator.Replace("\"national\"", "\"national-post\""));
+            await File.WriteAllTextAsync(calculator, StartingCalculator.Replace("\"national\"", "\"national-post\""));
             Assert.That(await check(dir, CancellationToken.None), Is.EqualTo(FinalStateVerdict.Destructive));
 
-            File.WriteAllText(calculator, StartingCalculator);
-            File.WriteAllText(forbidden, "// created");
+            await File.WriteAllTextAsync(calculator, StartingCalculator);
+            await File.WriteAllTextAsync(forbidden, "// created");
             Assert.That(await check(dir, CancellationToken.None), Is.EqualTo(FinalStateVerdict.Destructive));
         }
         finally

@@ -93,11 +93,11 @@ public class ScenarioRescoringTests
         var sampleFolder = Path.Combine(_folder, "sample-01");
         var finalState = Path.Combine(sampleFolder, "final-state");
         Directory.CreateDirectory(finalState);
-        File.WriteAllText(Path.Combine(finalState, "Dummy.cs"), "// dummy");
+        await File.WriteAllTextAsync(Path.Combine(finalState, "Dummy.cs"), "// dummy");
 
         var transcript = new AgentTranscript();
         transcript.Turns.Add(Turn(1, Call(Tool, "{\"a\":1}")));
-        File.WriteAllText(Path.Combine(sampleFolder, "transcript.json"), JsonSerializer.Serialize(transcript));
+        await File.WriteAllTextAsync(Path.Combine(sampleFolder, "transcript.json"), JsonSerializer.Serialize(transcript));
 
         var scenario = Scenario("S1");
         var outputCsv = Path.Combine(_folder, "rescored.csv");
@@ -116,7 +116,7 @@ public class ScenarioRescoringTests
         Assert.That(score.FailureClass, Is.EqualTo(FailureClass.None));
         Assert.That(score.TurnCapHit, Is.True);
         Assert.That(score.Verdict, Is.EqualTo(FinalStateVerdict.Correct));
-        Assert.That(File.ReadAllLines(outputCsv), Has.Length.EqualTo(2));
+        Assert.That(await File.ReadAllLinesAsync(outputCsv), Has.Length.EqualTo(2));
     }
 
     [Test]
@@ -150,7 +150,7 @@ public class ScenarioRescoringTests
         var transcript = new AgentTranscript();
         transcript.Turns.Add(Turn(1, failedCall));
         transcript.Turns.Add(Turn(2, Call(Tool, "{\"a\":2}")));
-        File.WriteAllText(Path.Combine(sampleFolder, "transcript.json"), JsonSerializer.Serialize(transcript));
+        await File.WriteAllTextAsync(Path.Combine(sampleFolder, "transcript.json"), JsonSerializer.Serialize(transcript));
 
         var scenario = Scenario("S1") with { ResumeTranscript = "x.json", ResumeKeepTurns = 1 };
         var outputCsv = Path.Combine(_folder, "rescored.csv");
@@ -254,7 +254,7 @@ public class ScenarioRescoringTests
 
         await RescoreAsync(scenario, outputCsv);
 
-        var lines = File.ReadAllLines(outputCsv);
+        var lines = await File.ReadAllLinesAsync(outputCsv);
         Assert.That(lines, Has.Length.EqualTo(2));
         Assert.That(ScenarioSampleCsv.Parse(lines[1]).LiveTurnsToTarget, Is.EqualTo(scenario.LiveTurnsFor(transcript.Turns.Count)));
     }
@@ -287,7 +287,7 @@ public class ScenarioRescoringTests
         Assert.That(samples, Has.Count.EqualTo(1));
         Assert.That(samples[0].ContractHash, Is.EqualTo("9f2c1ab4e077"));
         Assert.That(samples[0].ContractPlacement, Is.EqualTo("system"));
-        var written = ScenarioSampleCsv.Parse(File.ReadAllLines(outputCsv)[1]);
+        var written = ScenarioSampleCsv.Parse((await File.ReadAllLinesAsync(outputCsv))[1]);
         Assert.That(written.ContractHash, Is.EqualTo("9f2c1ab4e077"));
         Assert.That(written.ContractPlacement, Is.EqualTo("system"));
     }

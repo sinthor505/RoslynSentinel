@@ -45,7 +45,7 @@ public class ScenarioSampleLoopTests
 
         Assert.That(samples.Select(s => s.SampleIndex).ToArray(), Is.EqualTo(new[] { 1, 2 }));
 
-        var lines = File.ReadAllLines(csv);
+        var lines = await File.ReadAllLinesAsync(csv);
         Assert.That(lines.Length, Is.EqualTo(3));
         Assert.That(lines[0], Is.EqualTo(ScenarioSampleCsv.Header));
 
@@ -90,7 +90,7 @@ public class ScenarioSampleLoopTests
         Assert.That(samples[0].Score, Is.Null);
         Assert.That(samples[1].Score, Is.Not.Null);
 
-        var lines = File.ReadAllLines(csv);
+        var lines = await File.ReadAllLinesAsync(csv);
         Assert.That(lines.Length, Is.EqualTo(3));
     }
 
@@ -172,7 +172,7 @@ public class ScenarioSampleLoopTests
         Assert.That(samples[0].InconclusiveReason, Is.EqualTo(reason));
         Assert.That(samples[0].SchemaDrift, Is.True);
 
-        var lines = File.ReadAllLines(csv);
+        var lines = await File.ReadAllLinesAsync(csv);
         Assert.That(lines.Length, Is.EqualTo(2));
         Assert.That(ScenarioSampleCsv.Parse(lines[1]).InconclusiveReason, Is.EqualTo(reason));
     }
