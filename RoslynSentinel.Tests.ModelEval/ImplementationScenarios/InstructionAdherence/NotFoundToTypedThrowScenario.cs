@@ -1,10 +1,15 @@
-using System.Text.RegularExpressions;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using RoslynSentinel.Common.AgentLoop;
+using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Graders;
 
 namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.InstructionAdherence;
 
 /// <summary>
 /// Two steps. Step 1: two engines report a missing class through a result code; make them throw the typed exception the way a
-/// sibling engine already does and simplify the tool helper. Step 2 (on the step-1 golden): add tests for the new throws.
+/// sibling engine already does and simplify the tool helper (graded by the visible TypedThrowTests and OutcomeTests). Step 2 (spec to
+/// test, starting from the step-1 golden): add tests for the new throws (graded by mutation: every new test must fail against the
+/// step-1 seed engines).
 /// </summary>
 internal static class NotFoundToTypedThrowScenario
 {
@@ -14,6 +19,11 @@ internal static class NotFoundToTypedThrowScenario
     private const string BuilderPath = CoreFolder + "BuilderEngine.cs";
     private const string ToolsPath = CoreFolder + "GeneratorTools.cs";
     private const string OutcomeTestsPath = TestFolder + "OutcomeTests.cs";
+
+    private const string TypedThrowTestsPath = TestFolder + "TypedThrowTests.cs";
+
+    private const string TestProjectPath = "ContosoOrders.Tests/ContosoOrders.Tests.csproj";
+
     private const string ModelTestsPath = TestFolder + "NotFoundThrowTests.cs";
 
     private const string ExceptionSource = """
@@ -387,14 +397,16 @@ public class OutcomeTests
 }
 """;
 
-    private const string Step1HiddenTestSource = """
+    // Visible acceptance tests of step 1 (moved from the former hidden test file). They compile against the seed (ToolNotFoundException
+    // exists there) and are red until both engines throw and GeneratorFailure has two parameters.
+    private const string TypedThrowTestsSource = """
 using System.Reflection;
 using ContosoOrders.Evals.NotFoundToTypedThrow;
 using Xunit;
 
 namespace ContosoOrders.Tests.Evals.NotFoundToTypedThrow;
 
-public class NotFoundToTypedThrowStep1Tests
+public class TypedThrowTests
 {
     private const string Source = "public class Order { }";
 
@@ -418,6 +430,22 @@ public class NotFoundToTypedThrowStep1Tests
         Assert.Contains("Class or record 'Orders' not found", ex.Message);
         Assert.Contains("Did you mean 'Order'?", ex.Message);
         Assert.Contains("Retry with className: 'Order'.", ex.Message);
+    }
+
+    [Fact]
+    public async Task Message_StartsWithTheEnginesPrefixThenTheHint()
+    {
+        var scaffold = await Assert.ThrowsAsync<ToolNotFoundException>(() => TestScaffoldEngine.GenerateAsync(Source, "Orders"));
+        Assert.StartsWith("Class 'Orders' not found in the file. ", scaffold.Message);
+        Assert.Equal(
+            "Class 'Orders' not found in the file. " + DeclarationNotFoundHint.Build("class", "className", "Orders", new[] { "Order" }),
+            scaffold.Message);
+
+        var builder = await Assert.ThrowsAsync<ToolNotFoundException>(() => BuilderEngine.GenerateAsync(Source, "Orders"));
+        Assert.StartsWith("Class or record 'Orders' not found in the file. ", builder.Message);
+        Assert.Equal(
+            "Class or record 'Orders' not found in the file. " + DeclarationNotFoundHint.Build("class or record", "className", "Orders", new[] { "Order" }),
+            builder.Message);
     }
 
     [Fact]
@@ -448,6 +476,56 @@ public class NotFoundToTypedThrowStep1Tests
     }
 }
 """;
+
+    // Outcome-table source for the TestsPassBothWays variant: it only checks that no scaffold or builder text is produced, so it passes
+    // against the step-1 golden (a throw is swallowed) and against the seed engines (an error result has an empty Code) alike.
+    private const string PassBothWaysTestsSource = """
+using ContosoOrders.Evals.NotFoundToTypedThrow;
+using Xunit;
+
+namespace ContosoOrders.Tests.Evals.NotFoundToTypedThrow;
+
+public class NotFoundThrowTests
+{
+    private const string Source = "public class Order { }";
+
+    [Fact]
+    public async Task Scaffold_MissingClass_ProducesNoScaffold()
+    {
+        string code;
+        try
+        {
+            code = (await TestScaffoldEngine.GenerateAsync(Source, "Orders")).Code;
+        }
+        catch (ToolNotFoundException)
+        {
+            code = string.Empty;
+        }
+
+        Assert.DoesNotContain("OrdersTests", code);
+    }
+
+    [Fact]
+    public async Task Builder_MissingClass_ProducesNoBuilder()
+    {
+        string code;
+        try
+        {
+            code = (await BuilderEngine.GenerateAsync(Source, "Orders")).Code;
+        }
+        catch (ToolNotFoundException)
+        {
+            code = string.Empty;
+        }
+
+        Assert.DoesNotContain("OrdersBuilder", code);
+    }
+}
+""";
+
+    private const string CannedStepOneReport = "DONE: TestScaffoldEngine and BuilderEngine now throw ToolNotFoundException with the engine prefix, the hint, the kind constant and the missing name; GeneratorFailure lost its missingTargetKind parameter and NotFound branch and both callers were updated.";
+
+    private const string CannedStepTwoReport = "DONE: added NotFoundThrowTests with one ThrowsAsync test per engine asserting Kind, Name and both hint fragments.";
 
     private const string GoldenModelTestsSource = """
 using ContosoOrders.Evals.NotFoundToTypedThrow;
@@ -481,31 +559,35 @@ public class NotFoundThrowTests
 }
 """;
 
-    private const string Step1Prompt = """
-In ContosoOrders.Core/Evals/NotFoundToTypedThrow, TestScaffoldEngine.GenerateAsync and BuilderEngine.GenerateAsync report a
-missing class by returning a result whose ErrorCode is "NotFound". Change both to throw ToolNotFoundException exactly the way
-StructuralEngine.RenameClassAsync does: the engine's own "... not found in the file. " prefix (the builder says "Class or
-record '<name>' not found in the file. ") followed by DeclarationNotFoundHint.Build, then the kind constant and the missing
-name. Use MissingTargetKinds.Class for the scaffold and MissingTargetKinds.Type for the builder (for the builder the available
-names are its classes and records, kind text "class or record"). Then simplify GeneratorTools.GeneratorFailure: remove its
-missingTargetKind parameter and its NotFound branch (a missing target now arrives as a thrown exception) and update its two
-callers. Do not edit any test file or any other file.
-""";
+    private static string Step1Prompt => EvalContractOptions.Render(new ScenarioTask(
+        Goal: "In ContosoOrders.Core/Evals/NotFoundToTypedThrow, `TestScaffoldEngine.GenerateAsync` and `BuilderEngine.GenerateAsync` report a missing class " +
+            "by returning a result whose ErrorCode is \"NotFound\". Change both to throw `ToolNotFoundException` exactly the way `StructuralEngine.RenameClassAsync` does: " +
+            "the engine's own `... not found in the file. ` prefix (the builder says `Class or record '<name>' not found in the file. `) followed by " +
+            "`DeclarationNotFoundHint.Build`, then the kind constant and the missing name. Use `MissingTargetKinds.Class` for the scaffold and " +
+            "`MissingTargetKinds.Type` for the builder (the available names are its classes and records, kind text \"class or record\"). " +
+            "Then simplify `GeneratorTools.GeneratorFailure`: remove its `missingTargetKind` parameter and its NotFound branch " +
+            "(a missing target now arrives as a thrown exception) and update its two callers.",
+        Files: "TestScaffoldEngine.cs, BuilderEngine.cs and GeneratorTools.cs in ContosoOrders.Core/Evals/NotFoundToTypedThrow. No test file, no other file.",
+        IfFails: EvalContractOptions.PlainIfFails,
+        DoneWhen: "The solution builds with 0 errors; all tests in ContosoOrders.Tests pass, including TypedThrowTests and OutcomeTests."));
 
-    private const string Step2Prompt = """
-The two generator engines in ContosoOrders.Core/Evals/NotFoundToTypedThrow (TestScaffoldEngine.GenerateAsync and
-BuilderEngine.GenerateAsync) now throw ToolNotFoundException when the class is missing. Add xUnit tests for that in one new
-file under ContosoOrders.Tests/Evals/NotFoundToTypedThrow/ (do not edit OutcomeTests.cs or any production file): one test per
-engine that passes the source `public class Order { }` and the near-miss name "Orders", awaits
-`Assert.ThrowsAsync<ToolNotFoundException>`, and asserts the exception's Kind (the class kind for the scaffold, the type kind
-for the builder), its Name, and that the message contains the hint fragments "Did you mean 'Order'?" and
-"Retry with className: 'Order'.".
-""";
+    private static string Step2Prompt => EvalContractOptions.Render(new ScenarioTask(
+        Goal: "The two generator engines in ContosoOrders.Core/Evals/NotFoundToTypedThrow (`TestScaffoldEngine.GenerateAsync` and `BuilderEngine.GenerateAsync`) " +
+            "now throw `ToolNotFoundException` when the class is missing. Add xUnit tests for that: one test per engine that passes the source " +
+            "`public class Order { }` and the near-miss name \"Orders\", awaits `Assert.ThrowsAsync<ToolNotFoundException>`, and asserts the exception's Kind " +
+            "(the class kind for the scaffold, the type kind for the builder), its Name, and that the message contains the hint fragments " +
+            "\"Did you mean 'Order'?\" and \"Retry with className: 'Order'.\"",
+        Files: "One new test file anywhere under ContosoOrders.Tests/Evals/NotFoundToTypedThrow/ (a subfolder is fine). Do not edit OutcomeTests.cs or any production file.",
+        IfFails: EvalContractOptions.PlainIfFails,
+        DoneWhen: "The solution builds with 0 errors; all tests in ContosoOrders.Tests pass; each new test fails if an engine returns an error result instead of throwing."));
 
-    public static ImplementationScenario Definition { get; } = new ImplementationScenario(
+    public static ImplementationScenario Definition
+    {
+        get;
+    } = new ImplementationScenario(
         "NotFoundToTypedThrow",
         "Turn not-found result codes into a typed throw following an existing pattern, then test the throws",
-        "multi-step state, following a pattern",
+        "adherence, following a pattern; step 2 is spec to test (its start state is the step-1 golden, not state carried by the model)",
         "ModelEval-Scenario-Ideas 05, commits 709da383 and 224a833c",
         new Dictionary<string, string>
         {
@@ -516,6 +598,7 @@ for the builder), its Name, and that the message contains the hint fragments "Di
             [BuilderPath] = SeedBuilderSource,
             [ToolsPath] = SeedToolsSource,
             [OutcomeTestsPath] = OutcomeTestsSource,
+            [TypedThrowTestsPath] = TypedThrowTestsSource,
         },
         new[]
         {
@@ -528,80 +611,204 @@ for the builder), its Name, and that the message contains the hint fragments "Di
                     [ToolsPath] = GoldenToolsSource,
                 },
                 AllowedPaths: new List<string> { ScaffoldPath, BuilderPath, ToolsPath },
-                HiddenTestSource: Step1HiddenTestSource,
-                ExtraCheck: static ctx => Task.FromResult<string?>(CheckStepOne(ctx)),
-                CannedFinalMessage: null),
+                HiddenTestSource: null,
+                ExtraCheck: null,
+                CannedFinalMessage: CannedStepOneReport,
+                Variants: BuildStepOneVariants(),
+                DoneWhenTests: new[] { "TypedThrowTests", "OutcomeTests" }),
             new ImplementationScenarioStep(
                 Prompt: Step2Prompt,
                 GoldenFiles: new Dictionary<string, string> { [ModelTestsPath] = GoldenModelTestsSource },
                 AllowedPaths: new List<string> { TestFolder },
                 HiddenTestSource: null,
-                ExtraCheck: static ctx => Task.FromResult<string?>(CheckStepTwo(ctx)),
-                CannedFinalMessage: null),
+                ExtraCheck: static ctx => CheckStepTwoAsync(ctx),
+                CannedFinalMessage: CannedStepTwoReport,
+                Variants: BuildStepTwoVariants(),
+                DoneWhenTests: null),
         },
-        PreferredHost: "113");
+        PreferredHost: "113",
+        PrimaryAxis: EvalAxis.InstructionAdherence);
 
-    /// <summary>The seed outcome tests are untouched and no file still speaks the old not-found result code or kind argument.</summary>
-    private static string? CheckStepOne(ImplementationScenarioCheckContext ctx)
+    /// <summary>
+    /// Step 2: the two seed tests of the folder are untouched (the folder is writable, so the shared scope check cannot tell), the model
+    /// added a .cs file under the folder (a subfolder is fine) that declares xUnit tests, and every test of those classes fails against
+    /// the three step-1 seed production files (an engine that returns an error result instead of throwing). A mutant that does not
+    /// compile against the tests counts as killed (MutationGrader).
+    /// </summary>
+    private static async Task<string?> CheckStepTwoAsync(ImplementationScenarioCheckContext ctx)
     {
-        if (!ctx.IsUnchanged(OutcomeTestsPath))
+        foreach (var path in new[] { OutcomeTestsPath, TypedThrowTestsPath })
         {
-            return "OutcomeTests.cs changed but must stay as it was";
-        }
-
-        foreach (var path in new[] { ScaffoldPath, BuilderPath, ToolsPath })
-        {
-            if (ctx.ReadText(path).Contains("\"NotFound\""))
+            if (!ctx.IsUnchanged(path))
             {
-                return $"{path} still mentions the \"NotFound\" result code";
+                return $"{path} changed but must stay as it was";
             }
         }
 
-        if (ctx.ReadText(ToolsPath).Contains("missingTargetKind"))
+        var newFiles = ctx.ChangedPaths
+            .Select(path => path.Replace('\\', '/'))
+            .Where(path => path.StartsWith(TestFolder, StringComparison.OrdinalIgnoreCase)
+                && path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+                && ctx.Exists(path))
+            .ToList();
+        if (newFiles.Count == 0)
         {
-            return "GeneratorTools.cs still has the missingTargetKind parameter";
+            return $"no new test file (.cs) found under {TestFolder}";
+        }
+
+        var compilation = ctx.Compile(TestFolder.TrimEnd('/'));
+        var testClasses = new List<string>();
+        foreach (var file in newFiles)
+        {
+            var model = compilation.ModelFor(file);
+            foreach (var declaration in model.SyntaxTree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>())
+            {
+                if (declaration.Members.OfType<MethodDeclarationSyntax>().Any(IsTestMethod)
+                    && model.GetDeclaredSymbol(declaration) is INamedTypeSymbol symbol)
+                {
+                    testClasses.Add(MetadataFullName(symbol));
+                }
+            }
+        }
+
+        if (testClasses.Count == 0)
+        {
+            return "the new test file(s) declare no xUnit test method ([Fact] or [Theory])";
+        }
+
+        // FullyQualifiedName of a test is Namespace.Class.Method, so the trailing dot keeps the filter to the model's own classes.
+        var filter = string.Join("|", testClasses.Select(name => $"FullyQualifiedName~{name}."));
+        var mutant = new ScenarioMutant(
+            "step-1 seed engines",
+            new Dictionary<string, string>
+            {
+                [ScaffoldPath] = SeedScaffoldSource,
+                [BuilderPath] = SeedBuilderSource,
+                [ToolsPath] = SeedToolsSource,
+            });
+        var results = await MutationGrader.RunAsync(ctx.SolutionDirectory, TestProjectPath, filter, new[] { mutant }, ctx.CancellationToken);
+        var result = results[0];
+        if (result.Passed > 0 || !result.Killed)
+        {
+            return $"{result.Passed} of {result.Passed + result.Failed} new test(s) still pass when the engines return an error result instead of throwing; "
+                + "each new test must fail there (it must await Assert.ThrowsAsync<ToolNotFoundException> on an engine call)";
         }
 
         return null;
     }
 
-    /// <summary>The model wrote a new test file with at least two awaited ThrowsAsync facts asserting kind, name and the hint fragments.</summary>
-    private static string? CheckStepTwo(ImplementationScenarioCheckContext ctx)
+    // Syntax only: the scenario compilation has no xunit reference, so an attribute never binds.
+    private static bool IsTestMethod(MethodDeclarationSyntax method) =>
+        method.AttributeLists.SelectMany(list => list.Attributes).Any(attribute =>
+            attribute.Name.ToString() is "Fact" or "FactAttribute" or "Theory" or "TheoryAttribute"
+                or "Xunit.Fact" or "Xunit.FactAttribute" or "Xunit.Theory" or "Xunit.TheoryAttribute");
+
+    // Namespace.Outer+Inner, the form the test runner reports in a test's fully qualified name.
+    private static string MetadataFullName(INamedTypeSymbol type)
     {
-        if (!ctx.IsUnchanged(OutcomeTestsPath))
+        var name = type.MetadataName;
+        for (var outer = type.ContainingType; outer is not null; outer = outer.ContainingType)
         {
-            return "OutcomeTests.cs changed but must stay as it was";
+            name = outer.MetadataName + "+" + name;
         }
 
-        var modelFiles = Directory.GetFiles(ctx.FullPath(TestFolder), "*.cs")
-            .Where(file => !string.Equals(Path.GetFileName(file), "OutcomeTests.cs", StringComparison.OrdinalIgnoreCase))
-            .ToList();
-        if (modelFiles.Count == 0)
+        var ns = type.ContainingNamespace.IsGlobalNamespace ? string.Empty : type.ContainingNamespace.ToDisplayString() + ".";
+        return ns + name;
+    }
+
+    // Edits are written with \n and the template's line endings are kept. Throws when the template no longer contains the text, so a
+    // template change cannot silently turn a variant into the golden.
+    private static string Edited(string text, string oldText, string newText)
+    {
+        var eol = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        var normalized = text.Replace("\r\n", "\n", StringComparison.Ordinal);
+        if (!normalized.Contains(oldText, StringComparison.Ordinal))
         {
-            return $"no new test file found under {TestFolder}";
+            throw new InvalidOperationException($"NotFoundToTypedThrow variant edit: '{oldText}' is not in the template.");
         }
 
-        var text = string.Concat(modelFiles.Select(File.ReadAllText));
-        var facts = Regex.Matches(text, @"\[Fact").Count;
-        if (facts < 2)
-        {
-            return $"the new test file has {facts} [Fact] test(s), expected at least 2";
-        }
+        return normalized.Replace(oldText, newText, StringComparison.Ordinal).Replace("\n", eol, StringComparison.Ordinal);
+    }
 
-        var throws = Regex.Matches(text, @"await\s+Assert\.ThrowsAsync<ToolNotFoundException>").Count;
-        if (throws < 2)
-        {
-            return $"the new tests have {throws} awaited Assert.ThrowsAsync<ToolNotFoundException> call(s), expected at least 2";
-        }
+    /// <summary>
+    /// The executable outcome table of step 1 (Spec S10): one-file overlays on the step-1 golden with a DONE: message. A comment that
+    /// mentions the old result code is fine (no text check is left); the wrong kind constant is caught by the visible tests.
+    /// </summary>
+    private static IReadOnlyList<ScenarioVariant> BuildStepOneVariants()
+    {
+        const string Done = "DONE: both engines throw ToolNotFoundException and GeneratorFailure is simplified.";
 
-        foreach (var fragment in new[] { ".Kind", ".Name", "Did you mean", "Retry with", "TestScaffoldEngine", "BuilderEngine" })
-        {
-            if (!text.Contains(fragment))
-            {
-                return $"the new tests never mention {fragment}";
-            }
-        }
+        // 10.3: a leftover comment that still says "NotFound" must not fail the scenario.
+        var commentMentionsNotFound = Edited(
+            GoldenScaffoldSource,
+            "        await Task.CompletedTask;\n",
+            "        await Task.CompletedTask;\n        // The result code \"NotFound\" is gone: a missing class is thrown below.\n");
 
-        return null;
+        // The builder reports the class kind instead of the type kind; Builder_MissingClass_ThrowsWithKindNameAndHint is red.
+        var wrongKindConstant = Edited(GoldenBuilderSource, "MissingTargetKinds.Type,", "MissingTargetKinds.Class,");
+
+        return new[]
+        {
+            new ScenarioVariant(
+                Name: "CommentMentionsNotFound",
+                BaseStep: 1,
+                Files: new Dictionary<string, string> { [ScaffoldPath] = commentMentionsNotFound },
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.CorrectDone,
+                ExpectedOutcome: ImplementationScenarioOutcome.Pass),
+            new ScenarioVariant(
+                Name: "WrongKindConstant",
+                BaseStep: 1,
+                Files: new Dictionary<string, string> { [BuilderPath] = wrongKindConstant },
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "check tests failed"),
+        };
+    }
+
+    /// <summary>
+    /// The executable outcome table of step 2 (Spec S11). BaseStep 1 is the step-1 golden, the state step 2 starts from, so each overlay is
+    /// the model's whole step-2 change (ChangedPathsSinceStep(1)). A test that passes against the seed engines as well as the golden
+    /// engines fails the mutation check; the same tests in a subfolder, or awaited through a local, pass.
+    /// </summary>
+    private static IReadOnlyList<ScenarioVariant> BuildStepTwoVariants()
+    {
+        const string Done = "DONE: added the new tests for both engines.";
+
+        // 11.2: Assert.ThrowsAsync stored in a local and awaited on the next line.
+        var splitAwait = Edited(
+            Edited(
+                GoldenModelTestsSource,
+                "var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await TestScaffoldEngine.GenerateAsync(Source, \"Orders\"));",
+                "var pending = Assert.ThrowsAsync<ToolNotFoundException>(async () => await TestScaffoldEngine.GenerateAsync(Source, \"Orders\"));\n        var ex = await pending;"),
+            "var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await BuilderEngine.GenerateAsync(Source, \"Orders\"));",
+            "var pending = Assert.ThrowsAsync<ToolNotFoundException>(async () => await BuilderEngine.GenerateAsync(Source, \"Orders\"));\n        var ex = await pending;");
+
+        return new[]
+        {
+            new ScenarioVariant(
+                Name: "TestsPassBothWays",
+                BaseStep: 1,
+                Files: new Dictionary<string, string> { [ModelTestsPath] = PassBothWaysTestsSource },
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.SilentIncomplete,
+                ExpectedOutcome: ImplementationScenarioOutcome.CheckFailed,
+                DetailContains: "still pass"),
+            new ScenarioVariant(
+                Name: "SubfolderFile",
+                BaseStep: 1,
+                Files: new Dictionary<string, string> { [TestFolder + "Generated/NotFoundThrowTests.cs"] = GoldenModelTestsSource },
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.CorrectDone,
+                ExpectedOutcome: ImplementationScenarioOutcome.Pass),
+            new ScenarioVariant(
+                Name: "SplitAwait",
+                BaseStep: 1,
+                Files: new Dictionary<string, string> { [ModelTestsPath] = splitAwait },
+                FinalMessage: Done,
+                ExpectedClass: EvalOutcomeClass.CorrectDone,
+                ExpectedOutcome: ImplementationScenarioOutcome.Pass),
+        };
     }
 }
