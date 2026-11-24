@@ -71,7 +71,8 @@ registered, outside the registry, so `McpServerStatus` works in any mode.
 **claude-lean** (`ToolClassRegistry.ClaudeLeanMode`) is exclusive and also applies a per-tool allow-list
 (`ClaudeLeanToolNames`, `Common/ToolAllowList.cs`), because its classes hold non-Core tools too. Tools
 outside the allow-list are switched on at runtime by `McpToolsetControl`: `Common/ToolsetCatalog.cs`
-(`ToolsBySet`: declarations / moveExtract / projectAdmin) and `Common/ToolsetService.cs`.
+(`ToolsBySet`: declarations / moveExtract / projectAdmin), `Common/ToolsetService.cs` (facade: resolves
+candidates, persists tab state) and `ToolSurfaceController.ApplyToolset`, the only runtime writer of the collection.
 `ClaudeLeanOnDemandToolClasses` makes DI register those classes' dependencies without exposing their tools.
 To make a tool reachable in claude-lean it must be in `ClaudeLeanToolNames` or a `ToolsBySet` entry.
 
@@ -82,8 +83,14 @@ Ground truth for "does this tool exist / is it gated": `McpServerStatus(toolList
 - `ToolSurfaceController` (DI singleton) builds an immutable, versioned `ToolSurfaceSnapshot` from the live
   `McpServerOptions.ToolCollection`: per tool its class, origin (`Startup` or `RuntimeToolset` plus the set),
   listed and hidden parameters, a schema fingerprint, the enabled toolsets and the ordered patch names. It
-  refreshes at startup (hosted service, above), on every `ToolCollection.Changed`, and lazily on first read.
+  refreshes at startup (hosted service, above), on every `ToolCollection.Changed`, after a real apply
+  (trigger `toolsetApplied`, so a zero-tool enable still bumps the version), and lazily on first read.
   The version moves only when the fingerprint or the enabled sets change.
+- Runtime toolsets: `ApplyToolset` adds or removes one set's tools in one deferred-`Changed` scope (one
+  `tools/list_changed` per real toggle) and records them in the runtime layer (`RuntimeToolSets`,
+  `RuntimeToolNames`), which is the exact attribution behind `RuntimeToolset` origin and `exposedBy`
+  (no catalog lookup). `ToolsetService.SetEnabled` (called by `McpToolsetControl`, `--toolsets` and tab-state
+  restore) delegates to it. Lock order is `_applyGate -> _lock`; `Refresh` never takes `_applyGate`.
 - `McpServerStatus` reads it (`toolSurface.surfaceVersion/surfaceTrigger/schemaPatches`, per-tool `exposedBy`):
   a tool counts as active only if it is in the live collection, so an allowed tool with a missing DI block
   is reported as not registered. Before the first snapshot it falls back to the declared-tool rule.

@@ -1,6 +1,6 @@
 # Plan: Tool-surface controller stage C - runtime toolsets go through the controller (one writer, exact attribution)
 
-**Status:** APPROVED 2026-11-24. Stage C: runtime toolsets applied through ToolSurfaceController with exact attribution; ToolsetService becomes a facade. Review fixes applied; decisions R1-R9 taken at recommendation (owner away), R3 needs owner confirmation (non-blocking).
+**Status:** IN PROGRESS 2026-11-24. Steps 1-11 done (aadefa7c..0a23c779, live A-E ok); Step 12 full run pending. Approved 2026-11-24: Stage C: runtime toolsets applied through ToolSurfaceController with exact attribution; ToolsetService becomes a facade. Review fixes applied; decisions R1-R9 taken at recommendation (owner away), R3 needs owner confirmation (non-blocking).
 
 Stage 2 of [proposal_tool_surface_controller.md](../proposals/proposal_tool_surface_controller.md); follows phase A/B ([closed/plan_tool_surface_controller.md](closed/plan_tool_surface_controller.md), ad3b5879..9619e344: B5 a3007c77, close 9619e344), whose "Later phases" bullet C this details.
 
@@ -99,6 +99,7 @@ the map places it after 7 || 8. Steps 5 and 6 must land in that order (between t
 attribution through its `ToolsetService` fallback, which is text-neutral; see Risks).
 
 ### Step 1 - Contract skeleton
+- Done: aadefa7c
 - Files: `RoslynSentinel.Common/ToolSurface/ToolSurfaceController.cs`, `RoslynSentinel.Common/ToolsetService.cs`
 - Depends on: none
 - Effect: text-neutral (no callers)
@@ -136,6 +137,7 @@ attribution through its `ToolsetService` fallback, which is text-neutral; see Ri
   CS0618 site until Step 6).
 
 ### Step 2 - Implement ApplyToolset, the runtime layer and exact attribution
+- Done: c4d40a08
 - Files: `RoslynSentinel.Common/ToolSurface/ToolSurfaceController.cs`, `RoslynSentinel.Common/ToolSurface/ToolSurfaceSnapshot.cs`
 - Depends on: 1
 - Effect: text-neutral (no production caller of `ApplyToolset` yet; with an empty layer `Refresh` falls back to today's
@@ -179,6 +181,7 @@ attribution through its `ToolsetService` fallback, which is text-neutral; see Ri
 - Done when: `Build` 0 errors; dispatcher runs `ToolSurfaceControllerTests` and `McpServerStatusToolListingTests`: all pass.
 
 ### Step 3 - Move the test constructions to the new ToolsetService constructor
+- Done: a4401917
 - Files: `RoslynSentinel.Tests.Server/McpToolsetControlTests.cs` (2 sites: `CreateService` :43,
   `Enable_ToolFromAnUnsupportedClass_IsReportedUnavailable` :204), `RoslynSentinel.Tests.Server/StartupToolsetRestoreTests.cs`
   (:96), `RoslynSentinel.Tests.Tools.Basic/AdminToolsTests.cs` (:394), `RoslynSentinel.Tests.Tools.Basic/McpServerStatusToolsetCountTests.cs`
@@ -197,6 +200,7 @@ attribution through its `ToolsetService` fallback, which is text-neutral; see Ri
   `ServiceRegistrationExtensionsBasic.cs:428`; dispatcher runs the five touched test classes: all pass.
 
 ### Step 4 - ApplyToolset tests
+- Done: 6709e406
 - Files: `RoslynSentinel.Tests.Server/ToolSurfaceControllerApplyTests.cs` (new)
 - Depends on: 2
 - Pairs with: Step 5 (edits only; Step 5's acceptance waits for this step)
@@ -219,6 +223,7 @@ attribution through its `ToolsetService` fallback, which is text-neutral; see Ri
 - Done when: dispatcher runs `ToolSurfaceControllerApplyTests`: all pass.
 
 ### Step 5 - ToolsetService writes through the controller
+- Done: 3be85b9e
 - Files: `RoslynSentinel.Common/ToolsetService.cs`, `RoslynSentinel.Tests.Server/ToolSurfaceControllerTests.cs`,
   `RoslynSentinel.Tools.Basic/ToolsetControlTools.cs` (class summary only)
 - Depends on: 2 (edits); acceptance also needs Step 4 landed (it runs `ToolSurfaceControllerApplyTests`)
@@ -253,6 +258,7 @@ attribution through its `ToolsetService` fallback, which is text-neutral; see Ri
   `ToolSurfaceControllerApplyTests`: all pass.
 
 ### Step 6 - One controller: DI passes it, the controller drops ToolsetService
+- Done: 719a9c37
 - Files: `RoslynSentinel.Common/ToolSurface/ToolSurfaceController.cs`, `RoslynSentinel.Server.Advanced/ServiceRegistrationExtensionsBasic.cs`,
   `RoslynSentinel.Tests.Tools.Basic/McpServerStatusToolListingTests.cs`
 - Depends on: 5
@@ -280,6 +286,7 @@ attribution through its `ToolsetService` fallback, which is text-neutral; see Ri
   `ToolClassRegistrationTests`, `NoActiveToolsStartupTests`, `ClaudeLeanSchemaBudgetTests`: all pass.
 
 ### Step 7 - Wiring tests
+- Done: 4f9dfbe9
 - Files: `RoslynSentinel.Tests.Server/ToolSurfaceControllerWiringTests.cs` (new)
 - Depends on: 6
 - Pairs with: Step 8
@@ -296,6 +303,7 @@ attribution through its `ToolsetService` fallback, which is text-neutral; see Ri
 - Done when: dispatcher runs `ToolSurfaceControllerWiringTests`: all pass.
 
 ### Step 8 - A real apply always refreshes a live snapshot
+- Done: ac3142d3
 - Files: `RoslynSentinel.Common/ToolSurface/ToolSurfaceController.cs`, `RoslynSentinel.Tests.Server/ToolSurfaceControllerApplyTests.cs`
 - Depends on: 2 (and 4, same test file)
 - Effect: behaviour-changing, status only: after an apply that changed the layer but moved no tool (every member
@@ -314,6 +322,7 @@ attribution through its `ToolsetService` fallback, which is text-neutral; see Ri
   (`ToolsetEnable_BumpsVersion_AndMarksRuntimeOrigin` still sees `toolCollectionChanged`): all pass.
 
 ### Step 9 - Remove the obsolete ToolsetService constructor
+- Done: 0a23c779
 - Files: `RoslynSentinel.Common/ToolsetService.cs`
 - Depends on: 3, 6
 - Effect: text-neutral
@@ -323,6 +332,7 @@ attribution through its `ToolsetService` fallback, which is text-neutral; see Ri
 - Done when: `Build` 0 errors with no CS0618 for `ToolsetService`.
 
 ### Step 10 - LIVE check
+- Done: 2026-11-24 on servedSha a1ea6ac6: A ok-fresh (v1 startup), B ok + same-text + visible (v2 toolCollectionChanged, exposedBy toolset:git, count 1), C ok (unchanged), D ok (v1 startup, restored git exposedBy toolset:git), E ok (v2, hint back, count +1)
 - Files: none
 - Depends on: 6, 8, 9 committed; own-server restart (`McpServerControl(StopServer)`, then `LoadSolution`); no subagent mid-operation
 - Effect: none
@@ -346,6 +356,7 @@ attribution through its `ToolsetService` fallback, which is text-neutral; see Ri
 - Done when: A-E recorded.
 
 ### Step 11 - Docs
+- Done: this commit
 - Files: `docs/current/references/reference_architecture_map.md`
 - Depends on: 6, 8
 - Effect: none (docs)
@@ -358,6 +369,7 @@ attribution through its `ToolsetService` fallback, which is text-neutral; see Ri
 - Done when: the section matches the code; links resolve.
 
 ### Step 12 - No stubs left, full run
+- Done: stub sweep 0 matches; full run pending (ClaudeLeanSchemaBudgetTests red from peer punchlist #20, fix promised by roslynsentinel-0c)
 - Files: none (check only)
 - Depends on: all above
 - Effect: none
