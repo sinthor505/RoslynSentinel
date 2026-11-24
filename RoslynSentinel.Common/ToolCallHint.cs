@@ -93,6 +93,7 @@ public static class ToolCallHint
             var spec = FindSpec(parameters, pair.Name);
             if (spec is null)
             {
+                // TODO read hidden parameters from the snapshot's hint catalog (stage E), then delete HiddenSchemaParams
                 if (pair.Value is not null && HiddenSchemaParams.IsHidden(toolName, pair.Name) && !hidden.Exists(entry => entry.Name == pair.Name))
                 {
                     hidden.Add((pair.Name, RenderHidden(pair.Value)));

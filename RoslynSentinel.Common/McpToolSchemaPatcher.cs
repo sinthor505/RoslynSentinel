@@ -680,6 +680,9 @@ public static class McpToolSchemaPatcher
         tool.ProtocolTool.InputSchema = JsonSerializer.SerializeToElement(schemaNode);
         StrippedToolParameters.Record(tool, removed);
         // TODO HiddenSchemaParams is the ToolCallHint mirror; remove with ToolCallHint's move to the snapshot (stage E)
+#pragma warning disable CS0618
+        // The only intended production write to the obsolete mirror (ToolCallHint reads it until stage E).
         HiddenSchemaParams.Register(tool.ProtocolTool.Name, removed);
+#pragma warning restore CS0618
     }
 }
