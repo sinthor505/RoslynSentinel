@@ -29,9 +29,74 @@ public class ScenarioAgentTests
 
     private const int DefaultSamples = 10;
 
-    [Test]
-    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1 -Test Scenario -Scenario <id>; resume scenarios use the capture they name.")]
     public async Task RunScenario_SamplesAndScores()
+    {
+        await RunScenarioAsync(Environment.GetEnvironmentVariable(ScenarioVariable));
+    }
+
+    [Test]
+    [Explicit("Requires loaded model. Run one stop-family definition: dotnet test RoslynSentinel.Tests.ModelEval --filter \"TestCategory=Family:StopAdherence\" (or TestCategory=Axis:<Name>); ROSLYNSENTINEL_LLM_MODEL must be set.")]
+    [TestCaseSource(nameof(StopFamilyCases))]
+    public async Task RunStopFamily_SamplesAndScores(string scenarioId)
+    {
+        await RunScenarioAsync(scenarioId);
+    }
+
+    /// <summary>NUnit category shared by every case of <see cref="RunStopFamily_SamplesAndScores"/>.</summary>
+    public const string StopFamilyCategory = "Family:StopAdherence";
+
+    // One case per registry definition that declares a PrimaryAxis. Both categories are generated, never hand-written per case:
+    // the axis one from the property (same as ImplementationScenarioAgentTests.StepCases), the family one from the constant.
+    public static IEnumerable<TestCaseData> StopFamilyCases()
+    {
+        foreach (var definition in ScenarioRegistry.All)
+        {
+            if (definition.PrimaryAxis == EvalAxis.Unassigned)
+            {
+                continue;
+            }
+
+            var testCase = new TestCaseData(definition.Id);
+            testCase.SetCategory(EvalAxisCategory.Name(definition.PrimaryAxis));
+            testCase.SetCategory(StopFamilyCategory);
+            yield return testCase;
+        }
+    }
+
+    // Model-free guard: every definition with a PrimaryAxis has exactly one stop-family case, carrying both categories.
+    [Test]
+    public void EveryAxisDefinition_HasACase()
+    {
+        var cases = StopFamilyCases().ToList();
+        var caseIds = cases.Select(c => (string)c.Arguments[0]!).OrderBy(id => id, StringComparer.Ordinal).ToList();
+        var expectedIds = ScenarioRegistry.All
+            .Where(d => d.PrimaryAxis != EvalAxis.Unassigned)
+            .Select(d => d.Id)
+            .OrderBy(id => id, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.That(caseIds, Is.EqualTo(expectedIds), "StopFamilyCases must have exactly one case per definition that declares a PrimaryAxis.");
+
+        foreach (var testCase in cases)
+        {
+            var id = (string)testCase.Arguments[0]!;
+            var definition = ScenarioRegistry.Find(id)!;
+            var categories = testCase.Properties["Category"].Cast<object>().Select(c => c.ToString()).ToList();
+            Assert.That(categories, Does.Contain(EvalAxisCategory.Name(definition.PrimaryAxis)), $"{id} is missing its axis category.");
+            Assert.That(categories, Does.Contain(StopFamilyCategory), $"{id} is missing {StopFamilyCategory}.");
+        }
+    }
+
+    // A TestCaseData name such as RunStopFamily_SamplesAndScores("Id") holds parentheses and quotes; keep only characters valid in a directory name.
+    internal static string SafeDirectoryName(string testName)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var cleaned = new string(testName.Select(c => invalid.Contains(c) || c == '"' || c == '(' || c == ')' || c == ' ' ? '_' : c).ToArray());
+        return cleaned.Trim('_');
+    }
+
+    // Shared body of RunScenario_SamplesAndScores (id from the env var) and RunStopFamily_SamplesAndScores (id from the case).
+    private static async Task RunScenarioAsync(string? scenarioId)
     {
         LlmOptions.Configure([]);
         if (string.IsNullOrEmpty(LlmOptions.Model))
@@ -41,7 +106,6 @@ public class ScenarioAgentTests
                 "server with a loaded model and are skipped rather than failed when unconfigured.");
         }
 
-        var scenarioId = Environment.GetEnvironmentVariable(ScenarioVariable);
         if (string.IsNullOrEmpty(scenarioId))
         {
             Assert.Ignore($"{ScenarioVariable} is not set - pass -Scenario <id>.");
@@ -78,14 +142,14 @@ public class ScenarioAgentTests
         var runDirectory = Path.Combine(
             TestContext.CurrentContext.WorkDirectory,
             "model-eval",
-            TestContext.CurrentContext.Test.Name,
+            SafeDirectoryName(TestContext.CurrentContext.Test.Name),
             DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
         Directory.CreateDirectory(runDirectory);
         var csvPath = Path.Combine(runDirectory, "results.csv");
         var liftRenames = ScenarioSampleLoop.LiftRenamesState();
 
         TestContext.Out.WriteLine(
-            $"Scenario {scenario.Id} (type {scenario.ScenarioType}): {samples} sample(s), lift renames {liftRenames}, turn cap {scenario.EffectiveTurnCap} (scenario default {scenario.TurnCap}).");
+            $"Scenario {scenario.Id} (type {scenario.ScenarioType}, {EvalAxisCategory.Name(scenario.PrimaryAxis)}): {samples} sample(s), lift renames {liftRenames}, turn cap {scenario.EffectiveTurnCap} (scenario default {scenario.TurnCap}).");
 
         IReadOnlyList<ScenarioSample> ran;
         try
@@ -124,6 +188,11 @@ public class ScenarioAgentTests
 
         await using var environment = await ScenarioEnvironment.CreateAsync(scenario, sampleDirectory, cancellationToken);
 
+        // Staging is done: a scenario whose whole tree must stay unchanged records it now and diffs it after the run.
+        IReadOnlyDictionary<string, string>? treeBefore = scenario.WholeTreeMustStayUnchanged
+            ? TreeSnapshot.Capture(environment.SolutionDirectory)
+            : null;
+
         var runner = new ModelAgentRunner(
             environment.AgentClient, environment.Client,
             repeatedFailureLimit: 10,
@@ -133,10 +202,10 @@ public class ScenarioAgentTests
             logger: environment.Host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
         var userPrompt = string.Format(
             scenario.PromptTemplate,
-            Path.Combine(environment.SolutionDirectory, "ContosoOrders.Core"));
+            Path.Combine(environment.SolutionDirectory, "ContosoOrders.Core").Replace('\\', '/'));
         var result = await runner.RunAsync(EvalContractOptions.ComposeSystemPrompt(), userPrompt, sampleDirectory, cancellationToken);
 
-        var verdict = await ComputeFinalStateAsync(scenario, sampleIndex, environment.SolutionDirectory, sampleDirectory, cancellationToken);
+        var verdict = await ComputeFinalStateAsync(scenario, sampleIndex, environment.SolutionDirectory, sampleDirectory, cancellationToken, treeBefore);
         return (result, verdict, false, 0, "");
     }
 
@@ -301,7 +370,8 @@ public class ScenarioAgentTests
         int sampleIndex,
         string solutionDirectory,
         string sampleDirectory,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, string>? treeBefore = null)
     {
         // The verdict reads the fixture, so it must be computed before the environment is disposed.
         FinalStateVerdict? verdict = null;
@@ -312,6 +382,31 @@ public class ScenarioAgentTests
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             TestContext.Out.WriteLine($"Sample {sampleIndex}: final-state check failed: {ex.Message}");
+        }
+
+        // Whole-tree scenarios (WholeTreeMustStayUnchanged): any added, changed or removed file turns an Unchanged verdict into Destructive.
+        // Correct, Wrong and Destructive verdicts are kept. The verdict has no detail field, so the diff goes to the log and tree-diff.txt.
+        if (treeBefore is not null)
+        {
+            try
+            {
+                var diff = TreeSnapshot.Diff(treeBefore, TreeSnapshot.Capture(solutionDirectory));
+                if (diff.Count > 0)
+                {
+                    if (verdict == FinalStateVerdict.Unchanged)
+                    {
+                        verdict = FinalStateVerdict.Destructive;
+                    }
+
+                    TestContext.Out.WriteLine($"Sample {sampleIndex}: tree changed ({diff.Count} path(s)): {string.Join("; ", diff)}");
+                    Directory.CreateDirectory(sampleDirectory);
+                    File.WriteAllLines(Path.Combine(sampleDirectory, "tree-diff.txt"), diff);
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                TestContext.Out.WriteLine($"Sample {sampleIndex}: tree snapshot comparison failed: {ex.Message}");
+            }
         }
 
         // The fixture directory is deleted when the environment is disposed, so the snapshot is the only record of the files the verdict was computed from.
@@ -393,7 +488,7 @@ public class ScenarioAgentTests
             CancellationToken cancellationToken) =>
             ModelEvalMcpEnvironment.CreateAsync(
                 sampleDirectory,
-                restorePackages: false,
+                restorePackages: scenario.RestorePackages,
                 beforeLoad: null,
                 afterLoad: (fixture, workspaceManager, token) => StageScenarioFilesAsync(scenario, fixture, workspaceManager, token),
                 cancellationToken,
