@@ -8,6 +8,18 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## RunTest no-TRX message named no exit code or cause for a silent exit (INBOX 2026-11-24 22:10) - resolved (2026-11-24)
+
+A `dotnet test` that exited without a TRX and printed nothing (the worktree MSBuild node handshake failure) reported only "No TRX result file was produced".
+
+Evidence: `TestRunEngine.NoTrxDetail` (809c5c50) names the exit code and, for empty stdout and stderr, the known cause plus options (global.json, `dotnet --version`, MSBUILDDEBUGCOMM); pinned by `TestRunOutcomeTests.NoTrxDetail_*`.
+
+## Four private copies of the MSBuildLocator pin list (INBOX 2026-11-24 22:10) - resolved (2026-11-24)
+
+`SolutionRestore`, `TestInstanceLauncher`, `TestSolutionFixture` and `LoadSolutionForceReloadRestoreIntegrationTests` each kept their own list of pinned MSBuild environment variables beside `BuildIsolation.MsBuildPinnedVariables`.
+
+Evidence: all four call `BuildIsolation.RemoveInheritedMsBuildPins` (d8ea2319); `BuildIsolationTests.DotnetSpawningCallers_StripTheInheritedMsBuildPinsThroughTheSharedList` scans every caller and fails on a new private `"MSBUILD_EXE_PATH"` copy.
+
 ## Stale docs/generated/modeleval_scenarios.md (INBOX 2026-11-24 04:30) - resolved (2026-11-24)
 
 ScenarioCatalogFreshness_WhenCommittedFileExists_MatchesRegeneratedContent failed "Scenario catalog is stale" since before stage E; the worktree test script skips Tests.ModelEval, so filtered runs never saw it.

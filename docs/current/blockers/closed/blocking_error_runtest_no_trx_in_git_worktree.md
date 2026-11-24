@@ -12,7 +12,9 @@ Evidence:
 
 Fix: `BuildIsolation.MsBuildPinnedVariables` and `BuildIsolation.RemoveInheritedMsBuildPins` (`RoslynSentinel.Engines.Basic/BuildIsolation.cs`); `TestRunEngine` and `BuildEngine` both call it (before caller `environment`, so a caller can still set a pin on purpose). Tests: `BuildIsolationTests.RemoveInheritedMsBuildPins_StripsEveryPinnedVariableAndKeepsTheRest` and `DotnetSpawningEngines_StripTheInheritedMsBuildPins` (Tests.Tools.Basic, OutOfProcess class, 38/38 passed).
 
-Not done: a live `RunTest(repoPath)` check against a restarted server (the running server predates the fix). Left open: `SolutionRestore.MsBuildPinnedVariables` and `TestInstanceLauncher.MsBuildPinnedVariables` still keep their own copy of the pin list (TODO in `BuildIsolation.MsBuildPinnedVariables`); the empty-output exit-1 case still reports only "No TRX result file was produced" (the exit code is in the `ExitCode` field but not in the message).
+Live check: `RunTest(repoPath)` in a worktree without global.json passed on the restarted server at 6b3f492b.
+
+Follow-ups, both done: the other private copies of the pin list now use `BuildIsolation` (d8ea2319), and `TestRunEngine.NoTrxDetail` puts the exit code and, for a silent exit, the known cause and options into the no-TRX message (809c5c50).
 
 ## What was being attempted
 Overnight run of the tool-surface controller stage F plan (2026-11-24). Gated slices needed `RunTest` to verify test classes.
