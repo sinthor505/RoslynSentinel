@@ -1,6 +1,6 @@
 # Plan: Standing workflow contract behind a switch, ScenarioTask record and renderer, contract stamp, validateOnApply hide switch (proposal Phasing step 1)
 
-**Status:** IN PROGRESS 2026-11-23. Steps 1-11 and 15-19 done (batch A 0522f742..8e5dc5f8, batch B 8d945d10..5aefe070); batch C (12, 13, 14, 20) and Step 21 left. Phasing step 1 of [proposal_modeleval_standing_workflow_contract.md](../proposals/proposal_modeleval_standing_workflow_contract.md).
+**Status:** IMPLEMENTED 2026-11-23. Batch A 0522f742..8e5dc5f8, batch B 8d945d10..5aefe070, batch C 4e7cb804..9cec311d; full suite green at 5fa1bd24. Phasing step 1 of [proposal_modeleval_standing_workflow_contract.md](../../proposals/proposal_modeleval_standing_workflow_contract.md).
 
 ## Problem
 
@@ -351,6 +351,7 @@ Wire impact: none (authoring input to a renderer, never serialized or returned b
 - Lane: test-writer (1 new file). Pairs with: Step 19.
 
 ### Step 21 - Leftover-stub search and verification
+- Done: 5fa1bd24 (verification: build 0 errors, full suite 0 failures at 5fa1bd24, servedSha 85d2d169)
 - Files: none edited (search and run)
 - Depends on: 1-20
 - Effect: text-neutral.

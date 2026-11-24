@@ -1,6 +1,6 @@
 # Plan: rework the 18 first-slice eval scenarios into realistic briefs with behavioural acceptance tests (proposal Phasing step 3)
 
-**Status:** DRAFT 2026-11-23, owner decisions of the same day folded in (R1, R2, R3, R5, R6 settled; scenarios organised by axis folder; generated catalog added); nothing built. Phasing step 3 of [proposal_modeleval_standing_workflow_contract.md](../proposals/proposal_modeleval_standing_workflow_contract.md), written from [finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md](../findings/finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md). Depends on [plan_modeleval_workflow_contract_phase1.md](./plan_modeleval_workflow_contract_phase1.md) (called "P1" below).
+**Status:** DRAFT 2026-11-23, owner decisions of the same day folded in (R1, R2, R3, R5, R6 settled; scenarios organised by axis folder; generated catalog added); nothing built. Phasing step 3 of [proposal_modeleval_standing_workflow_contract.md](../proposals/proposal_modeleval_standing_workflow_contract.md), written from [finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md](../findings/finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md). Depends on [plan_modeleval_workflow_contract_phase1.md](./closed/plan_modeleval_workflow_contract_phase1.md) (called "P1" below).
 
 ## Problem
 
