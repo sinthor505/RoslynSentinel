@@ -218,23 +218,9 @@ public class RunTestTests
         Assert.That(data.Detail, Does.Contain("matched filter"));
     }
 
-    [Test]
-    public async Task RunTest_InvalidFilterSyntax_IsRunErrorNamingTheAdapterCauseAsync()
-    {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath, null, TestSolutionFixture.LoadTimeout);
-        var workspaceTools = BuildTools(workspaceManager);
-
-        var result = await workspaceTools.RunTestTool(reason: "test message", ToolScope.solution, filter: "FullyQualifiedName~(Foo", timeoutSeconds: 120);
-
-        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
-        var data = (TestRunResult)result.SuccessData!;
-        Assert.That(data.Outcome, Is.EqualTo(TestRunOutcome.RunError), "a filter the adapter rejects exits non-zero with no test run.");
-        Assert.That(data.Detail, Does.Contain("rejected the filter"));
-        Assert.That(data.Detail, Does.Contain("Incorrect format for TestCaseFilter"));
-        Assert.That(data.Detail, Does.Not.Contain("tests matched"));
-    }
+    // No integration test for a rejected --filter here: the fixture project uses xunit, whose adapter
+    // reports a malformed filter as 0 matched tests; the NUnit adapter's rejection text is covered by
+    // TestRunOutcomeTests (InvalidFilterDetail).
 
     // Known intermittent failure under a full/parallel Battery run (passes isolated and on rerun) ->
     // same TestSolutionFixture.Dispose()/RunTestTool-subprocess file-handle race as the comment on
