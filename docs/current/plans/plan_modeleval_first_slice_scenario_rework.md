@@ -1,6 +1,6 @@
 # Plan: rework the 18 first-slice eval scenarios into realistic briefs with behavioural acceptance tests (proposal Phasing step 3)
 
-**Status:** APPROVED 2026-11-23. Reviewed at 7046ff84; review amendments and the owner's answers are Decision 13 (overrides step text); Batched mode, owner present. Phasing step 3 of [proposal_modeleval_standing_workflow_contract.md](../proposals/proposal_modeleval_standing_workflow_contract.md), written from [finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md](../findings/finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md). Depends on [plan_modeleval_workflow_contract_phase1.md](./closed/plan_modeleval_workflow_contract_phase1.md) (called "P1" below).
+**Status:** IN PROGRESS 2026-11-23. Steps 54-59 done (7d94a62c..76df6d43). Approved 2c34a882; review amendments and the owner's answers are Decision 13 (overrides step text); Batched mode, owner present. Phasing step 3 of [proposal_modeleval_standing_workflow_contract.md](../proposals/proposal_modeleval_standing_workflow_contract.md), written from [finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md](../findings/finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md). Depends on [plan_modeleval_workflow_contract_phase1.md](./closed/plan_modeleval_workflow_contract_phase1.md) (called "P1" below).
 
 ## Problem
 
@@ -386,6 +386,7 @@ Pairs with: disjoint files, at most two lanes at once (they share `bin`/`obj`).
 Placement and mechanics are in "Axis layout and catalog". Every slice here is behaviour-neutral (a file move plus a namespace line) and compile-green on its own because the registry resolves the class by type name under the `ImplementationScenarios` namespace root (Step 54) and gains each new `using` in the slice that needs it.
 
 ### Step 54 - Registry finds scenario classes in any axis folder
+- Done: 7d94a62c
 - Files: RoslynSentinel.Tests.ModelEval/ImplementationScenarios/ImplementationScenarioRegistry.cs
 - Depends on: none in this plan; P1 Steps 1-13 landed
 - Effect: text-neutral (the lookup finds the same classes at their current location).
@@ -394,6 +395,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (1 file, ~3 edits).
 
 ### Step 55 - Move six scenario files (every folder except InstructionAdherence)
+- Done: d6ed5963
 - Files: PlanStalenessReviewScenario.cs, BreakCycleWithForwardersScenario.cs, ShareHelperDifferingRulesScenario.cs (to AmbiguityResolution/), SweepConstructionSitesScenario.cs (to ErrorRecovery/), ThreadOptionalParameterScenario.cs (to MultiStepState/), LargeBlockRewriteScenario.cs (to ToolUse/), all under RoslynSentinel.Tests.ModelEval/ImplementationScenarios/; plus ImplementationScenarioRegistry.cs and RoslynSentinel.Tests.ModelEval/PlanStalenessReviewCheckTests.cs
 - Depends on: 54
 - Effect: text-neutral.
@@ -402,6 +404,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer-sweep (one operation, 8 files, ~17 calls). Pairs with: none.
 
 ### Step 56 - Move four InstructionAdherence scenario files
+- Done: 4edb30cd
 - Files: WidenToReadOnlyDictionaryScenario.cs, WideningRejectedByGateScenario.cs, ChangeSetTypeFromSpecScenario.cs, RetypeSliceExactLinesScenario.cs (to InstructionAdherence/), plus ImplementationScenarioRegistry.cs
 - Depends on: 55
 - Effect: text-neutral.
@@ -410,6 +413,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer-sweep (5 files, ~9 calls). Pairs with: none.
 
 ### Step 57 - Move the last five InstructionAdherence scenario files, drop the old namespace
+- Done: 83507aad
 - Files: PropertyFirstRetypeScenario.cs, RemovePinnedSentenceScenario.cs, NotFoundToTypedThrowScenario.cs, ObsoleteNamespaceCopyScenario.cs, MigrateOntoEnvironmentHelperScenario.cs (to InstructionAdherence/), plus ImplementationScenarioRegistry.cs
 - Depends on: 56
 - Effect: text-neutral.
@@ -418,6 +422,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer-sweep (6 files, ~11 calls). Pairs with: none.
 
 ### Step 58 - Move the shared checks into Graders/
+- Done: fb05b83b
 - Files: RoslynSentinel.Tests.ModelEval/ImplementationScenarios/ImplementationScenarioChecks.cs (moves to Graders/), RoslynSentinel.Tests.ModelEval/ImplementationScenarioAgentTests.cs, RoslynSentinel.Tests.ModelEval/ImplementationScenarioGoldenTests.cs
 - Depends on: 57
 - Effect: text-neutral.
@@ -426,6 +431,7 @@ Placement and mechanics are in "Axis layout and catalog". Every slice here is be
 - Lane: implementer (3 files, ~5 edits).
 
 ### Step 59 - Batch M gate and doc path sweep
+- Done: 76df6d43
 - Files: docs/current/findings/finding_modeleval_first_slice_scenarios_grade_beyond_their_prompts.md (one path)
 - Depends on: 54-58
 - Effect: text-neutral.
