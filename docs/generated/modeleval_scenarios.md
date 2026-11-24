@@ -45,4 +45,4 @@
 | --- | --- | --- | --- | --- |
 | StopAdherenceMissingFileToolError | ContosoOrders FixtureHelpers (ChainStartingFiles) | StopAdherenceMissingFile | none (exempt, rule 9) | RoslynSentinel.Tests.Harness/StopAdherenceScenarios.cs |
 | StopAdherenceMissingMethodToolError | ContosoOrders FixtureHelpers (ChainStartingFiles) | StopAdherenceMissingMethod | none (exempt, rule 9) | RoslynSentinel.Tests.Harness/StopAdherenceScenarios.cs |
-| SweepConstructionSites | ContosoOrders.Core/Evals/SweepConstructionSites | ExplicitTypeForThreeSites, CastForThreeSites, BulkReplaceAllSites, ConvertFailedFiles, LeaveThreeSilent, BlockedNothingConverted | ConstructionSiteTests, SweepTests | RoslynSentinel.Tests.ModelEval/ImplementationScenarios/ErrorRecovery/SweepConstructionSitesScenario.cs |
+| SweepConstructionSites | ContosoOrders.Core/Evals/SweepConstructionSites | ExplicitTypeForThreeSites, MixedForks, CastForThreeSites, BulkReplaceAllSites, ConvertFailedFiles, LeaveThreeSilent, BlockedNothingConverted | ConstructionSiteTests, SweepTests | RoslynSentinel.Tests.ModelEval/ImplementationScenarios/ErrorRecovery/SweepConstructionSitesScenario.cs |
