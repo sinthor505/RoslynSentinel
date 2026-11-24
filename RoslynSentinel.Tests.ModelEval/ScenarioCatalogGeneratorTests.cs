@@ -82,7 +82,9 @@ public class ScenarioCatalogGeneratorTests
     [Test]
     public void Render_IsDeterministic()
     {
-        Assert.That(ScenarioCatalogGenerator.Render(), Is.EqualTo(ScenarioCatalogGenerator.Render()));
+        var first = ScenarioCatalogGenerator.Render();
+        var second = ScenarioCatalogGenerator.Render();
+        Assert.That(first, Is.EqualTo(second));
     }
 
     [Test]
