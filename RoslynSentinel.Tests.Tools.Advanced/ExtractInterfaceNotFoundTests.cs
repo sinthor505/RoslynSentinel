@@ -27,7 +27,7 @@ public sealed class ExtractInterfaceNotFoundTests
         var result = await tools.ExtractMembersTool(reason: "test message", workspace.PathOf("Source.cs"), "OrderPricingCalculater", ExtractAsType.@interface, newTypeName: "IOrderPricingCalculator");
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
-        Assert.That(result.ErrorData?.Message, Does.Contain("Did you mean 'OrderPricingCalculator'"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("'OrderPricingCalculator'"));
         Assert.That(result.ErrorData?.Message, Does.Contain("className"));
         Assert.That(workspace.ReadText("Source.cs"), Is.EqualTo(original), "A refused call must not write.");
     }

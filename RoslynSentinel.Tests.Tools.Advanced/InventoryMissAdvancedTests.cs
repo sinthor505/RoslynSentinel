@@ -1,5 +1,6 @@
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tests.Fakes;
+using RoslynSentinel.Tests.Support;
 
 namespace RoslynSentinel.Tests.Tools.Advanced;
 
@@ -88,7 +89,8 @@ public sealed class InventoryMissAdvancedTests
 
         Assert.That(ex!.Message, Does.Contain("Did you mean one of these?"));
         Assert.That(ex.Message, Does.Contain("Calc.cs"));
-        Assert.That(ex.Message, Does.Contain("existsOnDisk=False, projectsLoaded=1."));
+        ErrorAssert.Is(ex, ToolErrorCode.NotFound, "projectsLoaded=1");
+        Assert.That(ex.Message, Does.Contain("existsOnDisk=False"));
         AssertFactsAndOptionsOnly(ex.Message);
     }
 }

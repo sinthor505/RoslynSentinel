@@ -4,6 +4,7 @@ using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tools.Advanced;
 using RoslynSentinel.Tools.Basic;
+using RoslynSentinel.Tests.Support;
 
 namespace RoslynSentinel.Tests.Tools.Advanced;
 
@@ -130,7 +131,7 @@ public class OrderPricingCalculator
         LoadCalculator(out var workspace);
         var engine = EngineFor(workspace);
         var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await engine.UpdateXmlDocsFromSignatureAsync("Calc.cs", "CalcDsc"));
-        Assert.That(ex!.Message, Does.Contain("Method 'CalcDsc' not found in 'Calc.cs'"));
+        ErrorAssert.Is(ex, ToolErrorCode.NotFound, "'CalcDsc'");
         Assert.That(ex.Message, Does.Contain("Did you mean 'CalcDisc'"));
     }
 
@@ -140,7 +141,7 @@ public class OrderPricingCalculator
         LoadCalculator(out var workspace);
         var engine = EngineFor(workspace);
         var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await engine.UpdateXmlDocsFromSignatureAsync("Calc.cs", "ApplyLoyaltyBonus"));
-        Assert.That(ex!.Message, Does.Contain("Method 'ApplyLoyaltyBonus' not found in 'Calc.cs'"));
+        ErrorAssert.Is(ex, ToolErrorCode.NotFound, "'ApplyLoyaltyBonus'");
         AssertNoCandidateText(ex.Message);
     }
 

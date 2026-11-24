@@ -11,7 +11,6 @@ AdminToolsLedgerTests.cs | 1
 AdminToolsTests.cs | 1
 AdvancedStructuralFormatCharacterizationTests.cs | 1
 AsyncOptimizationNormalizeCharacterizationTests.cs | 1
-BasicRefactoringNameMissTests.cs | 2
 BatteryFifteenTests.cs | 1
 BatteryFourTests.cs | 1
 BatteryNineteenTests.cs | 1
@@ -38,13 +37,11 @@ DiffEngineTests.cs | 1
 DocumentationToolsTests.cs | 1
 EditEffectEvidenceTests.cs | 1
 EditImpactGateWiringTests.cs | 3
-ExtractInterfaceNotFoundTests.cs | 1
 FileNotFoundDeclaringTypeTests.cs | 1
 FoldPendingGuardTests.cs | 1
 GetLargeResultTests.cs | 3
 GitStageLineRangeTests.cs | 3
 ImpactMissAdvancedTests.cs | 2
-InventoryMissAdvancedTests.cs | 1
 LargeResultMissTests.cs | 3
 LaunchBuildMarkerTests.cs | 1
 LocateSymbolIncludeTestsTests.cs | 2
