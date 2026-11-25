@@ -150,16 +150,24 @@ public class ValidationEngine
     public static async Task<ValidationCandidateResult> ValidateChangesWithCandidateAsync(
         Solution baseline, IReadOnlyDictionary<FilePathWrapper, string> fileChanges,
         IReadOnlyCollection<FilePathWrapper>? removePaths = null, CancellationToken cancellationToken = default)
+        => await ValidateChangesAgainstBaselineAsync(baseline, baseline, fileChanges, removePaths, cancellationToken);
+
+    /// <summary>
+    /// Like ValidateChangesWithCandidateAsync, but the candidate is built from candidateBase (for example the committed solution plus in-memory project references) while the introduced-error delta is taken against errorBaseline's compilation of the same project id. Projects whose ProjectReferences or document ids differ between errorBaseline and candidateBase are added to the compiled set even when no changed document is in them (a project that only gained a reference can gain errors, for example CS0433).
+    /// </summary>
+    public static async Task<ValidationCandidateResult> ValidateChangesAgainstBaselineAsync(
+        Solution errorBaseline, Solution candidateBase, IReadOnlyDictionary<FilePathWrapper, string> fileChanges,
+        IReadOnlyCollection<FilePathWrapper>? removePaths = null, CancellationToken cancellationToken = default)
     {
         Debug.WriteLine("Starting validation of proposed changes...");
-        var candidate = baseline;
+        var candidate = candidateBase;
         var affectedProjectIds = new HashSet<ProjectId>();
 
         if (removePaths != null)
         {
             foreach (var removePath in removePaths)
             {
-                var removeDocumentId = baseline.GetDocumentIdsWithFilePath(removePath).FirstOrDefault();
+                var removeDocumentId = candidateBase.GetDocumentIdsWithFilePath(removePath).FirstOrDefault();
                 if (removeDocumentId == null)
                     continue;
 
@@ -172,7 +180,7 @@ public class ValidationEngine
         {
             var filePath = change.Key;
             var newContent = change.Value;
-            var documentId = baseline.GetDocumentIdsWithFilePath(filePath).FirstOrDefault();
+            var documentId = candidateBase.GetDocumentIdsWithFilePath(filePath).FirstOrDefault();
 
             Debug.WriteLine($"Processing change for {filePath} (mapped to DocumentId: {documentId})...");
 
@@ -185,7 +193,7 @@ public class ValidationEngine
                     continue;
                 }
 
-                var project = SolutionProjectLocator.FindContainingProject(baseline, filePath);
+                var project = SolutionProjectLocator.FindContainingProject(candidateBase, filePath);
                 if (project == null)
                 {
                     Debug.WriteLine($"New file does not belong to any project, skipping in-memory validation: {filePath}");
@@ -203,6 +211,28 @@ public class ValidationEngine
             affectedProjectIds.Add(documentId.ProjectId);
         }
 
+        if (!ReferenceEquals(errorBaseline, candidateBase))
+        {
+            // A project that only gained or lost a reference (or a document) has no changed document, but its errors can change.
+            foreach (var project in candidateBase.Projects)
+            {
+                var baselineProject = errorBaseline.GetProject(project.Id);
+                if (baselineProject == null)
+                {
+                    affectedProjectIds.Add(project.Id);
+                    continue;
+                }
+
+                var candidateReferences = project.ProjectReferences.Select(r => r.ProjectId).ToHashSet();
+                var baselineReferences = baselineProject.ProjectReferences.Select(r => r.ProjectId).ToHashSet();
+                if (!candidateReferences.SetEquals(baselineReferences)
+                    || !project.DocumentIds.ToHashSet().SetEquals(baselineProject.DocumentIds))
+                {
+                    affectedProjectIds.Add(project.Id);
+                }
+            }
+        }
+
         if (affectedProjectIds.Count == 0)
         {
             Debug.WriteLine("No files could be mapped to solution documents, nothing to validate.");
@@ -213,7 +243,7 @@ public class ValidationEngine
         // nothing in that project calls) while breaking every other project that references it.
         // Expand to transitive dependents so validation reflects solution-wide impact, not just
         // the edited project's own internal call graph.
-        var dependencyGraph = baseline.GetProjectDependencyGraph();
+        var dependencyGraph = candidateBase.GetProjectDependencyGraph();
         var directlyAffected = affectedProjectIds.ToList();
         foreach (var projectId in directlyAffected)
         {
@@ -224,24 +254,29 @@ public class ValidationEngine
 
         foreach (var projectId in affectedProjectIds)
         {
-            var baselineProject = baseline.GetProject(projectId)!;
+            var baselineProject = errorBaseline.GetProject(projectId);
             var candidateProject = candidate.GetProject(projectId)!;
 
-            Debug.WriteLine($"Compiling project {baselineProject.Name} (baseline + candidate)...");
+            Debug.WriteLine($"Compiling project {candidateProject.Name} (baseline + candidate)...");
 
-            var baselineCompilation = await baselineProject.GetCompilationAsync(cancellationToken);
-            if (baselineCompilation == null)
+            // A project absent from the error baseline has no baseline errors, so every candidate error is introduced.
+            var baselineErrors = new HashSet<string>();
+            if (baselineProject != null)
             {
-                introducedDiagnostics.Add(new DiagnosticInfo("RS002", "Error",
-                    $"Failed to create baseline compilation for project {baselineProject.Name}.", "", 0, 0, 0, 0));
-                continue;
-            }
+                var baselineCompilation = await baselineProject.GetCompilationAsync(cancellationToken);
+                if (baselineCompilation == null)
+                {
+                    introducedDiagnostics.Add(new DiagnosticInfo("RS002", "Error",
+                        $"Failed to create baseline compilation for project {baselineProject.Name}.", "", 0, 0, 0, 0));
+                    continue;
+                }
 
-            var baselineErrors = baselineCompilation
-                .GetDiagnostics(cancellationToken)
-                .Where(d => d.Severity == DiagnosticSeverity.Error)
-                .Select(DiagnosticKey)
-                .ToHashSet();
+                baselineErrors = baselineCompilation
+                    .GetDiagnostics(cancellationToken)
+                    .Where(d => d.Severity == DiagnosticSeverity.Error)
+                    .Select(DiagnosticKey)
+                    .ToHashSet();
+            }
 
             var candidateCompilation = await candidateProject.GetCompilationAsync(cancellationToken);
             if (candidateCompilation == null)
