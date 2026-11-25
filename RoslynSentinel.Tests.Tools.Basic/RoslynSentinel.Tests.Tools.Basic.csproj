@@ -47,16 +47,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Temporary stand-in for Step 18; removed when the files have moved. These files are compiled by
-         RoslynSentinel.Tests.Git through links (same wildcard patterns as its csproj), so they are removed here. -->
-    <Compile Remove="Git*.cs" />
-    <Compile Remove="Cas?ommitTestSupport.cs" />
-    <Compile Remove="ShortHashLengthsTest?.cs" />
-    <Compile Remove="RepoPathWorktreeTest?.cs" />
-    <Compile Remove="McpServerStatusGitBackendTest?.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Using Include="NUnit.Framework" />
     <Using Include="RoslynSentinel.Common" />
   </ItemGroup>

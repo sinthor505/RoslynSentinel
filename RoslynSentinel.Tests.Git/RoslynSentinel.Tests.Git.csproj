@@ -43,17 +43,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Temporary stand-in for Step 18; removed when the files have moved. The patterns are wildcards so a file
-         that has already moved into this folder is not a missing literal Include (CS2001). Each non-Git* pattern
-         uses '?' for one character so it names exactly one file today and matches nothing once it has moved. -->
-    <Compile Include="..\RoslynSentinel.Tests.Tools.Basic\Git*.cs" LinkBase="_standin" />
-    <Compile Include="..\RoslynSentinel.Tests.Tools.Basic\Cas?ommitTestSupport.cs" LinkBase="_standin" />
-    <Compile Include="..\RoslynSentinel.Tests.Tools.Basic\ShortHashLengthsTest?.cs" LinkBase="_standin" />
-    <Compile Include="..\RoslynSentinel.Tests.Tools.Basic\RepoPathWorktreeTest?.cs" LinkBase="_standin" />
-    <Compile Include="..\RoslynSentinel.Tests.Tools.Basic\McpServerStatusGitBackendTest?.cs" LinkBase="_standin" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Using Include="NUnit.Framework" />
     <Using Include="RoslynSentinel.Common" />
   </ItemGroup>
