@@ -1,6 +1,6 @@
 # Eval client: thinking only after a tool error, and a harness-enforced reasoning budget
 
-**Status:** PROPOSED 2026-11-24. Awaiting design review in a fresh session; nothing built.
+**Status:** APPROVED 2026-11-25. Plan: [plans/plan_error_gated_thinking_and_client_reasoning_budget.md](../plans/plan_error_gated_thinking_and_client_reasoning_budget.md). Design changed: the budget is observed only (no enforced cut for Qwen3.5), triggers are configurable; see the plan's Decision log.
 
 ## Motivation
 
@@ -13,8 +13,8 @@ written by `Get-TimingStats.ps1`):
 
 | Host / model | Runs | Runs with any reasoning | Median s per turn |
 | --- | --- | --- | --- |
-| 85 Qwen3.5-4B | 118 | 0 | ~10 |
-| 112 Qwen3.5-9B | 160 | 0 | not split out |
+| 85 Qwen3.5-4B | 118 | 0 | 8.1 (corrected 2026-11-25; was "~10") |
+| 112 Qwen3.5-9B | 160 | 0 | 4.7 (added 2026-11-25) |
 | 113 Ornith-1.5-9B | 55 | 55 (4.5M reasoning chars in total) | 33.5 |
 
 - **Qwen thinks only when the request asks for it.** The eval client sends no `reasoning` field
@@ -48,7 +48,8 @@ The probe settles three facts:
 The memory note `reference_unsloth_per_request_sampler_params` records the same facts.
 
 **Where tool errors happen.** Turns that follow a turn with at least one `IsError` tool call, counted
-from the same transcripts:
+from the same transcripts (no script reproduces this table or the per-code counts below; noted
+2026-11-25):
 
 | Host | Runs | Runs with an error | Turns | Turns after an error |
 | --- | --- | --- | --- | --- |
