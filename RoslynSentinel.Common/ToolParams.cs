@@ -125,6 +125,9 @@ public static class ToolParams
  " A file holding an 'add static' conversion must not be targeted by other edits in the same batch; " +
  "two members that only use each other can be listed together.";
 
+    public const string MoveFileMoves =
+ "Pairs of sourcePath and destinationPath; a single move is a list of one.";
+
     // Added by ModifyAttribute batch support
     public const string AttributeEdits =
     "Batch form of the singular filePath/targetName/existingAttribute/action/newAttribute params - use it instead of them, not with them. " + BatchSemantics;

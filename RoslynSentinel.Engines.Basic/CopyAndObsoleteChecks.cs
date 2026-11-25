@@ -48,7 +48,7 @@ public static class CopyAndObsoleteChecks
                 .Distinct(PathComparison.Comparer)
                 .ToList();
             return CopyAndObsoleteCheckResult.Refused(ToolErrorCode.InvalidArgument,
-                $"copyAndObsolete: the destination '{destination.Absolute}' is inside no loaded project, so the namespace its folder gives cannot be computed. Searched {folders.Count} project folder(s): {string.Join("; ", folders.Take(MaxListed))}{(folders.Count > MaxListed ? "; ..." : string.Empty)}. Options: pass a destinationPath under one of those folders, or use namespaceHandling keep, which does not compute a namespace.");
+                $"copyAndObsolete: the destination '{destination.Absolute}' is inside no loaded project, so the namespace its folder gives cannot be computed. Searched {folders.Count} project folder(s): {string.Join("; ", folders.Take(MaxListed))}{(folders.Count > MaxListed ? "; ..." : string.Empty)}. Options: pass a {MoveFileParameterNames.DestinationPath} under one of those folders, or use namespaceHandling keep, which does not compute a namespace.");
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -106,7 +106,7 @@ public static class CopyAndObsoleteChecks
         if (string.Equals(oldNamespace, newNamespace, StringComparison.Ordinal))
         {
             return CopyAndObsoleteCheckResult.Refused(oldNamespace, newNamespace, types, ToolErrorCode.InvalidArgument,
-                $"copyAndObsolete: the destination '{destination.Absolute}' (project '{destinationProject!.Name}') gives the namespace {Describe(newNamespace)}, which is the namespace {Describe(oldNamespace)} that '{source.Absolute}' already declares, so the copy and the original would declare the same type names in one namespace. Options: pass a destinationPath in a folder whose namespace differs, or use namespaceHandling keep to move the file without a copy.");
+                $"copyAndObsolete: the destination '{destination.Absolute}' (project '{destinationProject!.Name}') gives the namespace {Describe(newNamespace)}, which is the namespace {Describe(oldNamespace)} that '{source.Absolute}' already declares, so the copy and the original would declare the same type names in one namespace. Options: pass a {MoveFileParameterNames.DestinationPath} in a folder whose namespace differs, or use namespaceHandling keep to move the file without a copy.");
         }
 
         return new CopyAndObsoleteCheckResult(oldNamespace, newNamespace, types, null);

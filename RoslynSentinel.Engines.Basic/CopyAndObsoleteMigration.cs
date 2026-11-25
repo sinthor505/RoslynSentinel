@@ -361,6 +361,6 @@ public static class CopyAndObsoleteMigration
         var listed = errors.Take(MaxListedErrors).Select(error => $"{error.Id} at '{error.FilePath.Absolute}' line {error.StartLine}: {ShortMessage(error.Message)}");
         var more = errors.Count > MaxListedErrors ? $" (and {errors.Count - MaxListedErrors} more)" : string.Empty;
         return $"copyAndObsolete: the copy at '{destination.Absolute}' and the marked original '{source.Absolute}' introduce {errors.Count} compile error(s) before any caller is rewritten: {string.Join("; ", listed)}{more}. "
-            + "Options: pass a destinationPath whose folder gives a namespace without these conflicts, or use namespaceHandling keep to move the file as it is.";
+            + $"Options: pass a {MoveFileParameterNames.DestinationPath} whose folder gives a namespace without these conflicts, or use namespaceHandling keep to move the file as it is.";
     }
 }

@@ -34,7 +34,7 @@ public sealed class MoveFileTests
     private static WholeFileWriteTools BuildTools(IWorkspaceManager manager) => BuildTools(manager, Battery.Basic.TestTools.WorkspaceTools(manager));
 
     private static Task<SentinelCallToolResult<AppliedChangeSummary>> MoveAsync(WholeFileWriteTools tools, string source, string destination, MoveFileNamespaceHandling handling) =>
-        tools.MoveFileTool(reason: "test message", source, destination, handling);
+        tools.MoveFileTool(reason: "test message", [new FileMovePair { SourcePath = source, DestinationPath = destination }], handling);
 
     private static string PathIn(TestSolutionFixture fixture, params string[] segments) =>
         Path.Combine(new[] { fixture.SolutionDirectory }.Concat(segments).ToArray());
@@ -274,18 +274,24 @@ public sealed class MoveFileTests
     }
 
     [Test]
-    public async Task MoveFile_DirectorySource_FailsAsNotAFileAsync()
+    public async Task MoveFile_DirectorySource_MovesItsContentsWithSubfoldersAsync()
     {
+        // D2: a pair may name a folder; its contents land at the destination path with subfolders kept.
         using var fixture = new TestSolutionFixture();
         using var manager = await LoadAsync(fixture);
-        var source = PathIn(fixture, CoreFolder);
-        var destination = PathIn(fixture, "Copy");
+        await fixture.AddFileToSolution(manager, Path.Combine("docs", "FolderSource", "One.md"), "# One\r\n");
+        await fixture.AddFileToSolution(manager, Path.Combine("docs", "FolderSource", "Nested", "Two.md"), "# Two\r\n");
+        var source = PathIn(fixture, "docs", "FolderSource");
+        var destination = PathIn(fixture, "docs", "FolderDest");
 
         var result = await MoveAsync(BuildTools(manager), source, destination, MoveFileNamespaceHandling.keep);
 
-        AssertRefused(result, ToolErrorCode.TargetIneligible, "is a directory", source);
-        Assert.That(Directory.Exists(source), Is.True);
-        Assert.That(Directory.Exists(destination), Is.False);
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(File.ReadAllText(Path.Combine(destination, "One.md")), Is.EqualTo("# One\r\n"));
+        Assert.That(File.ReadAllText(Path.Combine(destination, "Nested", "Two.md")), Is.EqualTo("# Two\r\n"));
+        Assert.That(File.Exists(Path.Combine(source, "One.md")), Is.False, "The source files are gone.");
+        Assert.That(File.Exists(Path.Combine(source, "Nested", "Two.md")), Is.False, "The source files are gone.");
+        Assert.That(result.SuccessData!.AffectedFiles, Has.Count.EqualTo(4), "Both paths of each of the two moved files are listed.");
     }
 
     [Test]

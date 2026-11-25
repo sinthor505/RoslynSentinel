@@ -103,7 +103,7 @@ public sealed class MoveFileCopyAndObsoleteTests
         Directory.Exists(OperationsFolder(fixture)) ? Directory.GetFiles(OperationsFolder(fixture), "*.json").Length : 0;
 
     private static Task<SentinelCallToolResult<AppliedChangeSummary>> CopyAsync(WholeFileWriteTools tools, string source, string destination) =>
-        tools.MoveFileTool(reason: "test message", source, destination, MoveFileNamespaceHandling.copyAndObsolete);
+        tools.MoveFileTool(reason: "test message", [new FileMovePair { SourcePath = source, DestinationPath = destination }], MoveFileNamespaceHandling.copyAndObsolete);
 
     [Test]
     public async Task CopyAndObsolete_TwoCallers_MigratesOneAndListsTheOtherWithItsErrorAsync()

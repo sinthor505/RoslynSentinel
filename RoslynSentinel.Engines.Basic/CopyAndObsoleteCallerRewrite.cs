@@ -69,7 +69,7 @@ public static class CopyAndObsoleteCallerRewrite
         if (newNamespace.Length == 0)
         {
             return CallerRewriteResult.Refused(ToolErrorCode.InvalidArgument,
-                $"copyAndObsolete: the destination gives the global namespace, so callers of '{source.Absolute}' have no namespace to switch to. Options: pass a destinationPath in a folder that gives a named namespace, or use namespaceHandling keep to move the file as it is.");
+                $"copyAndObsolete: the destination gives the global namespace, so callers of '{source.Absolute}' have no namespace to switch to. Options: pass a {MoveFileParameterNames.DestinationPath} in a folder that gives a named namespace, or use namespaceHandling keep to move the file as it is.");
         }
 
         var lookup = DocumentLookup.TryGetDocument(solution, source);

@@ -289,18 +289,23 @@ public class WholeFileWriteTools
 
     [McpServerTool(Name = "MoveFile")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Moves or renames a text file in one step that is checked against the build (the destination may be in another project) and undoable via UndoChange. Fails if the source is missing, a directory or binary, or the destination exists.")]
+    [Description("Moves or renames text files in one step that is checked against the build (destinations may be in other projects) and undoable via UndoChange. A pair may name a folder (its contents land at the destination path, subfolders kept, a same-name file refuses); a single move is a list of one, up to 200 files, one build check, one undo. Fails if a source is missing or binary, or a destination exists.")]
     public async Task<SentinelCallToolResult<AppliedChangeSummary>> MoveFileTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string sourcePath,
-        [Description("New path of the file; its folders are created if missing.")][ExternalInputRequired(DataTag.SourceFilepath, required: true)] string destinationPath,
+        // Deliberate deviation from the single-path pattern (plan P9): a list parameter cannot carry the [Consumes]/[ExternalInputRequired] tags (they tag top-level
+        // parameters only), so each pair's two paths are validated here and the item schema text rides on the FileMovePair properties ([BatchItemField]).
+        [Description(ToolParams.MoveFileMoves)] List<FileMovePair> moves,
         [Description("keep: the text moves unchanged, a .cs namespace stays as written. copyAndObsolete (.cs): copies the file with the folder-derived namespace, marks the old types [Obsolete], migrates callers best effort; refused when the namespace would not change or a type is partial across files. update: not supported yet. Non-.cs files accept only keep.")] MoveFileNamespaceHandling namespaceHandling,
+        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper source = _workspaceManager.ResolveFromWire(sourcePath);
-        FilePathWrapper destination = _workspaceManager.ResolveFromWire(destinationPath);
         try
         {
+            if (moves is null || moves.Count == 0)
+            {
+                return MoveFileError(ToolErrorCode.InvalidArgument, $"MoveFile: {nameof(moves)} is empty. Options: pass one pair of {MoveFileParameterNames.SourcePath} and {MoveFileParameterNames.DestinationPath} per file or folder to move. Nothing was moved.");
+            }
+
             Solution solution;
             try
             {
@@ -308,90 +313,96 @@ public class WholeFileWriteTools
             }
             catch (SolutionNotLoadedException)
             {
-                return MoveFileError(ToolErrorCode.SolutionNotLoaded, $"MoveFile: no solution is loaded, so '{sourcePath}' and '{destinationPath}' were not resolved to paths and nothing was moved.");
+                return MoveFileError(ToolErrorCode.SolutionNotLoaded, $"MoveFile: no solution is loaded, so the {moves.Count} move pair(s) were not resolved to paths and nothing was moved.");
             }
 
-            bool isCs = string.Equals(Path.GetExtension(source.Absolute), ".cs", StringComparison.OrdinalIgnoreCase);
-            // copyAndObsolete on a .cs file runs after the generic validations below (MoveFileCopyAndObsolete); update stays unsupported.
-            var copyAndObsolete = isCs && namespaceHandling == MoveFileNamespaceHandling.copyAndObsolete;
-            if (namespaceHandling != MoveFileNamespaceHandling.keep && !copyAndObsolete)
+            var resolved = new List<FileMovePair>(moves.Count);
+            for (var i = 0; i < moves.Count; i++)
             {
-                return isCs
-                    ? MoveFileError(ToolErrorCode.NotImplemented, $"MoveFile: namespaceHandling '{namespaceHandling}' is not supported yet; only 'keep' is supported in this version, apart from 'copyAndObsolete'. Nothing was moved.")
-                    : MoveFileError(ToolErrorCode.InvalidArgument, $"MoveFile: namespaceHandling '{namespaceHandling}' does not apply to '{source.Absolute}', which is not a .cs file; non-.cs files accept only 'keep'. Nothing was moved.");
-            }
-
-            if (source == destination)
-            {
-                return MoveFileError(ToolErrorCode.InvalidArgument, $"MoveFile: sourcePath and destinationPath resolve to the same path '{source.Absolute}'. Nothing was moved.");
-            }
-
-            if (Directory.Exists(source.Absolute))
-            {
-                return MoveFileError(ToolErrorCode.TargetIneligible, $"MoveFile: '{source.Absolute}' is a directory, not a file; this tool moves single files.");
-            }
-
-            if (!File.Exists(source.Absolute))
-            {
-                var missing = $"MoveFile: '{source.Absolute}' does not exist on disk (resolved from '{sourcePath}'; path comparison ignores case).";
-                if (_activeToolSurface is null || _activeToolSurface.IsCallable("Search"))
+                var pair = moves[i];
+                if (pair is null || string.IsNullOrWhiteSpace(pair.SourcePath) || string.IsNullOrWhiteSpace(pair.DestinationPath))
                 {
-                    missing += " " + ToolCallHint.Next("Search", "to find the right path.", ("mode", "text"));
+                    return MoveFileError(ToolErrorCode.InvalidArgument, $"MoveFile: {nameof(moves)}[{i}] needs both {MoveFileParameterNames.SourcePath} and {MoveFileParameterNames.DestinationPath}. Nothing was moved.");
                 }
 
-                return MoveFileError(ToolErrorCode.NotFound, missing);
+                resolved.Add(new FileMovePair
+                {
+                    SourcePath = _workspaceManager.ResolveFromWire(pair.SourcePath).Absolute,
+                    DestinationPath = _workspaceManager.ResolveFromWire(pair.DestinationPath).Absolute
+                });
             }
 
-            if (File.Exists(destination.Absolute) || Directory.Exists(destination.Absolute))
+            if (namespaceHandling != MoveFileNamespaceHandling.keep)
             {
-                var kind = Directory.Exists(destination.Absolute) ? "directory" : "file";
-                return MoveFileError(ToolErrorCode.InvalidArgument, $"MoveFile: the destination '{destination.Absolute}' already exists as a {kind}; a move does not overwrite. Options: pass a destinationPath that does not exist, or remove the existing {kind} first.");
+                // A non-.cs file (a folder pair is judged by the files it expands to, below) accepts only keep.
+                if (resolved.Select(p => p.SourcePath).FirstOrDefault(p => !Directory.Exists(p) && !IsCSharpPath(p)) is { } nonCs)
+                {
+                    return MoveFileError(ToolErrorCode.InvalidArgument, $"MoveFile: namespaceHandling '{namespaceHandling}' does not apply to '{nonCs}', which is not a .cs file; non-.cs files accept only 'keep'. Nothing was moved.");
+                }
+
+                if (namespaceHandling == MoveFileNamespaceHandling.update)
+                {
+                    var supported = $"MoveFile: namespaceHandling '{namespaceHandling}' is not supported yet; only 'keep' is supported in this version, apart from 'copyAndObsolete'. Nothing was moved.";
+                    var option = _activeToolSurface is null || _activeToolSurface.IsCallable("ChangeNamespace")
+                        ? ToolCallHint.Next("ChangeNamespace", "changes the namespace of files, after a move with namespaceHandling keep.")
+                        : "ChangeNamespace (changes the namespace of files, after a move with namespaceHandling keep) is in the moveExtract toolset: McpToolsetControl(toolSet: moveExtract, enabled: true) enables it.";
+                    return MoveFileError(ToolErrorCode.NotImplemented, $"{supported} {option}");
+                }
+
+                if (dryRun)
+                {
+                    // The copyAndObsolete engine has no dry-run mode, so a dry run would write.
+                    return MoveFileError(ToolErrorCode.InvalidArgument, $"MoveFile: dryRun does not apply to namespaceHandling '{namespaceHandling}', which always writes. Options: dryRun with namespaceHandling keep, or run copyAndObsolete without dryRun. Nothing was moved.");
+                }
             }
 
-            var bytes = await File.ReadAllBytesAsync(source.Absolute, cancellationToken);
-            if (Array.IndexOf(bytes, (byte)0, 0, Math.Min(bytes.Length, 8000)) >= 0)
+            var plan = await MoveSetPlanner.ExpandAndCheckAsync(new MoveSetRequest(resolved), cancellationToken);
+            if (plan.Moves.Count == 0)
             {
-                return MoveFileError(ToolErrorCode.TargetIneligible, $"MoveFile: '{source.Absolute}' contains a NUL byte within its first 8000 bytes, so it is treated as a binary file; this tool moves text files only.");
+                return MoveFileError(ToolErrorCode.InvalidArgument, "MoveFile: the move set expands to no files; a folder pair moves the files inside the folder, and this folder holds none. Nothing was moved.");
             }
 
-            // Decode the bytes here rather than with File.ReadAllText: GetString keeps a UTF-8 BOM as a leading U+FEFF, so the text moves as stored.
-            // Strict decoding refuses a file that is not valid UTF-8, because the text would otherwise be rewritten with replacement characters.
-            string text;
-            try
+            if (namespaceHandling == MoveFileNamespaceHandling.copyAndObsolete)
             {
-                text = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true).GetString(bytes);
-            }
-            catch (System.Text.DecoderFallbackException)
-            {
-                return MoveFileError(ToolErrorCode.TargetIneligible, $"MoveFile: '{source.Absolute}' is not valid UTF-8 text, so it cannot be moved without altering its bytes; this tool moves UTF-8 text files only.");
+                if (plan.Moves.Count != 1)
+                {
+                    return MoveFileError(ToolErrorCode.InvalidArgument, $"MoveFile: namespaceHandling '{namespaceHandling}' applies to a set that expands to exactly one .cs file; this set expands to {plan.Moves.Count} files. Options: name one .cs file, or use namespaceHandling keep. Nothing was moved.");
+                }
+
+                var only = plan.Moves[0];
+                if (!IsCSharpPath(only.Source.Absolute))
+                {
+                    return MoveFileError(ToolErrorCode.InvalidArgument, $"MoveFile: namespaceHandling '{namespaceHandling}' does not apply to '{only.Source.Absolute}', which is not a .cs file; non-.cs files accept only 'keep'. Nothing was moved.");
+                }
+
+                // The copyAndObsolete engine keeps its own checks and operation name (copy_and_obsolete_file): the original stays, so the blob must not read as a move.
+                return await MoveFileCopyAndObsolete.RunAsync(_workspaceManager, _validationEngine, _symbolNavigationEngine, _activeToolSurface, _logger, solution, only.Source, only.Destination, plan.Changes[only.Destination], cancellationToken);
             }
 
-            if (copyAndObsolete)
-            {
-                return await MoveFileCopyAndObsolete.RunAsync(_workspaceManager, _validationEngine, _symbolNavigationEngine, _activeToolSurface, _logger, solution, source, destination, text, cancellationToken);
-            }
-
-            var sourceProject = SolutionProjectLocator.FindContainingProject(solution, source.Absolute);
-            var destinationProject = SolutionProjectLocator.FindContainingProject(solution, destination.Absolute);
-            var sourceProjectName = sourceProject?.Name ?? "(no loaded project)";
-            var destinationProjectName = destinationProject?.Name ?? "(no loaded project)";
+            plan = await MoveSetPlanner.CheckProjectsAndCollectFactsAsync(plan, solution, cancellationToken);
+            var changes = plan.Changes;
+            IReadOnlyCollection<FilePathWrapper> deletePaths = plan.DeletePaths;
             var solutionRoot = _workspaceManager.GetSolutionRoot();
-            var sourceDisplay = EditEffectNames.DisplayPath(source.Absolute, solutionRoot);
-            var destinationDisplay = EditEffectNames.DisplayPath(destination.Absolute, solutionRoot);
-
-            var changes = new DocumentChangeSet { [destination] = text };
-            IReadOnlyCollection<FilePathWrapper> deletePaths = [source];
+            string Display(FilePathWrapper path) => EditEffectNames.DisplayPath(path.Absolute, solutionRoot);
+            var movesText = DescribeMoves(plan.Moves, Display);
 
             // verbatim: the decoded text (BOM kept as a leading U+FEFF) is written back byte-exact; no EOL or BOM normalization, every other chokepoint guard still applies.
             var apply = await ValidateAndApplyHelper.ValidateAndApplyAsync(
-                _validationEngine, _workspaceManager, _logger, changes, "move_file",
+                _validationEngine, _workspaceManager, _logger, changes, MoveFileOperation.Name,
+                dryRun: dryRun,
                 cancellationToken: cancellationToken,
                 deletePaths: deletePaths,
                 verbatim: true,
                 describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable),
                 describeEditImpact: EditImpactGate.Describer(_workspaceManager, changes, _activeToolSurface, null, deletePaths),
-                recordEffects: () => ToolCallContext.Current?.RecordEffect(
-                    EditEffectKind.FileMoved, sourceDisplay, null, Path.GetFileNameWithoutExtension(source.Absolute), null, null, destinationDisplay));
+                recordEffects: () =>
+                {
+                    foreach (var move in plan.Moves)
+                    {
+                        ToolCallContext.Current?.RecordEffect(
+                            EditEffectKind.FileMoved, Display(move.Source), null, Path.GetFileNameWithoutExtension(move.Source.Absolute), null, null, Display(move.Destination));
+                    }
+                });
 
             if (apply.Error is { } error)
             {
@@ -399,38 +410,88 @@ public class WholeFileWriteTools
                 var refusal = error.ErrorCode == ToolErrorCode.ValidationFailed
                     ? error with
                     {
-                        Message = $"MoveFile: moving '{sourceDisplay}' (project '{sourceProjectName}') to '{destinationDisplay}' (project '{destinationProjectName}') would break the build; nothing was moved. {error.Message}"
+                        Message = $"MoveFile: moving {movesText} would break the build; nothing was moved. {error.Message}"
                     }
                     : error;
                 return new SentinelCallToolResult<AppliedChangeSummary> { IsError = true, ErrorData = refusal };
             }
 
-            // A later read of the old path is told the new one.
-            FileMoveMemory.Shared.Record(source.Absolute, destination.Absolute, "MoveFile");
-
-            var description = $"Moved '{sourceDisplay}' (project '{sourceProjectName}') to '{destinationDisplay}' (project '{destinationProjectName}'); the text moved unchanged (namespaceHandling keep).";
-            if (isCs && DescribeKeptNamespace(text, destinationProject, destination) is { } namespaceFact)
+            if (!apply.DryRun)
             {
-                description += " " + namespaceFact;
+                // A later read of an old path is told the new one. Recorded after the write stands (not in recordEffects, which runs before the chokepoint can still refuse).
+                foreach (var move in plan.Moves)
+                {
+                    FileMoveMemory.Shared.Record(move.Source.Absolute, move.Destination.Absolute, "MoveFile");
+                }
             }
 
+            var description = $"{(apply.DryRun ? "Would move" : "Moved")} {movesText}; the text moved unchanged (namespaceHandling keep).";
+            // The kept-namespace fact is also in the description (callers read it there); every fact is lifted to a finding below.
+            foreach (var kept in plan.Facts.Where(f => f.Kind == MoveFactKind.KeptNamespace && f.Detail is not null))
+            {
+                description += " " + kept.Detail;
+            }
+
+            var affectedFiles = plan.Moves.SelectMany(m => new[] { m.Source, m.Destination }).ToList();
+            var findings = (apply.Findings ?? []).Concat(LiftMoveFacts(plan.Facts)).ToList();
             return new SentinelCallToolResult<AppliedChangeSummary>
             {
                 IsError = false,
-                SuccessData = AppliedChangeSummary.From(apply, [source, destination], description),
-                Findings = apply.Findings ?? []
+                SuccessData = AppliedChangeSummary.From(apply, affectedFiles, description),
+                Findings = findings
             };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "MoveFile failed for '{Source}' to '{Destination}'", source, destination);
+            if (ex is MoveSetRefusedException refused)
+            {
+                // A typed refusal is an expected outcome, not a fault: no error log. A missing source keeps the Search option the legacy text carried.
+                var refusal = ToolErrorMapper.ToResultError(ex, _workspaceManager, "MoveFile");
+                if (refused.Offenders.Any(o => o.Reason == MoveOffenderReason.Missing) && (_activeToolSurface is null || _activeToolSurface.IsCallable("Search")))
+                {
+                    refusal = refusal with { Message = refusal.Message + " " + ToolCallHint.Next("Search", "to find the right path.", ("mode", "text")) };
+                }
+
+                return new SentinelCallToolResult<AppliedChangeSummary>() { IsError = true, ErrorData = refusal };
+            }
+
+            _logger.LogError(ex, "MoveFile failed for {Count} move pair(s)", moves?.Count ?? 0);
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
                 IsError = true,
-                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"MoveFile for '{source}' to '{destination}'")
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"MoveFile for {moves?.Count ?? 0} move pair(s)")
             };
         }
     }
+
+    private static bool IsCSharpPath(string path) => string.Equals(Path.GetExtension(path), ".cs", StringComparison.OrdinalIgnoreCase);
+
+    // One move as the description and the compile-gate refusal name it, with both projects; several moves are listed up to a cap.
+    private static string DescribeMoves(IReadOnlyList<PlannedFileMove> moves, Func<FilePathWrapper, string> display)
+    {
+        const int maxListed = 20;
+        string One(PlannedFileMove move) =>
+            $"'{display(move.Source)}' (project '{move.SourceProjectName ?? "(no loaded project)"}') to '{display(move.Destination)}' (project '{move.DestinationProjectName ?? "(no loaded project)"}')";
+
+        if (moves.Count == 1)
+        {
+            return One(moves[0]);
+        }
+
+        var listed = string.Join(", ", moves.Take(maxListed).Select(One));
+        return $"{moves.Count} files: {listed}{(moves.Count > maxListed ? $" and {moves.Count - maxListed} more" : string.Empty)}";
+    }
+
+    // The one place a planner fact becomes a wire finding: the fact's own detail when it has one, else its kind and subject.
+    private static List<Finding> LiftMoveFacts(IReadOnlyList<MoveFact> facts) =>
+        facts.Select(fact => new Finding(
+                "MoveFile",
+                fact.Detail ?? $"{fact.Kind}: {fact.Subject}",
+                fact.Kind is MoveFactKind.MissingProjectReference or MoveFactKind.MissingInternalsVisibleTo or MoveFactKind.MissingPackageReference
+                    or MoveFactKind.EdgeWouldCloseCycle or MoveFactKind.WorkspaceChangedDuringGate
+                    ? FindingSeverity.Warning
+                    : FindingSeverity.Info))
+            .ToList();
 
     private static SentinelCallToolResult<AppliedChangeSummary> MoveFileError(string errorCode, string message) =>
         new()
@@ -438,28 +499,6 @@ public class WholeFileWriteTools
             IsError = true,
             ErrorData = new ResultError(errorCode, message)
         };
-
-    // One fact when the moved .cs file declares a namespace that differs from the folder-derived one in its destination project
-    // (the project's default namespace plus the folder path under the project directory); null when they match, the file declares none, or the destination is in no loaded project.
-    private static string? DescribeKeptNamespace(string text, Project? destinationProject, FilePathWrapper destination)
-    {
-        if (destinationProject is null || FolderNamespace.Expected(destinationProject, destination) is not { } expected)
-        {
-            return null;
-        }
-
-        var declared = CSharpSyntaxTree.ParseText(text).GetRoot().DescendantNodes()
-            .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.BaseNamespaceDeclarationSyntax>()
-            .FirstOrDefault()?.Name.ToString();
-        if (declared is null)
-        {
-            return null;
-        }
-
-        return string.Equals(declared, expected, StringComparison.Ordinal)
-            ? null
-            : $"The namespace '{declared}' was kept; the destination folder's convention would give '{expected}'.";
-    }
 
     /// <summary>
     /// Fraction of <paramref name="oldContent"/>'s line count that <paramref name="newContent"/>

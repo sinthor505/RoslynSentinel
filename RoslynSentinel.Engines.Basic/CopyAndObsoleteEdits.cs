@@ -52,7 +52,7 @@ public static class CopyAndObsoleteEdits
         if (newNamespace.Length == 0)
         {
             return CopyAndObsoleteEditResult.Refused(ToolErrorCode.InvalidArgument,
-                $"copyAndObsolete: the destination gives the global namespace, so the copy of '{source.Absolute}' would need its namespace declaration removed, which this edit does not do. Options: pass a destinationPath in a folder that gives a named namespace, or use namespaceHandling keep to move the file as it is.");
+                $"copyAndObsolete: the destination gives the global namespace, so the copy of '{source.Absolute}' would need its namespace declaration removed, which this edit does not do. Options: pass a {MoveFileParameterNames.DestinationPath} in a folder that gives a named namespace, or use namespaceHandling keep to move the file as it is.");
         }
 
         var lookup = DocumentLookup.TryGetDocument(solution, source);
