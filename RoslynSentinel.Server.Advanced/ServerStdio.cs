@@ -77,7 +77,7 @@ namespace RoslynSentinel.Server.Advanced
             Debug.WriteLine($"--- BUILD STAMP: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC ---");
 
             // ── Interactive pipe setup (must precede host build) ─────────────────
-            var isInteractive = args.Contains("--interactive");
+            var isInteractive = ServerHostSettings.InteractiveSetting.Read(StartupArgs.Parse(args), StartupSettings.EnvironmentReader).Value;
             System.IO.Pipelines.Pipe? c2sPipe = null;
             System.IO.Pipelines.Pipe? s2cPipe = null;
             Stream? interactiveServerInput = null;

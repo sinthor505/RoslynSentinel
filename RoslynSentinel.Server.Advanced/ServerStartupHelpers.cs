@@ -60,13 +60,15 @@ public static class ServerStartupHelpers
         out HashSet<string> excludeTools,
         out OperatingMode operatingMode)
     {
-        operatingMode = args.Contains("--testing") ? OperatingMode.Testing : OperatingMode.Production;
+        var parsedArgs = StartupArgs.Parse(args);
+        var env = StartupSettings.EnvironmentReader;
+        operatingMode = ServerHostSettings.TestingSetting.Read(parsedArgs, env).Value ? OperatingMode.Testing : OperatingMode.Production;
 
         // No --mode/--modes means no mode set is loaded (activeModes ends up empty) -> a caller
         // must opt in via --mode=all, an explicit mode list, or --include-tools.
-        modeArg = GetArgValue(args, "--mode") ?? GetArgValue(args, "--modes") ?? "";
-        solutionPath = GetArgValue(args, "--solution");
-        baseRepoDirectory = GetArgValue(args, "--base-repo-dir");
+        modeArg = ServerHostSettings.ModeSetting.Read(parsedArgs, env).Value ?? ServerHostSettings.ModesSetting.Read(parsedArgs, env).Value ?? "";
+        solutionPath = ServerHostSettings.SolutionSetting.Read(parsedArgs, env).Value;
+        baseRepoDirectory = ServerHostSettings.BaseRepoDirSetting.Read(parsedArgs, env).Value;
 
         var resolvedModeArg = ToolsetAliases.TryGetValue(modeArg, out var alias) ? alias : modeArg;
 
@@ -94,8 +96,8 @@ public static class ServerStartupHelpers
             }
         }
 
-        includeTools = NormalizeToolClassNames(ParseNameList(GetArgValue(args, "--include-tools")));
-        excludeTools = NormalizeToolClassNames(ParseNameList(GetArgValue(args, "--exclude-tools")));
+        includeTools = NormalizeToolClassNames(ParseNameList(ServerHostSettings.IncludeToolsSetting.Read(parsedArgs, env).Value));
+        excludeTools = NormalizeToolClassNames(ParseNameList(ServerHostSettings.ExcludeToolsSetting.Read(parsedArgs, env).Value));
     }
 
     private static HashSet<string> ParseNameList(string? value) =>
@@ -110,7 +112,7 @@ public static class ServerStartupHelpers
     /// hide it alone. Applies only in claude-lean (the only mode with an allow-list); unknown names are
     /// ignored, so a name may be passed before it is a core tool.
     /// </summary>
-    public static HashSet<string> ParseHideTools(string[] args) => ParseNameList(GetArgValue(args, "--hide-tools"));
+    public static HashSet<string> ParseHideTools(string[] args) => ParseNameList(ReadHostSetting(ServerHostSettings.HideToolsSetting, args));
 
     /// <summary>
     /// Reads the comma-separated <c>--toolsets</c> list: on-demand toolset names to switch on at startup.
@@ -121,7 +123,7 @@ public static class ServerStartupHelpers
     {
         var sets = new List<ToolSetName>();
         var unknown = new List<string>();
-        foreach (var name in ParseNameList(GetArgValue(args, "--toolsets")))
+        foreach (var name in ParseNameList(ReadHostSetting(ServerHostSettings.ToolsetsSetting, args)))
         {
             if (ToolsetCatalog.TryParseSetName(name, out var set))
             {
@@ -324,32 +326,19 @@ public static class ServerStartupHelpers
         return activeToolClasses;
     }
 
-    /// <summary>
-    /// Reads a command-line flag's value, accepting both "--flag=value" and "--flag value" forms.
-    /// Returns null if the flag is absent (or "--flag value" is missing its value).
-    /// </summary>
-    private static string? GetArgValue(string[] args, string flag)
-    {
-        var inlinePrefix = flag + "=";
-        var inline = args.FirstOrDefault(a => a.StartsWith(inlinePrefix, StringComparison.Ordinal));
-        if (inline is not null)
-        {
-            return inline[inlinePrefix.Length..];
-        }
-
-        var index = Array.FindIndex(args, a => a.Equals(flag, StringComparison.Ordinal));
-        return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
-    }
+    /// <summary>Reads one host setting's effective value from <paramref name="args"/> without touching registry state.</summary>
+    private static T ReadHostSetting<T>(StartupSetting<T> setting, string[] args) =>
+        setting.Read(StartupArgs.Parse(args), StartupSettings.EnvironmentReader).Value;
 
     /// <summary>Parses --port (either "--port=N" or "--port N"); returns <paramref name="defaultPort"/> if absent or unparseable.</summary>
     public static int ParsePort(string[] args, int defaultPort = 5100)
     {
-        var portArg = GetArgValue(args, "--port");
-        return int.TryParse(portArg, out var parsed) ? parsed : defaultPort;
+        // Absent, blank or unparseable (Source Default or Invalid) leaves the setting null, so the caller default applies.
+        return ReadHostSetting(ServerHostSettings.PortSetting, args) ?? defaultPort;
     }
 
     /// <summary>Parses --transport (either "--transport=stdio|http" or "--transport stdio|http"); returns "stdio" if absent.</summary>
-    public static string ParseTransport(string[] args) => GetArgValue(args, "--transport") ?? "stdio";
+    public static string ParseTransport(string[] args) => ReadHostSetting(ServerHostSettings.TransportSetting, args) ?? ServerHostSettings.DefaultTransport;
 
     /// <summary>
     /// Parses --bind (<c>loopback</c> | <c>any</c>, case-insensitive). Default and unknown value: Loopback. Same
@@ -357,9 +346,7 @@ public static class ServerStartupHelpers
     /// parse time); an unknown value falls to the safe, narrower default.
     /// </summary>
     public static HttpBindScope ParseBind(string[] args) =>
-        string.Equals(GetArgValue(args, "--bind"), "any", StringComparison.OrdinalIgnoreCase)
-            ? HttpBindScope.Any
-            : HttpBindScope.Loopback;
+        ReadHostSetting(ServerHostSettings.BindSetting, args);
 
     /// <summary>
     /// Parses --respawn (<c>auto</c> | <c>none</c>, case-insensitive). When absent or unknown the default follows
@@ -368,20 +355,11 @@ public static class ServerStartupHelpers
     /// </summary>
     public static RespawnPolicy ParseRespawn(string[] args, string transport)
     {
-        var value = GetArgValue(args, "--respawn");
-        if (string.Equals(value, "auto", StringComparison.OrdinalIgnoreCase))
-        {
-            return RespawnPolicy.Auto;
-        }
-
-        if (string.Equals(value, "none", StringComparison.OrdinalIgnoreCase))
-        {
-            return RespawnPolicy.None;
-        }
-
-        return string.Equals(transport, "http", StringComparison.OrdinalIgnoreCase)
-            ? RespawnPolicy.None
-            : RespawnPolicy.Auto;
+        // Absent, blank or unknown (Source Default or Invalid) leaves the setting null, so the transport default applies.
+        return ReadHostSetting(ServerHostSettings.RespawnSetting, args)
+            ?? (string.Equals(transport, "http", StringComparison.OrdinalIgnoreCase)
+                ? RespawnPolicy.None
+                : RespawnPolicy.Auto);
     }
 
     /// <summary>
@@ -464,13 +442,13 @@ public static class ServerStartupHelpers
         HashSet<string>? includeTools = null,
         HashSet<string>? excludeTools = null)
     {
-        if (!args.Contains("--list-tools"))
+        if (!ReadHostSetting(ServerHostSettings.ListToolsSetting, args))
         {
             return false;
         }
 
-        var outputPath = GetArgValue(args, "--output");
-        var full = args.Contains("--full");
+        var outputPath = ReadHostSetting(ServerHostSettings.OutputSetting, args);
+        var full = ReadHostSetting(ServerHostSettings.FullSetting, args);
         ConsoleMode.ListTools(registerTools, outputPath, full);
         return true;
     }
@@ -713,7 +691,7 @@ public static class ServerStartupHelpers
     /// Parses --log-dir (either "--log-dir=path" or "--log-dir path"); returns null if absent, in
     /// which case callers fall back to their own default (see <see cref="ResolveLogDirectory"/>).
     /// </summary>
-    public static string? ParseLogDirectory(string[] args) => GetArgValue(args, "--log-dir");
+    public static string? ParseLogDirectory(string[] args) => ReadHostSetting(ServerHostSettings.LogDirSetting, args);
 
     /// <summary>
     /// Parses --run-id (either "--run-id=value" or "--run-id value"); returns null if absent, in
@@ -721,13 +699,13 @@ public static class ServerStartupHelpers
     /// a server launched without it (e.g. an interactive VS Code session) logs and runs exactly as
     /// before.
     /// </summary>
-    public static string? ParseRunId(string[] args) => GetArgValue(args, "--run-id");
+    public static string? ParseRunId(string[] args) => ReadHostSetting(ServerHostSettings.RunIdSetting, args);
 
     /// <summary>
     /// Parses --step-id (either "--step-id=value" or "--step-id value"); returns null if absent,
     /// same fallback behaviour as <see cref="ParseRunId"/>.
     /// </summary>
-    public static string? ParseStepId(string[] args) => GetArgValue(args, "--step-id");
+    public static string? ParseStepId(string[] args) => ReadHostSetting(ServerHostSettings.StepIdSetting, args);
 
     /// <summary>
     /// Resolves the effective log directory: <paramref name="logDirectory"/> when supplied
