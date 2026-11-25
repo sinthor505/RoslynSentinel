@@ -32,6 +32,7 @@ The `AskUserQuestion` dialog is narrow, not resizable, and drops newlines and fo
   dependent question only after the one it depends on is answered, unless the dependency is stated.
 - Question text stands alone (item number and title, what the choice decides); recommended option
   first, labelled "(Recommended)". Up to 4 questions per call, grouped by topic.
+- Effort: tag each option label S/M/L/DS (`plan-writer` skill, section 3a), in the chat write-up too.
 
 ## 1. Intake
 

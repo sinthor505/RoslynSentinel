@@ -35,6 +35,7 @@
 - Effect: <text-neutral | behaviour-changing: what a caller or model sees differently>
 - Change: <what, concretely>
 - Done when: <verifiable condition, e.g. Build 0 errors, named test passes>
+- Effort: <S | M | L | DS; scale in the plan-writer skill, section 3a>
 <!-- Test, eval or LIVE step: state the outcome classes it reports (ideal vs limit, one named class per outcome),
      not just pass/fail. See reference_model_eval_procedure.md, "Scoring design". -->
 

@@ -19,7 +19,8 @@ steps, tracker, dispatch contract, failures and summary are defined there. CLAUD
   blocked".
 - Read `docs/current/TODO.md` yourself (one small file) and the latest
   `.claude/handoff/*_todo_review_*.md` record if there is one. Show a numbered list, one sentence per
-  item, grouped **Quick wins / Small / Medium / Large / Needs owner or blocked**, cheapest first. Give
+  item, grouped **S / M / L / DS / Needs owner or blocked** (scale: `plan-writer` skill, section
+  3a; use an entry's `; effort` tag where present), cheapest first. Give
   each item its TODO.md line number. Mark `[READY]` items `(ready)` (settled by a todo review) and
   `[PARKED]` items `(parked)`, as well as the "Needs owner review" section and `PARKED` lines in the
   memory index.
@@ -41,7 +42,8 @@ overnight candidates. Give a recommendation for each (include / leave).
   Write the anchors into the tracker's Scoping notes (they are unverified until a batch re-checks them).
   For a `[READY]` item, the scoper reads the linked doc's `## Decisions` section and treats those as
   owner rulings: do not ask them again; report `DECISION` only for a question they do not cover.
-- Ask every `DECISION` with `AskUserQuestion`, up to 4 per call, recommended option first. A simple
+- Ask every `DECISION` with `AskUserQuestion`, up to 4 per call, recommended option first, effort
+  tag in each option label (S/M/L/DS). A simple
   one is settled now. Otherwise the owner says defer: mark it `DEFERRED (owner)`, do not dispatch it.
 - `NEEDS-DESIGN` items are deferred without asking, unless the owner wants to design one now.
 - `LIVE-WINDOW` items: explain what the live step involves (reference, "Live-window steps") and

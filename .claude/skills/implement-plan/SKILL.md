@@ -43,7 +43,8 @@ CLAUDE.md applies throughout.
 ## 2. Settle
 
 - Open decisions = the plan's "Risks and open decisions" plus the review's questions. Ask them with
-  `AskUserQuestion`, up to 4 per call, recommended option first, previews for code-shape choices.
+  `AskUserQuestion`, up to 4 per call, recommended option first, previews for code-shape choices,
+  effort tag in each option label (S/M/L/DS, `plan-writer` skill, section 3a).
 - Record each answer as a dated entry in the plan's `## Decision` section. A decision too big to
   settle now is deferred with the steps that depend on it (mark them in the plan).
 - Ask once: **will the owner be present during the run?** Present: mid-run decisions are asked with a
@@ -62,7 +63,9 @@ CLAUDE.md applies throughout.
 ## 4. Tracker (write before the first dispatch)
 
 Per the reference, `<kind>_<slug>` = `plan_<slug>`. The Status table has one row per plan step; Ref
-is the step heading. Owner rulings include the mode and the presence answer.
+is the step heading. Owner rulings include the mode and the presence answer. Each row also carries
+the step's estimated effort tag (from the plan; the review's size if the plan has none) and, once
+done, the actual size by the same scale (slices dispatched, senior needed, sessions spanned).
 
 ## 5. Execute (in plan step order)
 
@@ -90,4 +93,4 @@ is the step heading. Owner rulings include the mode and the presence answer.
 - **Not all done:** Status stays `IN PROGRESS` with what is left and why; shrink its TODO.md line to
   match; deferred decisions go to the plan's "Risks and open decisions" as well as the tracker.
 - Close the `project_` memory; final message per the reference's end-of-run summary, plus the plan's
-  final Status line.
+  final Status line and one line of estimate vs actual (e.g. "est 3S 2M, actual 2S 3M; Step 4 S->M").

@@ -47,6 +47,21 @@ order and in parallel lanes, with no co-dependent edit ordering.
   `MethodSignature`) or the repeated `ReplaceSnippet` batch pattern.
 - Slices meant to run as a pair touch disjoint files, preferably different projects.
 
+## 3a. Effort scale (shared by all skills and questions)
+
+One scale, in this repo's units, not hours. Every plan step carries one tag; so do options in an
+owner question (in the option label, e.g. `Arm-conditional text [S] (Recommended)`) and TODO.md
+entries (trailing `; effort S`).
+- **S**: a direct edit (up to ~3 edits in 2 files) or one implementer slice.
+- **M**: several slices or one `implementer-senior` job, within one session.
+- **L**: an orchestrator batch or more than one session; the approach is known.
+- **DS**: needs a design session (`plan-design`) before it can be sized. A state, not a fourth size;
+  it is replaced by S/M/L once designed. (Not `D`, which reads as implementer tier `D1`; not `P`/`PL`,
+  which read as parked or an existing plan.)
+
+Omit the tag when options cost the same or the choice is wording or preference. When an option defers
+work, show both parts: `[S now, M later]`.
+
 ## 4. Done when is a call
 
 Write each "Done when" as something the implementer can run: `Build` 0 errors (name the level when it
@@ -55,7 +70,8 @@ implementers never run tests.
 
 ## 5. Before handing over
 
-- Every step has Files, Depends on (the real prerequisite), Effect, Change, Done when, lane.
+- Every step has Files, Depends on (the real prerequisite), Effect, Change, Done when, lane, and an
+  effort tag (section 3a).
 - Open questions are in "Risks and open decisions" with options and a recommendation, not routed around.
 - DTO additions follow the `dto-conventions` skill (reuse or a NEW-DTO justification in the step).
 - A new MCP tool step lists both registration points (CLAUDE.md, Architecture): the class and its `ToolClassRegistry` entries.

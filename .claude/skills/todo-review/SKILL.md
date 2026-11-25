@@ -39,7 +39,7 @@ question). Per item it returns, in at most about 15 lines:
 - current state with evidence (`file:line`, commit, test name): this catches stale items;
 - each decision point separately, each answerable in one choice;
 - per decision, 2-3 options, each with what concretely changes (files, tools), effort
-  (Small/Medium/Large) and risk or trade-off, plus a recommendation;
+  (S/M/L/DS, `plan-writer` skill, section 3a) and risk or trade-off, plus a recommendation;
 - for an implementable item, the acceptance check (test or observable result).
 
 Do not read the code yourself beyond a small verification read.
@@ -64,7 +64,7 @@ Each question text stands alone and carries:
 Each option's description names the concrete outcome (what gets done or recorded, effort, risk);
 its `preview` shows the exact TODO.md line or Decisions entry that choice would write (the code or
 text instead, for code-shape or wording choices). Recommended option first, labelled
-"(Recommended)". When detail does not fit, put it in the preview rather than shortening the
+"(Recommended)"; effort tag in the label (`... [M] (Recommended)`). When detail does not fit, put it in the preview rather than shortening the
 question.
 
 Per question the owner answers, or says "explain in more detail", "design now", "park" or "drop".
@@ -77,7 +77,8 @@ answer invalidates the scoping.
 - **Decided:** add a dated `## Decisions` section (or entry) to the item's linked doc: the question,
   the choice, one line of why, the acceptance check. With no linked doc, the TODO.md line itself
   carries the decision if it fits in one sentence; otherwise create the doc per templates/README.md.
-  Rewrite the TODO.md line as one actionable sentence with the tag `[READY]`.
+  Rewrite the TODO.md line as one actionable sentence with the tag `[READY]` and a trailing
+  `; effort S|M|L|DS`.
 - **Design now:** small designs are worked out in the session and written up by
   `design-doc-scribe` in the folder templates/README.md prescribes; the TODO.md line links it and
   becomes `[READY]` if the design leaves no open question. A large design gets a stub doc (problem,
