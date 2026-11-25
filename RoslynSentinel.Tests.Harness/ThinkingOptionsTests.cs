@@ -46,8 +46,6 @@ public class ThinkingOptionsTests
     [TestCase(ThinkingOptions.TriggersVariable, "1")]
     [TestCase(ThinkingOptions.TriggersVariable, ",")]
     [TestCase(ThinkingOptions.TriggersVariable, " , ")]
-    [TestCase(ThinkingOptions.EffortVariable, "   ")]
-    [TestCase(ThinkingOptions.EffortVariable, "")]
     [TestCase(ThinkingOptions.BudgetVariable, "0")]
     [TestCase(ThinkingOptions.BudgetVariable, "-5")]
     [TestCase(ThinkingOptions.BudgetVariable, "abc")]
@@ -55,18 +53,19 @@ public class ThinkingOptionsTests
     {
         var env = new Dictionary<string, string> { [variable] = value };
 
-        var ex = Assert.Throws<InvalidThinkingSettingException>(() => ThinkingOptions.FromEnvironment(Reader(env)));
+        var ex = Assert.Throws<ConfigurationInvalidException>(() => ThinkingOptions.FromEnvironment(Reader(env)));
 
-        Assert.That(ex.Variable, Is.EqualTo(variable));
+        Assert.That(ex.Problems[0].EnvName, Is.EqualTo(variable));
     }
 
     [Test]
-    public void FromEnvironment_EmptyStringIsUnsetExceptEffort()
+    public void FromEnvironment_EmptyStringIsUnset()
     {
         var env = new Dictionary<string, string>
         {
             [ThinkingOptions.ModeVariable] = "",
             [ThinkingOptions.TriggersVariable] = "",
+            [ThinkingOptions.EffortVariable] = "",
             [ThinkingOptions.BudgetVariable] = "",
         };
 
@@ -76,6 +75,17 @@ public class ThinkingOptionsTests
         Assert.That(options.Triggers, Is.EqualTo(ThinkingTriggers.Error));
         Assert.That(options.Effort, Is.EqualTo(ThinkingOptions.DefaultEffort));
         Assert.That(options.ReasoningBudget, Is.Null);
+    }
+
+    [TestCase("   ")]
+    [TestCase("")]
+    public void FromEnvironment_BlankEffort_IsUnsetAndKeepsDefault(string value)
+    {
+        var env = new Dictionary<string, string> { [ThinkingOptions.EffortVariable] = value };
+
+        var options = ThinkingOptions.FromEnvironment(Reader(env));
+
+        Assert.That(options.Effort, Is.EqualTo("low"));
     }
 
     [Test]

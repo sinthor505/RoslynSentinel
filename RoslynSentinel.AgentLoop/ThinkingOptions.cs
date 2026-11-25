@@ -25,6 +25,7 @@ public enum ThinkingTriggers
     FirstTurn = 4,
 }
 
+[StartupSettingGroup("Thinking (ModelEval)")]
 public sealed record ThinkingOptions(ThinkingMode Mode, ThinkingTriggers Triggers, string Effort, int? ReasoningBudget)
 {
     public const string ModeVariable = "ROSLYNSENTINEL_MODELEVAL_THINKING";
@@ -34,79 +35,79 @@ public sealed record ThinkingOptions(ThinkingMode Mode, ThinkingTriggers Trigger
     public const string DefaultEffort = "low";
     public const string CustomEffortWarningFormat = "Warning: Custom thinking_effort value {0} was specified - ensure it is valid for the active model {1}";
 
+    /// <summary>Thinking mode (<see cref="ModeVariable"/>), re-read on every access.</summary>
+    public static readonly StartupSetting<ThinkingMode> ModeSetting = StartupSetting.Enum<ThinkingMode>(null, ModeVariable, ThinkingMode.Off, "Thinking mode for model-eval requests: off, triggered or always.", SettingScope.AgentLoop, SettingKind.Live);
+
+    /// <summary>Trigger conditions for triggered mode (<see cref="TriggersVariable"/>), re-read on every access.</summary>
+    public static readonly StartupSetting<ThinkingTriggers> TriggersSetting = StartupSetting.Custom<ThinkingTriggers>(
+        null,
+        TriggersVariable,
+        ThinkingTriggers.Error,
+        "error",
+        (string raw, out ThinkingTriggers value) =>
+        {
+            var triggerNames = Array.FindAll(Enum.GetNames<ThinkingTriggers>(), n => n != nameof(ThinkingTriggers.None));
+            var combined = ThinkingTriggers.None;
+            foreach (var part in raw.Split(','))
+            {
+                var token = part.Trim();
+                var triggerName = Array.Find(triggerNames, n => string.Equals(n, token, StringComparison.OrdinalIgnoreCase));
+                if (triggerName is null)
+                {
+                    value = default;
+                    return false;
+                }
+
+                combined |= Enum.Parse<ThinkingTriggers>(triggerName);
+            }
+
+            value = combined;
+            return true;
+        },
+        "error,latchRefusal,firstTurn (comma list)",
+        "Comma list of the conditions that request thinking in triggered mode.",
+        SettingScope.AgentLoop,
+        SettingKind.Live);
+
+    /// <summary>Thinking effort (<see cref="EffortVariable"/>), re-read on every access; blank is unset.</summary>
+    public static readonly StartupSetting<string?> EffortSetting = StartupSetting.String(null, EffortVariable, DefaultEffort, "Thinking effort sent with thinking requests; any non-blank text (known: none, minimal, low, medium, high, xhigh).", SettingScope.AgentLoop, SettingKind.Live);
+
+    /// <summary>Reasoning token budget (<see cref="BudgetVariable"/>), re-read on every access; null when unset.</summary>
+    public static readonly StartupSetting<int?> BudgetSetting = StartupSetting.NullableInt(null, BudgetVariable, "Reasoning token budget per turn (positive integer); unset means none.", SettingScope.AgentLoop, SettingKind.Live, minValue: 1);
+
     public static IReadOnlyList<string> KnownEfforts { get; } = ["none", "minimal", "low", "medium", "high", "xhigh"];
 
     public static ThinkingOptions Off { get; } = new(ThinkingMode.Off, ThinkingTriggers.Error, DefaultEffort, null);
 
     public static ThinkingOptions FromEnvironment(Func<string, string?>? readVariable = null)
     {
-        readVariable ??= name => Environment.GetEnvironmentVariable(name);
-        var rawMode = readVariable(ModeVariable);
-        var rawTriggers = readVariable(TriggersVariable);
-        var rawEffort = readVariable(EffortVariable);
-        var rawBudget = readVariable(BudgetVariable);
-        if (string.IsNullOrWhiteSpace(rawMode) && string.IsNullOrWhiteSpace(rawTriggers)
-            && rawEffort is null && string.IsNullOrWhiteSpace(rawBudget))
+        readVariable ??= StartupSettings.EnvironmentReader;
+        var mode = ModeSetting.Read(StartupArgs.Empty, readVariable);
+        var triggers = TriggersSetting.Read(StartupArgs.Empty, readVariable);
+        var effort = EffortSetting.Read(StartupArgs.Empty, readVariable);
+        var budget = BudgetSetting.Read(StartupArgs.Empty, readVariable);
+
+        var problems = new List<ConfigurationProblem>();
+        foreach (var problem in new[] { mode.Problem, triggers.Problem, effort.Problem, budget.Problem })
+        {
+            if (problem is not null)
+            {
+                problems.Add(problem);
+            }
+        }
+
+        if (problems.Count > 0)
+        {
+            throw new ConfigurationInvalidException(problems);
+        }
+
+        if (mode.Source == SettingSource.Default && triggers.Source == SettingSource.Default
+            && effort.Source == SettingSource.Default && budget.Source == SettingSource.Default)
         {
             return Off;
         }
 
-        var modeNames = Enum.GetNames<ThinkingMode>();
-        var mode = ThinkingMode.Off;
-        if (!string.IsNullOrWhiteSpace(rawMode))
-        {
-            var modeName = MatchName(modeNames, rawMode.Trim());
-            if (modeName is null)
-            {
-                throw new InvalidThinkingSettingException(ModeVariable, rawMode, modeNames);
-            }
-
-            mode = Enum.Parse<ThinkingMode>(modeName);
-        }
-
-        var triggerNames = Array.FindAll(Enum.GetNames<ThinkingTriggers>(), n => n != nameof(ThinkingTriggers.None));
-        var triggers = Off.Triggers;
-        if (!string.IsNullOrWhiteSpace(rawTriggers))
-        {
-            triggers = ThinkingTriggers.None;
-            foreach (var part in rawTriggers.Split(','))
-            {
-                var triggerName = MatchName(triggerNames, part.Trim());
-                if (triggerName is null)
-                {
-                    throw new InvalidThinkingSettingException(TriggersVariable, rawTriggers, triggerNames);
-                }
-
-                triggers |= Enum.Parse<ThinkingTriggers>(triggerName);
-            }
-        }
-
-        var effort = Off.Effort;
-        if (rawEffort is not null)
-        {
-            if (string.IsNullOrWhiteSpace(rawEffort))
-            {
-                throw new InvalidThinkingSettingException(EffortVariable, rawEffort, KnownEfforts);
-            }
-
-            effort = rawEffort;
-        }
-
-        int? budget = null;
-        if (!string.IsNullOrWhiteSpace(rawBudget))
-        {
-            if (!int.TryParse(rawBudget.Trim(), out var parsedBudget) || parsedBudget <= 0)
-            {
-                throw new InvalidThinkingSettingException(BudgetVariable, rawBudget, ["a positive integer"]);
-            }
-
-            budget = parsedBudget;
-        }
-
-        return new ThinkingOptions(mode, triggers, effort, budget);
-
-        static string? MatchName(string[] names, string token) =>
-            Array.Find(names, n => string.Equals(n, token, StringComparison.OrdinalIgnoreCase));
+        return new ThinkingOptions(mode.Value, triggers.Value, effort.Value ?? DefaultEffort, budget.Value);
     }
 
     [JsonIgnore]
@@ -145,14 +146,3 @@ public sealed record ThinkingOptions(ThinkingMode Mode, ThinkingTriggers Trigger
 }
 
 public sealed record TurnThinking(bool Requested, ThinkingTriggers FiredTriggers, int? ReasoningDeltas, bool? OverBudget);
-
-// DTO-EXEMPT: exception
-public sealed class InvalidThinkingSettingException(string variable, string value, IReadOnlyList<string> allowed)
-    : Exception($"Invalid value '{value}' for {variable}; allowed values: {string.Join(", ", allowed)}.")
-{
-    public string Variable { get; } = variable;
-
-    public string Value { get; } = value;
-
-    public IReadOnlyList<string> Allowed { get; } = allowed;
-}
