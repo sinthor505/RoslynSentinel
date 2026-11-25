@@ -40,7 +40,73 @@ public sealed record ThinkingOptions(ThinkingMode Mode, ThinkingTriggers Trigger
 
     public static ThinkingOptions FromEnvironment(Func<string, string?>? readVariable = null)
     {
-        throw new NotImplementedException(); // TODO implement (Step 2)
+        readVariable ??= name => Environment.GetEnvironmentVariable(name);
+        var rawMode = readVariable(ModeVariable);
+        var rawTriggers = readVariable(TriggersVariable);
+        var rawEffort = readVariable(EffortVariable);
+        var rawBudget = readVariable(BudgetVariable);
+        if (string.IsNullOrWhiteSpace(rawMode) && string.IsNullOrWhiteSpace(rawTriggers)
+            && rawEffort is null && string.IsNullOrWhiteSpace(rawBudget))
+        {
+            return Off;
+        }
+
+        var modeNames = Enum.GetNames<ThinkingMode>();
+        var mode = ThinkingMode.Off;
+        if (!string.IsNullOrWhiteSpace(rawMode))
+        {
+            var modeName = MatchName(modeNames, rawMode.Trim());
+            if (modeName is null)
+            {
+                throw new InvalidThinkingSettingException(ModeVariable, rawMode, modeNames);
+            }
+
+            mode = Enum.Parse<ThinkingMode>(modeName);
+        }
+
+        var triggerNames = Array.FindAll(Enum.GetNames<ThinkingTriggers>(), n => n != nameof(ThinkingTriggers.None));
+        var triggers = Off.Triggers;
+        if (!string.IsNullOrWhiteSpace(rawTriggers))
+        {
+            triggers = ThinkingTriggers.None;
+            foreach (var part in rawTriggers.Split(','))
+            {
+                var triggerName = MatchName(triggerNames, part.Trim());
+                if (triggerName is null)
+                {
+                    throw new InvalidThinkingSettingException(TriggersVariable, rawTriggers, triggerNames);
+                }
+
+                triggers |= Enum.Parse<ThinkingTriggers>(triggerName);
+            }
+        }
+
+        var effort = Off.Effort;
+        if (rawEffort is not null)
+        {
+            if (string.IsNullOrWhiteSpace(rawEffort))
+            {
+                throw new InvalidThinkingSettingException(EffortVariable, rawEffort, KnownEfforts);
+            }
+
+            effort = rawEffort;
+        }
+
+        int? budget = null;
+        if (!string.IsNullOrWhiteSpace(rawBudget))
+        {
+            if (!int.TryParse(rawBudget.Trim(), out var parsedBudget) || parsedBudget <= 0)
+            {
+                throw new InvalidThinkingSettingException(BudgetVariable, rawBudget, ["a positive integer"]);
+            }
+
+            budget = parsedBudget;
+        }
+
+        return new ThinkingOptions(mode, triggers, effort, budget);
+
+        static string? MatchName(string[] names, string token) =>
+            Array.Find(names, n => string.Equals(n, token, StringComparison.OrdinalIgnoreCase));
     }
 
     [JsonIgnore]
@@ -48,14 +114,33 @@ public sealed record ThinkingOptions(ThinkingMode Mode, ThinkingTriggers Trigger
     {
         get
         {
-            throw new NotImplementedException(); // TODO implement (Step 2)
+            foreach (var known in KnownEfforts)
+            {
+                if (string.Equals(known, Effort, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 
     /// <summary>signals = the trigger conditions that hold for this request.</summary>
     public TurnThinking Decide(ThinkingTriggers signals)
     {
-        throw new NotImplementedException(); // TODO implement (Step 2)
+        if (Mode == ThinkingMode.Always)
+        {
+            return new TurnThinking(true, ThinkingTriggers.None, null, null);
+        }
+
+        if (Mode == ThinkingMode.Triggered)
+        {
+            var fired = Triggers & signals;
+            return new TurnThinking(fired != ThinkingTriggers.None, fired, null, null);
+        }
+
+        return new TurnThinking(false, ThinkingTriggers.None, null, null);
     }
 }
 
