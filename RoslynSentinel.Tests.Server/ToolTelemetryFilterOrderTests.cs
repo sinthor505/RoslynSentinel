@@ -77,7 +77,7 @@ public class ToolTelemetryFilterOrderTests
 
             Assert.That(names, Does.Not.Contain("ErrorPolicy"), "Off mode must register no error-policy filter, so Off is byte-identical to today.");
             Assert.That(registeredCount, Is.EqualTo(names.Count), "Every name in CallToolFilterNames must be one registered call-tool filter, and vice versa.");
-            Assert.That(names.Count, Is.EqualTo(15), "The call-tool filter count without the error-policy filter (the 14 before the transcript filter, plus ToolCallTranscript).");
+            Assert.That(names.Count, Is.EqualTo(16), "The call-tool filter count without the error-policy filter (the 14 before the transcript filter, plus ToolCallTranscript and ConfigurationHalt).");
         }
         finally
         {
@@ -98,7 +98,7 @@ public class ToolTelemetryFilterOrderTests
             var workspaceNotLoaded = names.IndexOf("WorkspaceNotLoaded");
             Assert.That(workspaceNotLoaded, Is.GreaterThan(0), "WorkspaceNotLoaded must be a registered call-tool filter.");
             Assert.That(names[workspaceNotLoaded - 1], Is.EqualTo("ErrorPolicy"), "The error-policy filter must sit directly outside WorkspaceNotLoaded so it sees thrown and returned errors alike.");
-            Assert.That(names.Count, Is.EqualTo(16), "Pointer mode adds exactly one call-tool filter to the 15 of Off mode.");
+            Assert.That(names.Count, Is.EqualTo(17), "Pointer mode adds exactly one call-tool filter to the 16 of Off mode.");
             Assert.That(registeredCount, Is.EqualTo(names.Count), "Every name in CallToolFilterNames must be one registered call-tool filter, and vice versa.");
         }
         finally

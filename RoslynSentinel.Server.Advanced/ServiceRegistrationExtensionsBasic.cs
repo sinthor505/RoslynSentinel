@@ -257,6 +257,8 @@ public static class RoslynSentinelServiceExtensionsBasic
         ("WirePathRelativize", AddWirePathRelativizeFilter),
         ("OrientationBreaker", AddOrientationBreakerFilter),
         ("UnrecoverableBreaker", BreakerFilters.AddUnrecoverableBreakerFilter),
+        // Last in the fixed list, beside the unrecoverable breaker (its precedent); disabled in effect while StartupSettings.HaltOnErrors is false.
+        ("ConfigurationHalt", f => BreakerFilters.AddConfigurationHaltFilter(f, () => StartupSettings.LastReport)),
         };
         if (NearMissRecorder.IsActive)
         {
