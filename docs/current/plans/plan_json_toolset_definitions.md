@@ -819,3 +819,4 @@ and the `Toolset1` alias.
   the budget, which follows the precedent of the tab-scoped plan's D-budget ruling.
 - **R8. Peer sessions.** `ServiceRegistrationExtensionsBasic.cs` and `AdminTools.cs` are frequent edit
   targets. Run `Git status` before Steps 8, 13, 22 and 23.
+- **R9. Startup configuration registry.** `plan_startup_configuration_registry.md` lands first. The new flags `--toolset`, `--toolset-file` and `--tools` are `StartupSetting` declarations in `ServerHostSettings` (`RoslynSentinel.Server.Advanced/ServerHostSettings.cs`), not hand-parsed. An unknown toolset name is `InvalidValue`, so with the configuration halt enabled it refuses every tool except `McpServerStatus` and names the problem there. The shipped toolset JSON files are documented by this plan's own `docs/generated/toolsets/` catalog, which the generated configuration reference links to.

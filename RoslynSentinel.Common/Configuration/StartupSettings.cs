@@ -20,8 +20,8 @@ public sealed class StartupSettingDeclarationException(string message) : Excepti
 
 public static class StartupSettings
 {
-    /// <summary>Step 26 sets true (Q16); readonly, not const, to avoid CS0162.</summary>
-    public static readonly bool HaltOnErrors = false;
+    /// <summary>When true, ConfigureAll(args, root, scopes) sets Halted on any problem and the configuration halt filter refuses every tool except McpServerStatus (plan_startup_configuration_registry Q5, Q16). Readonly, not const, to avoid CS0162 on tests that pass false.</summary>
+    public static readonly bool HaltOnErrors = true;
 
     /// <summary>Q24 hint text, facts and options only.</summary>
     public const string UndeclaredEnvHint = "Undeclared ROSLYNSENTINEL_* names are listed with settings: nonDefault or settings: all.";

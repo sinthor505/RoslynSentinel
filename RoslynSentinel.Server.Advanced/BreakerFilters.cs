@@ -34,7 +34,7 @@ public static class BreakerFilters
         };
     }
 
-    // Disabled in effect while StartupSettings.HaltOnErrors is false: Halted is then never true, so every call passes through.
+    // Refuses every tool except McpServerStatus while the startup configuration report is Halted (plan_startup_configuration_registry Q5a).
     public static void AddConfigurationHaltFilter(IMcpRequestFilterBuilder filters, Func<ConfigurationReport> report)
     {
         filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
