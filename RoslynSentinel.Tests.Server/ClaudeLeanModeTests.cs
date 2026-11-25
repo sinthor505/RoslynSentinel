@@ -45,7 +45,7 @@ public class ClaudeLeanModeTests
     private static readonly string[] ClaudeAdvancedBaseline =
     [
         "ApplyDiff", "ApplyUnifiedDiff", "Build", "ChangeAccessibility",
-        "ChangeSignature", "ConstructorParameter", "ConvertAnonymousToNamed", "CreateFile", "CreateProject",
+        "ChangeNamespace", "ChangeSignature", "ConstructorParameter", "ConvertAnonymousToNamed", "CreateFile", "CreateProject",
         "DeleteFile", "ExtractLocalVariable", "ExtractMembers", "ExtractMethod", "ExternalFileDrift", "Features",
         "FindReferences", "GetBestInsertionPoint", "GetDiagnostics", "GetFileOutline", "GetLargeResult",
         "GetMethodSource", "GetOperationDetail", "GetTypeInfo", "GetWorkspaceHealth", "Git", "GitRemote",
@@ -264,6 +264,20 @@ public class ClaudeLeanModeTests
         Assert.That(ToolClassRegistry.ClaudeLeanToolNames, Does.Not.Contain("QualifyCrefs"));
         Assert.That(ToolsetCatalog.FindSet("QualifyCrefs"), Is.EqualTo(ToolSetName.moveExtract));
         Assert.That(ToolsetCatalog.AllToolNames, Does.Contain("QualifyCrefs"));
+    }
+
+    [Test]
+    public void ChangeNamespace_IsRegisteredInModeMap_AndOnDemandOnlyInClaudeLean()
+    {
+        // In the Claude advanced baseline (the pre-existing tool set) and in the moveExtract toolset, never in the claude-lean core.
+        Assert.That(ClaudeAdvancedBaseline, Does.Contain("ChangeNamespace"));
+        Assert.That(CoreTools, Does.Not.Contain("ChangeNamespace"));
+
+        // Off by default in claude-lean: the class is on demand, the tool is not allow-listed, and the toolset switches it on.
+        Assert.That(ToolClassRegistry.ClaudeLeanOnDemandToolClasses, Does.Contain("CoreRefactoringTools"));
+        Assert.That(ToolClassRegistry.ClaudeLeanToolNames, Does.Not.Contain("ChangeNamespace"));
+        Assert.That(ToolsetCatalog.FindSet("ChangeNamespace"), Is.EqualTo(ToolSetName.moveExtract));
+        Assert.That(ToolsetCatalog.AllToolNames, Does.Contain("ChangeNamespace"));
     }
 
     [Test]
