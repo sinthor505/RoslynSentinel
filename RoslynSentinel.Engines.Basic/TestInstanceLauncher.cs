@@ -621,6 +621,7 @@ public sealed class TestInstanceLauncher
 
     /// <summary>The server source folders (under the solution directory) plus solution-level build files whose
     /// change makes an existing server build stale: Common, Engines.*, Tools.*, Server.* and Directory.Build/Packages files.</summary>
+    // TODO include RoslynSentinel.Git (and its pathspec in ReadGitStamp): see the TODO at ServerBinaryStaleness.SourcePathPrefixes.
     public static IReadOnlyList<string> GetSourceRoots(string solutionDirectory)
     {
         var roots = new List<string>();

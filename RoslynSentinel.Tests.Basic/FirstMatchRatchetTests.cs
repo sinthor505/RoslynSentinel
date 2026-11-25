@@ -19,6 +19,7 @@ public class FirstMatchRatchetTests
 
     private static bool IsProductionProject(string projectName) =>
     projectName == "RoslynSentinel.Common"
+    || projectName == "RoslynSentinel.Git"
     || projectName.StartsWith("RoslynSentinel.Engines.", StringComparison.Ordinal)
     || projectName.StartsWith("RoslynSentinel.Tools.", StringComparison.Ordinal);
 

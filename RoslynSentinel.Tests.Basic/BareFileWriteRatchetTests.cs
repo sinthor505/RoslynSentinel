@@ -30,7 +30,7 @@ public class BareFileWriteRatchetTests
         // Lock holder sidecar under .roslynsentinel/ (server state, not a workspace source file), written while holding the exclusive OS write lock.
         ["RoslynSentinel.Common/CrossProcessWriteLock.cs::WriteHolderSidecar"] = 1,
         // In-process commit route outcome log under <common git dir>/roslynsentinel/ (server state inside .git, not a workspace file; best-effort append).
-        ["RoslynSentinel.Common/Git/InProcessCommitRoute.cs::AppendOutcome"] = 1,
+        ["RoslynSentinel.Git/InProcessCommitRoute.cs::AppendOutcome"] = 1,
         // Large-result cache under .roslynsentinel/largeresults (server state, not workspace files).
         ["RoslynSentinel.Common/LargeResultHelper.cs::StoreWrappedJsonAsync"] = 1, // used by StoreEnvelopeAsync
         // Migration ledger state file (server state).
@@ -62,7 +62,7 @@ public class BareFileWriteRatchetTests
         // Debug dumps (two sites).
         ["RoslynSentinel.Tools.Advanced/AsyncifyTools.cs::AsyncifyLoopTool"] = 2,
         // Temp patch file for hunk staging, deleted after use.
-        ["RoslynSentinel.Common/Git/GitImpl.cs::StageHunksAsync"] = 1,
+        ["RoslynSentinel.Git/GitImpl.cs::StageHunksAsync"] = 1,
         // Blocker .md document written by the PlanStepRunner utility.
         ["RoslynSentinel.Utilities.PlanStepRunner/Program.cs::WriteBlockerDoc"] = 1,
     };

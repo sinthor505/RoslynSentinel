@@ -25,11 +25,6 @@
 		<PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
 	</ItemGroup>	
 
-	<!-- INTERIM (plan_isolate_git_area_into_own_project Step 14B removes this: files move physically into RoslynSentinel.Git) -->
-	<ItemGroup>
-		<Compile Remove="Git\**\*.cs" />
-	</ItemGroup>
-
 	<ItemGroup>
 		<InternalsVisibleTo Include="RoslynSentinel.Tests" />
 			<InternalsVisibleTo Include="RoslynSentinel.Tests.Tools.Basic" />
@@ -39,10 +34,9 @@
 			<InternalsVisibleTo Include="RoslynSentinel.Engines.Basic" />
 			<!-- StaleReadGuardTests uses the internal AddExternalChangeForTest drift seam. -->
 			<InternalsVisibleTo Include="RoslynSentinel.Tests.Basic" />
-		<!-- GitImpl.RunGitAsync / RunGitBytesAsync are thin wrappers over the internal GitProcess runner. -->
+		<!-- The tool layer uses internal Common types. (The Git-internals reason, GitImpl over GitProcess, moved to RoslynSentinel.Git.) -->
 		<InternalsVisibleTo Include="RoslynSentinel.Tools.Basic" />
-			<!-- ModelEvalAssemblySetUp stamps runs via the internal GitReaders.Default. -->
-			<InternalsVisibleTo Include="RoslynSentinel.Tests.ModelEval" />
+			<!-- EvalRunStamp (Harness) reads the internal WorkingTreeChange returned by the repo-query seam. -->
 			<InternalsVisibleTo Include="RoslynSentinel.Tests.Harness" />
 		<!-- The Git project (Git\ folder code) uses internal Common types (IRepoQuery, ChangedCommit, WorkingTreeChange, ...). -->
 		<InternalsVisibleTo Include="RoslynSentinel.Git" />

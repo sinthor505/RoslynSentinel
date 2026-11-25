@@ -56,9 +56,10 @@ public class NewlineLiteralRatchetTests
 
     private static string RepoRoot() => RepoRootLocator.Find(AppContext.BaseDirectory);
 
-    // Scope: RoslynSentinel.Common and every RoslynSentinel.Engines.* production project (tests excluded).
+    // Scope: RoslynSentinel.Common, RoslynSentinel.Git and every RoslynSentinel.Engines.* production project (tests excluded).
     private static bool IsInScopeProject(string directoryName) =>
         directoryName == "RoslynSentinel.Common"
+        || directoryName == "RoslynSentinel.Git"
         || (directoryName.StartsWith("RoslynSentinel.Engines.", StringComparison.Ordinal)
             && !directoryName.Contains("Tests", StringComparison.Ordinal));
 

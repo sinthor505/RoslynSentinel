@@ -41,6 +41,7 @@ public static class ServerBinaryStaleness
 
     /// <summary>Repo-relative path prefixes whose changes make a stamped binary stale (server source, not tests/docs).</summary>
     // Keep in sync with scripts/server-source-paths.txt (a test enforces it); the two root files change the built server binary.
+    // TODO add "RoslynSentinel.Git/" here and in scripts/server-source-paths.txt, TestInstanceLauncher.GetSourceRoots and ReadGitStamp: Git code moved out of Common (plan_isolate_git_area Step 14B2), so edits to it no longer mark a binary stale.
     internal static readonly string[] SourcePathPrefixes =
     [
         "RoslynSentinel.Common/",
