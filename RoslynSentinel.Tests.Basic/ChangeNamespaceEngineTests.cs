@@ -44,6 +44,10 @@ public class ChangeNamespaceEngineTests
     private static string NewTextOf(CallerRewriteResult result, string relative)
         => result.Files.Single(file => file.FilePath == Abs(relative)).NewText;
 
+    // The mode the plan applied to one changed caller file.
+    private static CallerRewriteMode ModeOf(CallerRewriteResult result, string relative)
+        => result.Files.Single(file => file.FilePath == Abs(relative)).Mode;
+
     // Only these files are changed by the plan; every other document keeps its committed bytes.
     private static void AssertOnlyFiles(CallerRewriteResult result, params string[] relatives)
         => Assert.That(result.Files.Select(file => file.FilePath.Absolute), Is.EquivalentTo(relatives.Select(Abs)).IgnoreCase);
@@ -209,6 +213,78 @@ public class ChangeNamespaceEngineTests
 
         Assert.That(result.IsRefusal, Is.False, result.Refusal?.Message);
         Assert.That(result.DanglingUsings ?? Enumerable.Empty<DanglingUsing>(), Is.Empty, "Demo.Models still holds Helper, so the global using still resolves.");
+        Assert.That(ModeOf(result, "Consumers/User.cs"), Is.EqualTo(CallerRewriteMode.Using), "The old types are gone, so a using of the new namespace is safe beside the global using.");
+        Assert.That(await CompileErrorsAfterAsync(solution, result), Is.Empty);
+    }
+
+    // Moved mode: a global using of the old namespace explains the missing 'using Old;', so the caller gets 'using New;' instead of qualification and the global using stays.
+    [Test]
+    public async Task Change_GlobalUsingOfTheOldNamespace_CallerGetsTheNewUsing_NotQualification_GlobalUsingUntouched()
+    {
+        var helper = ("Models/Helper.cs", Lf("namespace Demo.Models;", "", "public class Helper { }"));
+        var globals = ("Consumers/Globals.cs", Lf("global using Demo.Models;"));
+        var caller = ("Consumers/User.cs", Lf("namespace Demo.Consumers;", "", "public class User { public Foo F = new Foo(); public Helper H = new Helper(); }"));
+        var solution = CreateSolution((FooRelative, FooSource), helper, globals, caller);
+
+        var result = await PlanAsync(solution, Move(FooRelative, "Demo.Models", "Demo.Other"));
+
+        Assert.That(result.IsRefusal, Is.False, result.Refusal?.Message);
+        Assert.That(ModeOf(result, "Consumers/User.cs"), Is.EqualTo(CallerRewriteMode.Using));
+        Assert.That(NewTextOf(result, "Consumers/User.cs"), Does.Contain("using Demo.Other;").And.Not.Contain("Demo.Other.Foo"));
+        AssertOnlyFiles(result, FooRelative, "Consumers/User.cs");
+        Assert.That(await CompileErrorsAfterAsync(solution, result), Is.Empty);
+    }
+
+    // Moved mode: other types of the old namespace are still used, so 'using Old;' stays and 'using New;' is added beside it (the old types are gone, so no CS0104).
+    [Test]
+    public async Task Change_CallerAlsoUsesAnotherTypeOfTheOldNamespace_KeepsBothUsings_NoQualification()
+    {
+        var helper = ("Models/Helper.cs", Lf("namespace Demo.Models;", "", "public class Helper { }"));
+        var caller = ("Consumers/User.cs", Lf("using Demo.Models;", "", "namespace Demo.Consumers;", "", "public class User { public Foo F = new Foo(); public Helper H = new Helper(); }"));
+        var solution = CreateSolution((FooRelative, FooSource), helper, caller);
+
+        var result = await PlanAsync(solution, Move(FooRelative, "Demo.Models", "Demo.Other"));
+
+        Assert.That(result.IsRefusal, Is.False, result.Refusal?.Message);
+        Assert.That(ModeOf(result, "Consumers/User.cs"), Is.EqualTo(CallerRewriteMode.Using));
+        Assert.That(NewTextOf(result, "Consumers/User.cs"), Does.Contain("using Demo.Models;").And.Contain("using Demo.Other;").And.Not.Contain("Demo.Other.Foo"));
+        AssertOnlyFiles(result, FooRelative, "Consumers/User.cs");
+        Assert.That(await CompileErrorsAfterAsync(solution, result), Is.Empty);
+    }
+
+    // Moved mode still qualifies when a used type shares its name with a different type of the new namespace (the added using would make it ambiguous).
+    [Test]
+    public async Task Change_SimpleNameConflictInTheNewNamespace_StillQualifies()
+    {
+        var keep = ("Models/Keep.cs", Lf("namespace Demo.Models;", "", "public class Keep { }"));
+        var lib = ("Lib/Helper.cs", Lf("namespace Demo.Lib;", "", "public class Helper { }"));
+        var clash = ("Other/Helper.cs", Lf("namespace Demo.Other;", "", "public class Helper { }"));
+        var caller = ("Consumers/User.cs", Lf("using Demo.Lib;", "using Demo.Models;", "", "namespace Demo.Consumers;", "", "public class User { public Foo F = new Foo(); public Helper H = new Helper(); }"));
+        var solution = CreateSolution((FooRelative, FooSource), keep, lib, clash, caller);
+
+        var result = await PlanAsync(solution, Move(FooRelative, "Demo.Models", "Demo.Other"));
+
+        Assert.That(result.IsRefusal, Is.False, result.Refusal?.Message);
+        Assert.That(ModeOf(result, "Consumers/User.cs"), Is.EqualTo(CallerRewriteMode.Qualify));
+        Assert.That(NewTextOf(result, "Consumers/User.cs"), Does.Contain("public Demo.Other.Foo F = new Demo.Other.Foo();").And.Not.Contain("using Demo.Other;"));
+        Assert.That(result.Facts, Has.Some.Contain("'Helper'").And.Contain("ambiguous"));
+        Assert.That(await CompileErrorsAfterAsync(solution, result), Is.Empty);
+    }
+
+    // Moved mode still qualifies when the old using appears in two scopes: which one binds the simple name is not decided here.
+    [Test]
+    public async Task Change_OldUsingInTwoScopes_StillQualifies()
+    {
+        var keep = ("Models/Keep.cs", Lf("namespace Demo.Models;", "", "public class Keep { }"));
+        var caller = ("Consumers/User.cs", Lf("using Demo.Models;", "", "namespace Demo.Consumers", "{", "    using Demo.Models;", "", "    public class User { public Foo F = new Foo(); }", "}"));
+        var solution = CreateSolution((FooRelative, FooSource), keep, caller);
+
+        var result = await PlanAsync(solution, Move(FooRelative, "Demo.Models", "Demo.Other"));
+
+        Assert.That(result.IsRefusal, Is.False, result.Refusal?.Message);
+        Assert.That(ModeOf(result, "Consumers/User.cs"), Is.EqualTo(CallerRewriteMode.Qualify));
+        Assert.That(NewTextOf(result, "Consumers/User.cs"), Does.Contain("public Demo.Other.Foo F = new Demo.Other.Foo();").And.Not.Contain("using Demo.Other;"));
+        Assert.That(result.Facts, Has.Some.Contain("more than one scope"));
         Assert.That(await CompileErrorsAfterAsync(solution, result), Is.Empty);
     }
 

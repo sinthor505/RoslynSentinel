@@ -55,7 +55,7 @@ public static class CopyAndObsoleteCallerRewrite
     /// <c>using A = OldNs.Type;</c>) always has the namespace part replaced by <paramref name="newNamespace"/>; a using directive cannot supply the type there.
     /// Simple-name references follow the file's mode. <see cref="CallerRewriteMode.Using"/> (the default) adds <c>using &lt;NewNs&gt;;</c> sorted among the
     /// plain usings of the scope that held <c>using &lt;OldNs&gt;;</c> and removes the old one when nothing else in the file needs it. The default is
-    /// <see cref="CallerRewriteMode.Qualify"/> instead when: a global using of the old namespace exists anywhere in the solution (a fact is recorded);
+    /// <see cref="CallerRewriteMode.Qualify"/> instead when: a global using of the old namespace exists in the project of the caller's own file (a fact names that file; a global using in another project does not count);
     /// the old namespace is the global namespace; the file declares code inside the old namespace or one nested in it (members of the enclosing
     /// namespace are found before using directives, so a using would keep binding the old type); the file uses other types of the old namespace, so the
     /// old using must stay; the old using appears in several scopes or not at all; or a type the file already uses shares its name with a type of
@@ -93,10 +93,10 @@ public static class CopyAndObsoleteCallerRewrite
             return new CallerRewriteResult(results, facts, null);
         }
 
-        var globalUsingPath = oldNamespace.Length == 0 ? null : await FindGlobalUsingAsync(solution, oldNamespace, cancellationToken);
-        if (globalUsingPath is not null)
+        var globalUsings = oldNamespace.Length == 0 ? null : await FindGlobalUsingAsync(solution, oldNamespace, cancellationToken);
+        foreach (var globalUsingPath in (globalUsings?.Values ?? Enumerable.Empty<string>()).Distinct(PathComparison.Comparer).Order(PathComparison.Comparer))
         {
-            facts.Add($"'{globalUsingPath}' has a global using of '{oldNamespace}', which stays; every caller is qualified with '{newNamespace}.' instead of getting a using directive.");
+            facts.Add($"'{globalUsingPath}' has a global using of '{oldNamespace}', which stays; every caller in its project is qualified with '{newNamespace}.' instead of getting a using directive.");
         }
 
         foreach (var (path, sites) in sitesByPath.OrderBy(entry => entry.Key, PathComparison.Comparer))
@@ -108,7 +108,7 @@ public static class CopyAndObsoleteCallerRewrite
             }
 
             CallerRewriteMode? forced = forcedModes is not null && forcedModes.TryGetValue(wrapped, out var mode) ? mode : null;
-            var rewrite = await RewriteFileAsync(path, sites, oldNamespace, newNamespace, forced, globalUsingPath, facts, cancellationToken);
+            var rewrite = await RewriteFileAsync(path, sites, oldNamespace, newNamespace, forced, globalUsings, facts, cancellationToken);
             if (rewrite is not null)
             {
                 results.Add(rewrite);
@@ -120,7 +120,7 @@ public static class CopyAndObsoleteCallerRewrite
 
     /// <summary>
     /// The set overload, for a namespace change: each <see cref="NamespaceMove"/> moves the top-level types of one file from its old namespace to its new one. The types
-    /// are moved, not copied (the old ones are gone, so a using directive of the new namespace is safe even in a file that declares code inside the old namespace).
+    /// are moved, not copied (the old ones are gone, so a using directive of the new namespace is safe even in a file that declares code inside the old namespace, in a file whose old namespace comes from a global using, or in a file that still uses other types of the old namespace; only a simple-name conflict in the new namespace or a using of the old namespace in several scopes still makes a caller qualify).
     /// Every file of the set is rewritten once for both roles. As the declaration owner its namespace declaration names the new namespace and it gets a using for the
     /// old-namespace types it reached implicitly, but none for a sibling that moves with it. As a caller its references to the moved types of any move of the set (its own
     /// types included) are switched as in the explicit-argument overload; a simple name that already reaches the type from the file's new namespace is left alone, and a
@@ -220,8 +220,8 @@ public static class CopyAndObsoleteCallerRewrite
             }
         }
 
-        // A global using of an old namespace makes the callers of that pair qualify (the sweep below decides what happens to the directive itself).
-        var globalUsings = new Dictionary<string, string?>(StringComparer.Ordinal);
+        // The global usings of each old namespace, per project: the project of a caller's file decides whether the old namespace reaches it implicitly (the sweep below decides what happens to the directive itself).
+        var globalUsings = new Dictionary<string, IReadOnlyDictionary<ProjectId, string>>(StringComparer.Ordinal);
         if (sitesByPath.Count > 0)
         {
             foreach (var oldNamespace in symbolsByPair.Keys.Select(pair => pair.Old).Where(ns => ns.Length > 0).Distinct(StringComparer.Ordinal))
@@ -567,11 +567,18 @@ public static class CopyAndObsoleteCallerRewrite
         return byPath;
     }
 
-    // The path of the first document that declares "global using <oldNamespace>;", or null.
-    private static async Task<string?> FindGlobalUsingAsync(Solution solution, string oldNamespace, CancellationToken cancellationToken)
+    // One scan of the solution: for each project that has a document declaring "global using <oldNamespace>;", the path of the first such document. A global using only
+    // reaches the files of its own project, so a project without an entry does not import the namespace implicitly.
+    private static async Task<IReadOnlyDictionary<ProjectId, string>> FindGlobalUsingAsync(Solution solution, string oldNamespace, CancellationToken cancellationToken)
     {
+        var byProject = new Dictionary<ProjectId, string>();
         foreach (var document in solution.Projects.SelectMany(project => project.Documents))
         {
+            if (byProject.ContainsKey(document.Project.Id))
+            {
+                continue;
+            }
+
             var text = (await document.GetTextAsync(cancellationToken)).ToString();
             if (!GlobalUsingHint.IsMatch(text) || await document.GetSyntaxRootAsync(cancellationToken) is not CompilationUnitSyntax root)
             {
@@ -580,17 +587,17 @@ public static class CopyAndObsoleteCallerRewrite
 
             if (root.Usings.Any(directive => !directive.GlobalKeyword.IsKind(SyntaxKind.None) && directive.Alias is null && directive.StaticKeyword.IsKind(SyntaxKind.None) && string.Equals(UsingName(directive), oldNamespace, StringComparison.Ordinal)))
             {
-                return document.FilePath ?? document.Name;
+                byProject[document.Project.Id] = document.FilePath ?? document.Name;
             }
         }
 
-        return null;
+        return byProject;
     }
 
     // One caller file: classifies its references, picks the mode and splices the edits; null when the file is generated, unreadable or would not change.
-    private static async Task<CallerFileRewrite?> RewriteFileAsync(string path, List<(Document Document, TextSpan Span, string TypeName)> sites, string oldNamespace, string newNamespace, CallerRewriteMode? forced, string? globalUsingPath, List<string> facts, CancellationToken cancellationToken)
+    private static async Task<CallerFileRewrite?> RewriteFileAsync(string path, List<(Document Document, TextSpan Span, string TypeName)> sites, string oldNamespace, string newNamespace, CallerRewriteMode? forced, IReadOnlyDictionary<ProjectId, string>? globalUsingsByProject, List<string> facts, CancellationToken cancellationToken)
     {
-        var plan = await PlanFileEditsAsync(path, sites[0].Document, sites, oldNamespace, newNamespace, forced, globalUsingPath, facts, oldTypesGone: false, selfNewNamespace: null, allMovedStarts: null, cancellationToken);
+        var plan = await PlanFileEditsAsync(path, sites[0].Document, sites, oldNamespace, newNamespace, forced, globalUsingsByProject, facts, oldTypesGone: false, selfNewNamespace: null, allMovedStarts: null, cancellationToken);
         if (plan is not { } planned)
         {
             return null;
@@ -603,10 +610,10 @@ public static class CopyAndObsoleteCallerRewrite
     // One file's caller edits as positions in FileText; null when the file is generated or unreadable (a fact says so). Mode is the mode applied (the forced one when
     // given); Rewritten counts the references that now name the new namespace.
     // oldTypesGone: the types moved instead of being copied (a namespace change), so a using directive of the new namespace is safe even in a file that declares code
-    // inside the old namespace (a copy leaves the old type there, found before any using). selfNewNamespace: the file itself moves and will declare that namespace, so a
+    // inside the old namespace (a copy leaves the old type there, found before any using), and the file's old namespace may come from a global using of its project or stay\r\n    // imported for other types (no second-using ambiguity once the old types are gone; the new namespace's name conflicts are still checked). selfNewNamespace: the file itself moves and will declare that namespace, so a
     // simple name that already reaches a type of it (or of a namespace enclosing it) needs no edit. allMovedStarts: where every reference to a moved type of the whole set
     // starts in this file, so none of them counts as a use of the old namespace.
-    private static async Task<(string FileText, List<(int Position, int Length, string Text)> Edits, CallerRewriteMode Mode, int Rewritten)?> PlanFileEditsAsync(string path, Document document, List<(Document Document, TextSpan Span, string TypeName)> sites, string oldNamespace, string newNamespace, CallerRewriteMode? forced, string? globalUsingPath, List<string> facts, bool oldTypesGone, string? selfNewNamespace, HashSet<int>? allMovedStarts, CancellationToken cancellationToken)
+    private static async Task<(string FileText, List<(int Position, int Length, string Text)> Edits, CallerRewriteMode Mode, int Rewritten)?> PlanFileEditsAsync(string path, Document document, List<(Document Document, TextSpan Span, string TypeName)> sites, string oldNamespace, string newNamespace, CallerRewriteMode? forced, IReadOnlyDictionary<ProjectId, string>? globalUsingsByProject, List<string> facts, bool oldTypesGone, string? selfNewNamespace, HashSet<int>? allMovedStarts, CancellationToken cancellationToken)
     {
         if (await document.GetSyntaxRootAsync(cancellationToken) is not CompilationUnitSyntax root || await document.GetSemanticModelAsync(cancellationToken) is not { } model)
         {
@@ -697,10 +704,15 @@ public static class CopyAndObsoleteCallerRewrite
         List<INamedTypeSymbol>? used = null;
         List<INamedTypeSymbol> Used() => used ??= CollectUsedTypes(model, root, exclusionStarts, cancellationToken);
 
-        // TODO moved mode (oldTypesGone) qualifies on "global using of old" and "old using must stay", where adding a using of the new namespace beside the kept old one is safe (old types gone, conflicts checked below); live ChangeNamespace dry run over RoslynSentinel.Git qualified 98+ references this way. Also check globalUsingPath scoping: an Engines.Basic file cited Common's obj GlobalUsings.g.cs.
+        // A global using only reaches the files of its own project, so only the entry of this file's project counts.
+        string? globalUsingPath = null;
+        globalUsingsByProject?.TryGetValue(document.Project.Id, out globalUsingPath);
+
+        // Moved mode (oldTypesGone): the old types are gone, so a using of the new namespace beside a kept old using (or a global one) cannot make a name ambiguous; the
+        // name-conflict guard at the end still applies. Copy mode keeps the old types visible, so a second using would give CS0104 and these cases qualify.
         string? WhyQualify()
         {
-            if (globalUsingPath is not null)
+            if (globalUsingPath is not null && !oldTypesGone)
             {
                 return $"'{oldNamespace}' is imported by a global using in '{globalUsingPath}'";
             }
@@ -720,7 +732,8 @@ public static class CopyAndObsoleteCallerRewrite
 
             if (!insideOld)
             {
-                if (oldUsings.Count == 0)
+                // In moved mode a global using of the old namespace in this file's project explains the missing directive.
+                if (oldUsings.Count == 0 && !(oldTypesGone && globalUsingPath is not null))
                 {
                     return $"no 'using {oldNamespace};' directive was found, so how the simple names resolve is unknown";
                 }
@@ -730,7 +743,8 @@ public static class CopyAndObsoleteCallerRewrite
                     return $"'using {oldNamespace};' appears in more than one scope";
                 }
 
-                var needing = Used().Where(type => IsInNamespace(type, oldNamespace)).Select(type => type.Name).Distinct().Order(StringComparer.Ordinal).ToList();
+                // The old using stays when other old-namespace types are still used (see removeOld below); in copy mode that forces Qualify, in moved mode it does not.
+                var needing = oldTypesGone ? [] : Used().Where(type => IsInNamespace(type, oldNamespace)).Select(type => type.Name).Distinct().Order(StringComparer.Ordinal).ToList();
                 if (needing.Count > 0)
                 {
                     return $"the file also uses {string.Join(", ", needing.Select(name => $"'{name}'"))} from '{oldNamespace}', so that using must stay";

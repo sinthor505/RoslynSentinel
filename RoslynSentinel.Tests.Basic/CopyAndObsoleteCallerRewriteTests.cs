@@ -430,6 +430,36 @@ public class CopyAndObsoleteCallerRewriteTests
         Assert.That(errors, Is.Empty);
     }
 
+    // A global using only reaches the files of its own project: here only the upstream project has one, so its caller qualifies for that reason while the caller of the
+    // downstream project (which has its own 'using Demo.Models;') gets the using directive.
+    [Test]
+    public async Task GlobalUsingInOneProject_QualifiesThatProjectsCallers_NotTheOtherProjects()
+    {
+        var upstream = new[]
+        {
+            (Abs(SourceRelative), FooSource),
+            (Abs("GlobalUsings.cs"), Lf("global using Demo.Models;")),
+            (Abs("Consumers/A.cs"), Lf("namespace Demo.Consumers;", "", "public class A { public Foo F; }")),
+        };
+        var downstream = new[]
+        {
+            (AppAbs("User.cs"), Lf("using Demo.Models;", "", "namespace App;", "", "public class User { public Foo F = new Foo(); }")),
+        };
+        var solution = TestSolutionBuilder.CreateTwoProjectSolution("Demo", upstream, "App", downstream);
+
+        var rewrite = await CopyAndObsoleteCallerRewrite.RewriteAsync(solution, Abs(SourceRelative), "Demo.Models", "Demo.Other", ["Foo"]);
+
+        Assert.That(rewrite.IsRefusal, Is.False, rewrite.Refusal?.Message);
+        var inGlobalUsingProject = rewrite.Files.Single(file => file.FilePath == Abs("Consumers/A.cs"));
+        Assert.That(inGlobalUsingProject.Mode, Is.EqualTo(CallerRewriteMode.Qualify));
+        Assert.That(inGlobalUsingProject.NewText, Is.EqualTo(Lf("namespace Demo.Consumers;", "", "public class A { public Demo.Other.Foo F; }")));
+        var inOtherProject = rewrite.Files.Single(file => file.FilePath == AppAbs("User.cs"));
+        Assert.That(inOtherProject.Mode, Is.EqualTo(CallerRewriteMode.Using));
+        Assert.That(inOtherProject.NewText, Is.EqualTo(Lf("using Demo.Other;", "", "namespace App;", "", "public class User { public Foo F = new Foo(); }")));
+        AssertFact(rewrite, "global using", Abs("GlobalUsings.cs"), "in its project");
+        Assert.That(rewrite.Facts.Any(fact => fact.Contains(AppAbs("User.cs"), StringComparison.Ordinal) && fact.Contains("global using", StringComparison.Ordinal)), Is.False, "The downstream caller is not qualified for the global-using reason.");
+    }
+
     [Test]
     public async Task FilesWithoutAReference_AndGeneratedFiles_AreNotTouched()
     {
