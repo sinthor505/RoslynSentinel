@@ -130,11 +130,11 @@ plus a per-test timeline):**
   Lane: `implementer` (2 new files).
 
 ### Step 5 - SessionStart full-suite debt check (new)
-- Files: `.claude/hooks/full-suite-debt-session-start.ps1` (new), `scripts/oop-areas.json` (new), `.claude/settings.json`
+- Files: `.claude/hooks/full-suite-debt-session-start.ps1` (new), `scripts/expensive-test-watch-list.json` (new), `.claude/settings.json`
 - Depends on: Step 3
 - Effect: behaviour-changing for agents: a session start prints one block when there is full-suite debt; silent otherwise.
 - Change:
-  - `oop-areas.json`: area name to path globs, from the OutOfProcess inventory (2026-11-24): `git` (`RoslynSentinel.Git/**`,
+  - `expensive-test-watch-list.json`: area name to path globs, from the OutOfProcess inventory (2026-11-24): `git` (`RoslynSentinel.Git/**`,
     `RoslynSentinel.Tests.Git/**`, and the tool-side `RoslynSentinel.Tools.Basic/GitTools.cs`, `GitRemoteTools.cs`,
     `GitStatusRenameHints.cs`, whose tool-level fixtures live in Tests.Git; not `GitHintText.cs` or
     `GitHintApplyingOperations.cs`: a hint-text edit is not a Git behaviour change, and the nightly run is the backstop),
@@ -160,7 +160,7 @@ plus a per-test timeline):**
 - Depends on: Step 5 (and D5)
 - Effect: behaviour-changing for agents.
 - Change: the two skill lines become: run `RunTest` with `suite: "full"` when the full-suite debt check (Step 5 hook, or
-  `RunTest`'s staleness line) reports debt or the work touched an area in `scripts/oop-areas.json`; otherwise a fast run, with
+  `RunTest`'s staleness line) reports debt or the work touched an area in `scripts/expensive-test-watch-list.json`; otherwise a fast run, with
   the nightly run as the backstop. The old plan's E-row item points to this plan.
 - Done when: the three edits are in. Lane: main session.
 
