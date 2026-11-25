@@ -394,7 +394,32 @@ public class WholeFileWriteTools
                 deletePaths: deletePaths,
                 verbatim: true,
                 describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable),
-                describeEditImpact: EditImpactGate.Describer(_workspaceManager, changes, _activeToolSurface, null, deletePaths),
+                describeEditImpact: async (report, ct) =>
+                {
+                    var inner = EditImpactGate.Describer(_workspaceManager, changes, _activeToolSurface, null, deletePaths);
+                    var (impactText, impactDetail) = await inner(report, ct);
+                    var setGroups = MoveSetErrorGrouper.Group(report, plan.Moves);
+                    if (setGroups.Count == 0)
+                    {
+                        return (impactText, impactDetail);
+                    }
+
+                    // Facts and options only: each group names the file its errors bind to; the outside group is one v1 bucket.
+                    var builder = new System.Text.StringBuilder(impactText ?? string.Empty);
+                    foreach (var group in setGroups)
+                    {
+                        if (builder.Length > 0)
+                        {
+                            builder.Append(' ');
+                        }
+
+                        var scope = group.OutsideSet ? "outside the move set" : "in the move set";
+                        builder.Append($"Compile errors ({group.Diagnostics.Count}) bind to {EditEffectNames.DisplayPath(group.FilePath, solutionRoot)} ({scope}). Option: include these files in moves.");
+                    }
+
+                    var items = new List<object>(impactDetail ?? Array.Empty<object>()) { setGroups };
+                    return (builder.ToString(), items);
+                },
                 recordEffects: () =>
                 {
                     foreach (var move in plan.Moves)
