@@ -21,7 +21,7 @@ public class GitRemoteTools
         ILogger<GitRemoteTools> logger)
     {
         _logger = logger;
-        _gitImpl = new GitImpl(workspaceManager, new NullLogger<GitImpl>());
+        _gitImpl = new GitHintApplyingOperations(new GitImpl(workspaceManager, new NullLogger<GitImpl>()));
     }
 
     [McpServerTool(Name = "GitRemote")]

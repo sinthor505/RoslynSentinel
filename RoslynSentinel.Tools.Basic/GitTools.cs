@@ -18,7 +18,7 @@ public class GitTools
         ILogger<GitTools> logger)
     {
         _logger = logger;
-        _gitImpl = new GitImpl(workspaceManager, new NullLogger<GitImpl>());
+        _gitImpl = new GitHintApplyingOperations(new GitImpl(workspaceManager, new NullLogger<GitImpl>()));
         _workspaceManager = workspaceManager;
 
     }
