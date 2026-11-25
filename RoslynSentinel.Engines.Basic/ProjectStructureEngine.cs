@@ -1857,19 +1857,13 @@ public class SolutionStructureEngine
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var sourceProject = ProjectLookup.FindProject(solution, sourceProjectName) ?? throw ProjectNotFound(sourceProjectName, solution, "sourceProjectName");
 
-        // 2. Create target project
-        await CreateProjectAsync(targetProjectName, "classlib", cancellationToken);
-
-        // 3. Identify files to move (creating the target does not change the documents of the source project)
-        var filesToMove = sourceProject.Documents.Where(d => d.Folders.Contains(folderName)).ToList();
-
-        // 3. Physically move files and update solution (simulated for expansion)
-        // TODO SplitProjectByFolderAsync is a simulation: it creates the project and reports "Moved N files" without moving any file; throw ToolNotImplementedException or implement the move (plan_document_edit_result_non_nullable_updated_text risks)
-        return new ProjectEditResult
-        {
-            Outcome = EditOutcome.Modified,
-            FilePath = default,
-            Message = $"Moved {filesToMove.Count} files from {sourceProjectName}/{folderName} to {targetProjectName}. References will need manual updating."
-        };
+        // 2. The move itself is not implemented. The former body created the target project and reported "Moved N files"
+        // without moving any file, a false success; it now fails before creating anything.
+        // TODO implement SplitProjectByFolderAsync: create the target project, move the folder's documents with references, IVT and package references
+        var fileCount = sourceProject.Documents.Count(d => d.Folders.Contains(folderName));
+        throw new ToolNotImplementedException(
+            $"SplitProjectByFolder is not implemented: it cannot move files between projects yet. Nothing was created or moved " +
+            $"({fileCount} file(s) under {sourceProjectName}/{folderName}). Options: create '{targetProjectName}' with CreateProject " +
+            "(or a hand-written .csproj), then move each file with MoveFile.");
     }
 }

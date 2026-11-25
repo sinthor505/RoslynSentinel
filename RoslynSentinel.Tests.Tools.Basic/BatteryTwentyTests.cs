@@ -1367,7 +1367,9 @@ public class Order
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.SplitProjectByFolderTool(reason: "test message", "TestProj", "NonExistentFolder", "NewProject");
 
-        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.PreconditionNotMet)); Assert.That(result.ErrorData!.Message, Does.StartWith("SplitProjectByFolder failed: Solution path not found: no solution file path is known"));
+        // The tool is a declared stub: it refuses before creating the target project instead of reporting a simulated move.
+        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotImplemented));
+        Assert.That(result.ErrorData!.Message, Does.Contain("SplitProjectByFolder is not implemented").And.Contain("Nothing was created or moved"));
         Assert.That(result.ErrorData, Is.Not.Null);
     }
 }
