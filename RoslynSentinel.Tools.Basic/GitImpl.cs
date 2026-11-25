@@ -2671,7 +2671,7 @@ public class GitImpl : IGitOperations
         result.ErrorKind ??= GitErrorCodes.OperationInProgress;
         // A hint whose slot is ErrorDetail renders into ErrorDetail at the tool boundary, so it counts as "already set" exactly as a text did.
         var hints = result.Hints is null ? new List<GitHint>() : new List<GitHint>(result.Hints);
-        if (result.ErrorDetail is null && !hints.Any(h => GitHintText.SlotOf(h.Key) == GitHintSlot.ErrorDetail))
+        if (result.ErrorDetail is null && !hints.Any(h => GitHintKeySlots.Of(h.Key) == GitHintSlot.ErrorDetail))
             hints.Add(new GitHint(GitHintKey.OperationInProgress));
         // The advice carries the abort call as an Inline token; the hint (slot Inline, never ErrorDetail) renders it at the tool boundary.
         hints.Add(new GitHint(GitHintKey.GitAbortCall));
@@ -3218,7 +3218,7 @@ public class GitImpl : IGitOperations
     /// today, so an ErrorDetail-slot hint must not travel there (it would add a Detail that is null now).</summary>
     private static IReadOnlyList<GitHint>? HintsForErrorOnlyCopy(IReadOnlyList<GitHint>? hints)
     {
-        var kept = hints?.Where(h => GitHintText.SlotOf(h.Key) is GitHintSlot.Inline or GitHintSlot.ErrorReplace).ToList();
+        var kept = hints?.Where(h => GitHintKeySlots.Of(h.Key) is GitHintSlot.Inline or GitHintSlot.ErrorReplace).ToList();
         return kept is { Count: > 0 } ? kept : null;
     }
 

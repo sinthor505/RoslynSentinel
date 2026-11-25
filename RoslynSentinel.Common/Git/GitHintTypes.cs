@@ -198,3 +198,66 @@ internal static class GitHintTokens
         return true;
     }
 }
+
+/// <summary>Maps each hint key to the slot its rendered text goes into.</summary>
+internal static class GitHintKeySlots
+{
+    /// <summary>The slot a key's rendered text goes into.</summary>
+    internal static GitHintSlot Of(GitHintKey key)
+    {
+        return key switch
+        {
+            GitHintKey.None => GitHintSlot.None,
+            GitHintKey.PathNotFound
+                or GitHintKey.IgnoredPath
+                or GitHintKey.NothingToCommit
+                or GitHintKey.OperationInProgress
+                or GitHintKey.RefRequiredReset
+                or GitHintKey.RefRequiredRevert
+                or GitHintKey.RefRequiredCheckout
+                or GitHintKey.RefRequiredStash
+                or GitHintKey.RefRequiredTag
+                or GitHintKey.RefRequiredWorktree
+                or GitHintKey.AlreadyExists
+                or GitHintKey.TargetNotFound
+                or GitHintKey.InvalidName
+                or GitHintKey.WorkingTreeDirty
+                or GitHintKey.NoChanges
+                or GitHintKey.StashConflict
+                or GitHintKey.Refused
+                or GitHintKey.HunkUnsupported
+                or GitHintKey.HunkSelection
+                or GitHintKey.IndexLocked
+                or GitHintKey.HookRejected
+                or GitHintKey.HunkStale
+                or GitHintKey.PassActionExample
+                or GitHintKey.ConfigActionUsage
+                or GitHintKey.ConfigValueRequired
+                or GitHintKey.StashRollbackUnverified
+                or GitHintKey.WorktreeBranchNotFoundOptions
+                or GitHintKey.WorktreeOnlyLinkedRemovable
+                or GitHintKey.WorktreeRemoveCurrentSwitch
+                or GitHintKey.GitDiffFailedRetry
+                or GitHintKey.HunkApplyRejectedNextStep => GitHintSlot.ErrorDetail,
+            GitHintKey.TagDeleteCall
+                or GitHintKey.StashListCall
+                or GitHintKey.GitStatusCall
+                or GitHintKey.WorktreeListCall
+                or GitHintKey.WorktreeRemoveDiscardCall
+                or GitHintKey.GitDiffStagedAnyPathsCall
+                or GitHintKey.GitStageAnyPathsCall
+                or GitHintKey.GitHunksCall
+                or GitHintKey.GitHunksPathCall
+                or GitHintKey.GitStagePathCall
+                or GitHintKey.GitAbortCall
+                or GitHintKey.GitUnstageCall
+                or GitHintKey.GitRemoteCheckoutCall
+                or GitHintKey.GitDiffStagedCall
+                or GitHintKey.TagCreateUndoCall
+                or GitHintKey.GitRemoteBranchDeleteCall => GitHintSlot.Inline,
+            GitHintKey.StashDiskNote
+                or GitHintKey.WorktreeAddNote => GitHintSlot.NotePrefix,
+            _ => throw new ArgumentOutOfRangeException(nameof(key), key, "No slot is defined for this hint key.")
+        };
+    }
+}
