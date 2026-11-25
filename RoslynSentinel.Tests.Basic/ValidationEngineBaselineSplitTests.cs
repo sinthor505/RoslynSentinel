@@ -124,10 +124,10 @@ public sealed class ValidationEngineBaselineSplitTests
         var projectC = ProjectId.CreateNewId("C");
         var projectD = ProjectId.CreateNewId("D");
 
-        // A -> B -> C in both solutions. The edge B -> D is the only difference. A has no changed document and no reference
-        // change, so it is reached only through the dependents expansion over candidateBase's graph (A depends on B).
-        // B's public Make() returns D.U; A can use it only once D is referenced, and A itself does not reference D, so
-        // the candidate compile of A reports CS0012 at its use of U.
+        // A -> B -> C in both solutions. The edge B -> D is the only difference. The baseline already has CS0246 in A
+        // (B's public Make() returns D.U, which A cannot see). The edge turns that into CS0012, a new diagnostic key.
+        // A has no changed document and no reference change, so it is reached only through the dependents expansion
+        // over candidateBase's graph (A depends on B).
         var errorBaseline = AddProject(workspace.CurrentSolution, projectC, "C");
         errorBaseline = AddProject(errorBaseline, projectD, "D");
         errorBaseline = AddProject(errorBaseline, projectB, "B");
@@ -141,7 +141,7 @@ public sealed class ValidationEngineBaselineSplitTests
         errorBaseline = AddSource(errorBaseline, projectA, "A.cs", PathA, "namespace N { public class A { public int Use(B b) => b.Make().V; } }\n");
         var candidateBase = errorBaseline.AddProjectReference(projectB, new ProjectReference(projectD));
 
-        Assert.That(await ErrorIdsAsync(errorBaseline, projectA), Is.Empty, "precondition: A is clean in the baseline");
+        Assert.That(await ErrorIdsAsync(errorBaseline, projectA), Does.Contain("CS0246").And.Not.Contain("CS0012"), "precondition: A has only the pre-existing CS0246 in the baseline");
 
         var result = await ValidationEngine.ValidateChangesAgainstBaselineAsync(errorBaseline, candidateBase, new Dictionary<FilePathWrapper, string>());
 
