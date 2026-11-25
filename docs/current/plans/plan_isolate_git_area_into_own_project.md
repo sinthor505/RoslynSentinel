@@ -1,6 +1,6 @@
 # Plan: Move the Git area into its own production project (RoslynSentinel.Git) and its own test project (RoslynSentinel.Tests.Git)
 
-**Status:** IN PROGRESS 2026-11-24. Steps 1a-4 done (7aa47fc6..c08a0b4f, dcc429dd); batched run, owner away; decisions D-a to D-f in Decision.
+**Status:** IN PROGRESS 2026-11-24. Steps 1a-10 done (7aa47fc6..906e0e8b); batched run, owner away; decisions D-a to D-f in Decision.
 
 ## Problem
 
@@ -320,6 +320,8 @@ the copies near `:2450` and `:2454`), `HunksAsync` (`:3170`) and `CommitAsync` (
 - Done when: `Build` 0 errors; dispatcher: `GitHintSinkGoldenTests` and `GitToolsSmokeTests` pass. Lane: `implementer` (1 file).
 
 ### Step 5 - Move the table sites onto keys (migration-first, Appendix A kind A, 56 references)
+
+- Done: 8c1294dc
 Each helper that takes a `string detail` gets a new overload taking `GitHintKey key` (and optional `GitHintFacts`); the string overload is
 marked `[Obsolete("Use the GitHintKey overload")]`, and the call sites move in slices (CS0618 warnings in between are expected). The key
 overload sets `Hints = [new GitHint(key, facts)]` and leaves `ErrorDetail` null. Helpers: `ActionRefused` (`:687`), `TagFailure`
@@ -341,6 +343,8 @@ query: "GitErrorDetails\\.", ...)` measured before the slice; sites seen at `:10
   declaration (`:112`) and the `[Obsolete]` string overloads' internals.
 
 ### Step 6 - Move the inline error texts onto keys (Appendix A kind B)
+
+- Done: 74cab4b0 (6a-6d), 30bd3ebf (6e-6h), dec947e8 (6i)
 Per site: add the enum member (in `Common/Git/GitHintTypes.cs`), the `SlotOf` case, the `Render` case (the string copied verbatim, facts read
 from `GitHintFacts`, tool calls via the same `ToolCallHint.Call(...)` expression), and change the engine site to set the hint plus its facts.
 Slot per Appendix A (planner's reading, confirmed by the slice): a whole detail sentence is `ErrorDetail`; a tool call in the middle of
@@ -368,6 +372,8 @@ Effect: text-neutral. Lane: `implementer`. Depends on: the Step 2 slice that pin
   "ToolCallHint", fileGlob: "RoslynSentinel.Tools.Basic/GitImpl.cs")` lists only kind C sites (Step 7).
 
 ### Step 7 - Move the success notes onto keys (Appendix A kind C)
+
+- Done: 97efb12b (also: `Apply` replaces Inline tokens in `GitStageHunksResult.Warning`)
 - Files: `GitImpl.cs`, `GitHintText.cs`, `GitHintTypes.cs` (3 files per slice). Depends on: Step 2d, Step 6h (same files), Step 3.
 - Effect: text-neutral.
 - Change: the engine sets a hint plus facts instead of the call text; the tool boundary applies it.
@@ -381,6 +387,8 @@ Effect: text-neutral. Lane: `implementer`. Depends on: the Step 2 slice that pin
   `Git_Stash_Push_Result_NoteMentionsLoadSolutionAsync`) pass. Lane: `implementer` per slice.
 
 ### Step 8 - Retire the legacy path; the engine names no tools
+
+- Done: 56fc3966, ae02572d (8b: slot mapping moved to `GitHintKeySlots` in Common; `ActionRequired` deleted, no producer)
 - Files: `GitImpl.cs`, `GitHintText.cs`, and the four test callers of the old `TryGetGitRoot` (`GitPathClassificationToolParityTests.cs`,
   `GitLogToolParityTests.cs`, `GitStatusToolParityTests.cs`, `GitToolsSmokeTests.cs`): 6 files, so `implementer-senior`
 - Depends on: Steps 5d, 6i, 7b. Effect: text-neutral.
@@ -392,6 +400,8 @@ Effect: text-neutral. Lane: `implementer`. Depends on: the Step 2 slice that pin
   `ToolHintRatchetTests`, `ToolsBasicResultStatusTests` pass.
 
 ### Step 9 - Consolidate the Common Git files into `RoslynSentinel.Common/Git/` (same project; Lane B)
+
+- Done: 7c6d922f, f99fe1f9, 7c6c4fda, 2efbd2b4, 0bc6e864 (9a baseline = full run at 042035a6)
 Depends on: Step 1a (the folder exists). Pairs with any Lane A slice. Effect: text-neutral (namespaces kept, `namespaceHandling: keep`; zero
 `using` ripple).
 - 9a - baseline and heads-up (dispatcher): (i) a clean-tree full run (`scripts/Test-Parallel.ps1`, idle machine), recorded with the commit hash;
@@ -415,6 +425,8 @@ Depends on: Step 1a (the folder exists). Pairs with any Lane A slice. Effect: te
   referencer as moving or behind the seam (none unclassified).
 
 ### Step 10 - The Common-to-Git seam (hybrid, per the Decision of 2026-11-24; Lane B)
+
+- Done: 3eeaddae, 181e59e3, 0694275c, 906e0e8b (10d: `[OneTimeSetUp]` in Tests.Tools.Basic `LeakDetectorSetUp`)
 Depends on: Step 9f (the moved files are in one folder; the seam files stay outside it, in the Common root).
 - 10a - Contract skeleton and record move. Files: `RoslynSentinel.Common/RepoQuery.cs` (new), `Common/Git/GitReader.cs` (the two records).
   Effect: text-neutral.
