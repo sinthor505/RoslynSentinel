@@ -35,21 +35,17 @@ public class ModelEvalAssemblySetUp
     {
         // Transcripts of in-process eval hosts go to call-transcripts-tests, not the real-session folder.
         TestHostAmbientDefaults.Apply();
-        LlmOptions.Configure([]);
-        // The in-process eval server never runs ServerStdio/ServerHttp, so read the experimental server flags'
-        // env vars here (ROSLYNSENTINEL_LIFT_RENAMES, ROSLYNSENTINEL_LOOP_LATCH); unset leaves them off.
-        LiftRenamesOptions.Configure([]);
-        // Reads ROSLYNSENTINEL_NOTFOUND_INVENTORY (on by default; 0 or false turns the symbol member inventory off; the file-miss folder list is always on; the stamp below carries +inventory while it is on).
-        NotFoundInventoryOptions.Configure([]);
-        LoopLatchOptions.Configure([]);
-        // Reads ROSLYNSENTINEL_NEAR_MISS_AUTOCORRECT / _NAME_DISPLAY (eval-only options; unset = off / show). Must run
-        // before the in-process server is built: the _meta filter is registered only when NearMissRecorder.IsActive.
-        NearMissOptions.Configure([]);
-        // Reads ROSLYNSENTINEL_ERROR_POLICY_MODE / _FILE; unset leaves the policy Off. For Pointer/Inline with no file,
-        // the harness defaults the file to ErrorPolicyFile.OutputPath (deviation from production startup, harness convenience only).
-        ErrorPolicyOptions.Configure(ErrorPolicyFile.ResolveConfigureArgs(
-            Environment.GetEnvironmentVariable("ROSLYNSENTINEL_ERROR_POLICY_MODE"),
-            Environment.GetEnvironmentVariable("ROSLYNSENTINEL_ERROR_POLICY_FILE")));
+        // Applies every Server, AgentLoop and TestHarness setting from its env var (registry-driven; the in-process eval server never runs
+        // ServerStdio/ServerHttp) and fails fast on an invalid value, so a bad env var fails the run instead of being ignored.
+        // For ROSLYNSENTINEL_ERROR_POLICY_MODE / _FILE, Pointer/Inline with no file default the file to ErrorPolicyFile.OutputPath
+        // (deviation from production startup, harness convenience only): the resolved args become flags, which beat env.
+        var report = StartupSettings.ConfigureAll(
+            ErrorPolicyFile.ResolveConfigureArgs(
+                StartupSettings.EnvironmentReader(ErrorPolicyOptions.ModeSetting.EnvName!),
+                StartupSettings.EnvironmentReader(ErrorPolicyOptions.FileSetting.EnvName!)),
+            typeof(ModelEvalAssemblySetUp).Assembly,
+            SettingScope.Server | SettingScope.AgentLoop | SettingScope.TestHarness);
+        StartupSettings.ThrowIfInvalid(report);
         // RepoRootLocator.TryFind() with no argument consults ROSLYNSENTINEL_REPO_ROOT; TryFind(startDirectory) ignores it.
         ModelAgentRunner.ProcessStamp = EvalRunStamp.BuildProcessStamp(EvalRunStamp.ReadWorkingTreeStamp(RepoRootLocator.TryFind() ?? AppContext.BaseDirectory));
         // Reads ROSLYNSENTINEL_MODELEVAL_CONTRACT / _CONTRACT_ENDINGS (unset = legacy contract, system endings). Runs before the
