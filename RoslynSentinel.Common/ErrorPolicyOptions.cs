@@ -8,8 +8,13 @@ namespace RoslynSentinel.Common;
 /// Populated once at startup via <see cref="Configure"/>; read-only after startup, but static,
 /// so tests must reset it. Mode Off registers no ErrorPolicyFilter, so it changes nothing at runtime.
 /// </summary>
+[StartupSettingGroup("Error policy", PostConfigure = "ValidateCrossFields")]
 public static class ErrorPolicyOptions
 {
+    public static readonly StartupSetting<ErrorPolicyMode> ModeSetting = StartupSetting.Enum<ErrorPolicyMode>("--error-policy-mode", "ROSLYNSENTINEL_ERROR_POLICY_MODE", ErrorPolicyMode.Off, "Error-policy mode for not-found guidance: Off, Pointer or Inline (Inline requires a readable policy file).", SettingScope.Server | SettingScope.PlanStepRunner);
+
+    public static readonly StartupSetting<string?> FileSetting = StartupSetting.String("--error-policy-file", "ROSLYNSENTINEL_ERROR_POLICY_FILE", null, "Path of the error-policy file; Pointer mode points at it and Inline mode inlines its content.", SettingScope.Server | SettingScope.PlanStepRunner);
+
     public static ErrorPolicyMode Mode { get; private set; } = ErrorPolicyMode.Off;
 
     public static string? PolicyFilePath { get; private set; }
@@ -20,20 +25,66 @@ public static class ErrorPolicyOptions
     /// </summary>
     public static void Configure(string[] args)
     {
-        var modeRaw = GetArgValue(args, "--error-policy-mode")
-            ?? Environment.GetEnvironmentVariable("ROSLYNSENTINEL_ERROR_POLICY_MODE");
-        var fileRaw = GetArgValue(args, "--error-policy-file")
-            ?? Environment.GetEnvironmentVariable("ROSLYNSENTINEL_ERROR_POLICY_FILE");
-        var filePath = string.IsNullOrWhiteSpace(fileRaw) ? null : fileRaw.Trim();
+        var parsed = StartupArgs.Parse(args);
+        var modeRead = ModeSetting.Read(parsed, StartupSettings.EnvironmentReader);
+        var fileRead = FileSetting.Read(parsed, StartupSettings.EnvironmentReader);
 
-        var mode = ParseMode(modeRaw);
+        if (modeRead.Problem is { } modeProblem)
+        {
+            throw ToArgumentException(modeProblem);
+        }
+
+        if (fileRead.Problem is { } fileProblem)
+        {
+            throw ToArgumentException(fileProblem);
+        }
+
+        if (modeRead.Value == ErrorPolicyMode.Inline)
+        {
+            ValidateReadableFile(fileRead.Value);
+        }
+
+        StartupSettings.ConfigureGroup(typeof(ErrorPolicyOptions), args);
+        Mode = ModeSetting.Value;
+        PolicyFilePath = FileSetting.Value;
+    }
+
+    /// <summary>PostConfigure hook for the error-policy group: Inline needs a readable policy file. On a problem Mode is Off (the registry resets the group); otherwise both properties are assigned from the settings.</summary>
+    private static IReadOnlyList<ConfigurationProblem> ValidateCrossFields()
+    {
+        var mode = ModeSetting.Value;
+        var filePath = FileSetting.Value;
         if (mode == ErrorPolicyMode.Inline)
         {
-            ValidateReadableFile(filePath);
+            try
+            {
+                ValidateReadableFile(filePath);
+            }
+            catch (ArgumentException ex)
+            {
+                Mode = ErrorPolicyMode.Off;
+                PolicyFilePath = null;
+                return [new ConfigurationProblem(ConfigurationProblemKind.PostConfigure, "ErrorPolicyOptions.Mode", ModeSetting.Flag, ModeSetting.EnvName, "inline", ex.Message)];
+            }
         }
 
         Mode = mode;
         PolicyFilePath = filePath;
+        return Array.Empty<ConfigurationProblem>();
+    }
+
+    private static ArgumentException ToArgumentException(ConfigurationProblem problem)
+    {
+        return problem.Kind == ConfigurationProblemKind.InvalidValue && problem.Flag == ModeSetting.Flag
+            ? UnknownModeException(problem.RawValue)
+            : new ArgumentException(StartupSettings.DescribeProblems([problem]));
+    }
+
+    private static ArgumentException UnknownModeException(string? raw)
+    {
+        // hint-ok: startup option validation message, not a tool-call hint
+        return new ArgumentException(
+            $"Unknown --error-policy-mode value '{raw}'. Expected Off, Pointer or Inline (set with --error-policy-mode or ROSLYNSENTINEL_ERROR_POLICY_MODE).");
     }
 
     /// <summary>
@@ -43,30 +94,13 @@ public static class ErrorPolicyOptions
     /// </summary>
     public static ErrorPolicyMode ParseMode(string? raw)
     {
-        var trimmed = raw?.Trim();
-        if (string.IsNullOrEmpty(trimmed))
+        var read = ModeSetting.Read(StartupArgs.Empty, _ => raw);
+        if (read.Problem is not null)
         {
-            return ErrorPolicyMode.Off;
+            throw UnknownModeException(read.Problem.RawValue);
         }
 
-        if (string.Equals(trimmed, "off", StringComparison.OrdinalIgnoreCase))
-        {
-            return ErrorPolicyMode.Off;
-        }
-
-        if (string.Equals(trimmed, "pointer", StringComparison.OrdinalIgnoreCase))
-        {
-            return ErrorPolicyMode.Pointer;
-        }
-
-        if (string.Equals(trimmed, "inline", StringComparison.OrdinalIgnoreCase))
-        {
-            return ErrorPolicyMode.Inline;
-        }
-
-        // hint-ok: startup option validation message, not a tool-call hint
-        throw new ArgumentException(
-            $"Unknown --error-policy-mode value '{raw}'. Expected Off, Pointer or Inline (set with --error-policy-mode or ROSLYNSENTINEL_ERROR_POLICY_MODE).");
+        return read.Value;
     }
 
     private static void ValidateReadableFile(string? filePath)
@@ -86,30 +120,6 @@ public static class ErrorPolicyOptions
             throw new ArgumentException(
                 $"Inline error-policy mode cannot read the policy file '{filePath}' (from --error-policy-file or ROSLYNSENTINEL_ERROR_POLICY_FILE). Check that it exists and is a readable file.");
         }
-    }
-
-    /// <summary>
-    /// Reads a command-line flag's value, accepting "--flag=value", "--flag value", and a bare
-    /// "--flag" (returned as "true"; a following token starting with "--" is not consumed as a value).
-    /// </summary>
-    private static string? GetArgValue(string[] args, string flag)
-    {
-        var inlinePrefix = flag + "=";
-        var inline = args.FirstOrDefault(a => a.StartsWith(inlinePrefix, StringComparison.Ordinal));
-        if (inline is not null)
-        {
-            return inline[inlinePrefix.Length..];
-        }
-
-        var index = Array.FindIndex(args, a => a.Equals(flag, StringComparison.Ordinal));
-        if (index < 0)
-        {
-            return null;
-        }
-
-        return index + 1 < args.Length && !args[index + 1].StartsWith("--", StringComparison.Ordinal)
-            ? args[index + 1]
-            : "true";
     }
 }
 

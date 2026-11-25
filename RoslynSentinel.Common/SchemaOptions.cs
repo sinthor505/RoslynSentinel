@@ -7,20 +7,40 @@ namespace RoslynSentinel.Common;
 /// so they are omitted by default (proposal_reduce_tool_schema_token_cost.md, Step 1).
 /// Populated once at startup via <see cref="Configure"/>: the <c>--emit-datatags</c> flag first,
 /// then the <c>ROSLYNSENTINEL_EMIT_DATATAGS</c> environment variable. Default is off; the flag
-/// alone, or a value other than <c>false</c>/<c>0</c> (case-insensitive), turns it on.
+/// alone, or a boolean literal (<c>true</c>/<c>1</c>/<c>on</c>/<c>yes</c>, case-insensitive), turns it on.
+/// A value that is not a boolean literal is reported as invalid and keeps the default.
 /// Read-only after startup; it must be configured before the tool schemas are built.
 /// </summary>
+[StartupSettingGroup("Tool schema", PostConfigure = "ApplyHiddenParameters")]
 public static class SchemaOptions
 {
-    public static bool EmitDataTags { get; private set; }
+    public static readonly StartupSetting<bool> EmitDataTagsSetting = StartupSetting.Bool("--emit-datatags", "ROSLYNSENTINEL_EMIT_DATATAGS", false, "Emit the optional DataTag vendor extensions (x-consumes-tag, x-produces-tag, default: null) in tools/list schemas.", SettingScope.Server);
+
+    public static readonly StartupSetting<SchemaProfile> ProfileSetting = StartupSetting.Enum<SchemaProfile>("--schema-profile", "ROSLYNSENTINEL_SCHEMA_PROFILE", SchemaProfile.Full, "Input-schema profile emitted by tools/list (Full keeps every parameter; Lean hides boilerplate parameters).", SettingScope.Server);
+
+    public static readonly StartupSetting<IReadOnlySet<string>> HiddenParametersSetting = StartupSetting.Custom<IReadOnlySet<string>>(
+        "--hide-params",
+        "ROSLYNSENTINEL_HIDE_PARAMS",
+        new HashSet<string>(StringComparer.Ordinal),
+        "(none)",
+        (string raw, out IReadOnlySet<string> value) =>
+        {
+            value = ParseHiddenParameters(raw);
+            return true;
+        },
+        "parameter names (or Tool.param entries) separated by ',' or ';'",
+        "Parameter names hidden from tool schemas; a Tool.param entry scopes the hide to that tool.",
+        SettingScope.Server);
+
+    public static bool EmitDataTags => EmitDataTagsSetting.Value;
 
     /// <summary>
     /// Which input-schema profile <c>tools/list</c> emits. <see cref="SchemaProfile.Full"/> (default) keeps
     /// every parameter; <see cref="SchemaProfile.Lean"/> hides boilerplate parameters (see
     /// McpToolSchemaPatcher.ApplyHiddenParameters). Set via <c>--schema-profile=lean|full</c> or
-    /// <c>ROSLYNSENTINEL_SCHEMA_PROFILE</c>; an unrecognised value keeps Full.
+    /// <c>ROSLYNSENTINEL_SCHEMA_PROFILE</c>; an unrecognised value is reported as invalid and keeps Full.
     /// </summary>
-    public static SchemaProfile Profile { get; private set; } = SchemaProfile.Full;
+    public static SchemaProfile Profile => ProfileSetting.Value;
 
     /// <summary>The Lean profile's hidden parameter list, in the order it is applied. Single source of truth for the Lean list.</summary>
     public static IReadOnlyList<string> LeanHiddenParameters { get; } = ["autoStage", "returnDiff", "validateOnApply", "lineBefore", "lineAfter"];
@@ -99,60 +119,26 @@ public static class SchemaOptions
     /// </summary>
     public static void Configure(string[] args)
     {
-        var raw = GetArgValue(args, "--emit-datatags")
-            ?? Environment.GetEnvironmentVariable("ROSLYNSENTINEL_EMIT_DATATAGS");
-        EmitDataTags = ParseEnabled(raw);
+        StartupSettings.ConfigureGroup(typeof(SchemaOptions), args);
+    }
 
-        Profile = ParseProfile(GetArgValue(args, "--schema-profile")
-            ?? Environment.GetEnvironmentVariable("ROSLYNSENTINEL_SCHEMA_PROFILE"));
-
-        HiddenParameters = ParseHiddenParameters(GetArgValue(args, "--hide-params")
-            ?? Environment.GetEnvironmentVariable("ROSLYNSENTINEL_HIDE_PARAMS"));
+    /// <summary>PostConfigure hook for the schema group: publishes the parsed --hide-params set to <see cref="HiddenParameters"/>.</summary>
+    private static IReadOnlyList<ConfigurationProblem> ApplyHiddenParameters()
+    {
+        HiddenParameters = HiddenParametersSetting.Value;
+        return Array.Empty<ConfigurationProblem>();
     }
 
     /// <summary>"lean" or "full" (case-insensitive, whitespace-trimmed) maps to the matching profile; null, empty or anything else keeps <see cref="SchemaProfile.Full"/> and never throws.</summary>
     public static SchemaProfile ParseProfile(string? raw)
     {
-        var trimmed = raw?.Trim();
-        return string.Equals(trimmed, "lean", StringComparison.OrdinalIgnoreCase)
-            ? SchemaProfile.Lean
-            : SchemaProfile.Full;
+        return ProfileSetting.Read(StartupArgs.Empty, _ => raw).Value;
     }
 
-    /// <summary>True when <paramref name="raw"/> is non-null and not "false" or "0" (case-insensitive, whitespace-trimmed); a bare flag with no value counts as on.</summary>
+    /// <summary>True when <paramref name="raw"/> is a boolean literal for on (true, 1, on, yes; case-insensitive, whitespace-trimmed); null, blank, off literals and anything unrecognised give false and never throw.</summary>
     public static bool ParseEnabled(string? raw)
     {
-        if (raw is null)
-        {
-            return false;
-        }
-
-        var trimmed = raw.Trim();
-        return !(string.Equals(trimmed, "false", StringComparison.OrdinalIgnoreCase) || trimmed == "0");
-    }
-
-    /// <summary>
-    /// Reads a command-line flag's value, accepting "--flag=value", "--flag value", and a bare
-    /// "--flag" (returned as "true"; a following token starting with "--" is not consumed as a value).
-    /// </summary>
-    private static string? GetArgValue(string[] args, string flag)
-    {
-        var inlinePrefix = flag + "=";
-        var inline = args.FirstOrDefault(a => a.StartsWith(inlinePrefix, StringComparison.Ordinal));
-        if (inline is not null)
-        {
-            return inline[inlinePrefix.Length..];
-        }
-
-        var index = Array.FindIndex(args, a => a.Equals(flag, StringComparison.Ordinal));
-        if (index < 0)
-        {
-            return null;
-        }
-
-        return index + 1 < args.Length && !args[index + 1].StartsWith("--", StringComparison.Ordinal)
-            ? args[index + 1]
-            : "true";
+        return EmitDataTagsSetting.Read(StartupArgs.Empty, _ => raw).Value;
     }
 }
 

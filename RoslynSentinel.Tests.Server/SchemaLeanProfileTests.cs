@@ -444,6 +444,18 @@ public class SchemaLeanProfileTests
     }
 
     [Test]
+    public void Configure_BogusProfile_KeepsFullAndReportsOneInvalidValueProblem()
+    {
+        var problems = StartupSettings.ConfigureGroup(typeof(SchemaOptions), ["--schema-profile=bogus"]);
+
+        Assert.That(SchemaOptions.Profile, Is.EqualTo(SchemaProfile.Full));
+        Assert.That(problems, Has.Count.EqualTo(1));
+        Assert.That(problems[0].Kind, Is.EqualTo(ConfigurationProblemKind.InvalidValue));
+        Assert.That(problems[0].Flag, Is.EqualTo("--schema-profile"));
+        Assert.That(problems[0].RawValue, Is.EqualTo("bogus"));
+    }
+
+    [Test]
     public void Configure_BareProfileFlagFollowedByAnotherFlag_DoesNotConsumeItAsValue()
     {
         SchemaOptions.Configure(["--schema-profile", "--emit-datatags"]);

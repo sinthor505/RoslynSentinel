@@ -153,6 +153,17 @@ public class ErrorPolicyOptionsTests
         Assert.That(ErrorPolicyOptions.PolicyFilePath, Is.EqualTo(path));
     }
 
+    [Test]
+    public void ConfigureGroup_InlineWithNoFile_ReportsPostConfigureProblemAndFallsBackToOff()
+    {
+        var problems = StartupSettings.ConfigureGroup(typeof(ErrorPolicyOptions), ["--error-policy-mode=inline"]);
+
+        Assert.That(problems, Has.Count.EqualTo(1));
+        Assert.That(problems[0].Kind, Is.EqualTo(ConfigurationProblemKind.PostConfigure));
+        Assert.That(ErrorPolicyOptions.Mode, Is.EqualTo(ErrorPolicyMode.Off));
+        Assert.That(ErrorPolicyOptions.PolicyFilePath, Is.Null);
+    }
+
     [TestCase(ErrorPolicyKey.FileNotFoundLookup, "FileNotFound.Lookup")]
     [TestCase(ErrorPolicyKey.FileNotFoundEdit, "FileNotFound.Edit")]
     [TestCase(ErrorPolicyKey.SymbolNotFoundLookup, "SymbolNotFound.Lookup")]
