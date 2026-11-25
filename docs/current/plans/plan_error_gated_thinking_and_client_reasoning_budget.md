@@ -204,6 +204,9 @@ in `RoslynSentinel.AgentLoop` plus one line in `ModelEvalAssemblySetUp`. The enf
   low; `/props`: unsloth-studio v0.1.923-beta, Q4_K, 1 slot, no budget field). The cap lives in the
   Unsloth wrapper. 112 and 113 are interchangeable for the 9B arms; 85 (~15k cap) is not, so
   stage-2 runs on 85 are compared only with 85.
+- 2026-11-25 (implement-plan): staleness check clean (no commits since 5ba43b82 touch the plan's
+  files). Owner away during the run; Batched mode: batch A = Steps 1-5, batch B = Steps 6-9, then
+  Steps 10-11 from the main session.
 
 ## Execution rules
 
