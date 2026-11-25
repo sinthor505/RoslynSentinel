@@ -44,6 +44,9 @@ public static class EngineServiceCollectionExtensionsBasic
         services.AddSingleton<IWorkspaceReader>(sp => sp.GetRequiredService<PersistentWorkspaceManager>());
         services.AddSingleton<MsToolAugmentEngine>();
         services.AddSingleton<PersistentWorkspaceManager>();
+        services.AddSingleton<IRepoProbe>(_ => GitBackendWarmup.Shared);
+        // Process-wide static installed here so both production hosts and the shared test host (TestEngines.CreateProvider calls this extension) install it in one place; a test that swaps it must restore it.
+        RepoQueryProvider.Current = GitReaders.Default;
         services.AddSingleton<SolutionStructureEngine>();
         services.AddSingleton<BasicRefactoringEngine>();
         services.AddSingleton<SemanticRefactoringEngine>();

@@ -349,11 +349,14 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     /// </summary>
     public TimeSpan DefaultLoadTimeout { get; set; } = SolutionLoadWait.DefaultTimeout;
 
-    public PersistentWorkspaceManager(ILogger<IWorkspaceManager> logger, IScopedOperationLedger? ledger = null, ActiveToolSurface? activeToolSurface = null)
+    private readonly IRepoProbe? _repoProbe;
+
+    public PersistentWorkspaceManager(ILogger<IWorkspaceManager> logger, IScopedOperationLedger? ledger = null, ActiveToolSurface? activeToolSurface = null, IRepoProbe? repoProbe = null)
     {
         _logger = logger;
         _ledger = ledger ?? new ScopedOperationLedgerEngine();
         _activeToolSurface = activeToolSurface;
+        _repoProbe = repoProbe;
         _unrecoverableBreaker = new UnrecoverableCircuitBreaker(logger);
         _mutationBreaker = new MutationCircuitBreaker(logger);
         _orientationBreaker = new OrientationCircuitBreaker(logger, OrientationBreakerOptions.TripThreshold);
@@ -1033,7 +1036,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 SweepRuntimeStateInBackground(GetSolutionRoot());
                 SeedEditEffectsInBackground(GetSolutionRoot());
                 // Fire-and-forget: the repo probe is never awaited here and the load response does not depend on it (McpServerStatus is its only waiter).
-                GitBackendWarmup.Shared.StartRepoProbe(solutionDirectory);
+                // A null probe (no IRepoProbe registered) means no probe.
+                _repoProbe?.StartRepoProbe(solutionDirectory);
             }
             finally
             {
