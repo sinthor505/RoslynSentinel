@@ -267,7 +267,7 @@ public sealed class MoveFileTests
         var source = PathIn(fixture, CoreFolder, "Nothing.cs");
         var destination = PathIn(fixture, CoreFolder, "Elsewhere.cs");
 
-        var result = await BuildTools(manager).MoveFileTool(reason: "test message", source, destination, MoveFileNamespaceHandling.keep);
+        var result = await MoveAsync(BuildTools(manager), source, destination, MoveFileNamespaceHandling.keep);
 
         AssertRefused(result, ToolErrorCode.NotFound, "does not exist on disk", source);
         Assert.That(File.Exists(destination), Is.False);
@@ -281,7 +281,7 @@ public sealed class MoveFileTests
         var source = PathIn(fixture, CoreFolder);
         var destination = PathIn(fixture, "Copy");
 
-        var result = await BuildTools(manager).MoveFileTool(reason: "test message", source, destination, MoveFileNamespaceHandling.keep);
+        var result = await MoveAsync(BuildTools(manager), source, destination, MoveFileNamespaceHandling.keep);
 
         AssertRefused(result, ToolErrorCode.TargetIneligible, "is a directory", source);
         Assert.That(Directory.Exists(source), Is.True);
@@ -297,7 +297,7 @@ public sealed class MoveFileTests
         var destination = PathIn(fixture, "moved.bin");
         File.WriteAllBytes(source, [0x50, 0x4B, 0x00, 0x00, 0x01, 0x02]);
 
-        var result = await BuildTools(manager).MoveFileTool(reason: "test message", source, destination, MoveFileNamespaceHandling.keep);
+        var result = await MoveAsync(BuildTools(manager), source, destination, MoveFileNamespaceHandling.keep);
 
         AssertRefused(result, ToolErrorCode.TargetIneligible, "NUL byte", "binary");
         Assert.That(File.Exists(source), Is.True);
@@ -315,7 +315,7 @@ public sealed class MoveFileTests
         var destination = PathIn(fixture, CoreFolder, "Occupied.cs");
         var destinationText = File.ReadAllText(destination);
 
-        var result = await BuildTools(manager).MoveFileTool(reason: "test message", source, destination, MoveFileNamespaceHandling.keep);
+        var result = await MoveAsync(BuildTools(manager), source, destination, MoveFileNamespaceHandling.keep);
 
         AssertRefused(result, ToolErrorCode.InvalidArgument, "already exists as a file", destination);
         Assert.That(File.Exists(source), Is.True);
@@ -331,7 +331,7 @@ public sealed class MoveFileTests
         var source = PathIn(fixture, CoreFolder, "Mover.cs");
         var destination = PathIn(fixture, TestsFolder);
 
-        var result = await BuildTools(manager).MoveFileTool(reason: "test message", source, destination, MoveFileNamespaceHandling.keep);
+        var result = await MoveAsync(BuildTools(manager), source, destination, MoveFileNamespaceHandling.keep);
 
         AssertRefused(result, ToolErrorCode.InvalidArgument, "already exists as a directory");
         Assert.That(File.Exists(source), Is.True);
@@ -345,7 +345,7 @@ public sealed class MoveFileTests
         await fixture.AddFileToSolution(manager, Path.Combine(CoreFolder, "Same.cs"), "namespace ContosoOrders.Core;\r\n\r\npublic class Same\r\n{\r\n}\r\n");
         var source = PathIn(fixture, CoreFolder, "Same.cs");
 
-        var result = await BuildTools(manager).MoveFileTool(reason: "test message", source, source, MoveFileNamespaceHandling.keep);
+        var result = await MoveAsync(BuildTools(manager), source, source, MoveFileNamespaceHandling.keep);
 
         AssertRefused(result, ToolErrorCode.InvalidArgument, "resolve to the same path");
         Assert.That(File.Exists(source), Is.True);
@@ -360,7 +360,7 @@ public sealed class MoveFileTests
         var source = PathIn(fixture, CoreFolder, "Pending.cs");
         var destination = PathIn(fixture, CoreFolder, "PendingMoved.cs");
 
-        var result = await BuildTools(manager).MoveFileTool(reason: "test message", source, destination, handling);
+        var result = await MoveAsync(BuildTools(manager), source, destination, handling);
 
         AssertRefused(result, ToolErrorCode.NotImplemented, "not supported yet", "only 'keep' is supported", handling.ToString());
         Assert.That(File.Exists(source), Is.True);
@@ -377,7 +377,7 @@ public sealed class MoveFileTests
         var source = PathIn(fixture, "docs", "Readme.md");
         var destination = PathIn(fixture, "docs", "ReadmeMoved.md");
 
-        var result = await BuildTools(manager).MoveFileTool(reason: "test message", source, destination, handling);
+        var result = await MoveAsync(BuildTools(manager), source, destination, handling);
 
         AssertRefused(result, ToolErrorCode.InvalidArgument, "not a .cs file", "only 'keep'", handling.ToString());
         Assert.That(File.Exists(source), Is.True);
