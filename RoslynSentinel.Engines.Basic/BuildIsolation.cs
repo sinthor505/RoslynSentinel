@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Management;
 using System.Runtime.Versioning;
+using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Engines.Basic;
 
@@ -20,7 +21,7 @@ public static class BuildIsolation
 
     /// <summary>Environment variable naming this server instance; set by the launcher. When absent the
     /// process id is used.</summary>
-    public const string InstanceIdEnvironmentVariable = "ROSLYNSENTINEL_INSTANCE_ID";
+    public const string InstanceIdEnvironmentVariable = ToolTelemetry.InstanceIdEnvVar;
 
     private const string BuildRootFolderName = ".roslynsentinel";
     private const string BuildSubfolderName = "build";
@@ -101,7 +102,7 @@ public static class BuildIsolation
     /// when set (sanitised to a safe folder name), otherwise the process id.</summary>
     public static string ResolveInstanceId()
     {
-        var fromEnvironment = SanitizeInstanceId(Environment.GetEnvironmentVariable(InstanceIdEnvironmentVariable));
+        var fromEnvironment = SanitizeInstanceId(ToolTelemetry.InstanceIdSetting.Value);
         return fromEnvironment ?? Environment.ProcessId.ToString();
     }
 

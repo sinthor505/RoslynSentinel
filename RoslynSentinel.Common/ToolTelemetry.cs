@@ -12,10 +12,14 @@ namespace RoslynSentinel.Common;
 /// (successes + errors = calls) while different tools never contend.
 /// </para>
 /// </summary>
+[StartupSettingGroup("Instance identity")]
 public sealed class ToolTelemetry
 {
     /// <summary>Environment variable that names this instance explicitly.</summary>
     public const string InstanceIdEnvVar = "ROSLYNSENTINEL_INSTANCE_ID";
+
+    /// <summary>Explicit name of this server instance, set by the launcher.</summary>
+    public static readonly StartupSetting<string?> InstanceIdSetting = StartupSetting.String(null, InstanceIdEnvVar, null, "Explicit name of this server instance, set by the launcher.", SettingScope.Server, SettingKind.Live);
 
     /// <summary>Instance id when neither the env var nor an explicit working directory names one.</summary>
     public const string DefaultInstanceId = "default";
@@ -89,7 +93,7 @@ public sealed class ToolTelemetry
     /// </summary>
     public static string ResolveInstanceId()
     {
-        var fromEnv = Environment.GetEnvironmentVariable(InstanceIdEnvVar);
+        var fromEnv = InstanceIdSetting.Value;
         if (!string.IsNullOrWhiteSpace(fromEnv))
         {
             return fromEnv.Trim();

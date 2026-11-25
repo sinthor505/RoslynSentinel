@@ -1,8 +1,11 @@
 namespace RoslynSentinel.Common;
 
 /// <summary>Finds the RoslynSentinel source checkout by its solution file.</summary>
+[StartupSettingGroup("Repository roots")]
 public static class RepoRootLocator
 {
+    public static readonly StartupSetting<string?> RepoRootSetting = StartupSetting.String(null, EnvironmentVariable, null, "Root of the RoslynSentinel source checkout; must hold RoslynSentinel.slnx.", SettingScope.Server | SettingScope.PlanStepRunner | SettingScope.AgentLoop | SettingScope.TestHarness, SettingKind.Live);
+
     public const string EnvironmentVariable = "ROSLYNSENTINEL_REPO_ROOT";
     public const string SolutionFileName = "RoslynSentinel.slnx";
 
@@ -44,7 +47,7 @@ public static class RepoRootLocator
 
     private static string? TryFromEnvironment()
     {
-        string? raw = Environment.GetEnvironmentVariable(EnvironmentVariable);
+        string? raw = RepoRootSetting.Value;
         if (string.IsNullOrWhiteSpace(raw))
         {
             return null;
