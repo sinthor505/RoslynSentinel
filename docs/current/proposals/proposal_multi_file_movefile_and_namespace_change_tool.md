@@ -1,6 +1,6 @@
 # Multi-file MoveFile and a namespace-change tool: move a connected set across a project edge, and change its namespace, in one compile-gated call
 
-**Status:** ACCEPTED 2026-11-25. Open questions settled with the owner (see Decision, which overrides the Proposal text where they differ); plan to be written as `plans/plan_multi_file_movefile_and_namespace_change_tool.md`.
+**Status:** IMPLEMENTED 2026-11-25 by [plan_multi_file_movefile_and_namespace_change_tool](../plans/closed/plan_multi_file_movefile_and_namespace_change_tool.md) (Parts 1 and 2; Part 3 kept as a stub per D10). Decision overrides the Proposal text where they differ. Open follow-ups: `namespaceHandling: update` composition (TODO.md), moved-mode qualify-instead-of-using (INBOX 2026-11-25 03:45).
 
 ## Motivation
 
@@ -20,7 +20,7 @@ one file per call. Files that reference each other have no valid order across a 
 `Libgit2GitReader.Hooks.cs` alone (one of 8 partial-class files) 178 (CS0103, CS0117, CS0433), all refused with the
 text "would break the build; nothing was moved". Counts only were recorded, not the per-error lists, so the exact
 error text is unverified here (see the
-[blocker](../blockers/blocking_error_movefile_has_no_multi_file_cross_project_move.md)). A partial class cannot be
+[blocker](../blockers/closed/blocking_error_movefile_has_no_multi_file_cross_project_move.md)). A partial class cannot be
 split across two assemblies at all, so for it no order exists.
 
 What worked instead, per the plan's Done lines: a hand-written `.csproj` for the new project that compiles the old
@@ -320,8 +320,8 @@ Settled with the owner 2026-11-25 (implement-plan, phase 2). Where this section 
 
 - Plan: [plan_isolate_git_area_into_own_project](../plans/closed/plan_isolate_git_area_into_own_project.md) (Appendix B spike
   report; Steps 13, 14, 18, 19 Done lines; Risks 5, 6, 11).
-- Blockers: [movefile has no multi-file cross-project move](../blockers/blocking_error_movefile_has_no_multi_file_cross_project_move.md),
-  [SplitProjectByFolder is a stub](../blockers/blocking_error_splitprojectbyfolder_is_a_stub.md).
+- Blockers: [movefile has no multi-file cross-project move](../blockers/closed/blocking_error_movefile_has_no_multi_file_cross_project_move.md),
+  [SplitProjectByFolder is a stub](../blockers/closed/blocking_error_splitprojectbyfolder_is_a_stub.md).
 - [proposal_move_file_tool](./proposal_move_file_tool.md): the approved MoveFile design; this proposal builds on its
   slice 2 engines and supplies the design its item 3 (`update`) lacked.
 - TODO.md: "No tool changes a namespace across files" and "MoveFile namespaceHandling `update`" should link here when

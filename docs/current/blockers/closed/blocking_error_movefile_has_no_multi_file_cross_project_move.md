@@ -1,9 +1,9 @@
 # `MoveFile` has no multi-file cross-project move: a mutually dependent cluster cannot cross a project edge
 
-**Status:** OPEN 2026-11-24. Root cause traced to source (single-path parameters plus one per-call compile gate in `MoveFileTool`); the error counts below are from the Step 12 spike in a throwaway worktree and were not re-measured while writing this doc.
+**Status:** CLOSED 2026-11-25 by plan_multi_file_movefile_and_namespace_change_tool (`MoveFile(moves)` moves a connected set in one compile-gated call; T16.1/T16.2 pin the cluster both ways). Was: OPEN 2026-11-24. Root cause traced to source (single-path parameters plus one per-call compile gate in `MoveFileTool`); the error counts below are from the Step 12 spike in a throwaway worktree and were not re-measured while writing this doc.
 
 ## What was being attempted
-Step 12 (spike) of [plan_isolate_git_area_into_own_project](../plans/closed/plan_isolate_git_area_into_own_project.md): after
+Step 12 (spike) of [plan_isolate_git_area_into_own_project](../../plans/closed/plan_isolate_git_area_into_own_project.md): after
 [the `SplitProjectByFolder` stub](blocking_error_splitprojectbyfolder_is_a_stub.md) moved nothing, the spike tried the fallback of moving the files of
 `RoslynSentinel.Common/Git/` one at a time into the new project `RoslynSentinel.Git` with `MoveFile(sourcePath, destinationPath, namespaceHandling: keep)`.
 It also tried a comma-separated list of paths in `sourcePath`.
@@ -67,4 +67,4 @@ The tool description says the destination may be in another project but does not
 The owner is away; no bypass (hand-edited csproj plus per-file `MoveFile`) is pre-authorized (plan decision D-e), so Step 14 waits.
 Step 13 (the intra-`Common` down-move into `RoslynSentinel.Common/Git/`, the 31-call sequence above) proceeds, because it does not cross a project edge.
 The dispatcher continues the Steps 15-18 prerequisites that do not depend on the new project.
-Related blocker: [blocking_error_splitprojectbyfolder_is_a_stub](blocking_error_splitprojectbyfolder_is_a_stub.md). Plan: [plan_isolate_git_area_into_own_project](../plans/closed/plan_isolate_git_area_into_own_project.md).
+Related blocker: [blocking_error_splitprojectbyfolder_is_a_stub](blocking_error_splitprojectbyfolder_is_a_stub.md). Plan: [plan_isolate_git_area_into_own_project](../../plans/closed/plan_isolate_git_area_into_own_project.md).

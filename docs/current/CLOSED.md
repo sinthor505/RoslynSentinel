@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## No tool changes a namespace across files (and multi-file MoveFile) - resolved (2026-11-25)
+
+No tool changes a namespace across files (2026-11-24) - IN PROGRESS ([plan](plans/plan_multi_file_movefile_and_namespace_change_tool.md), also multi-file MoveFile): `ChangeNamespace` (moveExtract) and `MoveFile(moves)` shipped 2026-11-25; left: D3 reference opt-ins and the reload signal (Steps 14, 18, 20, 23, 26, 27, awaiting owner answers R12/R15/R16/R17), recipe, final checks; the Git namespace rename itself is the Git plan's follow-up; TOOL-GAP from plan_isolate_git_area_into_own_project Step 19: `RenameSymbol` has no namespace mode that moves a file group, `SyncTypeAndFilename` and `MoveFile` (`namespaceHandling: keep`) keep namespaces, and the `update` mode is unbuilt (see the MoveFile `update` item below); wanted: `RoslynSentinel.Common` plumbing (~40 files), `RoslynSentinel.Tools.Basic` engine+DTOs (~35) and `RoslynSentinel.Common.GitWorktree` (3) to `RoslynSentinel.Git[.GitWorktree]` with using updates; a fix is a `ChangeNamespace` tool or a namespace mode on `MoveFile`/`SplitProjectByFolder`; two code TODOs in `GitEngine.cs` and `GitProcess.cs`
+
+Evidence: plan_multi_file_movefile_and_namespace_change_tool IMPLEMENTED, 9c8c5663..eacd90c8; ChangeNamespace + MoveFile(moves); full suite green at eacd90c8. The Git namespace rename itself is the Git plan follow-up (GitEngine/GitProcess TODOs).
+
 ## Plan: Move the Git area into its own production project (RoslynSentinel.Git) and its own test project (RoslynSentinel.Tests.Git) - resolved (2026-11-24)
 
 Plan: Move the Git area into its own production project (RoslynSentinel.Git) and its own test project (RoslynSentinel.Tests.Git) - [doc](plans/closed/plan_isolate_git_area_into_own_project.md)

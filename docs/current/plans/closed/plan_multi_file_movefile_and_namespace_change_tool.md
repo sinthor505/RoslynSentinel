@@ -1,17 +1,17 @@
 # Plan: multi-file MoveFile (a `moves` list, one compile gate, optional csproj edges) and a `ChangeNamespace` tool
 
-**Status:** IN PROGRESS 2026-11-25. Steps 1-13, 15-17, 19, 21, 22, 24, 25, 28, 30-33 done (9c8c5663..d2ee0705), Step 29 skipped (probe green); Step 35c CLEAN. Steps 14, 18, 20, 23, 26, 27 done (6d20e875..bd52884d) after D17-D20. Left: 34, 35a/b, 36, 37. Batched run. Nothing built; implements [proposal_multi_file_movefile_and_namespace_change_tool.md](../proposals/proposal_multi_file_movefile_and_namespace_change_tool.md) (ACCEPTED 2026-11-25). Revised 2026-11-25 with the owner's decisions D12-D16 and an independent review (P5-P16). Commit trailer for every slice: `Plan: plan_multi_file_movefile_and_namespace_change_tool` (the last slice adds `Closes:`).
+**Status:** IMPLEMENTED 2026-11-25. 9c8c5663..eacd90c8 (Steps 1-28, 30-37; Step 29 skipped, probe green); full suite green at eacd90c8. Implements [proposal_multi_file_movefile_and_namespace_change_tool.md](../../proposals/proposal_multi_file_movefile_and_namespace_change_tool.md) (IMPLEMENTED 2026-11-25). Revised 2026-11-25 with the owner's decisions D12-D16 and an independent review (P5-P16). Commit trailer for every slice: `Plan: plan_multi_file_movefile_and_namespace_change_tool` (the last slice adds `Closes:`).
 
 ## Problem
 
-Two gaps, both hit while running [plan_isolate_git_area_into_own_project](closed/plan_isolate_git_area_into_own_project.md)
+Two gaps, both hit while running [plan_isolate_git_area_into_own_project](plan_isolate_git_area_into_own_project.md)
 and both environment gaps (the tool surface had no one-call route, so the run fell back to hand-edited project files):
 
 1. **`MoveFile` moves one file per call, and the compile gate sees one file per call.** A connected cluster across a
    project edge has no valid order: the Git run measured 1391 errors moving `GitResult` before its derived records, 45 for
    `GitProcess`, 178 for one of 8 partial-class files (counts only; per-error lists were not kept). The workaround was 121
    `MoveFile` calls (15-20 s each) plus a hand-written csproj with a temporary link stand-in. Evidence and blocker:
-   [blocking_error_movefile_has_no_multi_file_cross_project_move.md](../blockers/blocking_error_movefile_has_no_multi_file_cross_project_move.md).
+   [blocking_error_movefile_has_no_multi_file_cross_project_move.md](../../blockers/closed/blocking_error_movefile_has_no_multi_file_cross_project_move.md).
    Source today: `MoveFileTool` takes `string sourcePath, string destinationPath` and refuses a directory
    (`RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs:290-433`, directory refusal `:329-331`).
 2. **No tool changes a namespace together with its reference sites.** `RenameSymbol` on a namespace renames the whole
@@ -19,7 +19,7 @@ and both environment gaps (the tool surface had no one-call route, so the run fe
    and refused; `FixMismatchedNamespacesAsync` (`RoslynSentinel.Engines.Basic/ProjectStructureEngine.cs:20`) edits one
    file and updates no caller. The Git namespace rename is still a `// TODO` at `RoslynSentinel.Git/GitEngine.cs:13` and
    `RoslynSentinel.Git/GitProcess.cs:7`. Blocker:
-   [blocking_error_splitprojectbyfolder_is_a_stub.md](../blockers/blocking_error_splitprojectbyfolder_is_a_stub.md).
+   [blocking_error_splitprojectbyfolder_is_a_stub.md](../../blockers/closed/blocking_error_splitprojectbyfolder_is_a_stub.md).
 
 The proposal's reasoning, alternatives (link-stand-in recipe, shell `git mv`, `[Obsolete]` forwarders, scoped ledger,
 `MoveFiles` as a new tool, Roslyn Features refactoring) and verification expectations are not repeated here; read it for
@@ -707,7 +707,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
   csproj items "not updated", `LoadSolution(forceReload)` for a destination in no loaded project, a `ReloadPending` fact). States the workflow positively; names the gated tool only through `McpToolsetControl(toolSet: moveExtract, enabled: true)`. Marks the interim
   link-stand-in recipe as superseded.
 - Done when: the file exists, is ASCII-only, and is linked from this plan.
-- Done 2026-11-25: [reference_split_folder_into_new_project_with_movefile.md](../references/reference_split_folder_into_new_project_with_movefile.md) (ASCII-only; the interim link-stand-in recipe is marked superseded).
+- Done 2026-11-25: [reference_split_folder_into_new_project_with_movefile.md](../../references/reference_split_folder_into_new_project_with_movefile.md) (ASCII-only; the interim link-stand-in recipe is marked superseded).
 - Lane: `implementer` (D1: 1 file).
 
 ### Step 35 - LIVE: reload wait, 60-file timing, `ChangeNamespace` dry run
@@ -728,6 +728,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: dispatcher (plain calls; not a supervisor job).
 
 ### Step 36 - Final regeneration, caller-sweep confirmation and doc annotations
+- Done: no drift (filtered run with ratchets on f8846852, 93/93); R9 delta recorded (eacd90c8: `MoveFile` catalog entry 1053 -> 2113 chars); sweep clean; annotations in the two docs. T27.12b tightened to `ValidationFailed` (f8846852).
 - Files: `RoslynSentinel.Tests.Harness/ToolSurfaceGolden/*.txt` and `_catalog.json`; `RoslynSentinel.Tests.ModelEval/ToolSurfaceGolden/eval-Harness_default__toolset_full.txt` and `_catalog.json`; `docs/generated/architecture_tools.md` (about `:105`) and
   `docs/generated/todo_markers.md` (regenerate with `scripts/Generate-ArchitectureMap.ps1` and `scripts/Get-TodoMarkers.ps1`, never by hand); annotations (not rewrites) in `docs/current/plans/plan_test_placement_guardrail_and_shared_test_helpers.md` (about `:336`, the old
   `MoveFile(sourcePath, destinationPath, namespaceHandling: keep)` call shape) and `docs/current/proposals/proposal_move_file_tool.md` (its one `sourcePath`/`destinationPath` mention).
@@ -742,6 +743,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: dispatcher (plain `Build`/`RunTest` calls); `implementer-sweep` only if (c) finds sites.
 
 ### Step 37 - Closing: stub sweep, ratchets, bookkeeping
+- Done: (a) no stub in the plan's files (glob widened to `CsprojEdge*`); (b) ratchets green in the f8846852 filtered run; (c) full suites green at bd52884d and eacd90c8; (d) bookkeeping in the closing commit. Deviation: TODO.md "MoveFile namespaceHandling `update`" stays open, re-scoped to the D6 composition (unbuilt; `ChangeNamespace` after `MoveFile` is the two-call route meanwhile), so the `BatteryToolFactory.cs:11` TODO stays too.
 - Files: none to edit except bookkeeping docs (`docs/current/TODO.md`, `docs/current/CLOSED.md`, blockers) by the dispatcher.
 - Depends on: all
 - Effect: text-neutral

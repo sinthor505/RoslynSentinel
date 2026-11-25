@@ -1,9 +1,9 @@
 # `SplitProjectByFolder` is a stub: it creates an empty project and reports "Moved N files" without moving any
 
-**Status:** OPEN 2026-11-24, false success removed: since bf27d721 the tool resolves the source project, then throws `ToolNotImplementedException` (`NotImplemented`, names CreateProject + MoveFile) before creating anything; the move itself is still unimplemented (code TODO in `SplitProjectByFolderAsync`). Root cause traced to source (`SolutionStructureEngine.SplitProjectByFolderAsync` has no move logic and already carries a TODO saying so); the numbers below are from the Step 12 spike run by a session in a throwaway worktree and were not re-measured while writing this doc.
+**Status:** CLOSED 2026-11-25 by plan_multi_file_movefile_and_namespace_change_tool: the stub stays by owner decision D10 (code comment names the wrapper idea), and the goal is met by the recipe `references/reference_split_folder_into_new_project_with_movefile.md` (CreateProject, `MoveFile(moves)` with the reference opt-ins, `ChangeNamespace`). Was: OPEN 2026-11-24, false success removed: since bf27d721 the tool resolves the source project, then throws `ToolNotImplementedException` (`NotImplemented`, names CreateProject + MoveFile) before creating anything; the move itself is still unimplemented (code TODO in `SplitProjectByFolderAsync`). Root cause traced to source (`SolutionStructureEngine.SplitProjectByFolderAsync` has no move logic and already carries a TODO saying so); the numbers below are from the Step 12 spike run by a session in a throwaway worktree and were not re-measured while writing this doc.
 
 ## What was being attempted
-Step 12 (spike) of [plan_isolate_git_area_into_own_project](../plans/closed/plan_isolate_git_area_into_own_project.md):
+Step 12 (spike) of [plan_isolate_git_area_into_own_project](../../plans/closed/plan_isolate_git_area_into_own_project.md):
 turn the folder `RoslynSentinel.Common/Git/` into a new project `RoslynSentinel.Git` with ONE call, in a throwaway worktree:
 
 ```
@@ -76,4 +76,4 @@ Whichever is chosen, the target project must not be created before the move is k
 The owner is away; no bypass (hand-edited csproj plus per-file `MoveFile`) is pre-authorized (plan decision D-e), so Step 14 waits.
 Step 13 (the intra-`Common` down-move into `RoslynSentinel.Common/Git/`, a 31-call single-file `MoveFile` sequence that the spike showed works once `Common.csproj` has `<Using Include="RoslynSentinel.Common" />`) is unaffected and proceeds.
 The dispatcher continues the Steps 15-18 prerequisites that do not depend on the new project.
-Related blocker: [blocking_error_movefile_has_no_multi_file_cross_project_move](blocking_error_movefile_has_no_multi_file_cross_project_move.md). Plan: [plan_isolate_git_area_into_own_project](../plans/closed/plan_isolate_git_area_into_own_project.md).
+Related blocker: [blocking_error_movefile_has_no_multi_file_cross_project_move](blocking_error_movefile_has_no_multi_file_cross_project_move.md). Plan: [plan_isolate_git_area_into_own_project](../../plans/closed/plan_isolate_git_area_into_own_project.md).

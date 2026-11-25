@@ -6,7 +6,7 @@ using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Tests.Basic;
 
-// Step 11 of docs/current/plans/plan_multi_file_movefile_and_namespace_change_tool.md: ValidateChangesAgainstBaselineAsync builds
+// Step 11 of docs/current/plans/closed/plan_multi_file_movefile_and_namespace_change_tool.md: ValidateChangesAgainstBaselineAsync builds
 // the candidate from candidateBase but takes the introduced-error delta against errorBaseline. Scenarios use detached in-memory
 // solutions (nothing is applied to a workspace), in the same style as MoveBindCheckTests.
 [TestFixture]
