@@ -464,7 +464,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                 {
                     services.AddSingleton(sp => new TabToolsetStateStore(
                         tabStateDir,
-                        Environment.GetEnvironmentVariable("CLAUDE_CODE_SESSION_ID"),
+                        ExternalEnvironmentSettings.ClaudeCodeSessionIdSetting.Value,
                         sp.GetService<ILoggerFactory>()?.CreateLogger<TabToolsetStateStore>()));
                 }
             }

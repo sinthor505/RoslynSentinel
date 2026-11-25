@@ -10,6 +10,15 @@ public class Program
     {
         var transport = ServerStartupHelpers.ParseTransport(args);
 
+        if (ServerHostSettings.ListOptionsSetting.Read(StartupArgs.Parse(args), StartupSettings.EnvironmentReader).Value)
+        {
+            Console.Out.WriteLine(ConfigurationReferenceRenderer.RenderConsole(
+                StartupSettings.Discover(typeof(Program).Assembly)
+                    .Where(s => (s.Scope & (SettingScope.Server | SettingScope.ServerStdio)) != SettingScope.None)
+                    .ToList()));
+            return;
+        }
+
         switch (transport.ToLowerInvariant())
         {
             case "http":
