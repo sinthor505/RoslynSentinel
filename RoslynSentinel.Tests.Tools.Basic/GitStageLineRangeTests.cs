@@ -286,7 +286,7 @@ public class GitStageLineRangeTests
         Assert.That(result.Error, Does.Contain("Widen the range to 9-11"));
         Assert.That(result.Error, Does.Contain("hunkIds").And.Contain("stage the whole file"));
         Assert.That(result.Error, Does.Not.Contain("must").And.Not.Contain("do not").IgnoreCase, "error text carries facts and options, not policy.");
-        Assert.That(result.ErrorDetail, Is.Not.Empty);
+        Assert.That(result.Hints, Has.Some.Matches<GitHint>(hint => hint.Key == GitHintKey.HunkSelection), "the engine attaches the HunkSelection hint; the tool side renders it into ErrorDetail.");
         Assert.That(RunGit(_dir, "diff", "--cached", "--name-only"), Is.Empty, "a refused selection stages nothing.");
     }
 

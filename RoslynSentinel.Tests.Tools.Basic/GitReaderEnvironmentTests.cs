@@ -160,7 +160,7 @@ public class GitReaderEnvironmentTests
     [Test]
     public void ProbeTable_CoversEveryIGitReaderMethod()
     {
-        var interfaceMethods = typeof(IGitReader).GetMethods().Select(method => method.Name).Distinct().Order().ToArray();
+        var interfaceMethods = typeof(IGitReader).GetMethods().Concat(typeof(IGitReader).GetInterfaces().SelectMany(i => i.GetMethods())).Select(method => method.Name).Distinct().Order().ToArray();
         var covered = Probes("0000000").Select(probe => probe.Method).Distinct().Order().ToArray();
         Assert.That(covered, Is.EqualTo(interfaceMethods), "add a Probe row for every IGitReader method");
     }

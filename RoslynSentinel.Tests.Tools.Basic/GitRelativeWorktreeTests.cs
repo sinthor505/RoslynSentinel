@@ -186,7 +186,7 @@ public class GitRelativeWorktreeTests
     public void ProbeTable_CoversEveryIGitReaderMethod()
     {
         // A method added to IGitReader without a row here would silently skip the fallback proof below.
-        var interfaceMethods = typeof(IGitReader).GetMethods().Select(m => m.Name).Distinct().Order().ToArray();
+        var interfaceMethods = typeof(IGitReader).GetMethods().Concat(typeof(IGitReader).GetInterfaces().SelectMany(i => i.GetMethods())).Select(m => m.Name).Distinct().Order().ToArray();
         var covered = Probes().Select(p => p.Method).Distinct().Order().ToArray();
 
         Assert.That(covered, Is.EqualTo(interfaceMethods), "add a Probe row for every IGitReader method");
