@@ -11,8 +11,10 @@ namespace RoslynSentinel.Common;
 [StartupSettingGroup("Error policy", PostConfigure = "ValidateCrossFields")]
 public static class ErrorPolicyOptions
 {
+    // hint-ok: setting description for the configuration reference, not a tool-call hint
     public static readonly StartupSetting<ErrorPolicyMode> ModeSetting = StartupSetting.Enum<ErrorPolicyMode>("--error-policy-mode", "ROSLYNSENTINEL_ERROR_POLICY_MODE", ErrorPolicyMode.Off, "Error-policy mode for not-found guidance: Off, Pointer or Inline (Inline requires a readable policy file).", SettingScope.Server | SettingScope.PlanStepRunner);
 
+    // hint-ok: setting description for the configuration reference, not a tool-call hint
     public static readonly StartupSetting<string?> FileSetting = StartupSetting.String("--error-policy-file", "ROSLYNSENTINEL_ERROR_POLICY_FILE", null, "Path of the error-policy file; Pointer mode points at it and Inline mode inlines its content.", SettingScope.Server | SettingScope.PlanStepRunner);
 
     public static ErrorPolicyMode Mode { get; private set; } = ErrorPolicyMode.Off;
