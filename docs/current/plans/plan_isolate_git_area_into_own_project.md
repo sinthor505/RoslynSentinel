@@ -742,6 +742,13 @@ Step 1a types. Added later by this plan: the DTO files (Step 11), `IGitOperation
 referencers (Step 9b classifies each): `PersistentWorkspaceManager.cs`, `ServerBinaryStaleness.cs`, `NotFoundEvidence.cs` (behind the seam). Spike
 (Step 12) report: to be written.
 
+**Step 9b result (batch B, 2026-11-24, after Steps 9c-9g and 10a-10c):** the 27 root files and 3 `GitWorktree/` files all moved
+(`Common/Git/` holds 30 moved files plus `GitRootFailure.cs` and `GitHintTypes.cs`; `Glob RoslynSentinel.Common/*[Gg]it*.cs` returns nothing).
+Non-Git Common referencers now: none in code. `PersistentWorkspaceManager.cs`, `ServerBinaryStaleness.cs` and `NotFoundEvidence.cs` are behind
+the seam (`IRepoProbe`, `RepoQueryProvider`; `RepoQuery.cs` stays in the Common root). Three prose references remain and will need
+attention at the project split (a `<see cref>` to a type in the new project becomes CS1574): `ChildProcessCapture.cs:23` (cref `GitProcess`),
+`RepoQuery.cs:20` (cref `IGitReader`), `RepoQuery.cs:54` (text only); `ToolCallTranscript.cs:44` is text only.
+
 ## Appendix C - Test move inventory (filled by Step 16)
 
 To be written: move list, `GitImpl`-constructing fixtures (17 files, 22 sites per the proposal; this session saw 20 files with `GitImpl` references
