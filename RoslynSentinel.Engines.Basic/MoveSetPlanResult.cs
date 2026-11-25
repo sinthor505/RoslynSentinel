@@ -90,6 +90,9 @@ public enum ProjectEdgeKind
 /// <summary>A project edge the move set needs but that is absent, with the reason it is needed.</summary>
 public sealed record NeededProjectEdge(ProjectEdgeKind Kind, string FromProject, string ToProject, string Reason);
 
+/// <summary>The result of one edge analysis pass: the edges to add, the ProjectReference edges withheld as cyclic, and the missing-package facts.</summary>
+public sealed record MoveSetEdgeAnalysis(IReadOnlyList<NeededProjectEdge> Accepted, IReadOnlyList<NeededProjectEdge> Cyclic, IReadOnlyList<MoveFact> PackageFacts);
+
 /// <summary>Diagnostics grouped by the move set file they bind to.</summary>
 public sealed record MoveSetErrorGroup(string FilePath, string? SourcePath, bool OutsideSet, IReadOnlyList<string> Diagnostics);
 

@@ -9,7 +9,8 @@ public static class CsprojEdgeWriter
     /// <summary>Returns the project file text with the given edges spliced in as ProjectReference or InternalsVisibleTo items.</summary>
     /// <remarks>The bytes are decoded as UTF-8 and a leading BOM stays as U+FEFF, so writing the returned text back verbatim reproduces the bytes. Edges already present are skipped, so splicing the output again changes nothing.</remarks>
     /// <param name="projectReferenceInclude">Maps a referenced project name to its ProjectReference Include path; null assumes sibling project folders.</param>
-    public static string Splice(byte[] csprojBytes, IReadOnlyList<NeededProjectEdge> edgesForThisProject, Func<string, string>? projectReferenceInclude = null)
+    /// <param name="internalsVisibleToName">Maps a receiving project name to its InternalsVisibleTo Include value (the friend assembly name); null uses the project name.</param>
+    public static string Splice(byte[] csprojBytes, IReadOnlyList<NeededProjectEdge> edgesForThisProject, Func<string, string>? projectReferenceInclude = null, Func<string, string>? internalsVisibleToName = null)
     {
         var text = System.Text.Encoding.UTF8.GetString(csprojBytes);
         var eol = CopyAndObsoleteEdits.DetectEol(text);
@@ -29,7 +30,7 @@ public static class CsprojEdgeWriter
                 // MoveFileTool passes the real relative csproj path of the referenced project; the null default (sibling project folders) is only for a caller that has no project file paths.
                 var value = kind == ProjectEdgeKind.ProjectReference
                     ? (projectReferenceInclude?.Invoke(edge.ToProject) ?? $@"..\{edge.ToProject}\{edge.ToProject}.csproj")
-                    : edge.ToProject; // TODO an InternalsVisibleTo Include names the receiving ASSEMBLY; AugmentBaseline uses the receiver's AssemblyName but this writes the project name, which differ when the project sets AssemblyName
+                    : (internalsVisibleToName?.Invoke(edge.ToProject) ?? edge.ToProject); // an InternalsVisibleTo Include names the receiving ASSEMBLY, which can differ from the project name
                 var escaped = EscapeAttribute(value);
                 if (text.Contains($"<{tag} Include=\"{escaped}\"", StringComparison.OrdinalIgnoreCase)
                     || !seen.Add($"{tag}|{escaped}"))

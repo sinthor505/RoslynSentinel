@@ -23,7 +23,7 @@ public sealed class MoveSetEdgeAnalyzerTests
 
     private sealed record SourceFile(string Name, string Content);
 
-    private sealed record SolutionProject(string Name, string[] References, SourceFile[] Files);
+    private sealed record SolutionProject(string Name, string[] References, SourceFile[] Files, string? AssemblyName = null);
 
     [Test]
     public async Task Analyze_ClusterFromTestsToCore_TestsOnlyDependency_MissingReferenceEdge()
@@ -128,6 +128,74 @@ public sealed class MoveSetEdgeAnalyzerTests
         Assert.That(edges, Is.Empty);
     }
 
+    [Test]
+    public async Task AnalyzeAll_CycleFixture_MatchesTheThreeSingleOutputMethods()
+    {
+        // Pins: one AnalyzeAllAsync pass returns the same accepted edges, cyclic edges and package facts as AnalyzeAsync, FindCycleEdgesAsync and FindMissingPackageFactsAsync.
+        var solution = BuildSolution(
+            new SolutionProject("Dest", [], [new SourceFile("Placeholder.cs", "namespace Dest { public class Placeholder { } }")]),
+            new SolutionProject("Lib", ["Dest"], [new SourceFile("LibType.cs", "namespace Lib { public class LibType { } }")]),
+            new SolutionProject("Src", ["Lib"], [new SourceFile("Mover.cs", "namespace Src { public class Mover { public Lib.LibType Make() => new Lib.LibType(); } }")]));
+
+        var all = await MoveSetEdgeAnalyzer.AnalyzeAllAsync(PlanOf(Move("Src", "Mover.cs", "Dest")), solution, CancellationToken.None);
+
+        await AssertMatchesWrappersAsync(all, PlanOf(Move("Src", "Mover.cs", "Dest")), solution);
+        Assert.That(Shape(all.Cyclic), Is.EquivalentTo(new[] { (ProjectEdgeKind.ProjectReference, "Dest", "Lib") }));
+    }
+
+    [Test]
+    public async Task AnalyzeAll_CrossProjectFixture_MatchesTheThreeSingleOutputMethods()
+    {
+        // Pins: on a fixture that yields accepted edges (ProjectReference plus InternalsVisibleTo), AnalyzeAllAsync matches the three single-output methods.
+        var solution = BuildSolution(
+            new SolutionProject("Home", [], [new SourceFile("Helpers.cs", "[assembly: System.Runtime.CompilerServices.InternalsVisibleTo(\"Src\")]\nnamespace Home { internal static class Helper { public static int Value() => 1; } }")]),
+            new SolutionProject("Src", ["Home"], [new SourceFile("Mover.cs", "namespace Src { public class Mover { public int Run() => Home.Helper.Value(); } }")]),
+            new SolutionProject("Dest", [], [new SourceFile("Placeholder.cs", "namespace Dest { public class Placeholder { } }")]));
+        var plan = PlanOf(Move("Src", "Mover.cs", "Dest"));
+
+        var all = await MoveSetEdgeAnalyzer.AnalyzeAllAsync(plan, solution, CancellationToken.None);
+
+        await AssertMatchesWrappersAsync(all, plan, solution);
+        Assert.That(Shape(all.Accepted), Is.EquivalentTo(new[]
+        {
+            (ProjectEdgeKind.ProjectReference, "Dest", "Home"),
+            (ProjectEdgeKind.InternalsVisibleTo, "Home", "Dest"),
+        }));
+    }
+
+    [Test]
+    public async Task AugmentBaseline_ReceiverAssemblyNameDiffersFromProjectName_InternalsVisibleToNamesTheAssembly()
+    {
+        // Pins: the in-memory InternalsVisibleTo document names the receiving project's AssemblyName, not its project name, and ReceiverAssemblyName returns it.
+        var solution = BuildSolution(
+            new SolutionProject("Home", [], [new SourceFile("Helpers.cs", "namespace Home { internal static class Helper { public static int Value() => 1; } }")]),
+            new SolutionProject("Src", ["Home"], [new SourceFile("Mover.cs", "namespace Src { public class Mover { public int Run() => Home.Helper.Value(); } }")]),
+            new SolutionProject("Dest", [], [new SourceFile("Placeholder.cs", "namespace Dest { public class Placeholder { } }")], AssemblyName: "Dest.Assembly"));
+        var edges = new[] { new NeededProjectEdge(ProjectEdgeKind.InternalsVisibleTo, "Home", "Dest", "reason") };
+
+        var augmented = MoveSetEdgeAnalyzer.AugmentBaseline(solution, edges, addReferences: false, addInternalsVisibleTo: true);
+
+        var dest = augmented.Projects.Single(p => p.Name == "Dest");
+        Assert.That(MoveSetEdgeAnalyzer.ReceiverAssemblyName(dest), Is.EqualTo("Dest.Assembly"));
+        var home = augmented.Projects.Single(p => p.Name == "Home");
+        var grant = home.Documents.Single(d => d.Name == "MoveSetInternalsVisibleTo.g.cs");
+        var text = (await grant.GetTextAsync()).ToString();
+        Assert.That(text, Does.Contain("InternalsVisibleTo(\"Dest.Assembly\")"));
+        Assert.That(text, Does.Not.Contain("InternalsVisibleTo(\"Dest\")"));
+    }
+
+#pragma warning disable CS0618 // the obsolete single-output wrappers are the comparison baseline
+    private static async Task AssertMatchesWrappersAsync(MoveSetEdgeAnalysis all, MoveSetPlanResult plan, Solution solution)
+    {
+        var accepted = await MoveSetEdgeAnalyzer.AnalyzeAsync(plan, solution, CancellationToken.None);
+        var cyclic = await MoveSetEdgeAnalyzer.FindCycleEdgesAsync(plan, solution, CancellationToken.None);
+        var facts = await MoveSetEdgeAnalyzer.FindMissingPackageFactsAsync(plan, solution, CancellationToken.None);
+
+        Assert.That(all.Accepted, Is.EqualTo(accepted));
+        Assert.That(all.Cyclic, Is.EqualTo(cyclic));
+        Assert.That(all.PackageFacts, Is.EqualTo(facts));
+    }
+
     private static MoveSetPlanResult PlanOf(params PlannedFileMove[] moves)
         => new(moves, new DocumentChangeSet(), [], [], []);
 
@@ -145,7 +213,7 @@ public sealed class MoveSetEdgeAnalyzerTests
         {
             var id = ProjectId.CreateNewId();
             ids[project.Name] = id;
-            var info = ProjectInfo.Create(id, VersionStamp.Default, project.Name, project.Name, LanguageNames.CSharp)
+            var info = ProjectInfo.Create(id, VersionStamp.Default, project.Name, project.AssemblyName ?? project.Name, LanguageNames.CSharp)
                 .WithMetadataReferences(SharedReferences)
                 .WithCompilationOptions(new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary))
                 .WithFilePath(Path.Combine(Root, project.Name, project.Name + ".csproj"));

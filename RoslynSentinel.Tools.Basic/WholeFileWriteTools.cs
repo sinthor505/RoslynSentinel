@@ -550,7 +550,6 @@ public class WholeFileWriteTools
 
     // D3: the project edges the move set needs, found on the committed solution. Facts are added to `facts`: package references and cycles always, and one
     // MissingProjectReference / MissingInternalsVisibleTo per needed edge whose toggle is off. Returns every needed edge (both kinds; the toggles are applied by the caller).
-    // TODO the three analyzer calls below each repeat the whole analysis (a FindReferences pass per moved type); expose one call that returns edges, cycles and package facts together
     private async Task<IReadOnlyList<NeededProjectEdge>> AnalyzeEdgesAsync(
         MoveSetPlanResult plan, Solution committed, bool addProjectReferences, bool addInternalsVisibleTo, List<MoveFact> facts, CancellationToken cancellationToken)
     {
@@ -562,8 +561,9 @@ public class WholeFileWriteTools
 
         try
         {
-            var edges = await MoveSetEdgeAnalyzer.AnalyzeAsync(plan, committed, cancellationToken);
-            foreach (var cyclic in await MoveSetEdgeAnalyzer.FindCycleEdgesAsync(plan, committed, cancellationToken))
+            var analysis = await MoveSetEdgeAnalyzer.AnalyzeAllAsync(plan, committed, cancellationToken);
+            var edges = analysis.Accepted;
+            foreach (var cyclic in analysis.Cyclic)
             {
                 facts.Add(new MoveFact(
                     MoveFactKind.EdgeWouldCloseCycle,
@@ -571,7 +571,7 @@ public class WholeFileWriteTools
                     $"a ProjectReference from '{cyclic.FromProject}' to '{cyclic.ToProject}' would close a project cycle, because '{cyclic.ToProject}' already depends on '{cyclic.FromProject}': {cyclic.Reason}"));
             }
 
-            facts.AddRange(await MoveSetEdgeAnalyzer.FindMissingPackageFactsAsync(plan, committed, cancellationToken));
+            facts.AddRange(analysis.PackageFacts);
             foreach (var edge in edges)
             {
                 if (edge.Kind == ProjectEdgeKind.ProjectReference && !addProjectReferences)
@@ -627,7 +627,8 @@ public class WholeFileWriteTools
             var text = CsprojEdgeWriter.Splice(
                 bytes,
                 edgesOfProject.ToList(),
-                referenced => Path.GetRelativePath(directory, ProjectLookup.FindProject(committed, referenced)!.FilePath!).Replace('/', '\\'));
+                referenced => Path.GetRelativePath(directory, ProjectLookup.FindProject(committed, referenced)!.FilePath!).Replace('/', '\\'),
+                receiver => ProjectLookup.FindProject(committed, receiver) is { } receiverProject ? MoveSetEdgeAnalyzer.ReceiverAssemblyName(receiverProject) : receiver);
             if (!string.Equals(text, System.Text.Encoding.UTF8.GetString(bytes), StringComparison.Ordinal))
             {
                 withEdges[_workspaceManager.ResolveFromWire(csprojPath)] = text;

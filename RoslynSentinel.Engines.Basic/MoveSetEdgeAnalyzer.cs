@@ -29,24 +29,34 @@ public static class MoveSetEdgeAnalyzer
     }
 
     /// <summary>
-    /// The ProjectReference edges the move set needs but that AnalyzeAsync withheld because adding them would close a cycle in the project
-    /// dependency graph. The tool lifts each to an EdgeWouldCloseCycle fact. Repeats the analysis; call it only when AnalyzeAsync found work.
+    /// Runs the edge analysis once and returns all three outputs: the accepted edges, the ProjectReference edges withheld because adding them
+    /// would close a cycle, and the missing-package facts. Prefer this over calling the three single-output methods, which each repeat the analysis.
     /// </summary>
-    public static async Task<IReadOnlyList<NeededProjectEdge>> FindCycleEdgesAsync(MoveSetPlanResult plan, Solution committed, CancellationToken cancellationToken)
+    public static async Task<MoveSetEdgeAnalysis> AnalyzeAllAsync(MoveSetPlanResult plan, Solution committed, CancellationToken cancellationToken)
     {
         var result = await AnalyzeCoreAsync(plan, committed, cancellationToken);
-        return result.Cyclic;
+        return new MoveSetEdgeAnalysis(result.Accepted, result.Cyclic, result.PackageFacts);
     }
 
     /// <summary>
-    /// MissingPackageReference facts for assemblies a moved file uses that are not projects and that the destination project does not
-    /// reference. Packages are facts only, never edges. Repeats the analysis; call it only when the move set crosses projects.
+    /// The ProjectReference edges the move set needs but that AnalyzeAsync withheld because adding them would close a cycle in the project
+    /// dependency graph. The tool lifts each to an EdgeWouldCloseCycle fact. Repeats the analysis.
     /// </summary>
+    [Obsolete("Use AnalyzeAllAsync")]
+    public static async Task<IReadOnlyList<NeededProjectEdge>> FindCycleEdgesAsync(MoveSetPlanResult plan, Solution committed, CancellationToken cancellationToken)
+        => (await AnalyzeAllAsync(plan, committed, cancellationToken)).Cyclic;
+
+    /// <summary>
+    /// MissingPackageReference facts for assemblies a moved file uses that are not projects and that the destination project does not
+    /// reference. Packages are facts only, never edges. Repeats the analysis.
+    /// </summary>
+    [Obsolete("Use AnalyzeAllAsync")]
     public static async Task<IReadOnlyList<MoveFact>> FindMissingPackageFactsAsync(MoveSetPlanResult plan, Solution committed, CancellationToken cancellationToken)
-    {
-        var result = await AnalyzeCoreAsync(plan, committed, cancellationToken);
-        return result.PackageFacts;
-    }
+        => (await AnalyzeAllAsync(plan, committed, cancellationToken)).PackageFacts;
+
+    /// <summary>The assembly name other assemblies use to refer to the project (the InternalsVisibleTo friend name): its AssemblyName, or its Name when that is empty.</summary>
+    public static string ReceiverAssemblyName(Project project)
+        => string.IsNullOrEmpty(project.AssemblyName) ? project.Name : project.AssemblyName;
 
     /// <summary>
     /// Returns a copy of the committed solution with the needed edges added as references or InternalsVisibleTo.
@@ -80,7 +90,7 @@ public static class MoveSetEdgeAnalyzer
             else if (edge.Kind == ProjectEdgeKind.InternalsVisibleTo && addInternalsVisibleTo)
             {
                 // The attribute names the receiving assembly, which can differ from the project name.
-                var receiver = string.IsNullOrEmpty(to.AssemblyName) ? to.Name : to.AssemblyName;
+                var receiver = ReceiverAssemblyName(to);
                 var directory = from.FilePath is { } projectPath ? Path.GetDirectoryName(projectPath) : null;
                 var fileName = $"MoveSetInternalsVisibleTo.{receiver}.g.cs";
                 var path = directory is null ? fileName : Path.Combine(directory, "obj", fileName);

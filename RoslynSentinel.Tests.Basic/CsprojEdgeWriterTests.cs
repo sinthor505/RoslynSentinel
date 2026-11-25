@@ -64,4 +64,30 @@ public sealed class CsprojEdgeWriterTests
         Assert.That(spliced, Does.Contain(ProjectReferenceItem));
         Assert.That(CsprojEdgeWriter.Splice(Encoding.UTF8.GetBytes(spliced), Edges), Is.EqualTo(spliced));
     }
+
+    [Test]
+    public void Splice_WithInternalsVisibleToName_WritesTheMappedIncludeValue()
+    {
+        // Pins: the optional mapper turns the receiving project name into the friend assembly name written as the InternalsVisibleTo Include.
+        var spliced = CsprojEdgeWriter.Splice(
+            Encoding.UTF8.GetBytes(Csproj),
+            Edges,
+            internalsVisibleToName: project => project == "App" ? "App.Assembly" : project);
+
+        Assert.That(spliced, Does.Contain("<InternalsVisibleTo Include=\"App.Assembly\" />"));
+        Assert.That(spliced, Does.Not.Contain(InternalsVisibleToItem));
+        Assert.That(spliced, Does.Contain(ProjectReferenceItem));
+    }
+
+    [Test]
+    public void Splice_WithoutInternalsVisibleToName_WritesTheProjectNameAsBefore()
+    {
+        // Pins: with no mapper the InternalsVisibleTo Include is the project name, the output of an explicit identity mapper, and the existing call shape is unchanged.
+        var bytes = Encoding.UTF8.GetBytes(Csproj);
+
+        var withoutMapper = CsprojEdgeWriter.Splice(bytes, Edges);
+
+        Assert.That(withoutMapper, Does.Contain(InternalsVisibleToItem));
+        Assert.That(CsprojEdgeWriter.Splice(bytes, Edges, internalsVisibleToName: project => project), Is.EqualTo(withoutMapper));
+    }
 }
