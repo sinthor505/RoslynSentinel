@@ -718,6 +718,7 @@ public class GitImpl : IGitOperations
         };
     }
 
+    [Obsolete("Use the GitHintKey overload")]
     private static GitTagResult TagFailure(string action, string kind, string error, string detail) => new()
     {
         Action = action,
@@ -725,6 +726,16 @@ public class GitImpl : IGitOperations
         ErrorKind = kind,
         Error = error,
         ErrorDetail = detail
+    };
+
+    /// <summary>Tag failure whose next-step text is a hint key rendered at the tool boundary; ErrorDetail stays null.</summary>
+    private static GitTagResult TagFailure(string action, string kind, string error, GitHintKey key, GitHintFacts? facts = null) => new()
+    {
+        Action = action,
+        IsError = true,
+        ErrorKind = kind,
+        Error = error,
+        Hints = [new GitHint(key, facts)]
     };
 
     /// <summary>
@@ -933,6 +944,7 @@ public class GitImpl : IGitOperations
         return writable.Contains($"{section}.{name}", StringComparer.OrdinalIgnoreCase);
     }
 
+    [Obsolete("Use the GitHintKey overload")]
     private static GitConfigResult ConfigFailure(string action, string kind, string error, string detail) => new()
     {
         Action = action,
@@ -940,6 +952,16 @@ public class GitImpl : IGitOperations
         ErrorKind = kind,
         Error = error,
         ErrorDetail = detail
+    };
+
+    /// <summary>Config failure whose next-step text is a hint key rendered at the tool boundary; ErrorDetail stays null.</summary>
+    private static GitConfigResult ConfigFailure(string action, string kind, string error, GitHintKey key, GitHintFacts? facts = null) => new()
+    {
+        Action = action,
+        IsError = true,
+        ErrorKind = kind,
+        Error = error,
+        Hints = [new GitHint(key, facts)]
     };
 
     /// <summary>Returns the fact-only error for a key that is not section.name or section.subsection.name, or null when the shape is valid.</summary>
@@ -1022,7 +1044,7 @@ public class GitImpl : IGitOperations
     {
         if (string.IsNullOrWhiteSpace(tagName))
             return TagFailure("create", GitErrorCodes.RefRequired,
-                "Git tag create needs tagName. Nothing was changed.", GitErrorDetails.RefRequiredTag);
+                "Git tag create needs tagName. Nothing was changed.", GitHintKey.RefRequiredTag);
         var name = tagName.Trim();
 
         // A leading '-' passes check-ref-format but would be read as an option by git tag.
@@ -1035,7 +1057,7 @@ public class GitImpl : IGitOperations
         if (!formatOk)
             return TagFailure("create", GitErrorCodes.InvalidName,
                 $"'{name}' is not a valid tag name (no spaces, '..', '~', '^', ':', leading '-' or trailing '.lock'). Nothing was changed.",
-                GitErrorDetails.InvalidName);
+                GitHintKey.InvalidName);
 
         var existing = await RunGitAsync(gitRoot, ["rev-parse", "--verify", "--quiet", $"refs/tags/{name}"], cancellationToken);
         if (existing.ExitCode == 0)
@@ -1044,7 +1066,7 @@ public class GitImpl : IGitOperations
             var existingHash = existingShort.ExitCode == 0 ? existingShort.Stdout.Trim() : existing.Stdout.Trim();
             return TagFailure("create", GitErrorCodes.AlreadyExists,
                 $"Tag '{name}' already exists (points at {existingHash}). This tool never overwrites or moves a tag. Use a new name, or delete it first ({ToolCallHint.Call("GitRemote", ("operation", "tag"), ("action", "delete"), ("tagName", name))}) and recreate. Nothing was changed.",
-                GitErrorDetails.AlreadyExists);
+                GitHintKey.AlreadyExists);
         }
 
         var target = string.IsNullOrWhiteSpace(refName) ? "HEAD" : refName.Trim();
@@ -1056,7 +1078,7 @@ public class GitImpl : IGitOperations
         if (resolved.ExitCode != 0 || targetHash.Length == 0)
             return TagFailure("create", GitErrorCodes.TargetNotFound,
                 $"Ref '{target}' does not resolve to a commit. Nothing was changed.",
-                GitErrorDetails.TargetNotFound);
+                GitHintKey.TargetNotFound);
 
         var annotated = !string.IsNullOrWhiteSpace(message);
         string[] createArgs = annotated
@@ -1085,7 +1107,7 @@ public class GitImpl : IGitOperations
     {
         if (string.IsNullOrWhiteSpace(tagName))
             return TagFailure("delete", GitErrorCodes.RefRequired,
-                "Git tag delete needs tagName. Nothing was changed.", GitErrorDetails.RefRequiredTag);
+                "Git tag delete needs tagName. Nothing was changed.", GitHintKey.RefRequiredTag);
         var name = tagName.Trim();
 
         var existing = await RunGitAsync(gitRoot, ["rev-parse", "--verify", "--quiet", $"refs/tags/{name}"], cancellationToken);
@@ -1100,7 +1122,7 @@ public class GitImpl : IGitOperations
                 : $"Existing tags: {string.Join(", ", known.Take(10))}{(known.Count > 10 ? $" and {known.Count - 10} more" : "")}.";
             return TagFailure("delete", GitErrorCodes.TargetNotFound,
                 $"Tag '{name}' does not exist. {listed} Nothing was changed.",
-                GitErrorDetails.TargetNotFound);
+                GitHintKey.TargetNotFound);
         }
 
         var kindRaw = await RunGitAsync(gitRoot, ["for-each-ref", "--format=%(objecttype)", $"refs/tags/{name}"], cancellationToken);
@@ -1160,6 +1182,7 @@ public class GitImpl : IGitOperations
         }
     }
 
+    [Obsolete("Use the GitHintKey overload")]
     private static GitStashResult StashFailure(string action, string kind, string error, string detail) => new()
     {
         Action = action,
@@ -1169,13 +1192,23 @@ public class GitImpl : IGitOperations
         ErrorDetail = detail
     };
 
+    /// <summary>Stash failure whose next-step text is a hint key rendered at the tool boundary; ErrorDetail stays null.</summary>
+    private static GitStashResult StashFailure(string action, string kind, string error, GitHintKey key, GitHintFacts? facts = null) => new()
+    {
+        Action = action,
+        IsError = true,
+        ErrorKind = kind,
+        Error = error,
+        Hints = [new GitHint(key, facts)]
+    };
+
     private async Task<GitStashResult> StashRestoreAsync(
     string gitRoot, bool pop, int? stashIndex, CancellationToken cancellationToken)
     {
         var action = pop ? "pop" : "apply";
         if (stashIndex is null)
             return StashFailure(action, GitErrorCodes.RefRequired,
-                $"Git stash {action} needs stashIndex (0 = newest). Nothing was changed.", GitErrorDetails.RefRequiredStash);
+                $"Git stash {action} needs stashIndex (0 = newest). Nothing was changed.", GitHintKey.RefRequiredStash);
         var index = stashIndex.Value;
 
         var entriesBefore = await StashCountAsync(gitRoot, cancellationToken);
@@ -1184,7 +1217,7 @@ public class GitImpl : IGitOperations
         if (index < 0 || index >= entriesBefore)
             return StashFailure(action, GitErrorCodes.TargetNotFound,
                 $"stash@{{{index}}} does not exist: the stash has {entriesBefore} {(entriesBefore == 1 ? "entry" : "entries")}. Nothing was changed.",
-                GitErrorDetails.TargetNotFound);
+                GitHintKey.TargetNotFound);
 
         // Precondition: no tracked changes, staged or unstaged. The D-18 rollback below relies on it.
         var dirty = await TrackedChangePathsAsync(gitRoot, cancellationToken);
@@ -1193,7 +1226,7 @@ public class GitImpl : IGitOperations
         if (dirty.Count > 0)
             return StashFailure(action, GitErrorCodes.WorkingTreeDirty,
                 $"Cannot {action} stash@{{{index}}}: the tracked tree has uncommitted changes in: {FormatPathSample(dirty)}. Nothing was changed.",
-                GitErrorDetails.WorkingTreeDirty);
+                GitHintKey.WorkingTreeDirty);
 
         // Deliberately no --index: staged state is not restored.
         var raw = await RunGitAsync(gitRoot, ["stash", action, $"stash@{{{index}}}"], cancellationToken);
@@ -1279,7 +1312,7 @@ public class GitImpl : IGitOperations
             return StashFailure(action, GitErrorCodes.StashConflict,
                 $"Applying stash@{{{stashIndex}}} conflicts with the current tree in: {FormatPathSample(conflicted)}. " +
                 $"The attempt was rolled back (git reset --merge): the tracked tree is clean again and stash@{{{stashIndex}}} was kept. Nothing was changed.",
-                GitErrorDetails.StashConflict);
+                GitHintKey.StashConflict);
 
         return StashFailure(action, GitErrorCodes.StashConflict,
             $"Applying stash@{{{stashIndex}}} conflicts, and the rollback could not be verified ({string.Join("; ", failed)}). " +
@@ -1300,7 +1333,7 @@ public class GitImpl : IGitOperations
             {
                 var pathError = ValidateRepoRoot(gitRoot, p);
                 if (pathError != null)
-                    return StashFailure("push", GitErrorCodes.PathNotFound, $"{pathError}. Nothing was changed.", GitErrorDetails.PathNotFound);
+                    return StashFailure("push", GitErrorCodes.PathNotFound, $"{pathError}. Nothing was changed.", GitHintKey.PathNotFound);
                 pathList.Add(p);
             }
         }
@@ -1323,7 +1356,7 @@ public class GitImpl : IGitOperations
         if (statusRaw.Stdout.Trim().Length == 0)
             return StashFailure("push", GitErrorCodes.NoChanges,
                 $"Nothing to stash: no modified tracked files{(includeUntracked ? ", and no untracked files" : "")}{(pathList.Count > 0 ? " among the named paths" : "")}. Nothing was changed.",
-                GitErrorDetails.NoChanges);
+                GitHintKey.NoChanges);
 
         var before = (await RunGitAsync(gitRoot, ["rev-parse", "-q", "--verify", "refs/stash"], cancellationToken)).Stdout.Trim();
 
@@ -1341,7 +1374,7 @@ public class GitImpl : IGitOperations
         {
             if (pushed.Stderr.Contains("did not match any file(s)"))
                 return StashFailure("push", GitErrorCodes.PathNotFound,
-                    $"{CleanGitStderr(pushed.Stderr)}. Nothing was changed.", GitErrorDetails.PathNotFound);
+                    $"{CleanGitStderr(pushed.Stderr)}. Nothing was changed.", GitHintKey.PathNotFound);
             return await AppendInProgressAsync(new GitStashResult
             {
                 Action = "push",
@@ -1354,7 +1387,7 @@ public class GitImpl : IGitOperations
         if (after.Length == 0 || after == before)
             return StashFailure("push", GitErrorCodes.NoChanges,
                 "Nothing was stashed: git reported success but no stash entry was created. Nothing was changed.",
-                GitErrorDetails.NoChanges);
+                GitHintKey.NoChanges);
 
         var top = await StashListAsync(gitRoot, 1, cancellationToken);
         return new GitStashResult
@@ -1496,6 +1529,7 @@ public class GitImpl : IGitOperations
         }
     }
 
+    [Obsolete("Use the GitHintKey overload")]
     private static GitWorktreeResult WorktreeFailure(string action, string kind, string error, string detail) => new()
     {
         Action = action,
@@ -1503,6 +1537,16 @@ public class GitImpl : IGitOperations
         ErrorKind = kind,
         Error = error,
         ErrorDetail = detail
+    };
+
+    /// <summary>Worktree failure whose next-step text is a hint key rendered at the tool boundary; ErrorDetail stays null.</summary>
+    private static GitWorktreeResult WorktreeFailure(string action, string kind, string error, GitHintKey key, GitHintFacts? facts = null) => new()
+    {
+        Action = action,
+        IsError = true,
+        ErrorKind = kind,
+        Error = error,
+        Hints = [new GitHint(key, facts)]
     };
 
     private static class WorktreeNativePaths
@@ -1632,7 +1676,7 @@ public class GitImpl : IGitOperations
             var missing = string.IsNullOrWhiteSpace(worktreePath) && string.IsNullOrWhiteSpace(branchName) ? "worktreePath and branchName"
                 : string.IsNullOrWhiteSpace(worktreePath) ? "worktreePath" : "branchName";
             return WorktreeFailure("add", GitErrorCodes.RefRequired,
-                $"Git worktree add needs {missing}. Nothing was changed.", GitErrorDetails.RefRequiredWorktree);
+                $"Git worktree add needs {missing}. Nothing was changed.", GitHintKey.RefRequiredWorktree);
         }
         var path = worktreePath.Trim();
         var branch = branchName.Trim();
@@ -1656,7 +1700,7 @@ public class GitImpl : IGitOperations
             return WorktreeFailure("add", GitErrorCodes.Refused,
                 "A worktree inside the repository would be compiled into the loaded solution and shows up in this repo's diffs (the Worktree/ trap). " +
                 $"Use a sibling directory,{(example.Length > 0 ? example : " outside the repository root")}. Nothing was changed.",
-                GitErrorDetails.Refused);
+                GitHintKey.Refused);
         }
 
         // startPoint only means something when a branch is being created; dropping it silently would
@@ -1665,7 +1709,7 @@ public class GitImpl : IGitOperations
             return WorktreeFailure("add", GitErrorCodes.Refused,
                 $"startPoint '{startPoint}' was supplied without createBranch=true, so it would be ignored. " +
                 "Pass createBranch=true to create the branch from it, or omit startPoint to add a worktree for the existing branch. Nothing was changed.",
-                GitErrorDetails.Refused);
+                GitHintKey.Refused);
 
         // A leading '-' would be read by git as an option.
         var nameOk = !branch.StartsWith('-');
@@ -1677,13 +1721,13 @@ public class GitImpl : IGitOperations
         if (!nameOk)
             return WorktreeFailure("add", GitErrorCodes.InvalidName,
                 $"'{branch}' is not a valid branch name (no spaces, '..', '~', '^', ':', leading '-' or trailing '.lock'). Nothing was changed.",
-                GitErrorDetails.InvalidName);
+                GitHintKey.InvalidName);
 
         // (c) the target path must be free: absent, or an existing empty directory.
         if (File.Exists(target) || (Directory.Exists(target) && Directory.EnumerateFileSystemEntries(target).Any()))
             return WorktreeFailure("add", GitErrorCodes.AlreadyExists,
                 $"Path '{path}' already exists and is not empty; a worktree cannot be added there. Nothing was changed.",
-                GitErrorDetails.AlreadyExists);
+                GitHintKey.AlreadyExists);
 
         var exists = (await RunGitAsync(gitRoot, ["rev-parse", "--verify", "--quiet", $"refs/heads/{branch}"], cancellationToken)).ExitCode == 0;
         if (!createBranch && !exists)
@@ -1694,7 +1738,7 @@ public class GitImpl : IGitOperations
             return WorktreeFailure("add", GitErrorCodes.AlreadyExists,
                 $"Branch '{branch}' already exists, and this tool does not silently reuse it for a new worktree. " +
                 "Pass createBranch=false to check the existing branch out in the new worktree, or choose a new branch name. Nothing was changed.",
-                GitErrorDetails.AlreadyExists);
+                GitHintKey.AlreadyExists);
 
         string? baseRef = null;
         if (createBranch)
@@ -1706,7 +1750,7 @@ public class GitImpl : IGitOperations
                 : await RunGitAsync(gitRoot, ["rev-parse", "--verify", "--quiet", $"{baseRef}^{{commit}}"], cancellationToken);
             if (resolved.ExitCode != 0)
                 return WorktreeFailure("add", GitErrorCodes.TargetNotFound,
-                    $"startPoint '{baseRef}' does not resolve to a commit. Nothing was changed.", GitErrorDetails.TargetNotFound);
+                    $"startPoint '{baseRef}' does not resolve to a commit. Nothing was changed.", GitHintKey.TargetNotFound);
         }
 
         var (entries, listError) = await ListWorktreesAsync(gitRoot, cancellationToken);
@@ -1720,7 +1764,7 @@ public class GitImpl : IGitOperations
             if (holder is not null)
                 return WorktreeFailure("add", GitErrorCodes.AlreadyExists,
                     $"Branch '{branch}' is already checked out in the worktree at '{holder.Path}'; a branch can be checked out in only one worktree. Nothing was changed.",
-                    GitErrorDetails.AlreadyExists);
+                    GitHintKey.AlreadyExists);
         }
 
         string[] args = createBranch
@@ -1769,7 +1813,7 @@ public class GitImpl : IGitOperations
     {
         if (string.IsNullOrWhiteSpace(worktreePath))
             return WorktreeFailure("remove", GitErrorCodes.RefRequired,
-                "Git worktree remove needs worktreePath. Nothing was removed.", GitErrorDetails.RefRequiredWorktree);
+                "Git worktree remove needs worktreePath. Nothing was removed.", GitHintKey.RefRequiredWorktree);
         var path = worktreePath.Trim();
 
         var (entries, listError) = await ListWorktreesAsync(gitRoot, cancellationToken);
@@ -1783,7 +1827,7 @@ public class GitImpl : IGitOperations
         if (entry is null)
             return WorktreeFailure("remove", GitErrorCodes.TargetNotFound,
                 $"No worktree at '{path}'. Known worktrees: {FormatWorktreePaths(entries.Select(e => e.Path).ToList())}. Nothing was removed.",
-                GitErrorDetails.TargetNotFound);
+                GitHintKey.TargetNotFound);
 
         if (entry.IsMain)
             return WorktreeFailure("remove", GitErrorCodes.Refused,
@@ -2101,7 +2145,7 @@ public class GitImpl : IGitOperations
 
     private static FileDiffLoad NoUnstagedChangesLoad(string path) => new(path, null, GitErrorCodes.NoChanges,
     $"No unstaged changes in '{path}'. Already staged? {ToolCallHint.Call("Git", ("operation", "diff"), ("ref", "staged"), ("paths", "..."))}. Nothing was changed.",
-    GitErrorDetails.NoChanges);
+    null, [new GitHint(GitHintKey.NoChanges)]);
 
     /// <summary>Outcome of loading one file's unstaged diff: Diff is set on success; otherwise ErrorKind, Error and
     /// ErrorDetail describe the classified failure. Shared by operation=hunks and the hunk stage.</summary>
@@ -2138,7 +2182,7 @@ public class GitImpl : IGitOperations
         if (unsupported is not null)
         {
             return new FileDiffLoad(path, null, GitErrorCodes.HunkUnsupported,
-                $"'{path}' {unsupported}, so it has no text hunks to choose from. Nothing was changed.", GitErrorDetails.HunkUnsupported);
+                $"'{path}' {unsupported}, so it has no text hunks to choose from. Nothing was changed.", null, [new GitHint(GitHintKey.HunkUnsupported)]);
         }
         if (diff.Hunks.Count == 0)
             return NoUnstagedChangesLoad(path);
@@ -2152,7 +2196,7 @@ public class GitImpl : IGitOperations
     {
         var list = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var listError);
         if (list is null)
-            return new FileDiffLoad("", null, GitErrorCodes.HunkSelection, $"{listError} Nothing was changed.", GitErrorDetails.HunkSelection);
+            return new FileDiffLoad("", null, GitErrorCodes.HunkSelection, $"{listError} Nothing was changed.", null, [new GitHint(GitHintKey.HunkSelection)]);
         if (list.Length == 0)
         {
             return new FileDiffLoad("", null, GitErrorCodes.RefRequired,
@@ -2162,12 +2206,12 @@ public class GitImpl : IGitOperations
         if (list.Length > 1)
         {
             return new FileDiffLoad("", null, GitErrorCodes.HunkSelection,
-                $"hunks works on one file at a time; got {list.Length}. Nothing was changed.", GitErrorDetails.HunkSelection);
+                $"hunks works on one file at a time; got {list.Length}. Nothing was changed.", null, [new GitHint(GitHintKey.HunkSelection)]);
         }
 
         var pathError = ValidateRepoRoot(gitRoot, list[0]);
         if (pathError is not null)
-            return new FileDiffLoad(list[0], null, GitErrorCodes.PathNotFound, $"{pathError}. Nothing was changed.", GitErrorDetails.PathNotFound);
+            return new FileDiffLoad(list[0], null, GitErrorCodes.PathNotFound, $"{pathError}. Nothing was changed.", null, [new GitHint(GitHintKey.PathNotFound)]);
 
         var classified = (await ClassifyPathsAsync(gitRoot, [list[0]], cancellationToken))[0];
         var path = classified.Path;
@@ -2179,14 +2223,14 @@ public class GitImpl : IGitOperations
                     isDirectory
                         ? $"'{path}' is a directory; hunks works on one tracked file at a time. Nothing was changed."
                         : $"'{path}' is untracked: untracked files have no hunks to choose from; stage the whole file with {ToolCallHint.Call("Git", ("operation", "stage"), ("paths", "..."))}. Nothing was changed.",
-                    GitErrorDetails.HunkUnsupported);
+                    null, [new GitHint(GitHintKey.HunkUnsupported)]);
             case PathClassification.Missing:
                 return new FileDiffLoad(path, null, GitErrorCodes.PathNotFound,
-                    $"'{path}' is not tracked and does not exist on disk. Nothing was changed.", GitErrorDetails.PathNotFound);
+                    $"'{path}' is not tracked and does not exist on disk. Nothing was changed.", null, [new GitHint(GitHintKey.PathNotFound)]);
             case PathClassification.HeadOnly:
                 return new FileDiffLoad(path, null, GitErrorCodes.HunkUnsupported,
                     $"'{path}' is deleted (tracked in HEAD, gone from the index), so it has no hunks to choose from. Nothing was changed.",
-                    GitErrorDetails.HunkUnsupported);
+                    null, [new GitHint(GitHintKey.HunkUnsupported)]);
         }
 
         return await LoadDiffForPathAsync(gitRoot, path, cancellationToken);
@@ -2239,7 +2283,7 @@ public class GitImpl : IGitOperations
     // Resolves hunkIds (guarded by the fingerprint) or lineRange to the selection to stage. Returns null on success with
     // the selection in `selection`; otherwise the classified refusal. Exactly one of the two is non-blank. A lineRange may cut
     // a hunk (a sub-hunk) whose body is a run of removed lines followed by a run of added lines; a partly covered hunk of any other shape is refused.
-    private static (string Kind, string Error, string Detail)? SelectHunks(
+    private static (string Kind, string Error, string? Detail, IReadOnlyList<GitHint>? Hints)? SelectHunks(
         GitFileDiff diff, string path, string? hunkIds, string? hunkFingerprint, string? lineRange, out GitLineSelectionResult selection)
     {
         selection = new GitLineSelectionResult([], [], []);
@@ -2248,23 +2292,23 @@ public class GitImpl : IGitOperations
             if (string.IsNullOrWhiteSpace(hunkFingerprint))
             {
                 return (GitErrorCodes.HunkSelection,
-                    $"hunkIds needs the hunkFingerprint returned by {ToolCallHint.Call("Git", ("operation", "hunks"))}. Nothing was staged.", GitErrorDetails.HunkSelection);
+                    $"hunkIds needs the hunkFingerprint returned by {ToolCallHint.Call("Git", ("operation", "hunks"))}. Nothing was staged.", null, [new GitHint(GitHintKey.HunkSelection)]);
             }
             var given = hunkFingerprint.Trim();
             if (!string.Equals(given, diff.Fingerprint, StringComparison.OrdinalIgnoreCase))
             {
                 return (GitErrorCodes.HunkStale,
                     $"'{path}' changed since the hunks were listed (fingerprint {given} vs {diff.Fingerprint}). " +
-                    $"Re-run {ToolCallHint.Call("Git", ("operation", "hunks"), ("paths", path))} and pick again. Nothing was staged.", GitErrorDetails.HunkStale);
+                    $"Re-run {ToolCallHint.Call("Git", ("operation", "hunks"), ("paths", path))} and pick again. Nothing was staged.", null, [new GitHint(GitHintKey.HunkStale)]);
             }
             if (!GitHunkParser.TryParseHunkIds(hunkIds, diff.Hunks.Count, out var ids, out var idError))
-                return (GitErrorCodes.HunkSelection, $"{idError} {DescribeHunkSpans(diff)} Nothing was staged.", GitErrorDetails.HunkSelection);
+                return (GitErrorCodes.HunkSelection, $"{idError} {DescribeHunkSpans(diff)} Nothing was staged.", null, [new GitHint(GitHintKey.HunkSelection)]);
             selection = new GitLineSelectionResult(ids, [], []);
             return null;
         }
 
         if (!GitHunkParser.TryParseLineRange(lineRange, out var from, out var to, out var rangeError))
-            return (GitErrorCodes.HunkSelection, $"{rangeError} {DescribeHunkSpans(diff)} Nothing was staged.", GitErrorDetails.HunkSelection);
+            return (GitErrorCodes.HunkSelection, $"{rangeError} {DescribeHunkSpans(diff)} Nothing was staged.", null, [new GitHint(GitHintKey.HunkSelection)]);
 
         var picked = GitHunkParser.SelectLines(diff, from, to);
         if (picked.Unsupported.Count > 0)
@@ -2282,13 +2326,13 @@ public class GitImpl : IGitOperations
                 $"{string.Join(' ', parts)} The body of hunk {unsupportedIds} is not a run of removed lines followed by a run of added lines (or its cut would join text onto a final line without a newline), so it cannot be cut at that range. " +
                 $"Widen the range to {SpanText(lo, hi)} to take the whole hunk, pass hunkIds from {ToolCallHint.Call("Git", ("operation", "hunks"), ("paths", path))}, " +
                 $"or stage the whole file with {ToolCallHint.Call("Git", ("operation", "stage"), ("paths", path))}. {DescribeHunkSpans(diff)} Nothing was staged.",
-                GitErrorDetails.HunkSelection);
+                null, [new GitHint(GitHintKey.HunkSelection)]);
         }
         if (picked.WholeHunks.Count == 0 && picked.SubHunks.Count == 0)
         {
             return (GitErrorCodes.HunkSelection,
                 $"No hunk overlaps lines {SpanText(from, to)}. {DescribeHunkSpans(diff)} Nothing was staged.",
-                GitErrorDetails.HunkSelection);
+                null, [new GitHint(GitHintKey.HunkSelection)]);
         }
         selection = picked;
         return null;
@@ -2391,6 +2435,16 @@ public class GitImpl : IGitOperations
         Error = error,
             ErrorDetail = detail,
             Hints = hints
+        };
+
+    /// <summary>Stage-hunks failure whose next-step text is a hint key rendered at the tool boundary; ErrorDetail stays null.</summary>
+    private static GitStageHunksResult StageHunksFailure(string path, string kind, string error, GitHintKey key, GitHintFacts? facts = null) => new()
+    {
+        Path = path,
+        IsError = true,
+        ErrorKind = kind,
+        Error = error,
+        Hints = [new GitHint(key, facts)]
     };
 
     // Runs after git apply succeeded: re-reads the unstaged diff to count what is left, and copies the repository
@@ -2453,7 +2507,7 @@ public class GitImpl : IGitOperations
             if (string.IsNullOrWhiteSpace(hunkIds) == string.IsNullOrWhiteSpace(lineRange))
             {
                 return StageHunksFailure("", GitErrorCodes.HunkSelection,
-                    "Pass hunkIds (with hunkFingerprint) or lineRange, not both. Nothing was staged.", GitErrorDetails.HunkSelection);
+                    "Pass hunkIds (with hunkFingerprint) or lineRange, not both. Nothing was staged.", GitHintKey.HunkSelection);
             }
 
             var load = await LoadFileDiffAsync(gitRoot, paths, cancellationToken);
@@ -2462,8 +2516,7 @@ public class GitImpl : IGitOperations
 
             var rejection = SelectHunks(load.Diff, load.Path, hunkIds, hunkFingerprint, lineRange, out var selection);
             if (rejection is { } refused)
-                // TODO carry refused.Hints once SelectHunks returns hints (plan_isolate_git_area_into_own_project Step 5c)
-                return StageHunksFailure(load.Path, refused.Kind, refused.Error, refused.Detail);
+                return StageHunksFailure(load.Path, refused.Kind, refused.Error, refused.Detail ?? "", refused.Hints);
 
             // Outside the repo, so the workspace file watcher never sees it. Latin-1 keeps every byte of the
             // patch (including CR) exactly as git printed it.
@@ -2472,7 +2525,7 @@ public class GitImpl : IGitOperations
 
             _afterHunkDiffLoaded?.Invoke(gitRoot);
             if (await IndexEntryChangedMessageAsync(gitRoot, load.Path, load.Diff, cancellationToken) is { } indexChanged)
-                return StageHunksFailure(load.Path, GitErrorCodes.HunkStale, indexChanged, GitErrorDetails.HunkStale);
+                return StageHunksFailure(load.Path, GitErrorCodes.HunkStale, indexChanged, GitHintKey.HunkStale);
 
             var apply = await RunGitAsync(gitRoot,
                 ["apply", "--cached", "--unidiff-zero", "--whitespace=nowarn", patchFile], cancellationToken);
@@ -2631,7 +2684,13 @@ public class GitImpl : IGitOperations
 
         result.Error += advice;
         result.ErrorKind ??= GitErrorCodes.OperationInProgress;
-        result.ErrorDetail ??= GitErrorDetails.OperationInProgress;
+        // A hint whose slot is ErrorDetail renders into ErrorDetail at the tool boundary, so it counts as "already set" exactly as a text did.
+        if (result.ErrorDetail is null && !(result.Hints?.Any(h => GitHintText.SlotOf(h.Key) == GitHintSlot.ErrorDetail) ?? false))
+        {
+            var hints = result.Hints is null ? new List<GitHint>() : new List<GitHint>(result.Hints);
+            hints.Add(new GitHint(GitHintKey.OperationInProgress));
+            result.Hints = hints;
+        }
         return result;
     }
 
@@ -3458,7 +3517,7 @@ public class GitImpl : IGitOperations
                             {
                                 IsError = true,
                                 ErrorKind = GitErrorCodes.PathNotFound,
-                                ErrorDetail = GitErrorDetails.PathNotFound,
+                                Hints = [new GitHint(GitHintKey.PathNotFound)],
                                 Error = $"{error}. Nothing was staged."
                             };
                         }
@@ -3476,7 +3535,7 @@ public class GitImpl : IGitOperations
                         {
                             IsError = true,
                             ErrorKind = GitErrorCodes.PathNotFound,
-                            ErrorDetail = GitErrorDetails.PathNotFound,
+                            Hints = [new GitHint(GitHintKey.PathNotFound)],
                             Error = $"The following paths are not tracked and do not exist on disk: {missingList}. Nothing was staged."
                         };
                     }
@@ -3517,7 +3576,7 @@ public class GitImpl : IGitOperations
                             {
                                 IsError = true,
                                 ErrorKind = GitErrorCodes.IgnoredPath,
-                                ErrorDetail = GitErrorDetails.IgnoredPath,
+                                Hints = [new GitHint(GitHintKey.IgnoredPath)],
                                 Error = $"The following paths are ignored by .gitignore: {ignoredNames}. The tool has no -f flag to force-add them. Remove them from the list or un-ignore them in .gitignore to stage them. Nothing was staged."
                             };
                         }
@@ -3535,7 +3594,7 @@ public class GitImpl : IGitOperations
                                 {
                                     IsError = true,
                                     ErrorKind = GitErrorCodes.IgnoredPath,
-                                    ErrorDetail = GitErrorDetails.IgnoredPath,
+                                    Hints = [new GitHint(GitHintKey.IgnoredPath)],
                                     Error = $"The following paths are ignored by .gitignore: {ignoredList}. The tool has no -f flag to force-add them. Remove them from the list or un-ignore them in .gitignore to stage them. Nothing was staged."
                                 };
                             }
@@ -3673,7 +3732,7 @@ public class GitImpl : IGitOperations
                         {
                             IsError = true,
                             ErrorKind = GitErrorCodes.PathNotFound,
-                            ErrorDetail = GitErrorDetails.PathNotFound,
+                            Hints = [new GitHint(GitHintKey.PathNotFound)],
                             Error = $"{error}. Nothing was committed."
                         };
                     }
@@ -3693,7 +3752,7 @@ public class GitImpl : IGitOperations
                     {
                         IsError = true,
                         ErrorKind = GitErrorCodes.PathNotFound,
-                        ErrorDetail = GitErrorDetails.PathNotFound,
+                        Hints = [new GitHint(GitHintKey.PathNotFound)],
                         Error = $"The following paths are not tracked and do not exist on disk: {missingList}. Nothing was committed."
                     };
                 }
@@ -3712,7 +3771,7 @@ public class GitImpl : IGitOperations
                         {
                             IsError = true,
                             ErrorKind = GitErrorCodes.IgnoredPath,
-                            ErrorDetail = GitErrorDetails.IgnoredPath,
+                            Hints = [new GitHint(GitHintKey.IgnoredPath)],
                             Error = $"The following paths are ignored by .gitignore: {ignoredNames}. The tool has no -f flag to force-add them. Remove them from the list or un-ignore them in .gitignore to commit them. Nothing was committed."
                         };
                     }
@@ -3732,7 +3791,7 @@ public class GitImpl : IGitOperations
                             {
                                 IsError = true,
                                 ErrorKind = GitErrorCodes.IgnoredPath,
-                                ErrorDetail = GitErrorDetails.IgnoredPath,
+                                Hints = [new GitHint(GitHintKey.IgnoredPath)],
                                 Error = $"The following paths are ignored by .gitignore: {ignoredList}. The tool has no -f flag to force-add them. Remove them from the list or un-ignore them in .gitignore to commit them. Nothing was committed."
                             };
                         }
@@ -3749,7 +3808,7 @@ public class GitImpl : IGitOperations
                         if (addLockPath is not null)
                         {
                             addFailed.ErrorKind = GitErrorCodes.IndexLocked;
-                            addFailed.ErrorDetail = GitErrorDetails.IndexLocked(addLockPath);
+                            addFailed.Hints = [new GitHint(GitHintKey.IndexLocked, new GitHintFacts { LockPath = addLockPath })];
                         }
                         return addFailed;
                     }
@@ -3845,7 +3904,7 @@ public class GitImpl : IGitOperations
                 if (indexLockPath is not null)
                 {
                     failed.ErrorKind = GitErrorCodes.IndexLocked;
-                    failed.ErrorDetail = GitErrorDetails.IndexLocked(indexLockPath);
+                    failed.Hints = [new GitHint(GitHintKey.IndexLocked, new GitHintFacts { LockPath = indexLockPath })];
                 }
                 // Hook rejection, tested before the NothingToCommit fallback (an empty index plus a rejecting pre-commit hook would
                 // otherwise send the caller to stage). git prints nothing of its own when a hook declines, so the signal is structural
@@ -3860,12 +3919,12 @@ public class GitImpl : IGitOperations
                     && !(nothingStaged && IsGitNothingToCommitText(commitRaw.Stdout, commitRaw.Stderr)))
                 {
                     failed.ErrorKind = GitErrorCodes.HookRejected;
-                    failed.ErrorDetail = GitErrorDetails.HookRejected;
+                    failed.Hints = [new GitHint(GitHintKey.HookRejected)];
                 }
                 else if (nothingStaged)
                 {
                     failed.ErrorKind = GitErrorCodes.NothingToCommit;
-                    failed.ErrorDetail = GitErrorDetails.NothingToCommit;
+                    failed.Hints = [new GitHint(GitHintKey.NothingToCommit)];
                 }
 
                 return await AppendInProgressAsync(failed, gitRoot, cancellationToken);
@@ -4091,7 +4150,7 @@ public class GitImpl : IGitOperations
         string gitRoot, string? commitHash, bool noCommit, int? mainline, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(commitHash))
-            return new GitRevertResult { IsError = true, ErrorKind = GitErrorCodes.RefRequired, ErrorDetail = GitErrorDetails.RefRequiredRevert, Error = "ref is required for operation=revert." };
+            return new GitRevertResult { IsError = true, ErrorKind = GitErrorCodes.RefRequired, Hints = [new GitHint(GitHintKey.RefRequiredRevert)], Error = "ref is required for operation=revert." };
 
         if (mainline is < 1)
             return new GitRevertResult { IsError = true, Error = $"mainline must be 1 or greater (got {mainline}); 1 is the parent that was merged into. Nothing was reverted." };
@@ -4412,7 +4471,7 @@ public class GitImpl : IGitOperations
             {
                 IsError = true,
                 ErrorKind = GitErrorCodes.RefRequired,
-                ErrorDetail = GitErrorDetails.RefRequiredReset,
+                Hints = [new GitHint(GitHintKey.RefRequiredReset)],
                 Error = "reset needs an explicit ref, e.g. ref: \"HEAD~1\" to undo the last commit (working tree kept). " +
                         "To unstage without moving HEAD use operation=unstage. Nothing was reset."
             };
@@ -4514,7 +4573,7 @@ public class GitImpl : IGitOperations
             {
                 IsError = true,
                 ErrorKind = GitErrorCodes.RefRequired,
-                ErrorDetail = GitErrorDetails.RefRequiredCheckout,
+                Hints = [new GitHint(GitHintKey.RefRequiredCheckout)],
                 Error = $"branchName is required for {ToolCallHint.Call("GitRemote", ("operation", "checkout"))}. Pass the branch to switch to, and createBranch=true if it doesn't exist yet."
             };
         }
