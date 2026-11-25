@@ -585,7 +585,25 @@ host 113 (Qwen3.5-9B-MTP-GGUF, llama-server/Unsloth) on 2026-11-25; scripts, bod
 
 ## Risks and open decisions
 
-None open. Implementer defaults (stated again in the steps that use them):
+- Cross-plan: `plan_startup_configuration_registry.md` (DRAFT 2026-11-25) declares every
+  `ROSLYNSENTINEL_*` env var as a `StartupSetting` descriptor and adds a source-scan guard (its T10)
+  that rejects a `ROSLYNSENTINEL_*` literal or an `Environment.GetEnvironmentVariable` call in product
+  code outside its registry. Its author was asked (2026-11-25) to add `AgentLoop/ThinkingOptions.cs`
+  to its Step 13a. Ordering:
+  - This plan first (expected): run as written. The registry later turns the four `*Variable`
+    constants into descriptors (scope `AgentLoop`, env-only, `Live`; a custom parser for the trigger
+    list; effort non-blank), `FromEnvironment` builds the record from their values, and
+    `InvalidThinkingSettingException` is replaced by the registry's Invalid record plus its
+    `ThrowIfInvalid` in `ModelEvalAssemblySetUp`.
+  - Registry first: Steps 1-2 declare the four settings as descriptors in a
+    `[StartupSettingGroup]` class instead of reading the environment, drop
+    `InvalidThinkingSettingException`, and keep the `ThinkingOptions` record, `Off`, `Decide` and the
+    known-effort warning; Step 6 places the `ThinkingDefault` line after the registry's `ConfigureAll`
+    in `ModelEvalAssemblySetUp`; Step 9's doc rows are replaced by the generated configuration
+    reference. Re-check `ThinkingOptionsTests` rows that assert the exception.
+  - Either way, both plans edit `ModelEvalAssemblySetUp.cs`; the second to land rebases.
+
+Implementer defaults (stated again in the steps that use them):
 - Q16 backend: the `reasoning` field is sent the same way on the `lmstudio` and `llama-server`
   backends; untested on `lmstudio` (unreachable on every host 2026-11-25).
 - Q17 log lines: the `Turn N: model responded in ...` line keeps its shape; thinking and threshold
