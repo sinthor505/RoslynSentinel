@@ -173,6 +173,11 @@ Decision log:
 - 2026-11-25 Peer request (session of `plan_error_gated_thinking_and_client_reasoning_budget.md`):
   `AgentLoop/ThinkingOptions.cs` (now present) joins the migration (Step 15);
   `InvalidThinkingSettingException` is replaced by `ConfigurationInvalidException`.
+- 2026-11-25 Run setup (implement-plan): staleness check since 8e02735a clean (only drift: the
+  launcher's server-argument strings for T11 now sit at `roslynsentinel-mcp-launch.ps1:1017-1039`;
+  `plan_error_gated_thinking_and_client_reasoning_budget.md` is closed, so its Risks note is moot).
+  Mode Batched, one orchestrator per slice-map wave; `implementer-senior` wherever it is faster than
+  splitting for Haiku. Owner away during the run: mid-run decisions are deferred. Owner choice.
 
 ## Tests
 
