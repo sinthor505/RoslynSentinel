@@ -1,28 +1,15 @@
 namespace RoslynSentinel.Common;
 
+[StartupSettingGroup("Orientation breaker")]
 public static class OrientationBreakerOptions
 {
-    public static int TripThreshold { get; private set; } = 10;
+    public static readonly StartupSetting<int> TripThresholdSetting = StartupSetting.Int("--orientation-breaker-threshold", "ROSLYNSENTINEL_ORIENTATION_BREAKER_THRESHOLD", 10, "Consecutive failures before the orientation circuit breaker trips.", SettingScope.Server, minValue: 1);
+
+    public static int TripThreshold => TripThresholdSetting.Value;
 
     /// <summary>Parses --orientation-breaker-threshold (falling back to ROSLYNSENTINEL_ORIENTATION_BREAKER_THRESHOLD) into TripThreshold. Call once at process startup, before DI is built.</summary>
     public static void Configure(string[] args)
     {
-        var thresholdRaw = GetArgValue(args, "--orientation-breaker-threshold")
-            ?? Environment.GetEnvironmentVariable("ROSLYNSENTINEL_ORIENTATION_BREAKER_THRESHOLD");
-        TripThreshold = int.TryParse(thresholdRaw, out var parsedThreshold) && parsedThreshold > 0 ? parsedThreshold : 10;
-    }
-
-    /// <summary>Reads a command-line flag's value, accepting both "--flag=value" and "--flag value" forms.</summary>
-    private static string? GetArgValue(string[] args, string flag)
-    {
-        var inlinePrefix = flag + "=";
-        var inline = args.FirstOrDefault(a => a.StartsWith(inlinePrefix, StringComparison.Ordinal));
-        if (inline is not null)
-        {
-            return inline[inlinePrefix.Length..];
-        }
-
-        var index = Array.FindIndex(args, a => a.Equals(flag, StringComparison.Ordinal));
-        return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
+        StartupSettings.ConfigureGroup(typeof(OrientationBreakerOptions), args);
     }
 }

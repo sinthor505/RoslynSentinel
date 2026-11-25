@@ -28,43 +28,4 @@ public static class LoopLatchOptions
     {
         StartupSettings.ConfigureGroup(typeof(LoopLatchOptions), args);
     }
-
-    /// <summary>True for "true", "1", "on" or "yes" (case-insensitive, whitespace-trimmed); false for null, empty and anything else.</summary>
-    public static bool ParseEnabled(string? raw)
-    {
-        var trimmed = raw?.Trim();
-        return string.Equals(trimmed, "true", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(trimmed, "on", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(trimmed, "yes", StringComparison.OrdinalIgnoreCase)
-            || trimmed == "1";
-    }
-
-    /// <summary>
-    /// "--flag=value" gives the value; a bare "--flag" gives "true", except that a following boolean-looking token
-    /// (true/false/on/off/yes/no/0/1) is taken as its value. Null when the flag is absent.
-    /// </summary>
-    // TODO remove with the last caller (Step 10b of plan_startup_configuration_registry)
-    internal static string? GetFlagValue(string[] args, string flag)
-    {
-        var inlinePrefix = flag + "=";
-        var inline = args.FirstOrDefault(a => a.StartsWith(inlinePrefix, StringComparison.Ordinal));
-        if (inline is not null)
-        {
-            return inline[inlinePrefix.Length..];
-        }
-
-        var index = Array.FindIndex(args, a => a.Equals(flag, StringComparison.Ordinal));
-        if (index < 0)
-        {
-            return null;
-        }
-
-        if (index + 1 < args.Length
-            && args[index + 1].Trim().ToLowerInvariant() is "true" or "false" or "on" or "off" or "yes" or "no" or "0" or "1")
-        {
-            return args[index + 1];
-        }
-
-        return "true";
-    }
 }
