@@ -38,6 +38,8 @@ public class NotFoundInventoryOptionsTests
     [TestCase("true")]
     [TestCase("TRUE")]
     [TestCase(" True ")]
+    [TestCase("on")]
+    [TestCase("yes")]
     public void Configure_EnvVarOnValue_TurnsItOn(string value)
     {
         Environment.SetEnvironmentVariable(Env, value);
@@ -49,17 +51,29 @@ public class NotFoundInventoryOptionsTests
 
     [TestCase("0")]
     [TestCase("false")]
-    [TestCase("on")]
-    [TestCase("yes")]
-    [TestCase("2")]
-    [TestCase("bogus")]
-    public void Configure_EnvVarOtherValue_LeavesItOff(string value)
+    public void Configure_EnvVarOffValue_TurnsItOff(string value)
     {
         Environment.SetEnvironmentVariable(Env, value);
 
         NotFoundInventoryOptions.Configure([]);
 
         Assert.That(NotFoundInventoryOptions.Enabled, Is.False);
+    }
+
+    [TestCase("2")]
+    [TestCase("bogus")]
+    public void Configure_EnvVarInvalidValue_KeepsDefaultOnAndReportsProblem(string value)
+    {
+        Environment.SetEnvironmentVariable(Env, value);
+
+        NotFoundInventoryOptions.Configure([]);
+
+        Assert.That(NotFoundInventoryOptions.Enabled, Is.True);
+
+        var problems = StartupSettings.ConfigureGroup(typeof(NotFoundInventoryOptions), []);
+
+        Assert.That(problems, Has.Count.EqualTo(1));
+        Assert.That(problems[0].Kind, Is.EqualTo(ConfigurationProblemKind.InvalidValue));
     }
 
     [Test]
