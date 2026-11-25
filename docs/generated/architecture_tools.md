@@ -62,6 +62,7 @@
 |-------|-----------|-------|---------|---------|
 | AdminTools | ExternalFileDrift | Admin, Claude, claude-lean | Allowed | Inspect and clear external file drift: a tracked file changed on disk outside this server. |
 | AdminTools | McpServerControl | Admin, Claude, claude-lean | - | Operator control. |
+| CoreRefactoringTools | ChangeNamespace | Claude, claude-lean (on demand), Refactor | - | Changes the namespace of a file's types (a folder: every .cs under it, subfolders included, no globs): moves the... |
 | CoreRefactoringTools | ChangeSignature | Claude, claude-lean, Refactor | - | Reorders, adds, or removes method parameters and updates all call sites solution-wide. |
 | CoreRefactoringTools | MoveAllTypesToFiles | Claude, claude-lean (on demand), Refactor | - | Moves secondary types out of a file into their own files. |
 | CoreRefactoringTools | MoveMember | Claude, claude-lean, Refactor | - | Moves methods/properties/fields from one class to another as a single atomic change, rewriting call sites. |

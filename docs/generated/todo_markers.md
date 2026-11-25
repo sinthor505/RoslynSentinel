@@ -34,7 +34,7 @@
 
 ## RoslynSentinel.Common/ErrorPolicyIntentTable.cs (1)
 
-- [212](../../RoslynSentinel.Common/ErrorPolicyIntentTable.cs#L212) `// TODO error-policy: a numeric selector (enum ordinal) falls back to the tool default; only string values are matched`
+- [213](../../RoslynSentinel.Common/ErrorPolicyIntentTable.cs#L213) `// TODO error-policy: a numeric selector (enum ordinal) falls back to the tool default; only string values are matched`
 
 ## RoslynSentinel.Common/FileIoHelper.cs (1)
 
@@ -222,7 +222,7 @@
 
 ## RoslynSentinel.Engines.Basic/ChangeNamespaceEngine.cs (1)
 
-- [14](../../RoslynSentinel.Engines.Basic/ChangeNamespaceEngine.cs#L14) `throw new NotImplementedException(); // TODO implement (Step 30)`
+- [31](../../RoslynSentinel.Engines.Basic/ChangeNamespaceEngine.cs#L31) `// TODO compile rounds (CopyAndObsoleteMigration.MaxCompileRounds = 3): RunCoreAsync is tied to the copyAndObsolete source/destination pair and cannot be reused, so this plans a single pass; the tool's compile gate refuses a candidate that does not compile instead of retrying callers with forced Qualify mode.`
 
 ## RoslynSentinel.Engines.Basic/ChangeSignatureWrapper.cs (1)
 
@@ -235,9 +235,13 @@
 - [811](../../RoslynSentinel.Engines.Basic/CompilerErrorLookupHelper.cs#L811) `// TODO FindExtensionMethods is named unconditionally; name it only when active (gated-tool rule)`
 - [919](../../RoslynSentinel.Engines.Basic/CompilerErrorLookupHelper.cs#L919) `// TODO share path matching with ValidateAndApplyHelper.DescribeUntouchedFileErrors`
 
+## RoslynSentinel.Engines.Basic/CopyAndObsoleteEdits.cs (1)
+
+- [182](../../RoslynSentinel.Engines.Basic/CopyAndObsoleteEdits.cs#L182) `// TODO a partial qualification inside a doc-comment cref (NameMemberCref/QualifiedCref) is not recognised here, so it still refuses a namespace change of the set`
+
 ## RoslynSentinel.Engines.Basic/CsprojEdgeWriter.cs (1)
 
-- [12](../../RoslynSentinel.Engines.Basic/CsprojEdgeWriter.cs#L12) `throw new NotImplementedException(); // TODO implement (Step 25)`
+- [29](../../RoslynSentinel.Engines.Basic/CsprojEdgeWriter.cs#L29) `// TODO resolve the real relative csproj path of the referenced project (Step 26 passes projectReferenceInclude); the null default assumes sibling project folders`
 
 ## RoslynSentinel.Engines.Basic/DocTrailerEngine.cs (1)
 
@@ -291,11 +295,6 @@
 
 - [338](../../RoslynSentinel.Engines.Basic/MemberSelection.cs#L338) `// TODO no filePath reaches SelectMembers, so the no-candidate case cannot prefill GetFileOutline(filePath)`
 - [347](../../RoslynSentinel.Engines.Basic/MemberSelection.cs#L347) `// TODO no filePath reaches SelectMembers, so the no-candidate case cannot prefill GetFileOutline(filePath)`
-
-## RoslynSentinel.Engines.Basic/MoveSetEdgeAnalyzer.cs (2)
-
-- [15](../../RoslynSentinel.Engines.Basic/MoveSetEdgeAnalyzer.cs#L15) `throw new NotImplementedException(); // TODO implement (Step 24)`
-- [21](../../RoslynSentinel.Engines.Basic/MoveSetEdgeAnalyzer.cs#L21) `throw new NotImplementedException(); // TODO implement (Step 24)`
 
 ## RoslynSentinel.Engines.Basic/MsToolAugmentEngine.cs (2)
 
@@ -728,14 +727,15 @@
 - [92](../../RoslynSentinel.Tools.Basic/SymbolNavigationImpl.cs#L92) `// TODO isCallable: SymbolNavigationImpl has no ActiveToolSurface, so hints name tools unconditionally (as the old text did)`
 - [282](../../RoslynSentinel.Tools.Basic/SymbolNavigationImpl.cs#L282) `// TODO hierarchy.Error is the type-not-found text (SymbolNavigationEngine.GetTypeHierarchyAsync), a lookup miss like the others: code it NotFound (TypeHierarchyReport has no error code field yet)`
 
-## RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs (6)
+## RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs (7)
 
 - [69](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L69) `// TODO reads existing text from disk, not the workspace document`
 - [245](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L245) `// TODO DeleteFile with no solution loaded returns NotFound; the cause is SolutionNotLoaded (ResolveFromWire yields an empty path), so the code is wrong.`
-- [889](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L889) `// TODO no shrink/no-type-left guard here (ApplyDiff files format has LargeShrinkRejectionThreshold; ReplaceSnippet has the no-type-left guard)`
-- [891](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L891) `// TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)`
-- [1038](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L1038) `// TODO no shrink/no-type-left guard here (ApplyDiff files format has LargeShrinkRejectionThreshold; ReplaceSnippet has the no-type-left guard)`
-- [1040](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L1040) `// TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)`
+- [347](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L347) `// TODO ToolHintRatchetTests.Scan_HintCallLiterals_AreValid fails here ("Unknown tool 'ChangeNamespace'") until plan_multi_file_movefile_and_namespace_change_tool Step 32 adds the tool; expected red until then`
+- [915](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L915) `// TODO no shrink/no-type-left guard here (ApplyDiff files format has LargeShrinkRejectionThreshold; ReplaceSnippet has the no-type-left guard)`
+- [917](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L917) `// TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)`
+- [1064](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L1064) `// TODO no shrink/no-type-left guard here (ApplyDiff files format has LargeShrinkRejectionThreshold; ReplaceSnippet has the no-type-left guard)`
+- [1066](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L1066) `// TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)`
 
 ## RoslynSentinel.Tools.Basic/WorkspaceBuildTestImpl.cs (1)
 
