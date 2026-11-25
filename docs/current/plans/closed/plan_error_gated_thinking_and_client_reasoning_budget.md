@@ -1,10 +1,10 @@
 # Plan: Eval client thinking on configurable triggers, with an observed reasoning budget
 
-**Status:** IN PROGRESS 2026-11-25. Steps 1-10 done (d1720c89d, 39dbc2700, ed219aa64, 18df7ffc8, 9184930d0, 9d52066e, 734d7dfb, a1f5ced3, 72b28140; fix-up b59fb544). Configurable thinking triggers (error, latchRefusal, firstTurn) with effort and an observed-only reasoning budget, then a 12-run smoke test; the enforced cut is parked.
+**Status:** IMPLEMENTED 2026-11-25. d1720c89d, 39dbc2700, ed219aa64, 18df7ffc8, 9184930d0, 9d52066e, 734d7dfb, a1f5ced3, 72b28140, b59fb544; smoke test at 8e02735a. Configurable thinking triggers (error, latchRefusal, firstTurn) with effort and an observed-only reasoning budget, then a 12-run smoke test; the enforced cut is parked.
 
 ## Problem
 
-Source: [proposal_error_gated_thinking_and_client_reasoning_budget.md](../proposals/proposal_error_gated_thinking_and_client_reasoning_budget.md).
+Source: [proposal_error_gated_thinking_and_client_reasoning_budget.md](../../proposals/proposal_error_gated_thinking_and_client_reasoning_budget.md).
 
 Qwen3.5 is the primary eval model family. Today the eval client never asks for reasoning, so Qwen
 never thinks; Ornith thinks on every turn and costs ~33 s per turn plus context overruns. The
@@ -548,6 +548,20 @@ private, so each new test file carries its own small copies):
   `outcome=`, `stopReason=` and `outcomeClass=` counts.
 - Done when: 12 runs finished and the table is in the run tracker; the owner then decides the
   stage-1 size and arms (latchRefusal, firstTurn, 85 comparisons only with 85).
+- Done: 12 jobs pinned at 8e02735a (2026-11-25, all Finished, none resubmitted; jobs 20261125-192438..192505,
+  tag `thinking-smoke-8e02735a`, per-run CSV `c:	mp	hinking-smoke-runs.csv`). Both scenarios pooled, n=4 per arm,
+  directional:
+  | Arm | Pass | Median wall | TurnCapExceeded | Thinking turns/run | Median deltas/thinking turn |
+  | --- | --- | --- | --- | --- | --- |
+  | baseline | 0/4 | 1:44 | 3 (+1 RepeatedToolFailure) | 0 | - |
+  | triggered-error | 1/4 | 2:08 | 3 | 5.25 | 30 |
+  | always | 0/4 | 3:28 | 4 | 25 | 66.5 |
+  triggered-error: keep met (+25 pp, a single Pass), wall met (1.23x), park not met, drop not triggered.
+  always: keep not met, wall met (2.0x), park not met, drop triggered. No PassedAfterCap, no host-cap turns;
+  every run SilentIncomplete. Harness conformance checked on all 12 transcripts: no mismatch.
+  Observation: in the agentic loop Qwen3.5-9B reasons briefly when asked (mostly 10-20 deltas per turn,
+  peaks ~1k; ~4 chars per delta, so the count is sound), unlike the single-shot probes (8-10k chars).
+  All arms ran the default (legacy) contract prompt.
 
 ## Out of scope
 

@@ -508,7 +508,7 @@ public sealed class ModelAgentRunner
                 Thinking = _thinking.Mode == ThinkingMode.Off ? null : (turnThinking with
                 {
                     ReasoningDeltas = modelMessage.ReasoningDeltaCount,
-                    // Observed reasoning budget: an inactive, experimental feature of unknown value; it never cuts the stream and can be removed if it causes problems. See docs/current/plans/plan_error_gated_thinking_and_client_reasoning_budget.md, "Deferred: enforced cut".
+                    // Observed reasoning budget: an inactive, experimental feature of unknown value; it never cuts the stream and can be removed if it causes problems. See docs/current/plans/closed/plan_error_gated_thinking_and_client_reasoning_budget.md, "Deferred: enforced cut".
                     OverBudget = turnThinking.Requested && _thinking.ReasoningBudget is { } budget ? (modelMessage.ReasoningDeltaCount ?? 0) > budget : null,
                 }),
             };

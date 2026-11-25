@@ -317,7 +317,7 @@ public sealed class LmStudioAgentClient
                             : reasoningBuilders[evt.ItemId] = new StringBuilder();
                         sb.Append(evt.Delta);
                         // Hook point for an enforced reasoning budget (cut and continue). Not built; design and probe facts:
-                        // docs/current/plans/plan_error_gated_thinking_and_client_reasoning_budget.md, "Deferred: enforced
+                        // docs/current/plans/closed/plan_error_gated_thinking_and_client_reasoning_budget.md, "Deferred: enforced
                         // cut". Moving the continuation to the runner (a typed exception) is the route to finer stream control.
                         reasoningDeltaCount++;
                         // One line per delta (normally one token), as for the content channel: scripts/Find-TypoTokenStream.ps1 reads both.

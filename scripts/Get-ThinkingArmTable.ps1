@@ -59,6 +59,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $HostCapMarkers = @('I should answer soon', 'I need to state my answer and act')
 
+# TODO read several machines' queue folders in one call, and group ImplementationScenario runs by -Scenario (from the job's evalArgs), not only by job test name
 if ($JobFolder) { $jobsDir = $JobFolder }
 else {
     if (-not $QueueRoot) { $QueueRoot = if ($env:ROSLYNSENTINEL_EVALQUEUE_ROOT) { $env:ROSLYNSENTINEL_EVALQUEUE_ROOT } else { Join-Path $env:LOCALAPPDATA 'RoslynSentinel\evalqueue' } }
