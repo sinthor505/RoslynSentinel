@@ -354,7 +354,7 @@ public sealed class MoveFileProjectEdgeTests
         Assert.That(seamCalls, Is.EqualTo(2), "The gate tries exactly twice.");
         Assert.That(foreignResults.Select(foreign => foreign.IsError), Is.All.False, "Both foreign writes landed.");
         Assert.That(result.IsError, Is.True, "A second miss is refused.");
-        Assert.That(result.ErrorData!.ErrorCode, Is.AnyOf(ToolErrorCode.ValidationFailed, ToolErrorCode.ConcurrentEditRefused), "The refusal comes from the apply that saw a moved workspace.");
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.ValidationFailed), "The refusal comes from the apply that saw a moved workspace.");
         Assert.That(result.ErrorData.Message, Does.Contain(WorkspaceChangedFragment), "The message says the check ran without the added references.");
         Assert.That(FindingTexts(result), Has.Some.Contain(WorkspaceChangedFragment), "The WorkspaceChangedDuringGate fact is a finding on the refusal.");
         Assert.That(File.ReadAllBytes(scenario.ExtrasCsprojPath), Is.EqualTo(csprojBefore), "The csproj is unchanged.");
