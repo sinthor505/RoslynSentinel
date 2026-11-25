@@ -1,6 +1,6 @@
 # Plan: Eval client thinking on configurable triggers, with an observed reasoning budget
 
-**Status:** IN PROGRESS 2026-11-25. Steps 1-9 done (d1720c89d, 39dbc2700, ed219aa64, 18df7ffc8, 9184930d0, 9d52066e, 734d7dfb, a1f5ced3, 72b28140; fix-up b59fb544). Configurable thinking triggers (error, latchRefusal, firstTurn) with effort and an observed-only reasoning budget, then a 12-run smoke test; the enforced cut is parked.
+**Status:** IN PROGRESS 2026-11-25. Steps 1-10 done (d1720c89d, 39dbc2700, ed219aa64, 18df7ffc8, 9184930d0, 9d52066e, 734d7dfb, a1f5ced3, 72b28140; fix-up b59fb544). Configurable thinking triggers (error, latchRefusal, firstTurn) with effort and an observed-only reasoning budget, then a 12-run smoke test; the enforced cut is parked.
 
 ## Problem
 
@@ -524,6 +524,7 @@ private, so each new test file carries its own small copies):
 - Change: `Search(mode: "text", query: "NotImplementedException")` over the plan's files finds none;
   `RunTest` full suite; compare with the 0-failure baseline.
 - Done when: no stubs; no new test failures.
+- Done: b59fb544 (fix-up: ResultOverride.CopyTurn copies Thinking); no stubs; full suite at b59fb544 0 failures.
 
 ### Step 11 - LIVE smoke test
 - Files: none (eval output under the scratch root)
