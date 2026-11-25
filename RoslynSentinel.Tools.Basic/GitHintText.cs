@@ -24,7 +24,6 @@ internal static class GitHintText
                 or GitHintKey.RefRequiredStash
                 or GitHintKey.RefRequiredTag
                 or GitHintKey.RefRequiredWorktree
-                or GitHintKey.ActionRequired
                 or GitHintKey.AlreadyExists
                 or GitHintKey.TargetNotFound
                 or GitHintKey.InvalidName
@@ -83,7 +82,6 @@ internal static class GitHintText
             GitHintKey.RefRequiredStash => GitErrorDetails.RefRequiredStash,
             GitHintKey.RefRequiredTag => GitErrorDetails.RefRequiredTag,
             GitHintKey.RefRequiredWorktree => GitErrorDetails.RefRequiredWorktree,
-            GitHintKey.ActionRequired => GitErrorDetails.ActionRequired,
             GitHintKey.AlreadyExists => GitErrorDetails.AlreadyExists,
             GitHintKey.TargetNotFound => GitErrorDetails.TargetNotFound,
             GitHintKey.InvalidName => GitErrorDetails.InvalidName,
@@ -295,4 +293,31 @@ internal static class GitHintText
         var advice = RenderRootFailure(failure);
         return advice.Length == 0 ? error : error + " " + advice;
     }
+}
+
+/// <summary>Next-step text paired with <see cref="GitErrorCodes"/> in ResultError.Detail; the text home <see cref="GitHintText.Render"/> delegates to.</summary>
+internal static class GitErrorDetails
+{
+    internal static string PathNotFound => $"Paths must be repo-relative and inside the repository root. Call {ToolCallHint.Call("Git", ("operation", "status"))} to list changed and untracked paths, then retry with exact names.";
+    internal const string IgnoredPath = "Remove the ignored entries from paths, or un-ignore them in .gitignore, then retry. This tool never force-adds ignored files.";
+    internal static string NothingToCommit => $"Stage changes first with {ToolCallHint.Call("Git", ("operation", "stage"), ("paths", "..."))}, or pass paths/scope on the commit call. Call {ToolCallHint.Call("Git", ("operation", "status"))} to see what changed.";
+    internal static string OperationInProgress => $"Call {ToolCallHint.Call("Git", ("operation", "abort"))} to back out of the in-progress operation, or resolve the conflicts in the working tree and commit.";
+    internal static string RefRequiredReset => $"Pass ref, e.g. ref: \"HEAD~1\" to undo the last commit with the working tree kept, or call {ToolCallHint.Call("Git", ("operation", "unstage"))} to unstage without moving HEAD.";
+    internal static string RefRequiredRevert => $"Pass ref, e.g. a hash taken from {ToolCallHint.Call("Git", ("operation", "log"))}.";
+    internal static string RefRequiredCheckout => $"Pass branchName, with createBranch=true if it does not exist yet. {ToolCallHint.Call("GitRemote", ("operation", "branch"))} lists existing branches.";
+    internal static string RefRequiredStash => $"Pass stashIndex (0 = newest). {ToolCallHint.Call("GitRemote", ("operation", "stash"), ("action", "list"))} shows every entry.";
+    internal static string RefRequiredTag => $"Pass tagName, e.g. {ToolCallHint.Call("GitRemote", ("operation", "tag"), ("action", "create"), ("tagName", "v1.0.0"))}.";
+    internal const string RefRequiredWorktree = "Pass worktreePath (absolute, outside the repo) and, for add, branchName.";
+    internal static string AlreadyExists => $"Use a different name or path, or inspect the existing entry first with {ToolCallHint.Call("GitRemote", ("operation", "tag"), ("action", "list"))}, {ToolCallHint.Call("GitRemote", ("operation", "worktree"), ("action", "list"))} or {ToolCallHint.Call("GitRemote", ("operation", "branch"))}. This tool never overwrites an existing tag, branch or worktree.";
+    internal static string TargetNotFound => $"Check the exact name with {ToolCallHint.Call("GitRemote", ("operation", "tag"), ("action", "list"))}, {ToolCallHint.Call("GitRemote", ("operation", "stash"), ("action", "list"))}, {ToolCallHint.Call("GitRemote", ("operation", "worktree"), ("action", "list"))} or {ToolCallHint.Call("GitRemote", ("operation", "branch"))}, then retry.";
+    internal const string InvalidName = "Use a name that git accepts: no spaces, no '..', '~', '^', ':' or trailing '.lock'. Then retry.";
+    internal static string WorkingTreeDirty => $"Commit them ({ToolCallHint.Call("Git", ("operation", "commit"))}) or stash them ({ToolCallHint.Call("GitRemote", ("operation", "stash"), ("action", "push"))}) first; applying onto a dirty tree can mix the two sets of changes. {ToolCallHint.Call("Git", ("operation", "status"))} lists the changed paths.";
+    internal static string NoChanges => $"Nothing to act on. Call {ToolCallHint.Call("Git", ("operation", "status"))} to see what changed, then retry with the paths that have changes.";
+    internal static string StashConflict => $"Check out the commit or branch the stash was created on ({ToolCallHint.Call("GitRemote", ("operation", "checkout"))}), then apply again; {ToolCallHint.Call("GitRemote", ("operation", "stash"), ("action", "list"))} shows where each entry was made.";
+    internal const string Refused = "Take the safe alternative the message names, then retry. Nothing was changed.";
+    internal static string HunkUnsupported => $"Stage the whole file with {ToolCallHint.Call("Git", ("operation", "stage"), ("paths", "<path>"))} instead, or use a file kind that has text hunks.";
+    internal static string HunkSelection => $"Call {ToolCallHint.Call("Git", ("operation", "hunks"), ("paths", "<path>"))} and pass hunkIds or lineRange exactly as it lists them.";
+    internal static string IndexLocked(string lockPath) => $"Another git process holds {lockPath}. Wait for it to finish and retry the commit; if no git process is running, the lock is stale and deleting that file clears it.";
+    internal const string HookRejected = "The text above ends with the hook's own output. Fix what the hook reports and commit again; the hooks live in .git/hooks, or in the directory named by core.hooksPath.";
+    internal static string HunkStale => $"Re-run {ToolCallHint.Call("Git", ("operation", "hunks"), ("paths", "<path>"))} and pick again with the new hunkFingerprint. Nothing was staged.";
 }

@@ -116,33 +116,6 @@ public static class GitErrorCodes
     };
 }
 
-/// <summary>Next-step text paired with <see cref="GitErrorCodes"/> in ResultError.Detail.</summary>
-internal static class GitErrorDetails
-{
-    internal static string PathNotFound => $"Paths must be repo-relative and inside the repository root. Call {ToolCallHint.Call("Git", ("operation", "status"))} to list changed and untracked paths, then retry with exact names.";
-    internal const string IgnoredPath = "Remove the ignored entries from paths, or un-ignore them in .gitignore, then retry. This tool never force-adds ignored files.";
-    internal static string NothingToCommit => $"Stage changes first with {ToolCallHint.Call("Git", ("operation", "stage"), ("paths", "..."))}, or pass paths/scope on the commit call. Call {ToolCallHint.Call("Git", ("operation", "status"))} to see what changed.";
-    internal static string OperationInProgress => $"Call {ToolCallHint.Call("Git", ("operation", "abort"))} to back out of the in-progress operation, or resolve the conflicts in the working tree and commit.";
-    internal static string RefRequiredReset => $"Pass ref, e.g. ref: \"HEAD~1\" to undo the last commit with the working tree kept, or call {ToolCallHint.Call("Git", ("operation", "unstage"))} to unstage without moving HEAD.";
-    internal static string RefRequiredRevert => $"Pass ref, e.g. a hash taken from {ToolCallHint.Call("Git", ("operation", "log"))}.";
-    internal static string RefRequiredCheckout => $"Pass branchName, with createBranch=true if it does not exist yet. {ToolCallHint.Call("GitRemote", ("operation", "branch"))} lists existing branches.";
-    internal static string RefRequiredStash => $"Pass stashIndex (0 = newest). {ToolCallHint.Call("GitRemote", ("operation", "stash"), ("action", "list"))} shows every entry.";
-    internal static string RefRequiredTag => $"Pass tagName, e.g. {ToolCallHint.Call("GitRemote", ("operation", "tag"), ("action", "create"), ("tagName", "v1.0.0"))}.";
-    internal const string RefRequiredWorktree = "Pass worktreePath (absolute, outside the repo) and, for add, branchName.";
-    internal const string ActionRequired = "Pass action with one of the values named in the message. Each operation documents its own actions.";
-    internal static string AlreadyExists => $"Use a different name or path, or inspect the existing entry first with {ToolCallHint.Call("GitRemote", ("operation", "tag"), ("action", "list"))}, {ToolCallHint.Call("GitRemote", ("operation", "worktree"), ("action", "list"))} or {ToolCallHint.Call("GitRemote", ("operation", "branch"))}. This tool never overwrites an existing tag, branch or worktree.";
-    internal static string TargetNotFound => $"Check the exact name with {ToolCallHint.Call("GitRemote", ("operation", "tag"), ("action", "list"))}, {ToolCallHint.Call("GitRemote", ("operation", "stash"), ("action", "list"))}, {ToolCallHint.Call("GitRemote", ("operation", "worktree"), ("action", "list"))} or {ToolCallHint.Call("GitRemote", ("operation", "branch"))}, then retry.";
-    internal const string InvalidName = "Use a name that git accepts: no spaces, no '..', '~', '^', ':' or trailing '.lock'. Then retry.";
-    internal static string WorkingTreeDirty => $"Commit them ({ToolCallHint.Call("Git", ("operation", "commit"))}) or stash them ({ToolCallHint.Call("GitRemote", ("operation", "stash"), ("action", "push"))}) first; applying onto a dirty tree can mix the two sets of changes. {ToolCallHint.Call("Git", ("operation", "status"))} lists the changed paths.";
-    internal static string NoChanges => $"Nothing to act on. Call {ToolCallHint.Call("Git", ("operation", "status"))} to see what changed, then retry with the paths that have changes.";
-    internal static string StashConflict => $"Check out the commit or branch the stash was created on ({ToolCallHint.Call("GitRemote", ("operation", "checkout"))}), then apply again; {ToolCallHint.Call("GitRemote", ("operation", "stash"), ("action", "list"))} shows where each entry was made.";
-    internal const string Refused = "Take the safe alternative the message names, then retry. Nothing was changed.";
-    internal static string HunkUnsupported => $"Stage the whole file with {ToolCallHint.Call("Git", ("operation", "stage"), ("paths", "<path>"))} instead, or use a file kind that has text hunks.";
-    internal static string HunkSelection => $"Call {ToolCallHint.Call("Git", ("operation", "hunks"), ("paths", "<path>"))} and pass hunkIds or lineRange exactly as it lists them.";
-    internal static string IndexLocked(string lockPath) => $"Another git process holds {lockPath}. Wait for it to finish and retry the commit; if no git process is running, the lock is stale and deleting that file clears it.";
-    internal const string HookRejected = "The text above ends with the hook's own output. Fix what the hook reports and commit again; the hooks live in .git/hooks, or in the directory named by core.hooksPath.";
-    internal static string HunkStale => $"Re-run {ToolCallHint.Call("Git", ("operation", "hunks"), ("paths", "<path>"))} and pick again with the new hunkFingerprint. Nothing was staged.";
-}
 
 public record GitRawResult
 {
@@ -725,16 +698,6 @@ public class GitImpl : IGitOperations
         };
     }
 
-    [Obsolete("Use the GitHintKey overload")]
-    private static GitTagResult TagFailure(string action, string kind, string error, string detail) => new()
-    {
-        Action = action,
-        IsError = true,
-        ErrorKind = kind,
-        Error = error,
-        ErrorDetail = detail
-    };
-
     /// <summary>Tag failure whose next-step text is a hint key rendered at the tool boundary; ErrorDetail stays null.</summary>
     private static GitTagResult TagFailure(string action, string kind, string error, GitHintKey key, GitHintFacts? facts = null) => new()
     {
@@ -799,14 +762,14 @@ public class GitImpl : IGitOperations
             var keyError = ValidateConfigKey(key);
             if (keyError is not null)
             {
-                return ConfigFailure("get", GitErrorCodes.InvalidName, keyError,
+                return ConfigFailureText("get", GitErrorCodes.InvalidName, keyError,
                     "Valid forms by example: user.name, branch.main.remote.");
             }
 
             var configKey = key!;
             if (IsDeniedConfigKey(configKey))
             {
-                return ConfigFailure("get", GitErrorCodes.Refused,
+                return ConfigFailureText("get", GitErrorCodes.Refused,
                     $"Config key '{configKey}' can hold credentials, so its value is not returned. Nothing was read.",
                     "Other keys can be read, for example key=user.name.");
             }
@@ -819,7 +782,7 @@ public class GitImpl : IGitOperations
                 && string.Equals(configKey.Split('.')[0], "url", StringComparison.OrdinalIgnoreCase)
                 && System.Text.RegularExpressions.Regex.IsMatch(configValue, @"://[^/\s@]+@"))
             {
-                return ConfigFailure("get", GitErrorCodes.Refused,
+                return ConfigFailureText("get", GitErrorCodes.Refused,
                     $"Config key '{configKey}' has a value that carries credentials (userinfo), so it is not returned.",
                     "Other keys can be read, for example key=user.name.");
             }
@@ -850,12 +813,12 @@ public class GitImpl : IGitOperations
     {
         var keyError = ValidateConfigKey(key);
         if (keyError is not null)
-            return ConfigFailure(action, GitErrorCodes.InvalidName, keyError.Replace("Nothing was read.", "Nothing was changed."),
+            return ConfigFailureText(action, GitErrorCodes.InvalidName, keyError.Replace("Nothing was read.", "Nothing was changed."),
                 "Valid forms by example: user.name, branch.main.remote.");
 
         var writeKey = key!;
         if (!IsWritableConfigKey(writeKey))
-            return ConfigFailure(action, GitErrorCodes.Refused,
+            return ConfigFailureText(action, GitErrorCodes.Refused,
                 $"Config key '{writeKey}' is not one this operation writes. Nothing was changed.",
                 "Writable keys: roslynsentinel.*, user.name, user.email, core.autocrlf, core.eol, core.safecrlf, core.longpaths, pull.rebase, push.default, init.defaultBranch, branch.<name>.remote, branch.<name>.merge, branch.<name>.rebase. The value of any other key can be read with action=get.");
 
@@ -865,7 +828,7 @@ public class GitImpl : IGitOperations
                 return ConfigFailure(action, GitErrorCodes.ActionRequired, "action=set needs configValue (got none). Nothing was changed.",
                     GitHintKey.ConfigValueRequired);
             if (value.Contains('\0'))
-                return ConfigFailure(action, GitErrorCodes.InvalidName,
+                return ConfigFailureText(action, GitErrorCodes.InvalidName,
                     "The config value contains a NUL character, which git cannot store. Nothing was changed.",
                     "Pass the value without the NUL character.");
         }
@@ -898,7 +861,7 @@ public class GitImpl : IGitOperations
                     Note = $"Key '{writeKey}' is set in another scope (global or system), not in this repository's local config. Nothing was changed.",
                 };
             if (unset.ExitCode != 0)
-                return ConfigFailure(action, GitErrorCodes.Fallback,
+                return ConfigFailureText(action, GitErrorCodes.Fallback,
                     $"git config exited with code {unset.ExitCode}. Nothing further was changed.",
                     "The key and its current value can be read with action=get.");
         }
@@ -907,7 +870,7 @@ public class GitImpl : IGitOperations
             // The -- guards a value that starts with '-'.
             var set = await RunGitAsync(gitRoot, ["config", "--local", "--", writeKey, value!], cancellationToken);
             if (set.ExitCode != 0)
-                return ConfigFailure(action, GitErrorCodes.Fallback,
+                return ConfigFailureText(action, GitErrorCodes.Fallback,
                     $"git config exited with code {set.ExitCode}. Nothing further was changed.",
                     "The key and its current value can be read with action=get.");
         }
@@ -951,8 +914,8 @@ public class GitImpl : IGitOperations
         return writable.Contains($"{section}.{name}", StringComparer.OrdinalIgnoreCase);
     }
 
-    [Obsolete("Use the GitHintKey overload")]
-    private static GitConfigResult ConfigFailure(string action, string kind, string error, string detail) => new()
+    /// <summary>Config failure whose next-step text names no tool, so it stays plain engine text in ErrorDetail.</summary>
+    private static GitConfigResult ConfigFailureText(string action, string kind, string error, string detail) => new()
     {
         Action = action,
         IsError = true,
@@ -1189,16 +1152,6 @@ public class GitImpl : IGitOperations
             return UnexpectedFailure<GitStashResult>(ex, "stash");
         }
     }
-
-    [Obsolete("Use the GitHintKey overload")]
-    private static GitStashResult StashFailure(string action, string kind, string error, string detail) => new()
-    {
-        Action = action,
-        IsError = true,
-        ErrorKind = kind,
-        Error = error,
-        ErrorDetail = detail
-    };
 
     /// <summary>Stash failure whose next-step text is a hint key rendered at the tool boundary; ErrorDetail stays null.</summary>
     private static GitStashResult StashFailure(string action, string kind, string error, GitHintKey key, GitHintFacts? facts = null) => new()
@@ -1540,8 +1493,8 @@ public class GitImpl : IGitOperations
         }
     }
 
-    [Obsolete("Use the GitHintKey overload")]
-    private static GitWorktreeResult WorktreeFailure(string action, string kind, string error, string detail) => new()
+    /// <summary>Worktree failure whose next-step text names no tool, so it stays plain engine text in ErrorDetail.</summary>
+    private static GitWorktreeResult WorktreeFailureText(string action, string kind, string error, string detail) => new()
     {
         Action = action,
         IsError = true,
@@ -1694,7 +1647,7 @@ public class GitImpl : IGitOperations
 
         // (a) absolute path. Fully qualified, so "\foo" or "C:foo" cannot resolve against the server's cwd.
         if (!Path.IsPathFullyQualified(path))
-            return WorktreeFailure("add", GitErrorCodes.Refused,
+            return WorktreeFailureText("add", GitErrorCodes.Refused,
                 $"worktreePath must be an absolute path (got '{path}'). Nothing was changed.",
                 "Pass a full path outside the repository, for example a sibling directory of the repository root.");
 
@@ -1850,7 +1803,7 @@ public class GitImpl : IGitOperations
                 $"Worktree '{path}' is the worktree this Git tool is operating in (the loaded solution's repository); removing it would delete the directory the server is working in. Nothing was removed.",
                 GitHintKey.WorktreeRemoveCurrentSwitch);
         if (entry.IsLocked)
-            return WorktreeFailure("remove", GitErrorCodes.Refused,
+            return WorktreeFailureText("remove", GitErrorCodes.Refused,
                 $"Worktree '{path}' is locked. Nothing was removed.",
                 "unlock it first with git worktree unlock in a shell; this tool does not unlock");
 
@@ -1875,7 +1828,7 @@ public class GitImpl : IGitOperations
         }
 
         if (changed.Count > 0 && !discardUncommittedChanges)
-            return WithHint(WorktreeFailure("remove", GitErrorCodes.WorkingTreeDirty,
+            return WithHint(WorktreeFailureText("remove", GitErrorCodes.WorkingTreeDirty,
                 $"Worktree '{path}' has uncommitted changes ({changed.Count} path(s): {FormatWorktreePaths(changed)}). Nothing was removed. " +
                 $"To delete it anyway and permanently lose those changes, call {GitHintTokens.Inline(GitHintKey.WorktreeRemoveDiscardCall)}. " +
                 "To keep them, commit or stash inside that worktree first.",
@@ -1921,7 +1874,11 @@ public class GitImpl : IGitOperations
     }
 
     /// <summary>
-    /// Finds the git repository root. GitTool operations read the working tree, not the Roslyn
+    /// Finds the git repository root and reports why it could not, as a <see cref="GitRootFailure"/>; <paramref name="error"/>
+    /// carries only the facts, and the tool appends the advice (<c>GitHintText.RenderRootFailure</c>). Resolution order: explicit
+    /// repoPath, then the loaded solution's directory (authoritative when loaded), then the server's base directory, then its
+    /// working directory.
+    /// GitTool operations read the working tree, not the Roslyn
     /// compilation, so this deliberately does NOT require a loaded solution: it falls back to
     /// walking up from the server's own base/working directory when nothing is loaded. When a
     /// solution IS loaded, its directory is tried FIRST -> a loaded solution reflects the
@@ -1933,24 +1890,8 @@ public class GitImpl : IGitOperations
     /// checkout) instead of the worktree -> a plausible, well-formed, wrong answer with no error.
     /// See docs/current/blockers/blocking_error_git_tool_commit_reports_clean_tree_worktree.md.
     /// </summary>
-    [Obsolete("Use the GitRootFailure overload")]
-    public string? TryGetGitRoot(out string error, string? repoPath = null)
-    {
-        // TODO remove with the 4 test callers (GitPathClassificationToolParityTests, GitLogToolParityTests, GitStatusToolParityTests, GitToolsSmokeTests) in Step 8
-        var root = TryGetGitRoot(out error, out var failure, repoPath);
-        error = GitHintText.JoinRootFailure(error, failure);
-        return root;
-    }
-
-    /// <summary>
-    /// Finds the git repository root and reports why it could not, as a <see cref="GitRootFailure"/>; <paramref name="error"/>
-    /// carries only the facts, and the tool appends the advice (<c>GitHintText.RenderRootFailure</c>). Resolution order is the
-    /// one documented on the other overload: explicit repoPath, then the loaded solution's directory (authoritative when
-    /// loaded), then the server's base directory, then its working directory.
-    /// </summary>
     public string? TryGetGitRoot(out string error, out GitRootFailure failure, string? repoPath = null)
     {
-        // TODO when the obsolete overload is removed (Step 8), move its long rationale doc comment (why the loaded solution is tried first) onto this method
         failure = GitRootFailure.None;
 
         // 0. An explicit repoPath override: takes priority over everything else.

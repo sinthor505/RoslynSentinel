@@ -410,7 +410,7 @@ public class GitStatusToolParityTests
         Write(worktree, "only-in-worktree.txt", "w\n");
 
         // The primary checkout stays clean; the worktree is the one with changes, found the way repoPath is: through TryGetGitRoot.
-        var worktreeRoot = Impl(new CliGitReader()).TryGetGitRoot(out var error, worktree);
+        var worktreeRoot = Impl(new CliGitReader()).TryGetGitRoot(out var error, out _, worktree);
         Assert.That(worktreeRoot, Is.Not.Null, error);
         var inWorktree = await BothBackendsAsync(worktreeRoot!);
         var inPrimary = await BothBackendsAsync(_repo);

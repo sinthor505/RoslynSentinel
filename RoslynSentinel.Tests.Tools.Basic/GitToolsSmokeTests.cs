@@ -425,7 +425,8 @@ public class GitToolsSmokeTests
             using var workspaceManager = new FakeWorkspaceManager(WorkspaceAccess.ReadOnly) { SolutionPath = Path.Combine(outsideDir, "Fake.sln") };
             var gitImpl = new GitImpl(workspaceManager, NullLogger<GitImpl>.Instance);
 
-            var root = gitImpl.TryGetGitRoot(out var error);
+            var root = gitImpl.TryGetGitRoot(out var factError, out var failure);
+            var error = GitHintText.JoinRootFailure(factError, failure);
 
             Assert.That(root, Is.Null);
             Assert.That(error, Does.Contain("not inside a git repository"));

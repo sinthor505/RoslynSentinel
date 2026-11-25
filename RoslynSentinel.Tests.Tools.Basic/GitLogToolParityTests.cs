@@ -868,7 +868,7 @@ public class GitLogToolParityTests
         Write(worktree, "w.txt", "w\n");
         Commit(worktree, "only in worktree\n");
 
-        var worktreeRoot = Impl(new CliGitReader()).TryGetGitRoot(out var error, worktree);
+        var worktreeRoot = Impl(new CliGitReader()).TryGetGitRoot(out var error, out _, worktree);
         Assert.That(worktreeRoot, Is.Not.Null, error);
         var inWorktree = await BothBackendsAsync(worktreeRoot!);
         var inWorktreePath = await BothBackendsAsync(worktreeRoot!, paths: "w.txt");

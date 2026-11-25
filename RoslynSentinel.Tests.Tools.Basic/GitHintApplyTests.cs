@@ -18,7 +18,7 @@ public class GitHintApplyTests
 
     private static IEnumerable<GitHintKey> DefinedKeys() => Enum.GetValues<GitHintKey>().Where(k => k != GitHintKey.None);
 
-    // The 23 keys that mirror GitErrorDetails (Step 1); keys added by Steps 6-7 are not table keys.
+    // The 22 keys that mirror GitErrorDetails (Step 1); keys added by Steps 6-7 are not table keys.
     private static IEnumerable<GitHintKey> TableKeys() => DefinedKeys().Where(k => k <= GitHintKey.HunkStale);
 
     private static GitHintFacts SomeFacts() => new() { LockPath = LockPath, Name = "n", Path = "p" };
@@ -91,7 +91,6 @@ public class GitHintApplyTests
             [GitHintKey.RefRequiredStash] = GitErrorDetails.RefRequiredStash,
             [GitHintKey.RefRequiredTag] = GitErrorDetails.RefRequiredTag,
             [GitHintKey.RefRequiredWorktree] = GitErrorDetails.RefRequiredWorktree,
-            [GitHintKey.ActionRequired] = GitErrorDetails.ActionRequired,
             [GitHintKey.AlreadyExists] = GitErrorDetails.AlreadyExists,
             [GitHintKey.TargetNotFound] = GitErrorDetails.TargetNotFound,
             [GitHintKey.InvalidName] = GitErrorDetails.InvalidName,

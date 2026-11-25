@@ -213,7 +213,7 @@ public class GitPathClassificationToolParityTests
         Write(worktree, "only-wt.txt", "w\n");
         RunGit(worktree, "add", "only-wt.txt");
 
-        var worktreeRoot = Impl(new CliGitReader()).TryGetGitRoot(out var error, worktree);
+        var worktreeRoot = Impl(new CliGitReader()).TryGetGitRoot(out var error, out _, worktree);
         Assert.That(worktreeRoot, Is.Not.Null, error);
 
         var json = await HunksBothAsync(worktreeRoot!, "a.txt");

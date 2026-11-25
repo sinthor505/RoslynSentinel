@@ -18,7 +18,6 @@ internal enum GitHintKey
     RefRequiredStash,
     RefRequiredTag,
     RefRequiredWorktree,
-    ActionRequired,
     AlreadyExists,
     TargetNotFound,
     InvalidName,
