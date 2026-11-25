@@ -1,6 +1,6 @@
 # Multi-file MoveFile and a namespace-change tool: move a connected set across a project edge, and change its namespace, in one compile-gated call
 
-**Status:** PROPOSED 2026-11-24. Awaiting owner review; nothing is built, every design choice below that is not stated as verified is open (see Open questions).
+**Status:** ACCEPTED 2026-11-25. Open questions settled with the owner (see Decision, which overrides the Proposal text where they differ); plan to be written as `plans/plan_multi_file_movefile_and_namespace_change_tool.md`.
 
 ## Motivation
 
@@ -239,6 +239,43 @@ the slnx entry, which is exactly what part 1 refuses to do silently; those belon
    "not updated"); edit. Not designed.
 8. **Refactor of `MoveFileTool`.** Moving its inline validations into an engine touches the most used core write tool;
    the alternative is a second code path for sets. Recommendation: one path, with `MoveFileTests` as the regression net.
+
+## Decision
+
+Settled with the owner 2026-11-25 (implement-plan, phase 2). Where this section and the Proposal text differ, this wins.
+
+- **D1 (Q1, parameter shape): `moves` list only, required.** `MoveFile` drops `sourcePath`/`destinationPath` and takes a
+  required `moves` list of `{sourcePath, destinationPath}` pairs; a single move is a list of one. Breaking change on a core
+  tool, accepted: the plan carries a caller-sweep slice (tests, eval fixtures, prompts, skills, agent docs, generated
+  tables). Not the either/or `batchEdits` shape and not "first pair plus additionalMoves".
+- **D2 (folder pairs): a pair may name a folder; no `include` globs.** Kind is derived per pair from disk; file and folder
+  pairs may mix in one list. A folder pair moves the source folder's contents to the destination path (merge into an
+  existing folder; a same-name file refuses), subfolders preserved. The description states that rule in one line;
+  `dryRun` returns the expanded file-by-file pairs and the result lists them. No operation enum (`MoveFiles`/`MoveFolder`):
+  it adds no information the tool cannot derive; revisit only if an eval measures weak-model confusion.
+- **D3 (Q2, csproj edits): two opt-in booleans, default false: `addProjectReferences` and `addInternalsVisibleTo`.**
+  Needed edges are derived by analysis, not a probe: symbols each moved file references (destination must reference
+  their projects), reference sites of moved types (their projects must reference the destination), internal symbols
+  used across the new boundary (IVT edges). They are added to the in-memory candidate before the single compile
+  (`Solution.AddProjectReference`; IVT as an in-memory `[assembly: InternalsVisibleTo]` document); the csproj items are
+  written only when the gate passes, under the same `changeId` so `UndoChange` reverts them. A cycle is refused as a fact.
+  With a toggle off, each needed edge is reported as a fact naming the edge and the parameter; the tool never widens
+  visibility unasked. Package references stay facts (a restore cannot be modelled in memory).
+- **D4 (Q3, cap): soft cap 200 files per call**, refusal names splitting; calibrate with a measured 60-file dry run.
+- **D5 (Q4, restore): probe, fix only if red.** `LoadSolution` already restores before loading (71c0c512: always with
+  `forceReload`, else when a project's assets are missing or stale; `dotnet sln add` alone does not restore, probed
+  2026-11-25), yet the Git run hit NU1105 on 2026-11-24. The plan adds an integration test (hand-written csproj that an
+  existing project references, `dotnet sln add`, `LoadSolution(forceReload)`); `LoadSolution` is fixed only if it fails.
+  The "destination in no loaded project" refusal names `LoadSolution(forceReload)` as the option.
+- **D6 (Q5): `ChangeNamespace` first**, a method on `CoreRefactoringTools` in the `moveExtract` toolset (no new tool
+  class); `MoveFile namespaceHandling: update` later as a thin composition, refused until then.
+- **D7 (Q6): one target namespace per call** (`newNamespace` or `matchFolder: true`); shadowing check either way.
+- **D8 (Q7): source csproj items naming a moved folder are reported as "not updated" facts** (text scan), never edited.
+- **D9 (Q8): one shared path.** `MoveFileTool`'s inline validations move into one `Engines.Basic` planner used by every
+  move; `MoveFileTests` is the regression net.
+- **D10 (part 3): keep `SplitProjectByFolder` as the `NotImplemented` stub**, with a code comment naming the wrapper idea
+  (compose `CreateProject` + `MoveFile` + `ChangeNamespace`) as an option for later. Not removed.
+- **D11 (run): owner away during the run**; mid-run decisions are deferred to the tracker with a recommendation.
 
 ## Cost / risk
 
