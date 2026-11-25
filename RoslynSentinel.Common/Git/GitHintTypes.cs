@@ -67,7 +67,38 @@ internal enum GitHintKey
     WorktreeRemoveCurrentSwitch,
 
     /// <summary>Inline: the worktree remove call with discardUncommittedChanges; facts: Path.</summary>
-    WorktreeRemoveDiscardCall
+    WorktreeRemoveDiscardCall,
+
+    // Step 6e-6h: hunk, stage, in-progress, commit and checkout texts.
+    /// <summary>Inline: the staged-diff call with a placeholder paths value.</summary>
+    GitDiffStagedAnyPathsCall,
+
+    /// <summary>ErrorDetail: check the repository state with the status call, then retry (git diff failed).</summary>
+    GitDiffFailedRetry,
+
+    /// <summary>Inline: the stage call with a placeholder paths value.</summary>
+    GitStageAnyPathsCall,
+
+    /// <summary>Inline: the hunks call with no paths.</summary>
+    GitHunksCall,
+
+    /// <summary>Inline: the hunks call for one path; facts: Path.</summary>
+    GitHunksPathCall,
+
+    /// <summary>Inline: the stage call for one path; facts: Path.</summary>
+    GitStagePathCall,
+
+    /// <summary>ErrorDetail: after a rejected git apply, re-run the hunks call or stage the whole file.</summary>
+    HunkApplyRejectedNextStep,
+
+    /// <summary>Inline: the abort call.</summary>
+    GitAbortCall,
+
+    /// <summary>Inline: the unstage call.</summary>
+    GitUnstageCall,
+
+    /// <summary>Inline: the GitRemote checkout call.</summary>
+    GitRemoteCheckoutCall
 }
 
 /// <summary>Where the rendered text of a <see cref="GitHintKey"/> goes on a result.</summary>

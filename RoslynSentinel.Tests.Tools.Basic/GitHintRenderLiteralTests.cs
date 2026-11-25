@@ -108,4 +108,51 @@ public class GitHintRenderLiteralTests
 
         Assert.That(applied.Error, Is.EqualTo(original));
     }
+
+    [Test]
+    public void LoadDiff_GitDiffFailedDetail_RendersOriginalText()
+    {
+        // Original ErrorDetail (LoadDiffForPathAsync, git diff exit code not 0):
+        //   $"Call {ToolCallHint.Call("Git", ("operation", "status"))} to check the repository state, then retry."
+        // Original Error: $"git diff failed: {CleanGitStderr(raw.Stderr)}. Nothing was changed." (engine text, unchanged)
+        var original = $"Call {ToolCallHint.Call("Git", ("operation", "status"))} to check the repository state, then retry.";
+        var result = new GitHunksResult
+        {
+            Path = "a.txt",
+            IsError = true,
+            Error = "git diff failed: boom. Nothing was changed.",
+            Hints = [new GitHint(GitHintKey.GitDiffFailedRetry)]
+        };
+
+        var applied = GitHintText.Apply(result);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(applied.ErrorDetail, Is.EqualTo(original));
+            Assert.That(GitHintText.Render(GitHintKey.GitDiffFailedRetry, null), Is.EqualTo(original));
+        });
+    }
+
+    [Test]
+    public void StageHunks_ApplyRejectedDetail_RendersOriginalText()
+    {
+        // Original ErrorDetail (StageHunksAsync, git apply exit code not 0):
+        //   $"Re-run {ToolCallHint.Call("Git", ("operation", "hunks"), ("paths", "<path>"))} and pick again, or stage the whole file with {ToolCallHint.Call("Git", ("operation", "stage"), ("paths", "<path>"))}."
+        var original = $"Re-run {ToolCallHint.Call("Git", ("operation", "hunks"), ("paths", "<path>"))} and pick again, or stage the whole file with {ToolCallHint.Call("Git", ("operation", "stage"), ("paths", "<path>"))}.";
+        var result = new GitStageHunksResult
+        {
+            Path = "a.txt",
+            IsError = true,
+            Error = "git apply rejected the selected hunks: boom. Nothing was staged.",
+            Hints = [new GitHint(GitHintKey.HunkApplyRejectedNextStep)]
+        };
+
+        var applied = GitHintText.Apply(result);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(applied.ErrorDetail, Is.EqualTo(original));
+            Assert.That(GitHintText.Render(GitHintKey.HunkApplyRejectedNextStep, null), Is.EqualTo(original));
+        });
+    }
 }

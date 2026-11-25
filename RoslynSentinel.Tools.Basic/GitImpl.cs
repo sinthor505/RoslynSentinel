@@ -2156,8 +2156,8 @@ public class GitImpl : IGitOperations
     }
 
     private static FileDiffLoad NoUnstagedChangesLoad(string path) => new(path, null, GitErrorCodes.NoChanges,
-    $"No unstaged changes in '{path}'. Already staged? {ToolCallHint.Call("Git", ("operation", "diff"), ("ref", "staged"), ("paths", "..."))}. Nothing was changed.",
-    null, [new GitHint(GitHintKey.NoChanges)]);
+    $"No unstaged changes in '{path}'. Already staged? {GitHintTokens.Inline(GitHintKey.GitDiffStagedAnyPathsCall)}. Nothing was changed.",
+    null, [new GitHint(GitHintKey.NoChanges), new GitHint(GitHintKey.GitDiffStagedAnyPathsCall)]);
 
     /// <summary>Outcome of loading one file's unstaged diff: Diff is set on success; otherwise ErrorKind, Error and
     /// ErrorDetail describe the classified failure. Shared by operation=hunks and the hunk stage.</summary>
@@ -2176,7 +2176,7 @@ public class GitImpl : IGitOperations
         if (raw.ExitCode != 0)
         {
             return new FileDiffLoad(path, null, GitErrorCodes.Fallback,
-                $"git diff failed: {CleanGitStderr(raw.Stderr)}. Nothing was changed.", $"Call {ToolCallHint.Call("Git", ("operation", "status"))} to check the repository state, then retry.");
+                $"git diff failed: {CleanGitStderr(raw.Stderr)}. Nothing was changed.", null, [new GitHint(GitHintKey.GitDiffFailedRetry)]);
         }
         if (raw.Stdout.Length == 0)
             return NoUnstagedChangesLoad(path);
@@ -2234,8 +2234,10 @@ public class GitImpl : IGitOperations
                 return new FileDiffLoad(path, null, GitErrorCodes.HunkUnsupported,
                     isDirectory
                         ? $"'{path}' is a directory; hunks works on one tracked file at a time. Nothing was changed."
-                        : $"'{path}' is untracked: untracked files have no hunks to choose from; stage the whole file with {ToolCallHint.Call("Git", ("operation", "stage"), ("paths", "..."))}. Nothing was changed.",
-                    null, [new GitHint(GitHintKey.HunkUnsupported)]);
+                        : $"'{path}' is untracked: untracked files have no hunks to choose from; stage the whole file with {GitHintTokens.Inline(GitHintKey.GitStageAnyPathsCall)}. Nothing was changed.",
+                    null, isDirectory
+                        ? [new GitHint(GitHintKey.HunkUnsupported)]
+                        : [new GitHint(GitHintKey.HunkUnsupported), new GitHint(GitHintKey.GitStageAnyPathsCall)]);
             case PathClassification.Missing:
                 return new FileDiffLoad(path, null, GitErrorCodes.PathNotFound,
                     $"'{path}' is not tracked and does not exist on disk. Nothing was changed.", null, [new GitHint(GitHintKey.PathNotFound)]);
@@ -2304,14 +2306,16 @@ public class GitImpl : IGitOperations
             if (string.IsNullOrWhiteSpace(hunkFingerprint))
             {
                 return (GitErrorCodes.HunkSelection,
-                    $"hunkIds needs the hunkFingerprint returned by {ToolCallHint.Call("Git", ("operation", "hunks"))}. Nothing was staged.", null, [new GitHint(GitHintKey.HunkSelection)]);
+                    $"hunkIds needs the hunkFingerprint returned by {GitHintTokens.Inline(GitHintKey.GitHunksCall)}. Nothing was staged.", null,
+                    [new GitHint(GitHintKey.HunkSelection), new GitHint(GitHintKey.GitHunksCall)]);
             }
             var given = hunkFingerprint.Trim();
             if (!string.Equals(given, diff.Fingerprint, StringComparison.OrdinalIgnoreCase))
             {
                 return (GitErrorCodes.HunkStale,
                     $"'{path}' changed since the hunks were listed (fingerprint {given} vs {diff.Fingerprint}). " +
-                    $"Re-run {ToolCallHint.Call("Git", ("operation", "hunks"), ("paths", path))} and pick again. Nothing was staged.", null, [new GitHint(GitHintKey.HunkStale)]);
+                    $"Re-run {GitHintTokens.Inline(GitHintKey.GitHunksPathCall)} and pick again. Nothing was staged.", null,
+                    [new GitHint(GitHintKey.HunkStale), new GitHint(GitHintKey.GitHunksPathCall, new GitHintFacts { Path = path })]);
             }
             if (!GitHunkParser.TryParseHunkIds(hunkIds, diff.Hunks.Count, out var ids, out var idError))
                 return (GitErrorCodes.HunkSelection, $"{idError} {DescribeHunkSpans(diff)} Nothing was staged.", null, [new GitHint(GitHintKey.HunkSelection)]);
@@ -2336,9 +2340,10 @@ public class GitImpl : IGitOperations
             var unsupportedIds = string.Join(", ", picked.Unsupported.Select(h => h.Index));
             return (GitErrorCodes.HunkSelection,
                 $"{string.Join(' ', parts)} The body of hunk {unsupportedIds} is not a run of removed lines followed by a run of added lines (or its cut would join text onto a final line without a newline), so it cannot be cut at that range. " +
-                $"Widen the range to {SpanText(lo, hi)} to take the whole hunk, pass hunkIds from {ToolCallHint.Call("Git", ("operation", "hunks"), ("paths", path))}, " +
-                $"or stage the whole file with {ToolCallHint.Call("Git", ("operation", "stage"), ("paths", path))}. {DescribeHunkSpans(diff)} Nothing was staged.",
-                null, [new GitHint(GitHintKey.HunkSelection)]);
+                $"Widen the range to {SpanText(lo, hi)} to take the whole hunk, pass hunkIds from {GitHintTokens.Inline(GitHintKey.GitHunksPathCall)}, " +
+                $"or stage the whole file with {GitHintTokens.Inline(GitHintKey.GitStagePathCall)}. {DescribeHunkSpans(diff)} Nothing was staged.",
+                null,
+                [new GitHint(GitHintKey.HunkSelection), new GitHint(GitHintKey.GitHunksPathCall, new GitHintFacts { Path = path }), new GitHint(GitHintKey.GitStagePathCall, new GitHintFacts { Path = path })]);
         }
         if (picked.WholeHunks.Count == 0 && picked.SubHunks.Count == 0)
         {
@@ -2434,8 +2439,8 @@ public class GitImpl : IGitOperations
         if (now is null || now.StartsWith(expected, StringComparison.OrdinalIgnoreCase))
             return null;
         return $"The index entry for '{path}' changed between reading the diff and applying it (was {ShortBlob(expected)}, now {ShortBlob(now)}): " +
-               $"another session changed what is staged for this file. Re-run {ToolCallHint.Call("Git", ("operation", "hunks"), ("paths", path))} " +
-               $"for the current hunks and select again, or stage the whole file with {ToolCallHint.Call("Git", ("operation", "stage"), ("paths", path))}. Nothing was staged.";
+               $"another session changed what is staged for this file. Re-run {GitHintTokens.Inline(GitHintKey.GitHunksPathCall)} " +
+               $"for the current hunks and select again, or stage the whole file with {GitHintTokens.Inline(GitHintKey.GitStagePathCall)}. Nothing was staged.";
     }
 
     private static GitStageHunksResult StageHunksFailure(string path, string kind, string error, string detail,
@@ -2473,6 +2478,7 @@ public class GitImpl : IGitOperations
         var warnings = new List<string>();
         if (remaining != expected)
         {
+            // TODO Step 6g: this Warning text carries a tool call but GitHintText.Apply only rewrites Error, ErrorDetail and Note; the contract needs a Warning slot (or Inline scanning of Warning) before this site can move onto a hint key.
             warnings.Add($"Staged {selection.WholeHunks.Count + selection.SubHunks.Count} hunk(s) but the remaining count is {remaining?.ToString() ?? "unknown"} " +
                          $"(expected {expected}); verify with {ToolCallHint.Call("Git", ("operation", "diff"), ("ref", "staged"))}.");
         }
@@ -2537,7 +2543,12 @@ public class GitImpl : IGitOperations
 
             _afterHunkDiffLoaded?.Invoke(gitRoot);
             if (await IndexEntryChangedMessageAsync(gitRoot, load.Path, load.Diff, cancellationToken) is { } indexChanged)
-                return StageHunksFailure(load.Path, GitErrorCodes.HunkStale, indexChanged, GitHintKey.HunkStale);
+            {
+                // indexChanged carries the Inline tokens of the hunks and stage calls for this path.
+                var staleFailure = StageHunksFailure(load.Path, GitErrorCodes.HunkStale, indexChanged, GitHintKey.HunkStale);
+                var pathFacts = new GitHintFacts { Path = load.Path };
+                return WithHint(WithHint(staleFailure, new GitHint(GitHintKey.GitHunksPathCall, pathFacts)), new GitHint(GitHintKey.GitStagePathCall, pathFacts));
+            }
 
             var apply = await RunGitAsync(gitRoot,
                 ["apply", "--cached", "--unidiff-zero", "--whitespace=nowarn", patchFile], cancellationToken);
@@ -2545,7 +2556,7 @@ public class GitImpl : IGitOperations
             {
                 return StageHunksFailure(load.Path, GitErrorCodes.Fallback,
                     $"git apply rejected the selected hunks: {CleanGitStderr(apply.Stderr)}. Nothing was staged.",
-                    $"Re-run {ToolCallHint.Call("Git", ("operation", "hunks"), ("paths", "<path>"))} and pick again, or stage the whole file with {ToolCallHint.Call("Git", ("operation", "stage"), ("paths", "<path>"))}.");
+                    GitHintKey.HunkApplyRejectedNextStep);
             }
 
             return await BuildStageHunksResultAsync(gitRoot, paths, load.Path, load.Diff, selection, cancellationToken);
@@ -2678,8 +2689,8 @@ public class GitImpl : IGitOperations
         return op switch
         {
             null => "",
-            "rebase" or "am" => $" Repository is mid-{op}. This tool cannot continue it; call {ToolCallHint.Call("Git", ("operation", "abort"))} to back out (the branch returns to its pre-{op} state), or finish it in the shell.",
-            _ => $" Repository is mid-{op}. Resolve the conflicts and commit, or call {ToolCallHint.Call("Git", ("operation", "abort"))} to back out.",
+            "rebase" or "am" => $" Repository is mid-{op}. This tool cannot continue it; call {GitHintTokens.Inline(GitHintKey.GitAbortCall)} to back out (the branch returns to its pre-{op} state), or finish it in the shell.",
+            _ => $" Repository is mid-{op}. Resolve the conflicts and commit, or call {GitHintTokens.Inline(GitHintKey.GitAbortCall)} to back out.",
         };
     }
 
@@ -2697,12 +2708,12 @@ public class GitImpl : IGitOperations
         result.Error += advice;
         result.ErrorKind ??= GitErrorCodes.OperationInProgress;
         // A hint whose slot is ErrorDetail renders into ErrorDetail at the tool boundary, so it counts as "already set" exactly as a text did.
-        if (result.ErrorDetail is null && !(result.Hints?.Any(h => GitHintText.SlotOf(h.Key) == GitHintSlot.ErrorDetail) ?? false))
-        {
-            var hints = result.Hints is null ? new List<GitHint>() : new List<GitHint>(result.Hints);
+        var hints = result.Hints is null ? new List<GitHint>() : new List<GitHint>(result.Hints);
+        if (result.ErrorDetail is null && !hints.Any(h => GitHintText.SlotOf(h.Key) == GitHintSlot.ErrorDetail))
             hints.Add(new GitHint(GitHintKey.OperationInProgress));
-            result.Hints = hints;
-        }
+        // The advice carries the abort call as an Inline token; the hint (slot Inline, never ErrorDetail) renders it at the tool boundary.
+        hints.Add(new GitHint(GitHintKey.GitAbortCall));
+        result.Hints = hints;
         return result;
     }
 
@@ -3900,7 +3911,7 @@ public class GitImpl : IGitOperations
                 {
                     // The staged file list through the seam (one entry per path, as the old `diff --cached --name-only` printed); a failed read counts 0, as before.
                     var stagedCount = (await Task.Run(() => _gitReader.GetNameStatus(gitRoot, "staged", null, GitProcessTimeout), cancellationToken))?.Count ?? 0;
-                    failureNote = $" Staging already ran; the index now holds {stagedCount} staged paths. Call {ToolCallHint.Call("Git", ("operation", "unstage"))} to undo.";
+                    failureNote = $" Staging already ran; the index now holds {stagedCount} staged paths. Call {GitHintTokens.Inline(GitHintKey.GitUnstageCall)} to undo.";
                 }
 
                 var failed = new GitCommitResult { IsError = true, Error = $"git commit failed: {errorText}{failureNote}" };
@@ -3938,6 +3949,10 @@ public class GitImpl : IGitOperations
                     failed.ErrorKind = GitErrorCodes.NothingToCommit;
                     failed.Hints = [new GitHint(GitHintKey.NothingToCommit)];
                 }
+
+                // failureNote (set only when stagedUntrackedFiles) carries the unstage call as an Inline token.
+                if (stagedUntrackedFiles)
+                    failed = WithHint(failed, new GitHint(GitHintKey.GitUnstageCall));
 
                 return await AppendInProgressAsync(failed, gitRoot, cancellationToken);
             }
@@ -4585,8 +4600,8 @@ public class GitImpl : IGitOperations
             {
                 IsError = true,
                 ErrorKind = GitErrorCodes.RefRequired,
-                Hints = [new GitHint(GitHintKey.RefRequiredCheckout)],
-                Error = $"branchName is required for {ToolCallHint.Call("GitRemote", ("operation", "checkout"))}. Pass the branch to switch to, and createBranch=true if it doesn't exist yet."
+                Hints = [new GitHint(GitHintKey.RefRequiredCheckout), new GitHint(GitHintKey.GitRemoteCheckoutCall)],
+                Error = $"branchName is required for {GitHintTokens.Inline(GitHintKey.GitRemoteCheckoutCall)}. Pass the branch to switch to, and createBranch=true if it doesn't exist yet."
             };
         }
 

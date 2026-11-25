@@ -43,12 +43,22 @@ internal static class GitHintText
                 or GitHintKey.StashRollbackUnverified
                 or GitHintKey.WorktreeBranchNotFoundOptions
                 or GitHintKey.WorktreeOnlyLinkedRemovable
-                or GitHintKey.WorktreeRemoveCurrentSwitch => GitHintSlot.ErrorDetail,
+                or GitHintKey.WorktreeRemoveCurrentSwitch
+                or GitHintKey.GitDiffFailedRetry
+                or GitHintKey.HunkApplyRejectedNextStep => GitHintSlot.ErrorDetail,
             GitHintKey.TagDeleteCall
                 or GitHintKey.StashListCall
                 or GitHintKey.GitStatusCall
                 or GitHintKey.WorktreeListCall
-                or GitHintKey.WorktreeRemoveDiscardCall => GitHintSlot.Inline,
+                or GitHintKey.WorktreeRemoveDiscardCall
+                or GitHintKey.GitDiffStagedAnyPathsCall
+                or GitHintKey.GitStageAnyPathsCall
+                or GitHintKey.GitHunksCall
+                or GitHintKey.GitHunksPathCall
+                or GitHintKey.GitStagePathCall
+                or GitHintKey.GitAbortCall
+                or GitHintKey.GitUnstageCall
+                or GitHintKey.GitRemoteCheckoutCall => GitHintSlot.Inline,
             _ => throw new ArgumentOutOfRangeException(nameof(key), key, "No slot is defined for this hint key.")
         };
     }
@@ -93,6 +103,16 @@ internal static class GitHintText
             GitHintKey.WorktreeOnlyLinkedRemovable => $"Only linked worktrees can be removed; {ToolCallHint.Call("GitRemote", ("operation", "worktree"), ("action", "list"))} shows which entry has IsMain false.",
             GitHintKey.WorktreeRemoveCurrentSwitch => $"Call {ToolCallHint.Call("LoadSolution", ("solutionPath", "<path to .slnx>"))} on a solution in a different worktree, then remove this one from there.",
             GitHintKey.WorktreeRemoveDiscardCall => ToolCallHint.Call("GitRemote", ("operation", "worktree"), ("action", "remove"), ("worktreePath", facts?.Path ?? string.Empty), ("discardUncommittedChanges", "true")),
+            GitHintKey.GitDiffStagedAnyPathsCall => ToolCallHint.Call("Git", ("operation", "diff"), ("ref", "staged"), ("paths", "...")),
+            GitHintKey.GitDiffFailedRetry => $"Call {ToolCallHint.Call("Git", ("operation", "status"))} to check the repository state, then retry.",
+            GitHintKey.GitStageAnyPathsCall => ToolCallHint.Call("Git", ("operation", "stage"), ("paths", "...")),
+            GitHintKey.GitHunksCall => ToolCallHint.Call("Git", ("operation", "hunks")),
+            GitHintKey.GitHunksPathCall => ToolCallHint.Call("Git", ("operation", "hunks"), ("paths", facts?.Path ?? string.Empty)),
+            GitHintKey.GitStagePathCall => ToolCallHint.Call("Git", ("operation", "stage"), ("paths", facts?.Path ?? string.Empty)),
+            GitHintKey.HunkApplyRejectedNextStep => $"Re-run {ToolCallHint.Call("Git", ("operation", "hunks"), ("paths", "<path>"))} and pick again, or stage the whole file with {ToolCallHint.Call("Git", ("operation", "stage"), ("paths", "<path>"))}.",
+            GitHintKey.GitAbortCall => ToolCallHint.Call("Git", ("operation", "abort")),
+            GitHintKey.GitUnstageCall => ToolCallHint.Call("Git", ("operation", "unstage")),
+            GitHintKey.GitRemoteCheckoutCall => ToolCallHint.Call("GitRemote", ("operation", "checkout")),
             _ => throw new ArgumentOutOfRangeException(nameof(key), key, "No text is defined for this hint key.")
         };
     }
