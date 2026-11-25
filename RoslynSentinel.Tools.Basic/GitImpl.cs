@@ -699,9 +699,16 @@ public class GitImpl : IGitOperations
         {
             IsError = true,
             ErrorKind = GitErrorCodes.ActionRequired,
-            ErrorDetail = $"Pass action, e.g. {ToolCallHint.Call("GitRemote", ("operation", operation), ("action", "list"))}.",
+            Hints = [new GitHint(GitHintKey.PassActionExample, new GitHintFacts { Operation = operation })],
             Error = $"operation={operation} needs action to be one of: {validList} (got {got}). Nothing was changed."
         };
+    }
+
+    /// <summary>Appends one more hint to the hints a failure helper already set (for example an Inline token hint beside the ErrorDetail key) and returns the same result.</summary>
+    private static T WithHint<T>(T result, GitHint hint) where T : GitResult
+    {
+        result.Hints = [.. result.Hints ?? Array.Empty<GitHint>(), hint];
+        return result;
     }
 
     /// <summary>
@@ -786,7 +793,7 @@ public class GitImpl : IGitOperations
                 default:
                     return ConfigFailure(action?.ToString() ?? "", GitErrorCodes.ActionRequired,
                         $"operation=config needs action to be one of: get, set, unset (got {action?.ToString() ?? "none"}). Nothing was changed.",
-                        $"Valid actions are get, set and unset; get takes configKey, set takes configKey and configValue, unset takes configKey. For example {ToolCallHint.Call("GitRemote", ("operation", "config"), ("action", "get"), ("configKey", "user.name"))}.");
+                        GitHintKey.ConfigActionUsage);
             }
 
             var keyError = ValidateConfigKey(key);
@@ -856,7 +863,7 @@ public class GitImpl : IGitOperations
         {
             if (value is null)
                 return ConfigFailure(action, GitErrorCodes.ActionRequired, "action=set needs configValue (got none). Nothing was changed.",
-                    $"Pass configValue with action=set; an empty string is a valid value. For example {ToolCallHint.Call("GitRemote", ("operation", "config"), ("action", "set"), ("configKey", "user.name"), ("configValue", "Ada"))}.");
+                    GitHintKey.ConfigValueRequired);
             if (value.Contains('\0'))
                 return ConfigFailure(action, GitErrorCodes.InvalidName,
                     "The config value contains a NUL character, which git cannot store. Nothing was changed.",
@@ -1064,9 +1071,9 @@ public class GitImpl : IGitOperations
         {
             var existingShort = await RunGitAsync(gitRoot, ["rev-parse", "--short", "--verify", "--quiet", $"refs/tags/{name}^{{commit}}"], cancellationToken);
             var existingHash = existingShort.ExitCode == 0 ? existingShort.Stdout.Trim() : existing.Stdout.Trim();
-            return TagFailure("create", GitErrorCodes.AlreadyExists,
-                $"Tag '{name}' already exists (points at {existingHash}). This tool never overwrites or moves a tag. Use a new name, or delete it first ({ToolCallHint.Call("GitRemote", ("operation", "tag"), ("action", "delete"), ("tagName", name))}) and recreate. Nothing was changed.",
-                GitHintKey.AlreadyExists);
+            return WithHint(TagFailure("create", GitErrorCodes.AlreadyExists,
+                $"Tag '{name}' already exists (points at {existingHash}). This tool never overwrites or moves a tag. Use a new name, or delete it first ({GitHintTokens.Inline(GitHintKey.TagDeleteCall)}) and recreate. Nothing was changed.",
+                GitHintKey.AlreadyExists), new GitHint(GitHintKey.TagDeleteCall, new GitHintFacts { Name = name }));
         }
 
         var target = string.IsNullOrWhiteSpace(refName) ? "HEAD" : refName.Trim();
@@ -1238,13 +1245,14 @@ public class GitImpl : IGitOperations
             note += entriesAfter == expected
                 ? (pop ? $" stash@{{{index}}} was applied and dropped; {entriesAfter} stash {(entriesAfter == 1 ? "entry" : "entries")} left."
                        : $" stash@{{{index}}} was applied and kept; {entriesAfter} stash {(entriesAfter == 1 ? "entry" : "entries")} total.")
-                : $" Expected {expected} stash entries afterwards but found {entriesAfter}; check {ToolCallHint.Call("GitRemote", ("operation", "stash"), ("action", "list"))}.";
+                : $" Expected {expected} stash entries afterwards but found {entriesAfter}; check {GitHintTokens.Inline(GitHintKey.StashListCall)}.";
             return new GitStashResult
             {
                 Action = action,
                 IsError = false,
                 AppliedIndex = index,
                 Note = note,
+                Hints = entriesAfter == expected ? null : new[] { new GitHint(GitHintKey.StashListCall) },
                 Status = await StatusAsync(gitRoot, DefaultStatusMaxEntries, cancellationToken),
             };
         }
@@ -1273,7 +1281,8 @@ public class GitImpl : IGitOperations
                 IsError = true,
                 Error = $"git stash {action} failed: {stderr}. The tree could not be verified clean afterwards" +
                         (trackedNow is { Count: > 0 } ? $" (tracked changes in: {FormatPathSample(trackedNow)})" : "") +
-                        $"; stash entries: {entriesNow} (was {entriesBefore}). The stash entry was kept. Run {ToolCallHint.Call("Git", ("operation", "status"))} before editing."
+                        $"; stash entries: {entriesNow} (was {entriesBefore}). The stash entry was kept. Run {GitHintTokens.Inline(GitHintKey.GitStatusCall)} before editing.",
+                Hints = [new GitHint(GitHintKey.GitStatusCall)]
             };
         return await AppendInProgressAsync(failure, gitRoot, cancellationToken);
     }
@@ -1314,10 +1323,10 @@ public class GitImpl : IGitOperations
                 $"The attempt was rolled back (git reset --merge): the tracked tree is clean again and stash@{{{stashIndex}}} was kept. Nothing was changed.",
                 GitHintKey.StashConflict);
 
-        return StashFailure(action, GitErrorCodes.StashConflict,
+        return WithHint(StashFailure(action, GitErrorCodes.StashConflict,
             $"Applying stash@{{{stashIndex}}} conflicts, and the rollback could not be verified ({string.Join("; ", failed)}). " +
-            $"The stash entry was kept. Run {ToolCallHint.Call("Git", ("operation", "status"))} before editing.",
-            $"Call {ToolCallHint.Call("Git", ("operation", "status"))} to see the tree; {ToolCallHint.Call("GitRemote", ("operation", "stash"), ("action", "list"))} shows the stash entries.");
+            $"The stash entry was kept. Run {GitHintTokens.Inline(GitHintKey.GitStatusCall)} before editing.",
+            GitHintKey.StashRollbackUnverified), new GitHint(GitHintKey.GitStatusCall));
     }
 
     private async Task<GitStashResult> StashPushAsync(
@@ -1733,7 +1742,7 @@ public class GitImpl : IGitOperations
         if (!createBranch && !exists)
             return WorktreeFailure("add", GitErrorCodes.TargetNotFound,
                 $"Branch '{branch}' does not exist. Nothing was changed.",
-                $"Pass createBranch=true to create it (optionally with startPoint), or list the existing branches with {ToolCallHint.Call("GitRemote", ("operation", "branch"))}.");
+                GitHintKey.WorktreeBranchNotFoundOptions);
         if (createBranch && exists)
             return WorktreeFailure("add", GitErrorCodes.AlreadyExists,
                 $"Branch '{branch}' already exists, and this tool does not silently reuse it for a new worktree. " +
@@ -1781,7 +1790,8 @@ public class GitImpl : IGitOperations
                 Action = "add",
                 IsError = true,
                 Error = $"git worktree add failed: {CleanGitStderr(added.Stderr)}. " +
-                        (registered ? $"The worktree may have been partly created; check {ToolCallHint.Call("GitRemote", ("operation", "worktree"), ("action", "list"))}." : "Nothing was changed.")
+                        (registered ? $"The worktree may have been partly created; check {GitHintTokens.Inline(GitHintKey.WorktreeListCall)}." : "Nothing was changed."),
+                Hints = registered ? new[] { new GitHint(GitHintKey.WorktreeListCall) } : null
             };
         }
 
@@ -1832,11 +1842,11 @@ public class GitImpl : IGitOperations
         if (entry.IsMain)
             return WorktreeFailure("remove", GitErrorCodes.Refused,
                 $"Worktree '{path}' is the main worktree; this tool never removes it. Nothing was removed.",
-                $"Only linked worktrees can be removed; {ToolCallHint.Call("GitRemote", ("operation", "worktree"), ("action", "list"))} shows which entry has IsMain false.");
+                GitHintKey.WorktreeOnlyLinkedRemovable);
         if (entry.IsCurrent)
             return WorktreeFailure("remove", GitErrorCodes.Refused,
                 $"Worktree '{path}' is the worktree this Git tool is operating in (the loaded solution's repository); removing it would delete the directory the server is working in. Nothing was removed.",
-                $"Call {ToolCallHint.Call("LoadSolution", ("solutionPath", "<path to .slnx>"))} on a solution in a different worktree, then remove this one from there.");
+                GitHintKey.WorktreeRemoveCurrentSwitch);
         if (entry.IsLocked)
             return WorktreeFailure("remove", GitErrorCodes.Refused,
                 $"Worktree '{path}' is locked. Nothing was removed.",
@@ -1863,11 +1873,12 @@ public class GitImpl : IGitOperations
         }
 
         if (changed.Count > 0 && !discardUncommittedChanges)
-            return WorktreeFailure("remove", GitErrorCodes.WorkingTreeDirty,
+            return WithHint(WorktreeFailure("remove", GitErrorCodes.WorkingTreeDirty,
                 $"Worktree '{path}' has uncommitted changes ({changed.Count} path(s): {FormatWorktreePaths(changed)}). Nothing was removed. " +
-                $"To delete it anyway and permanently lose those changes, call {ToolCallHint.Call("GitRemote", ("operation", "worktree"), ("action", "remove"), ("worktreePath", path), ("discardUncommittedChanges", "true"))}. " +
+                $"To delete it anyway and permanently lose those changes, call {GitHintTokens.Inline(GitHintKey.WorktreeRemoveDiscardCall)}. " +
                 "To keep them, commit or stash inside that worktree first.",
-                "discardUncommittedChanges: true deletes modified and untracked files in that worktree; they cannot be recovered. Committed work and the branch are not affected.");
+                "discardUncommittedChanges: true deletes modified and untracked files in that worktree; they cannot be recovered. Committed work and the branch are not affected."),
+                new GitHint(GitHintKey.WorktreeRemoveDiscardCall, new GitHintFacts { Path = path }));
 
         // --force only for a worktree verified dirty above; a clean worktree never gets it.
         var force = changed.Count > 0;
@@ -1885,7 +1896,8 @@ public class GitImpl : IGitOperations
                 Action = "remove",
                 IsError = true,
                 Error = $"git worktree remove failed: {CleanGitStderr(removed.Stderr)}. " +
-                        (stillThere ? "The worktree was not removed." : $"Check its state with {ToolCallHint.Call("GitRemote", ("operation", "worktree"), ("action", "list"))}.")
+                        (stillThere ? "The worktree was not removed." : $"Check its state with {GitHintTokens.Inline(GitHintKey.WorktreeListCall)}."),
+                Hints = stillThere ? null : new[] { new GitHint(GitHintKey.WorktreeListCall) }
             };
         }
 

@@ -36,7 +36,19 @@ internal static class GitHintText
                 or GitHintKey.HunkSelection
                 or GitHintKey.IndexLocked
                 or GitHintKey.HookRejected
-                or GitHintKey.HunkStale => GitHintSlot.ErrorDetail,
+                or GitHintKey.HunkStale
+                or GitHintKey.PassActionExample
+                or GitHintKey.ConfigActionUsage
+                or GitHintKey.ConfigValueRequired
+                or GitHintKey.StashRollbackUnverified
+                or GitHintKey.WorktreeBranchNotFoundOptions
+                or GitHintKey.WorktreeOnlyLinkedRemovable
+                or GitHintKey.WorktreeRemoveCurrentSwitch => GitHintSlot.ErrorDetail,
+            GitHintKey.TagDeleteCall
+                or GitHintKey.StashListCall
+                or GitHintKey.GitStatusCall
+                or GitHintKey.WorktreeListCall
+                or GitHintKey.WorktreeRemoveDiscardCall => GitHintSlot.Inline,
             _ => throw new ArgumentOutOfRangeException(nameof(key), key, "No slot is defined for this hint key.")
         };
     }
@@ -69,6 +81,18 @@ internal static class GitHintText
             GitHintKey.IndexLocked => GitErrorDetails.IndexLocked(facts?.LockPath ?? string.Empty),
             GitHintKey.HookRejected => GitErrorDetails.HookRejected,
             GitHintKey.HunkStale => GitErrorDetails.HunkStale,
+            GitHintKey.PassActionExample => $"Pass action, e.g. {ToolCallHint.Call("GitRemote", ("operation", facts?.Operation ?? string.Empty), ("action", "list"))}.",
+            GitHintKey.ConfigActionUsage => $"Valid actions are get, set and unset; get takes configKey, set takes configKey and configValue, unset takes configKey. For example {ToolCallHint.Call("GitRemote", ("operation", "config"), ("action", "get"), ("configKey", "user.name"))}.",
+            GitHintKey.ConfigValueRequired => $"Pass configValue with action=set; an empty string is a valid value. For example {ToolCallHint.Call("GitRemote", ("operation", "config"), ("action", "set"), ("configKey", "user.name"), ("configValue", "Ada"))}.",
+            GitHintKey.TagDeleteCall => ToolCallHint.Call("GitRemote", ("operation", "tag"), ("action", "delete"), ("tagName", facts?.Name ?? string.Empty)),
+            GitHintKey.StashListCall => ToolCallHint.Call("GitRemote", ("operation", "stash"), ("action", "list")),
+            GitHintKey.GitStatusCall => ToolCallHint.Call("Git", ("operation", "status")),
+            GitHintKey.StashRollbackUnverified => $"Call {ToolCallHint.Call("Git", ("operation", "status"))} to see the tree; {ToolCallHint.Call("GitRemote", ("operation", "stash"), ("action", "list"))} shows the stash entries.",
+            GitHintKey.WorktreeBranchNotFoundOptions => $"Pass createBranch=true to create it (optionally with startPoint), or list the existing branches with {ToolCallHint.Call("GitRemote", ("operation", "branch"))}.",
+            GitHintKey.WorktreeListCall => ToolCallHint.Call("GitRemote", ("operation", "worktree"), ("action", "list")),
+            GitHintKey.WorktreeOnlyLinkedRemovable => $"Only linked worktrees can be removed; {ToolCallHint.Call("GitRemote", ("operation", "worktree"), ("action", "list"))} shows which entry has IsMain false.",
+            GitHintKey.WorktreeRemoveCurrentSwitch => $"Call {ToolCallHint.Call("LoadSolution", ("solutionPath", "<path to .slnx>"))} on a solution in a different worktree, then remove this one from there.",
+            GitHintKey.WorktreeRemoveDiscardCall => ToolCallHint.Call("GitRemote", ("operation", "worktree"), ("action", "remove"), ("worktreePath", facts?.Path ?? string.Empty), ("discardUncommittedChanges", "true")),
             _ => throw new ArgumentOutOfRangeException(nameof(key), key, "No text is defined for this hint key.")
         };
     }

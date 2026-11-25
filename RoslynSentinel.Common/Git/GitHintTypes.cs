@@ -30,7 +30,44 @@ internal enum GitHintKey
     HunkSelection,
     IndexLocked,
     HookRejected,
-    HunkStale
+    HunkStale,
+
+    // Step 6a-6d: inline error texts (ErrorDetail = a whole sentence, Inline = a call fragment inside engine text).
+    /// <summary>ErrorDetail "Pass action, e.g. {call}."; facts: Operation.</summary>
+    PassActionExample,
+
+    /// <summary>ErrorDetail: valid config actions and the example call.</summary>
+    ConfigActionUsage,
+
+    /// <summary>ErrorDetail: config set needs configValue, with the example call.</summary>
+    ConfigValueRequired,
+
+    /// <summary>Inline: the tag delete call; facts: Name.</summary>
+    TagDeleteCall,
+
+    /// <summary>Inline: the stash list call.</summary>
+    StashListCall,
+
+    /// <summary>Inline: the Git status call.</summary>
+    GitStatusCall,
+
+    /// <summary>ErrorDetail: check the tree and the stash entries after an unverified rollback.</summary>
+    StashRollbackUnverified,
+
+    /// <summary>ErrorDetail: worktree add for a missing branch (createBranch or list branches).</summary>
+    WorktreeBranchNotFoundOptions,
+
+    /// <summary>Inline: the worktree list call.</summary>
+    WorktreeListCall,
+
+    /// <summary>ErrorDetail: only linked worktrees can be removed; the list call shows IsMain.</summary>
+    WorktreeOnlyLinkedRemovable,
+
+    /// <summary>ErrorDetail: load a solution in a different worktree, then remove the current one.</summary>
+    WorktreeRemoveCurrentSwitch,
+
+    /// <summary>Inline: the worktree remove call with discardUncommittedChanges; facts: Path.</summary>
+    WorktreeRemoveDiscardCall
 }
 
 /// <summary>Where the rendered text of a <see cref="GitHintKey"/> goes on a result.</summary>
