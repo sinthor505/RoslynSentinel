@@ -42,6 +42,14 @@ public record GitResult : IOperationResult
     {
         get; set;
     }
+
+    /// <summary>Hints the engine attached to this result: keys plus call facts. The engine sets the keys and the tool
+    /// boundary renders them into the text slots; never serialized. Null when the engine attached none.</summary>
+    [JsonIgnore]
+    internal IReadOnlyList<GitHint>? Hints
+    {
+        get; set;
+    }
 }
 
 /// <summary>Specific ResultError.ErrorCode values for failed GitTool results. GitError stays the fallback.</summary>
