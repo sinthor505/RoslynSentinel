@@ -28,6 +28,7 @@
 	<ItemGroup>
 		<InternalsVisibleTo Include="RoslynSentinel.Tests" />
 			<InternalsVisibleTo Include="RoslynSentinel.Tests.Tools.Basic" />
+			<InternalsVisibleTo Include="RoslynSentinel.Tests.Git" />
 			<!-- WorkspaceStaleStampFilterTests latches a reload failure via RecordReloadFailure. -->
 			<InternalsVisibleTo Include="RoslynSentinel.Tests.Server" />
 			<!-- TestInstanceLauncher runs git (GitProcess) for the build-source stamp. -->

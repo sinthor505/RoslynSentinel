@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="RoslynSentinel.Tests.Tools.Basic" />
+    <InternalsVisibleTo Include="RoslynSentinel.Tests.Git" />
   </ItemGroup>
 
   <ItemGroup>
