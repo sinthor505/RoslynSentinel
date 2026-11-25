@@ -22,7 +22,7 @@ namespace RoslynSentinel.Common;
 /// <see cref="Report"/>, called by McpServerStatus, which waits a bounded time and reports "warming" on timeout.
 /// </para>
 /// </summary>
-public sealed class GitBackendWarmup
+public sealed class GitBackendWarmup : IRepoProbe
 {
     internal const string BackendLibgit2 = "Libgit2";
     internal const string BackendCliFallback = "CliFallback";
