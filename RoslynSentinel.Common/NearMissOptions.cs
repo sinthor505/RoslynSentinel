@@ -4,13 +4,16 @@ namespace RoslynSentinel.Common;
 /// EVALUATION option, off by default and not meant for production use: startup switches for near-miss rejection hints.
 /// Populated once at startup via <see cref="Configure"/>. Each option reads its command-line flag first, then its environment
 /// variable. Both defaults match today's behaviour: <see cref="AutoCorrect"/> is false and <see cref="NameDisplay"/> is
-/// <see cref="NearMissNameDisplay.Show"/>. Boolean parsing matches <see cref="LoopLatchOptions"/>: the bare flag and
-/// <c>--near-miss-autocorrect=true</c>, <c>1</c>, <c>on</c> or <c>yes</c> turn it on; anything else leaves it off.
+/// <see cref="NearMissNameDisplay.Show"/>. Boolean settings accept the bare flag, <c>true</c>, <c>1</c>, <c>on</c>, <c>yes</c>
+/// (turn on) and <c>false</c>, <c>0</c>, <c>off</c>, <c>no</c> (leave off); any other value is reported as an invalid setting
+/// and leaves the option off.
 /// </summary>
+[StartupSettingGroup("Near-miss hints")]
 public static class NearMissOptions
 {
-    private static bool _autoCorrect;
-    private static NearMissNameDisplay _nameDisplay = NearMissNameDisplay.Show;
+    public static readonly StartupSetting<bool> AutoCorrectSetting = StartupSetting.Bool("--near-miss-autocorrect", "ROSLYNSENTINEL_NEAR_MISS_AUTOCORRECT", false, "EVALUATION: auto-correct near-miss rejections (unsafe; see AutoCorrect).", SettingScope.Server);
+
+    public static readonly StartupSetting<NearMissNameDisplay> NameDisplaySetting = StartupSetting.Enum<NearMissNameDisplay>("--near-miss-name-display", "ROSLYNSENTINEL_NEAR_MISS_NAME_DISPLAY", NearMissNameDisplay.Show, "EVALUATION: whether near-miss hints show the suggested name (show or hide).", SettingScope.Server);
 
     // Deliberate deviation from the other *Options classes (plain static, set once at startup): the fixture tests need the flag
     // on in one test and off in the next without a process restart, and an AsyncLocal override keeps that safe under parallel
@@ -23,13 +26,13 @@ public static class NearMissOptions
     /// <c>ROSLYNSENTINEL_NEAR_MISS_AUTOCORRECT</c>. Warning: an edit that uses a member before its declaration can get a
     /// silent change of meaning that still compiles, so do not treat correction as safe.
     /// </summary>
-    public static bool AutoCorrect => AutoCorrectOverride.Value ?? _autoCorrect;
+    public static bool AutoCorrect => AutoCorrectOverride.Value ?? AutoCorrectSetting.Value;
 
     /// <summary>
     /// EVALUATION option, <see cref="NearMissNameDisplay.Show"/> by default and not meant for production use. Set by
     /// <c>--near-miss-name-display</c> (value <c>show</c> or <c>hide</c>) or <c>ROSLYNSENTINEL_NEAR_MISS_NAME_DISPLAY</c>.
     /// </summary>
-    public static NearMissNameDisplay NameDisplay => NameDisplayOverride.Value ?? _nameDisplay;
+    public static NearMissNameDisplay NameDisplay => NameDisplayOverride.Value ?? NameDisplaySetting.Value;
 
     /// <summary>
     /// Parses --near-miss-autocorrect and --near-miss-name-display (each falling back to its environment variable) into
@@ -37,13 +40,7 @@ public static class NearMissOptions
     /// </summary>
     public static void Configure(string[] args)
     {
-        var rawAutoCorrect = LoopLatchOptions.GetFlagValue(args, "--near-miss-autocorrect")
-            ?? Environment.GetEnvironmentVariable("ROSLYNSENTINEL_NEAR_MISS_AUTOCORRECT");
-        _autoCorrect = LoopLatchOptions.ParseEnabled(rawAutoCorrect);
-
-        var rawNameDisplay = GetValueFlag(args, "--near-miss-name-display")
-            ?? Environment.GetEnvironmentVariable("ROSLYNSENTINEL_NEAR_MISS_NAME_DISPLAY");
-        _nameDisplay = ParseNameDisplay(rawNameDisplay);
+        StartupSettings.ConfigureGroup(typeof(NearMissOptions), args);
     }
 
     /// <summary>Test hook: forces <see cref="AutoCorrect"/> and <see cref="NameDisplay"/> for the current async flow until the returned scope is disposed.</summary>
@@ -54,36 +51,6 @@ public static class NearMissOptions
         AutoCorrectOverride.Value = autoCorrect;
         NameDisplayOverride.Value = nameDisplay;
         return new OverrideScope(previousAutoCorrect, previousNameDisplay);
-    }
-
-    /// <summary>"hide" (case-insensitive, whitespace-trimmed) gives <see cref="NearMissNameDisplay.Hide"/>; anything else, including null, gives <see cref="NearMissNameDisplay.Show"/>.</summary>
-    private static NearMissNameDisplay ParseNameDisplay(string? raw)
-    {
-        return string.Equals(raw?.Trim(), "hide", StringComparison.OrdinalIgnoreCase)
-            ? NearMissNameDisplay.Hide
-            : NearMissNameDisplay.Show;
-    }
-
-    /// <summary>
-    /// "--flag=value" gives the value; a bare "--flag" gives the next token, whatever it is. Null when the flag is absent or
-    /// has no following token. Unlike <see cref="LoopLatchOptions.GetFlagValue"/>, a non-boolean value such as "hide" is kept.
-    /// </summary>
-    private static string? GetValueFlag(string[] args, string flag)
-    {
-        var inlinePrefix = flag + "=";
-        var inline = args.FirstOrDefault(a => a.StartsWith(inlinePrefix, StringComparison.Ordinal));
-        if (inline is not null)
-        {
-            return inline[inlinePrefix.Length..];
-        }
-
-        var index = Array.FindIndex(args, a => a.Equals(flag, StringComparison.Ordinal));
-        if (index < 0 || index + 1 >= args.Length)
-        {
-            return null;
-        }
-
-        return args[index + 1];
     }
 
     private sealed class OverrideScope(bool? previousAutoCorrect, NearMissNameDisplay? previousNameDisplay) : IDisposable
