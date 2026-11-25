@@ -1,6 +1,6 @@
 # Plan: Declare every startup flag and env var once, generate the configuration reference from it, and report effective values at runtime
 
-**Status:** IN PROGRESS 2026-11-25. Steps 1-9, 11, 13-15, 22a done (see per-step Done lines). Declare every startup flag and env var once as a `StartupSetting<T>` and drive parsing, the generated reference, `McpServerStatus` and a configuration halt latch from that registry (33 slices, staged report-only before the halt).
+**Status:** IN PROGRESS 2026-11-25. Steps 1-17, 22a done (see per-step Done lines). Declare every startup flag and env var once as a `StartupSetting<T>` and drive parsing, the generated reference, `McpServerStatus` and a configuration halt latch from that registry (33 slices, staged report-only before the halt).
 
 ## Problem
 
@@ -458,6 +458,7 @@ Rules the bodies implement:
 - Effect: as Step 6, plus Q22 for NotFoundInventory: `on`/`yes` now mean true, and `2`/`bogus` are Invalid so the default (true) applies. `NotFoundInventoryOptionsTests.Configure_EnvVarOtherValue_LeavesItOff` is rewritten: `on`/`yes` move to the enabled cases; `2`/`bogus` assert `Enabled == true` (default) and an `InvalidValue` problem from `ConfigureGroup`; rename the test to match. IdleRestart settings (`--idle-restart-minutes`, `--builds-root`) scope `ServerStdio` (documents the deliberate HTTP omission); `IdleRestartOptions.ResetForTests` resets its descriptors; remove the `// TODO share GetArgValue` at `IdleRestartOptions.cs:37`. `NotFoundInventoryOptions.EnvironmentVariable` stays a `const` passed as `env:` and stops calling `LoopLatchOptions.GetFlagValue`.
 - Done when: `Build` 0 errors.
 - Lane: implementer.
+- Done: 44520700
 
 ### Step 10b - OrientationBreakerOptions; remove the LoopLatchOptions parsing helpers
 - Files: `RoslynSentinel.Common/OrientationBreakerOptions.cs`, `RoslynSentinel.Common/LoopLatchOptions.cs`
@@ -466,6 +467,7 @@ Rules the bodies implement:
 - Change: migrate `OrientationBreakerOptions` (scope `Server`) per Execution rules. In `LoopLatchOptions`, delete `GetFlagValue` and `ParseEnabled` if `Search(mode: references, includeTests: true)` shows no caller; otherwise mark them `[Obsolete("Use StartupSettings")]`.
 - Done when: `Build` 0 errors.
 - Lane: implementer.
+- Done: 01bc4386
 
 ### Step 11 - Migrate ToolCallEchoOptions, ResultMarshallerOptions
 - Files: `RoslynSentinel.Common/ToolCallEchoOptions.cs`, `RoslynSentinel.Tests.Server/ToolCallEchoFilterTests.cs`, `RoslynSentinel.Common/ResultMarshallerOptions.cs`
@@ -481,6 +483,7 @@ Rules the bodies implement:
 - Effect: Q22 only (`ROSLYNSENTINEL_RELATIVE_PATHS=bogus` becomes Invalid; default on applies). Env-only `Live` setting, scope `Server`, preserving the per-access read that `WirePathRelativizeFilterTests` relies on.
 - Done when: `Build` 0 errors.
 - Lane: implementer.
+- Done: 06edd789
 
 ### Step 12 - Migrate ChangedContentOptions, ServerInstancePaths, ScratchRoot
 - Files: `RoslynSentinel.Common/ChangedContentOptions.cs`, `RoslynSentinel.Common/ServerInstancePaths.cs`, `RoslynSentinel.Common/ScratchRoot.cs`
@@ -489,6 +492,7 @@ Rules the bodies implement:
 - Change: `ChangedContentOptions`: env-only `Startup` descriptor declared first; `InlineOnApply` stays a settable static initialised from `<Setting>.Read(StartupArgs.Empty, StartupSettings.EnvironmentReader).Value`. `ServerInstancePaths`: flag-only descriptors (env null) for `--working-dir`, `--tab-state-dir` (scope `Server`) declared above `CurrentLazy`; `Resolve(args, binDir)` reads them with `Read(StartupArgs.Parse(args), StartupSettings.EnvironmentReader)`; its private `GetArgValue` (:77) goes. `ScratchRoot`: `ROSLYNSENTINEL_SCRATCH_ROOT` and `_RESULTS_ROOT` (env-only, `Live`, scope `Server | PlanStepRunner | AgentLoop | TestHarness`).
 - Done when: `Build` 0 errors.
 - Lane: implementer.
+- Done: d1981e7f
 
 ### Step 13 - Single-source REPO_ROOT and INSTANCE_ID
 - Files: `RoslynSentinel.Common/RepoRootLocator.cs`, `RoslynSentinel.Common/ToolTelemetry.cs`, `RoslynSentinel.Engines.Basic/BuildIsolation.cs`
@@ -533,6 +537,7 @@ Rules the bodies implement:
 - Change: `[StartupSettingGroup("Server host")] public static class ServerHostSettings` declaring 21 flags, scope `Server` unless noted: `--testing`, `--mode`, `--modes`, `--solution`, `--base-repo-dir`, `--include-tools`, `--exclude-tools`, `--hide-tools`, `--toolsets`, `--port` (`NullableInt`), `--transport` (`String`), `--bind` (`Enum<HttpBindScope>`, default `Loopback`), `--respawn` (`Custom<RespawnPolicy?>`, enum names per Q22, null default), `--list-tools`, `--full`, `--output`, `--log-dir`, `--run-id`, `--step-id`, `--interactive` (scope `ServerStdio`), `--list-options` (new). Each `Parse*` method keeps its public signature and return type and reads its descriptor with `Read(StartupArgs.Parse(args), StartupSettings.EnvironmentReader)`: `ParseArgs` :52-99, `ParseHideTools` :113, `ParseToolsets` :120, `ParsePort(args, defaultPort)` :345 (caller default when `Source` is `Default` or `Invalid`; `--port=abc` still returns 5100, `HttpHostStartupArgsTests.cs:15-19`), `ParseTransport` :352 (returns the raw value; the unknown-transport `ArgumentException` stays in `Program.cs:19`), `ParseBind` :359 (`--bind=everything` is Invalid and returns `Loopback`, `:30`), `ParseRespawn(args, transport)` :369 (transport-derived default when `Source` is `Default` or `Invalid`; `--respawn=sometimes`, `:70`), `HandleListTools` :460, `ParseLogDirectory` :716, `ParseRunId` :724, `ParseStepId` :730; delete private `GetArgValue` (:331). `ServerStdio.cs:80` `args.Contains("--interactive")` becomes `ServerHostSettings.InteractiveSetting.Read(StartupArgs.Parse(args), StartupSettings.EnvironmentReader).Value` (not `.Value` on the descriptor: `ConfigureAll` only arrives in Step 18).
 - Done when: `Build` 0 errors.
 - Lane: implementer-senior (11 methods in a 941-line file). Dispatcher afterwards runs `HttpHostStartupArgsTests`, `ToolClassSelectionTests`, `SubAgentLaunchTests`.
+- Done: 6094d7da
 
 ### Step 17 - Test-harness declarations
 - Files: `RoslynSentinel.Tests.Harness/TestHarnessSettings.cs` (new)
@@ -543,6 +548,7 @@ Rules the bodies implement:
   - Literals: `ROSLYNSENTINEL_MODELEVAL_REPLAY_TRANSCRIPT`, `_REPLAY_SIZE`, `_TOOLSET`, `_EDIT_ARM`, `_STEP_WALL_CLOCK_MINUTES`, `_SCENARIO`, `_SCENARIO_SAMPLES`, `_PROMPT_VARIANT`, `_SIZES`, `_REPEATS`, `_REPLAY_EARLY_STOP`, `_RESUME_LITERAL_CASE`, `_RESUME_STEP`; `ROSLYNSENTINEL_UPDATE_GENERATED_DOCS`, `_UPDATE_LONG_MESSAGE_BASELINE`, `_UPDATE_PLACEMENT_BASELINE`, `_UPDATE_HINT_BASELINE`, `_UPDATE_TOOL_RETURN_BASELINE`; `ROSLYNSENTINEL_TEST_KEEP`, `_TEST_ENV_PASSTHROUGH`, `_TEST_SERVER_OUTPUT`; `ROSLYNSENTINEL_FAKE_WRITE_AUDIT`.
 - Done when: `Build` 0 errors.
 - Lane: implementer.
+- Done: c9979dfb
 
 ### Step 18 - Server entry points (report-only)
 - Files: `RoslynSentinel.Server.Advanced/ServerStdio.cs`, `RoslynSentinel.Server.Advanced/ServerHttp.cs`
