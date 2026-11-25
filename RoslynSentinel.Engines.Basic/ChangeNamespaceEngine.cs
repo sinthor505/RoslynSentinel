@@ -173,11 +173,21 @@ public static class ChangeNamespaceEngine
 
         var separator = Path.DirectorySeparatorChar;
         var folder = path.Absolute.TrimEnd(separator) + separator;
-        var documents = committed.Projects
-            .SelectMany(project => project.Documents)
-            .Where(document => document.FilePath is { Length: > 0 } filePath
-                && filePath.StartsWith(folder, PathComparison.Comparison)
-                && !filePath[folder.Length..].Split(separator).SkipLast(1).Any(segment => segment.Equals("obj", StringComparison.OrdinalIgnoreCase) || segment.Equals("bin", StringComparison.OrdinalIgnoreCase)))
+        var candidates = new List<Document>();
+        foreach (var project in committed.Projects)
+        {
+            foreach (var document in project.Documents)
+            {
+                if (document.FilePath is { Length: > 0 } filePath
+                    && filePath.StartsWith(folder, PathComparison.Comparison)
+                    && !filePath[folder.Length..].Split(separator).SkipLast(1).Any(segment => segment.Equals("obj", StringComparison.OrdinalIgnoreCase) || segment.Equals("bin", StringComparison.OrdinalIgnoreCase)))
+                {
+                    candidates.Add(document);
+                }
+            }
+        }
+
+        var documents = candidates
             .GroupBy(document => document.FilePath!, PathComparison.Comparer)
             .Select(group => group.First())
             .OrderBy(document => document.FilePath, PathComparison.Comparer)
@@ -288,7 +298,15 @@ public static class ChangeNamespaceEngine
                     shadows.Add($"Name shadowing: '{clash.ToDisplayString()}' is a type in {where}, and the new namespace '{target}' also gives '{segments[i]}' there as a namespace; code in {where} that writes '{segments[i]}.' would bind to the namespace.");
                 }
 
-                var next = parent.GetNamespaceMembers().FirstOrDefault(ns => string.Equals(ns.Name, segments[i], StringComparison.Ordinal));
+                INamespaceSymbol? next = null;
+                foreach (var candidate in parent.GetNamespaceMembers())
+                {
+                    if (string.Equals(candidate.Name, segments[i], StringComparison.Ordinal))
+                    {
+                        next = candidate;
+                        break;
+                    }
+                }
                 if (next is null)
                 {
                     break;
