@@ -85,7 +85,7 @@ public static class ServerBinaryStaleness
                 return null;
             }
 
-            var sha = GitReaders.Default.GetHeadSha(directory, shortForm: false, GitTimeout)?.Trim();
+            var sha = RepoQueryProvider.Current?.GetHeadSha(directory, shortForm: false, GitTimeout)?.Trim();
             return sha is { Length: 40 } && sha.All(char.IsAsciiHexDigit) ? sha : null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
@@ -236,7 +236,7 @@ public static class ServerBinaryStaleness
             // under a server-source prefix", so the results differ only for a rename OUT of server source (old path under a
             // prefix, new path outside): it used to look not stale and is now stale, which is right (a source file left the tree).
             // A rename within or into server source is stale either way.
-            var commits = GitReaders.Default.GetCommitsSince(solutionDirectory, buildSha, GitTimeout);
+            var commits = RepoQueryProvider.Current?.GetCommitsSince(solutionDirectory, buildSha, GitTimeout);
             if (commits is null)
             {
                 return notStale;
@@ -265,7 +265,7 @@ public static class ServerBinaryStaleness
 
             // No pathspecs: git matches a pathspec by whole leading components, so "RoslynSentinel.Tools." would match nothing.
             // The prefix filter in DescribeUncommittedChanges does the narrowing.
-            var changes = GitReaders.Default.GetStatus(solutionDirectory, pathspecs: null, GitTimeout);
+            var changes = RepoQueryProvider.Current?.GetStatus(solutionDirectory, pathspecs: null, GitTimeout);
             return changes is null ? null : DescribeUncommittedChanges(changes, SourcePathPrefixes);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.ComponentModel.Win32Exception)
@@ -278,7 +278,7 @@ public static class ServerBinaryStaleness
     /// Pure parser for <c>git status --porcelain</c> output: counts entries whose repo-relative path starts with one of
     /// <paramref name="pathPrefixes"/> and describes the first one; null when none match.
     /// </summary>
-    // TODO production no longer calls this (DescribeUncommittedServerSource reads typed rows via GitReaders.Default and DescribeUncommittedChanges); kept only for its text-parser tests in ServerBinaryStalenessTests. Delete it with them.
+    // TODO production no longer calls this (DescribeUncommittedServerSource reads typed rows via RepoQueryProvider.Current and DescribeUncommittedChanges); kept only for its text-parser tests in ServerBinaryStalenessTests. Delete it with them.
     internal static string? ParseUncommittedStatus(string porcelainOutput, IReadOnlyList<string> pathPrefixes)
     {
         var count = 0;
@@ -336,7 +336,7 @@ public static class ServerBinaryStaleness
     /// path line never contains one) and a blank line. Returns, in log order, the commits with at least one path that
     /// starts with one of <paramref name="pathPrefixes"/> (ordinal, '/' separators).
     /// </summary>
-    // TODO production no longer calls this (EvaluateGit reads typed commits via GitReaders.Default and FilterServerSourceCommits); kept only for its text-parser tests in ServerBinaryStalenessTests. Delete it with them.
+    // TODO production no longer calls this (EvaluateGit reads typed commits via RepoQueryProvider.Current and FilterServerSourceCommits); kept only for its text-parser tests in ServerBinaryStalenessTests. Delete it with them.
     internal static IReadOnlyList<StaleCommit> ParseGitLog(string output, IReadOnlyList<string> pathPrefixes)
     {
         var commits = new List<StaleCommit>();
