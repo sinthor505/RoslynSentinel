@@ -43,8 +43,8 @@ surface text does not count as a behaviour change of the area.
 
 ### Selection rule (applies to every area; decided independently of the splits)
 
-`scripts/test-areas.json` (new; supersedes `scripts/oop-areas.json` from Step 5 of
-`plan_full_suite_nightly_and_tail_shard.md`) maps each area test project to the production projects and the few shared files
+`scripts/expensive-test-watch-list.json` (new; the same file Step 5 of
+`plan_full_suite_nightly_and_tail_shard.md` creates) maps each area test project to the production projects and the few shared files
 it watches. A task-end verification run is the fast suite plus every area test project whose watched paths changed since the
 marker's `headSha` (or are uncommitted); the nightly full run covers the rest. Before a split, an area's watch list is file
 globs; after it, a project directory. Until the splits land, the glob form gives most of the saving for task-end runs, so
@@ -205,7 +205,7 @@ Its mechanics tests are about 250 s. The lever is the 82 fixtures (2,633 s; 1,73
 ## Related
 
 - [plan_full_suite_nightly_and_tail_shard.md](../plans/plan_full_suite_nightly_and_tail_shard.md) (marker, nightly run, debt
-  check; its Step 5 area list becomes `test-areas.json` here)
+  check; its Step 5 creates the shared `scripts/expensive-test-watch-list.json`)
 - [plan_shorten_verification_loop.md](../plans/plan_shorten_verification_loop.md) (D1 task-end rule; Appendix A serial tail)
 - [plan_in_memory_test_tier_for_battery.md](../plans/plan_in_memory_test_tier_for_battery.md) (Area 3 direction)
 - [proposal_runtest_tests_for_members.md](./proposal_runtest_tests_for_members.md)
