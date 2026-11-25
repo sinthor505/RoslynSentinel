@@ -9,6 +9,8 @@ namespace RoslynSentinel.Tools.Basic;
 [McpServerToolType]
 public class ServerStatusTools
 {
+    public const string ToolName = "McpServerStatus";
+
     private readonly IWorkspaceManager _workspaceManager;
     private readonly ActiveToolSurface _activeToolSurface;
     private readonly StoppedByScriptMarker _stoppedByScriptMarker;
@@ -46,7 +48,7 @@ public class ServerStatusTools
         _toolsets = toolsets;
     }
 
-    [McpServerTool(Name = "McpServerStatus", ReadOnly = true)]
+    [McpServerTool(Name = ToolName, ReadOnly = true)]
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)] // read-only diagnostic an operator or agent needs while halted (breaker filter refuses every tool not on the allow-list)
     [Produces(DataTag.ResultOnly)]
     [Description("Diagnostic snapshot: server build identity (serverVersion, serverBuildTimeUtc, serverBinaryPath, serverPid, buildSha, binaryStaleness = commits since buildSha touching server source, else loaded assemblies with a newer build on disk), session-halt state, circuit breaker, loaded workspace (isFreshStartup = this server process has not loaded a solution yet, e.g. just restarted), active tool-mode resolution. " +
@@ -64,6 +66,8 @@ public class ServerStatusTools
         McpServerStatusToolListing toolListing = McpServerStatusToolListing.none,
         [Description("Case-insensitive substring of tool/class name; narrows toolListing.")]
         string? toolNameFilter = null,
+        [Description("Startup settings to list with undeclared env names: nonDefault or all.")]
+        McpServerStatusSettingsListing settings = McpServerStatusSettingsListing.none,
         CancellationToken cancellationToken = default,
         RequestContext<CallToolRequestParams>? requestContext = null)
     {
@@ -220,9 +224,41 @@ public class ServerStatusTools
             // Tool-list change scopes this process applied; not proof a client received notifications/tools/list_changed.
             ToolListChangedRaised: _toolsets?.ToolListChangedRaised,
             // subscriptions/listen requests asking for tool-list notifications (2026-07-28 clients); null without ToolsetService.
-            ToolListSubscriptionRequests: _toolsets?.ToolListSubscriptionRequests
+            ToolListSubscriptionRequests: _toolsets?.ToolListSubscriptionRequests,
+            // Always present: problems, halt state and the undeclared-env count; the lists ride with settings != none.
+            Configuration: BuildConfiguration(settings)
         )
         };
+    }
+
+    private static McpServerStatusConfiguration BuildConfiguration(McpServerStatusSettingsListing settings)
+    {
+        var report = StartupSettings.LastReport;
+        var listed = settings != McpServerStatusSettingsListing.none;
+
+        IReadOnlyList<McpServerStatusSetting>? rows = null;
+        if (listed)
+        {
+            rows = report.Settings
+                .Where(s => settings == McpServerStatusSettingsListing.all || s.Source != SettingSource.Default)
+                .Select(s => new McpServerStatusSetting(
+                    Name: s.Name,
+                    Flag: s.Flag,
+                    Env: s.EnvName,
+                    Value: s.EffectiveText,
+                    Source: s.Source,
+                    // One entry per set flag so the wire never carries a combined flags string.
+                    Scopes: Enum.GetValues<SettingScope>().Where(f => f != SettingScope.None && s.Scope.HasFlag(f)).ToArray()))
+                .ToArray();
+        }
+
+        return new McpServerStatusConfiguration(
+            Problems: report.Problems,
+            Halted: report.Halted,
+            UndeclaredEnvCount: report.UndeclaredEnv.Count,
+            UndeclaredEnv: listed ? report.UndeclaredEnv : null,
+            UndeclaredEnvHint: !listed && report.UndeclaredEnv.Count > 0 ? StartupSettings.UndeclaredEnvHint : null,
+            Settings: rows);
     }
 
     private string DescribeHowToEnable(string className, string toolName, bool useSnapshot)
@@ -271,6 +307,36 @@ public enum McpServerStatusToolListing
     inactive,
     all
 }
+/// <summary>Whether McpServerStatusTool lists the effective startup settings (and undeclared env names) in <c>Configuration</c>.</summary>
+public enum McpServerStatusSettingsListing
+{
+    none,
+    nonDefault,
+    all
+}
+
+/// <summary>
+/// Startup configuration state from <c>StartupSettings.LastReport</c>. Problems, Halted and UndeclaredEnvCount are always
+/// present; UndeclaredEnv and Settings only when a settings listing was requested; UndeclaredEnvHint only when the
+/// list is omitted and undeclared names exist.
+/// </summary>
+public sealed record McpServerStatusConfiguration(
+    IReadOnlyList<ConfigurationProblem> Problems,
+    bool Halted,
+    int UndeclaredEnvCount,
+    IReadOnlyList<string>? UndeclaredEnv,
+    string? UndeclaredEnvHint,
+    IReadOnlyList<McpServerStatusSetting>? Settings);
+
+/// <summary>One startup setting row: Value is the effective text (an External setting reports "set" or "unset"), Scopes lists each applicable host.</summary>
+public sealed record McpServerStatusSetting(
+    string Name,
+    string? Flag,
+    string? Env,
+    string Value,
+    SettingSource Source,
+    IReadOnlyList<SettingScope> Scopes);
+
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>A single circuit breaker's tripped state and message, as reported by McpServerStatusTool.</summary>
 public sealed record McpServerStatusBreakerState(bool Tripped, string? Message);
@@ -361,7 +427,9 @@ public sealed record McpServerStatusResult(
     string? ClientProtocolVersion = null,
     // Tool-list change scopes ToolsetService applied in this process (null when no ToolsetService is injected).
     int? ToolListChangedRaised = null,
-    int? ToolListSubscriptionRequests = null);
+    int? ToolListSubscriptionRequests = null,
+    // Startup configuration registry state (problems, halt, undeclared env); lists only with settings != none.
+    McpServerStatusConfiguration? Configuration = null);
 /// <summary>
 /// One <see cref="McpServerToolAttribute"/>-carrying method discovered via reflection, as reported
 /// by McpServerStatusTool's <c>AllDeclaredTools</c>. Ground truth for "does this tool exist in this
