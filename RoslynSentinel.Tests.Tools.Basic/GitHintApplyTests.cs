@@ -219,6 +219,25 @@ public class GitHintApplyTests
     }
 
     [Test]
+    public void Apply_InlineSlotKeys_AreReplacedInStageHunksWarning_AndLeaveNoTokenBehind()
+    {
+        Assert.Multiple(() =>
+        {
+            foreach (var key in DefinedKeys().Where(k => GitHintText.SlotOf(k) == GitHintSlot.Inline))
+            {
+                var token = GitHintTokens.Inline(key);
+                var result = new GitStageHunksResult { Warning = "before " + token + " after" };
+                result.Hints = new[] { new GitHint(key, SomeFacts()) };
+
+                var applied = GitHintText.Apply(result);
+
+                Assert.That(applied.Warning, Is.EqualTo("before " + GitHintText.Render(key, SomeFacts()) + " after"), $"{key} token is replaced in Warning");
+                Assert.That(applied.Warning, Does.Not.Contain(token), $"{key} leaves no token in Warning");
+            }
+        });
+    }
+
+    [Test]
     public void RenderRootFailure_NoRepositoryFound_NamesLoadSolution()
     {
         var text = GitHintText.RenderRootFailure(GitRootFailure.NoRepositoryFound);

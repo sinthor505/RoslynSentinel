@@ -1147,7 +1147,7 @@ public class GitImpl : IGitOperations
                 Error = $"git tag -d failed: {CleanGitStderr(deleted.Stderr)}. Nothing was changed."
             };
 
-        var note = $"Deleted locally only. To undo: {ToolCallHint.Call("GitRemote", ("operation", "tag"), ("action", "create"), ("tagName", name), ("ref", previous))}.";
+        var note = $"Deleted locally only. To undo: {GitHintTokens.Inline(GitHintKey.TagCreateUndoCall)}.";
         if (wasAnnotated)
             note += " The tag was annotated; its message and tagger are not restored by that call (pass message to make the recreated tag annotated).";
         return new GitTagResult
@@ -1157,6 +1157,7 @@ public class GitImpl : IGitOperations
             Deleted = name,
             PreviousTargetHash = previous,
             Note = note,
+            Hints = [new GitHint(GitHintKey.TagCreateUndoCall, new GitHintFacts { Name = name, Hash = previous })],
         };
     }
 
@@ -1241,7 +1242,7 @@ public class GitImpl : IGitOperations
         {
             var entriesAfter = await StashCountAsync(gitRoot, cancellationToken);
             var expected = pop ? entriesBefore - 1 : entriesBefore;
-            var note = StashDiskNote + " Staged state is not restored (--index is not used).";
+            var note = "Staged state is not restored (--index is not used).";
             note += entriesAfter == expected
                 ? (pop ? $" stash@{{{index}}} was applied and dropped; {entriesAfter} stash {(entriesAfter == 1 ? "entry" : "entries")} left."
                        : $" stash@{{{index}}} was applied and kept; {entriesAfter} stash {(entriesAfter == 1 ? "entry" : "entries")} total.")
@@ -1252,7 +1253,9 @@ public class GitImpl : IGitOperations
                 IsError = false,
                 AppliedIndex = index,
                 Note = note,
-                Hints = entriesAfter == expected ? null : new[] { new GitHint(GitHintKey.StashListCall) },
+                Hints = entriesAfter == expected
+                    ? new[] { new GitHint(GitHintKey.StashDiskNote) }
+                    : new[] { new GitHint(GitHintKey.StashDiskNote), new GitHint(GitHintKey.StashListCall) },
                 Status = await StatusAsync(gitRoot, DefaultStatusMaxEntries, cancellationToken),
             };
         }
@@ -1405,12 +1408,11 @@ public class GitImpl : IGitOperations
             IsError = false,
             Created = true,
             Message = top.Entries.FirstOrDefault()?.Message ?? message,
-            Note = StashDiskNote + " Staged changes come back unstaged on pop/apply (--index is not used).",
+            Note = "Staged changes come back unstaged on pop/apply (--index is not used).",
+            Hints = [new GitHint(GitHintKey.StashDiskNote)],
             Status = await StatusAsync(gitRoot, DefaultStatusMaxEntries, cancellationToken),
         };
     }
-
-    private static string StashDiskNote => $"Tracked files changed on disk; call {ToolCallHint.Call("LoadSolution", ("forceReload", "true"))} before editing C#.";
 
     private async Task<GitStashResult> StashListAsync(string gitRoot, int count, CancellationToken cancellationToken)
     {
@@ -1801,7 +1803,7 @@ public class GitImpl : IGitOperations
             IsError = false,
             Added = path,
             Branch = branch,
-            Note = $"Use {ToolCallHint.Call("LoadSolution", ("solutionPath", "<path to .slnx>"))} on a .slnx inside {path} to work in it; mutating Git operations always target the loaded solution's repo.",
+            Hints = [new GitHint(GitHintKey.WorktreeAddNote, new GitHintFacts { Path = path })],
         };
     }
 
@@ -1903,7 +1905,7 @@ public class GitImpl : IGitOperations
 
         var kept = entry.Branch is null
             ? "The worktree was on a detached HEAD, so there is no branch to delete."
-            : $"The branch '{entry.Branch}' was kept; delete it with {ToolCallHint.Call("GitRemote", ("operation", "branch"), ("deleteBranch", "true"))} once merged.";
+            : $"The branch '{entry.Branch}' was kept; delete it with {GitHintTokens.Inline(GitHintKey.GitRemoteBranchDeleteCall)} once merged.";
         return new GitWorktreeResult
         {
             Action = "remove",
@@ -1914,6 +1916,7 @@ public class GitImpl : IGitOperations
             Note = force
                 ? $"Removed '{path}' and discarded uncommitted changes in {changed.Count} path(s). They are not recoverable. {kept}"
                 : kept,
+            Hints = entry.Branch is null ? null : [new GitHint(GitHintKey.GitRemoteBranchDeleteCall)],
         };
     }
 
@@ -2290,8 +2293,9 @@ public class GitImpl : IGitOperations
             TotalHunks = diff.Hunks.Count,
             IsTruncated = diff.Hunks.Count > limit,
             Hunks = diff.Hunks.Take(limit).Select(ToHunkEntry).ToList(),
-            Note = $"Pass hunkIds with this hunkFingerprint to {ToolCallHint.Call("Git", ("operation", "stage"), ("paths", path))}, or lineRange. " +
-                   "Hunks are zero-context: adjacent edits are separate hunks."
+            Note = $"Pass hunkIds with this hunkFingerprint to {GitHintTokens.Inline(GitHintKey.GitStagePathCall)}, or lineRange. " +
+                   "Hunks are zero-context: adjacent edits are separate hunks.",
+            Hints = [new GitHint(GitHintKey.GitStagePathCall, new GitHintFacts { Path = path })]
         };
     }
 
@@ -2495,9 +2499,8 @@ public class GitImpl : IGitOperations
         var warnings = new List<string>();
         if (remaining != expected)
         {
-            // TODO Step 6g: this Warning text carries a tool call but GitHintText.Apply only rewrites Error, ErrorDetail and Note; the contract needs a Warning slot (or Inline scanning of Warning) before this site can move onto a hint key.
             warnings.Add($"Staged {selection.WholeHunks.Count + selection.SubHunks.Count} hunk(s) but the remaining count is {remaining?.ToString() ?? "unknown"} " +
-                         $"(expected {expected}); verify with {ToolCallHint.Call("Git", ("operation", "diff"), ("ref", "staged"))}.");
+                         $"(expected {expected}); verify with {GitHintTokens.Inline(GitHintKey.GitDiffStagedCall)}.");
         }
 
         var status = await StatusAsync(gitRoot, DefaultStatusMaxEntries, cancellationToken);
@@ -2511,6 +2514,7 @@ public class GitImpl : IGitOperations
             RemainingUnstagedHunks = remaining ?? expected,
             Note = notes.Count == 0 ? null : string.Join(' ', notes),
             Warning = warnings.Count == 0 ? null : string.Join(' ', warnings),
+            Hints = remaining != expected ? new[] { new GitHint(GitHintKey.GitDiffStagedCall) } : null,
             Branch = status.Branch,
             IsClean = status.IsClean,
             Staged = status.Staged,

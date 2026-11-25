@@ -98,7 +98,23 @@ internal enum GitHintKey
     GitUnstageCall,
 
     /// <summary>Inline: the GitRemote checkout call.</summary>
-    GitRemoteCheckoutCall
+    GitRemoteCheckoutCall,
+
+    // Step 6g Warning extension and Step 7a-7b: notes and the stage-hunks warning.
+    /// <summary>Inline: the staged-diff call with no paths (used in the stage-hunks Warning).</summary>
+    GitDiffStagedCall,
+
+    /// <summary>Inline: the tag create call that restores a deleted tag; facts: Name, Hash.</summary>
+    TagCreateUndoCall,
+
+    /// <summary>NotePrefix: tracked files changed on disk after a stash push, pop or apply; call LoadSolution with forceReload before editing C#.</summary>
+    StashDiskNote,
+
+    /// <summary>NotePrefix: after worktree add, how to work in the new worktree through LoadSolution; facts: Path. The engine Note is empty.</summary>
+    WorktreeAddNote,
+
+    /// <summary>Inline: the GitRemote branch call with deleteBranch.</summary>
+    GitRemoteBranchDeleteCall
 }
 
 /// <summary>Where the rendered text of a <see cref="GitHintKey"/> goes on a result.</summary>

@@ -58,7 +58,12 @@ internal static class GitHintText
                 or GitHintKey.GitStagePathCall
                 or GitHintKey.GitAbortCall
                 or GitHintKey.GitUnstageCall
-                or GitHintKey.GitRemoteCheckoutCall => GitHintSlot.Inline,
+                or GitHintKey.GitRemoteCheckoutCall
+                or GitHintKey.GitDiffStagedCall
+                or GitHintKey.TagCreateUndoCall
+                or GitHintKey.GitRemoteBranchDeleteCall => GitHintSlot.Inline,
+            GitHintKey.StashDiskNote
+                or GitHintKey.WorktreeAddNote => GitHintSlot.NotePrefix,
             _ => throw new ArgumentOutOfRangeException(nameof(key), key, "No slot is defined for this hint key.")
         };
     }
@@ -113,6 +118,11 @@ internal static class GitHintText
             GitHintKey.GitAbortCall => ToolCallHint.Call("Git", ("operation", "abort")),
             GitHintKey.GitUnstageCall => ToolCallHint.Call("Git", ("operation", "unstage")),
             GitHintKey.GitRemoteCheckoutCall => ToolCallHint.Call("GitRemote", ("operation", "checkout")),
+            GitHintKey.GitDiffStagedCall => ToolCallHint.Call("Git", ("operation", "diff"), ("ref", "staged")),
+            GitHintKey.TagCreateUndoCall => ToolCallHint.Call("GitRemote", ("operation", "tag"), ("action", "create"), ("tagName", facts?.Name ?? string.Empty), ("ref", facts?.Hash ?? string.Empty)),
+            GitHintKey.StashDiskNote => $"Tracked files changed on disk; call {ToolCallHint.Call("LoadSolution", ("forceReload", "true"))} before editing C#.",
+            GitHintKey.WorktreeAddNote => $"Use {ToolCallHint.Call("LoadSolution", ("solutionPath", "<path to .slnx>"))} on a .slnx inside {facts?.Path ?? string.Empty} to work in it; mutating Git operations always target the loaded solution's repo.",
+            GitHintKey.GitRemoteBranchDeleteCall => ToolCallHint.Call("GitRemote", ("operation", "branch"), ("deleteBranch", "true")),
             _ => throw new ArgumentOutOfRangeException(nameof(key), key, "No text is defined for this hint key.")
         };
     }
@@ -168,6 +178,12 @@ internal static class GitHintText
             if (TryGetNote(result, out var note))
             {
                 SetNote(result, ReplaceTokens(note, inlineFacts));
+            }
+
+            // GitStageHunksResult.Warning carries a tool call too; it is the only Warning that does (Inline slot only).
+            if (result is GitStageHunksResult stageResult)
+            {
+                stageResult.Warning = ReplaceTokens(stageResult.Warning, inlineFacts);
             }
         }
 

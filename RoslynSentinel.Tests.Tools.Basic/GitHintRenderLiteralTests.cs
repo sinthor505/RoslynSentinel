@@ -183,4 +183,28 @@ public class GitHintRenderLiteralTests
             Assert.That(GitHintText.RenderRootFailure(GitRootFailure.SolutionDirectoryNotInRepository), Is.Empty);
         });
     }
+
+    [Test]
+    public void StageHunks_RemainingCountMismatchWarning_RendersOriginalText()
+    {
+        // Original Warning (BuildStageHunksResultAsync; renderer-pinned only: the mismatch has no cheap scenario):
+        //   $"Staged {selection.WholeHunks.Count + selection.SubHunks.Count} hunk(s) but the remaining count is {remaining?.ToString() ?? "unknown"} " +
+        //   $"(expected {expected}); verify with {ToolCallHint.Call("Git", ("operation", "diff"), ("ref", "staged"))}."
+        const int staged = 2;
+        const string remaining = "unknown";
+        const int expected = 1;
+        var original = $"Staged {staged} hunk(s) but the remaining count is {remaining} " +
+                       $"(expected {expected}); verify with {ToolCallHint.Call("Git", ("operation", "diff"), ("ref", "staged"))}.";
+        var result = new GitStageHunksResult
+        {
+            Path = "a.txt",
+            Warning = $"Staged {staged} hunk(s) but the remaining count is {remaining} " +
+                      $"(expected {expected}); verify with {GitHintTokens.Inline(GitHintKey.GitDiffStagedCall)}.",
+            Hints = [new GitHint(GitHintKey.GitDiffStagedCall)]
+        };
+
+        var applied = GitHintText.Apply(result);
+
+        Assert.That(applied.Warning, Is.EqualTo(original));
+    }
 }
