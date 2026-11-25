@@ -155,4 +155,32 @@ public class GitHintRenderLiteralTests
             Assert.That(GitHintText.Render(GitHintKey.HunkApplyRejectedNextStep, null), Is.EqualTo(original));
         });
     }
+
+    [Test]
+    public void TryGetGitRoot_NoRepositoryFound_FactsPlusRenderedAdviceEqualsOriginalText()
+    {
+        // Original engine text: $"No git repository found. Searched upward from the server's base directory and working directory without finding a .git entry, and no solution is loaded to search from either. If the repository is elsewhere, call {ToolCallHint.Call("LoadSolution", ("solutionPath", "<path to .slnx>"))} with a solution inside it first."
+        var original = $"No git repository found. Searched upward from the server's base directory and working directory without finding a .git entry, and no solution is loaded to search from either. If the repository is elsewhere, call {ToolCallHint.Call("LoadSolution", ("solutionPath", "<path to .slnx>"))} with a solution inside it first.";
+        const string engineFacts = "No git repository found. Searched upward from the server's base directory and working directory without finding a .git entry, and no solution is loaded to search from either.";
+
+        var advice = GitHintText.RenderRootFailure(GitRootFailure.NoRepositoryFound);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(engineFacts + " " + advice, Is.EqualTo(original));
+            Assert.That(GitHintText.JoinRootFailure(engineFacts, GitRootFailure.NoRepositoryFound), Is.EqualTo(original));
+        });
+    }
+
+    [Test]
+    public void TryGetGitRoot_RepoPathAndSolutionDirectoryFailures_RenderNoAdvice()
+    {
+        // Originals carried no tool-call text: the whole message is the engine's fact text (the "Pass repoPath" sentence
+        // names the Git tool's own parameter), so the renderer must add nothing for these causes.
+        Assert.Multiple(() =>
+        {
+            Assert.That(GitHintText.RenderRootFailure(GitRootFailure.RepoPathNotARepository), Is.Empty);
+            Assert.That(GitHintText.RenderRootFailure(GitRootFailure.SolutionDirectoryNotInRepository), Is.Empty);
+        });
+    }
 }

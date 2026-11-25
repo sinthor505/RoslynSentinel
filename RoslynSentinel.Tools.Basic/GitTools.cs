@@ -116,9 +116,9 @@ public class GitTools
             return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"repoPath is only supported for status/log/diff/show/hunks - operation '{operation}' always targets the loaded solution's repo. Omit repoPath, or switch to a read-only operation.", Detail: null) };
         }
 
-        var gitRoot = _gitImpl.TryGetGitRoot(out var rootError, isReadOnlyOperation ? repoPath : null);
+        var gitRoot = _gitImpl.TryGetGitRoot(out var rootError, out var rootFailure, isReadOnlyOperation ? repoPath : null);
         if (gitRoot is null)
-            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "GitRootNotFound", Message: rootError, Detail: null) };
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "GitRootNotFound", Message: GitHintText.JoinRootFailure(rootError, rootFailure), Detail: null) };
 
         // `ref` is the single spelling for "a git ref" (target/commitHash/branchName/files are renamed to
         // ref/paths by ToolArgumentValidator.ParameterAliases before binding).

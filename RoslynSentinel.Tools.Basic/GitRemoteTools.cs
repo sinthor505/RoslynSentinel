@@ -87,9 +87,9 @@ public class GitRemoteTools
             return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"repoPath is only supported for list actions (tag/stash/worktree) and config get - operation '{operation}' always targets the loaded solution's repo. Omit repoPath, or use action: list.", Detail: null) };
         }
 
-        var gitRoot = _gitImpl.TryGetGitRoot(out var rootError, isReadOnlyOperation ? repoPath : null);
+        var gitRoot = _gitImpl.TryGetGitRoot(out var rootError, out var rootFailure, isReadOnlyOperation ? repoPath : null);
         if (gitRoot is null)
-            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "GitRootNotFound", Message: rootError, Detail: null) };
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "GitRootNotFound", Message: GitHintText.JoinRootFailure(rootError, rootFailure), Detail: null) };
 
         string? resolvedRef = string.IsNullOrWhiteSpace(@ref) ? null : @ref.Trim();
         if (resolvedRef is not null && operation != GitRemoteOperation.tag)

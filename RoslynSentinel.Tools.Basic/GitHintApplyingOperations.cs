@@ -64,8 +64,12 @@ internal sealed class GitHintApplyingOperations(IGitOperations inner) : IGitOper
     public async Task<GitTagResult> TagAsync(string gitRoot, GitAction? action, string? tagName, string? refName, string? message, int count, CancellationToken cancellationToken)
         => GitHintText.Apply(await inner.TagAsync(gitRoot, action, tagName, refName, message, count, cancellationToken));
 
+    [Obsolete("Use the GitRootFailure overload")]
     public string? TryGetGitRoot(out string error, string? repoPath = null)
         => inner.TryGetGitRoot(out error, repoPath);
+
+    public string? TryGetGitRoot(out string error, out GitRootFailure failure, string? repoPath = null)
+        => inner.TryGetGitRoot(out error, out failure, repoPath);
 
     public async Task<GitStatusResult> UnstageAsync(string gitRoot, string? paths, CancellationToken cancellationToken)
         => GitHintText.Apply(await inner.UnstageAsync(gitRoot, paths, cancellationToken));

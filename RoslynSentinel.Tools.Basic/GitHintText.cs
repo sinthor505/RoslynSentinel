@@ -268,9 +268,15 @@ internal static class GitHintText
     /// <summary>The tool-side advice appended to the engine's factual text for a root-lookup failure.</summary>
     internal static string RenderRootFailure(GitRootFailure failure)
     {
-        // Step 6i defines the final split of the engine text and this advice; nothing calls this yet.
         return failure == GitRootFailure.NoRepositoryFound
             ? "If the repository is elsewhere, call " + ToolCallHint.Call("LoadSolution", ("solutionPath", "<path to .slnx>")) + " with a solution inside it first."
             : string.Empty;
+    }
+
+    /// <summary>The engine's factual root-lookup error with the rendered advice (if any) appended after one separating space.</summary>
+    internal static string JoinRootFailure(string error, GitRootFailure failure)
+    {
+        var advice = RenderRootFailure(failure);
+        return advice.Length == 0 ? error : error + " " + advice;
     }
 }

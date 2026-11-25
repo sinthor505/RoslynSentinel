@@ -1930,11 +1930,27 @@ public class GitImpl : IGitOperations
     /// checkout) instead of the worktree -> a plausible, well-formed, wrong answer with no error.
     /// See docs/current/blockers/blocking_error_git_tool_commit_reports_clean_tree_worktree.md.
     /// </summary>
+    [Obsolete("Use the GitRootFailure overload")]
     public string? TryGetGitRoot(out string error, string? repoPath = null)
     {
-        // 0. An explicit repoPath override (status/log/diff/show only - see GitTool's own parameter
-        //    description). Takes priority over everything else: a caller who names a specific
-        //    worktree meant that one, not whatever the loaded solution happens to point at.
+        // TODO remove with the 4 test callers (GitPathClassificationToolParityTests, GitLogToolParityTests, GitStatusToolParityTests, GitToolsSmokeTests) in Step 8
+        var root = TryGetGitRoot(out error, out var failure, repoPath);
+        error = GitHintText.JoinRootFailure(error, failure);
+        return root;
+    }
+
+    /// <summary>
+    /// Finds the git repository root and reports why it could not, as a <see cref="GitRootFailure"/>; <paramref name="error"/>
+    /// carries only the facts, and the tool appends the advice (<c>GitHintText.RenderRootFailure</c>). Resolution order is the
+    /// one documented on the other overload: explicit repoPath, then the loaded solution's directory (authoritative when
+    /// loaded), then the server's base directory, then its working directory.
+    /// </summary>
+    public string? TryGetGitRoot(out string error, out GitRootFailure failure, string? repoPath = null)
+    {
+        // TODO when the obsolete overload is removed (Step 8), move its long rationale doc comment (why the loaded solution is tried first) onto this method
+        failure = GitRootFailure.None;
+
+        // 0. An explicit repoPath override: takes priority over everything else.
         if (!string.IsNullOrWhiteSpace(repoPath))
         {
             var fromRepoPath = FindRepositoryRoot(repoPath);
@@ -1945,11 +1961,11 @@ public class GitImpl : IGitOperations
             }
 
             error = $"repoPath '{repoPath}' does not resolve to a git repository or worktree (no .git entry found walking up from it). Double-check the path - it must be a real directory that is itself inside a git working tree.";
+            failure = GitRootFailure.RepoPathNotARepository;
             return null;
         }
 
-        // 1. The loaded solution's directory, if there is one. This is the caller's most recent
-        //    explicit signal of which repo/worktree they mean, via LoadSolutionTool. // hint-ok: prose names the LoadSolutionTool class, not a callable tool form
+        // 1. The loaded solution's directory, if there is one (the caller's most recent explicit signal of which repo they mean).
         var solutionRoot = _workspaceManager.GetSolutionRoot();
         if (solutionRoot is not null)
         {
@@ -1962,11 +1978,11 @@ public class GitImpl : IGitOperations
 
             // A loaded solution is authoritative: do not fall through to the base or working directory.
             error = $"The loaded solution's directory ('{solutionRoot}') is not inside a git repository, so there is nothing for Git to operate on. Git does not fall back to the server's own repository when a solution is loaded. Pass repoPath (status/log/diff/show) to inspect another repository."; // hint-ok: names the Git tool's own repoPath parameter, not a call to another tool
+            failure = GitRootFailure.SolutionDirectoryNotInRepository;
             return null;
         }
 
-        // 2. Walk up from the server's base directory. Common case when no solution is loaded
-        //    yet: the server runs from a bin/ folder inside the repo it is operating on.
+        // 2. Walk up from the server's base directory (the server runs from a bin/ folder inside the repo it operates on).
         var fromBaseDirectory = FindRepositoryRoot(AppContext.BaseDirectory);
         if (fromBaseDirectory is not null)
         {
@@ -1974,8 +1990,7 @@ public class GitImpl : IGitOperations
             return fromBaseDirectory;
         }
 
-        // 3. Walk up from the current working directory -> covers a server whose binaries are
-        //    deployed outside the repo but which was launched from inside it.
+        // 3. Walk up from the current working directory (binaries deployed outside the repo but launched from inside it).
         var fromCurrentDirectory = FindRepositoryRoot(Directory.GetCurrentDirectory());
         if (fromCurrentDirectory is not null)
         {
@@ -1983,9 +1998,11 @@ public class GitImpl : IGitOperations
             return fromCurrentDirectory;
         }
 
-        error = $"No git repository found. Searched upward from the server's base directory and working directory without finding a .git entry, and no solution is loaded to search from either. If the repository is elsewhere, call {ToolCallHint.Call("LoadSolution", ("solutionPath", "<path to .slnx>"))} with a solution inside it first.";
+        error = "No git repository found. Searched upward from the server's base directory and working directory without finding a .git entry, and no solution is loaded to search from either.";
+        failure = GitRootFailure.NoRepositoryFound;
         return null;
     }
+
     /// <summary>
     /// Walks up from <paramref name="startDirectory"/> looking for a <c>.git</c> entry. Accepts a
     /// <c>.git</c> <b>file</b> as well as a directory: linked worktrees and submodules use a

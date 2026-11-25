@@ -23,7 +23,9 @@ public interface IGitOperations
     Task<GitStashResult> StashAsync(string gitRoot, GitAction? action, string? message, bool includeUntracked, string? paths, int? stashIndex, int count, CancellationToken cancellationToken);
     Task<GitStatusResult> StatusAsync(string gitRoot, int maxEntries, CancellationToken cancellationToken);
     Task<GitTagResult> TagAsync(string gitRoot, GitAction? action, string? tagName, string? refName, string? message, int count, CancellationToken cancellationToken);
+    [Obsolete("Use the GitRootFailure overload")]
     string? TryGetGitRoot(out string error, string? repoPath = null);
+    string? TryGetGitRoot(out string error, out GitRootFailure failure, string? repoPath = null);
     Task<GitStatusResult> UnstageAsync(string gitRoot, string? paths, CancellationToken cancellationToken);
     Task<GitWorktreeResult> WorktreeAsync(string gitRoot, GitAction? action, string? worktreePath, string? branchName, bool createBranch, string? startPoint, bool discardUncommittedChanges, CancellationToken cancellationToken);
 }
