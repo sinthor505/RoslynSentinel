@@ -823,7 +823,7 @@ public sealed class LmStudioAgentClient
 
     /// <summary>The live reasoning window: <see cref="ReasoningWindowVariable"/> when set, otherwise <see cref="ReasoningReplayTurns"/>.</summary>
     internal static int EffectiveReasoningWindow =>
-        ParseReasoningWindowOverride(Environment.GetEnvironmentVariable(ReasoningWindowVariable)) ?? ReasoningReplayTurns;
+        ReasoningReplayPolicy.WindowSetting.Value ?? ReasoningReplayTurns;
 
     private static List<object> BuildInputItems(IReadOnlyList<AgentChatMessage> messages, ReasoningReplayPolicy? replayPolicy)
     {

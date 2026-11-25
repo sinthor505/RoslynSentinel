@@ -34,26 +34,52 @@ public sealed record AgentAssist(string Kind, string ToolName, int RepeatCount, 
 /// </summary>
 /// <param name="Enabled">Collapse and injection on.</param>
 /// <param name="InjectionRole">"user" or "assistant": the role of the injected message and of the collapse note (the role is an open question to be tested).</param>
+[StartupSettingGroup("Loop assist")]
 public sealed record LoopAssistOptions(bool Enabled, string InjectionRole)
 {
     public const string EnabledVariable = "ROSLYNSENTINEL_MODELEVAL_LOOP_ASSIST";
     public const string RoleVariable = "ROSLYNSENTINEL_MODELEVAL_LOOP_ASSIST_ROLE";
+
+    public static readonly StartupSetting<bool> EnabledSetting = StartupSetting.Bool(null, EnabledVariable, false, "Turn the loop-assist harness feature (collapse of repeated rejected calls plus fact-only injection) on.", SettingScope.AgentLoop, SettingKind.Live);
+
+    public static readonly StartupSetting<string> RoleSetting = StartupSetting.Custom<string>(
+        null,
+        RoleVariable,
+        "user",
+        "user",
+        (string raw, out string value) =>
+        {
+            var trimmed = raw.Trim();
+            if (string.Equals(trimmed, "user", StringComparison.OrdinalIgnoreCase))
+            {
+                value = "user";
+                return true;
+            }
+
+            if (string.Equals(trimmed, "assistant", StringComparison.OrdinalIgnoreCase))
+            {
+                value = "assistant";
+                return true;
+            }
+
+            value = "user";
+            return false;
+        },
+        "user|assistant",
+        "Role of the loop-assist injected message and collapse note.",
+        SettingScope.AgentLoop,
+        SettingKind.Live);
 
     public static LoopAssistOptions Off { get; } = new(false, "user");
 
     /// <param name="readVariable">Environment reader; defaults to the process environment (a seam for tests).</param>
     public static LoopAssistOptions FromEnvironment(Func<string, string?>? readVariable = null)
     {
-        readVariable ??= name => Environment.GetEnvironmentVariable(name);
-        var enabled = IsTruthy(readVariable(EnabledVariable));
-        var role = string.Equals(readVariable(RoleVariable)?.Trim(), "assistant", StringComparison.OrdinalIgnoreCase)
-            ? "assistant"
-            : "user";
-        return new LoopAssistOptions(enabled, role);
+        readVariable ??= StartupSettings.EnvironmentReader;
+        return new LoopAssistOptions(
+            EnabledSetting.Read(StartupArgs.Empty, readVariable).Value,
+            RoleSetting.Read(StartupArgs.Empty, readVariable).Value);
     }
-
-    private static bool IsTruthy(string? value) =>
-        value?.Trim().ToLowerInvariant() is "1" or "true" or "yes" or "on";
 }
 
 /// <summary>

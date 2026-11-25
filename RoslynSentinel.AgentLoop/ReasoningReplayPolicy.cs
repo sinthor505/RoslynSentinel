@@ -6,6 +6,7 @@ namespace RoslynSentinel.Common;
 /// <see cref="PressureFraction"/> of the context; then it drops the oldest half of the unpinned turns.
 /// The first <see cref="PinnedTurns"/> turns are never dropped. One instance per run.
 /// </summary>
+[StartupSettingGroup("Reasoning replay")]
 public sealed class ReasoningReplayPolicy
 {
     /// <summary>Number of leading assistant turns that are never dropped in pressure mode.</summary>
@@ -52,18 +53,39 @@ public sealed class ReasoningReplayPolicy
     /// </summary>
     internal static int? ParseWindowOverride(string? text)
     {
-        if (string.IsNullOrWhiteSpace(text))
+        var read = WindowSetting.Read(StartupArgs.Empty, _ => text);
+        if (read.Problem is not null)
         {
-            return null;
+            throw new FormatException(StartupSettings.DescribeProblems([read.Problem]));
         }
 
-        if (int.TryParse(text.Trim(), out var value) && value >= 0)
-        {
-            return value;
-        }
-
-        throw new FormatException($"{WindowVariable} must be a non-negative integer (0 = replay all reasoning), got '{text}'.");
+        return read.Value;
     }
+
+    /// <summary>The block window override (<see cref="WindowVariable"/>), re-read on every access; null when unset, empty or invalid.</summary>
+    public static readonly StartupSetting<int?> WindowSetting = StartupSetting.NullableInt(null, WindowVariable, "Replay window in turns for block mode (0 = replay all reasoning); unset keeps the default.", SettingScope.AgentLoop, SettingKind.Live, minValue: 0);
+
+    /// <summary>The pressure fraction override (<see cref="PressureFractionVariable"/>), re-read on every access; null when unset, empty or invalid.</summary>
+    public static readonly StartupSetting<double?> PressureFractionSetting = StartupSetting.Custom<double?>(
+        null,
+        PressureFractionVariable,
+        null,
+        "0.7",
+        (string raw, out double? value) =>
+        {
+            if (double.TryParse(raw.Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed) && parsed > 0 && parsed <= 1)
+            {
+                value = parsed;
+                return true;
+            }
+
+            value = null;
+            return false;
+        },
+        "number > 0 and <= 1",
+        "Context fraction at which pressure mode drops reasoning turns; unset keeps the default.",
+        SettingScope.AgentLoop,
+        SettingKind.Live);
 
     /// <summary>
     /// How many of the oldest assistant turns lose their reasoning when <paramref name="assistantTurns"/> turns are replayed,
@@ -121,8 +143,8 @@ public sealed class ReasoningReplayPolicy
     {
         return new ReasoningReplayPolicy(
             contextLength,
-            ParseWindowOverride(Environment.GetEnvironmentVariable(WindowVariable)),
-            ParsePressureFractionOverride(Environment.GetEnvironmentVariable(PressureFractionVariable)) ?? PressureFraction);
+            ParseWindowOverride(StartupSettings.EnvironmentReader(WindowVariable)),
+            ParsePressureFractionOverride(StartupSettings.EnvironmentReader(PressureFractionVariable)) ?? PressureFraction);
     }
 
     /// <summary>
@@ -131,17 +153,13 @@ public sealed class ReasoningReplayPolicy
     /// </summary>
     internal static double? ParsePressureFractionOverride(string? text)
     {
-        if (string.IsNullOrWhiteSpace(text))
+        var read = PressureFractionSetting.Read(StartupArgs.Empty, _ => text);
+        if (read.Problem is not null)
         {
-            return null;
+            throw new FormatException(StartupSettings.DescribeProblems([read.Problem]));
         }
 
-        if (double.TryParse(text.Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var value) && value > 0 && value <= 1)
-        {
-            return value;
-        }
-
-        throw new FormatException($"{PressureFractionVariable} must be a number greater than 0 and at most 1, got '{text}'.");
+        return read.Value;
     }
 
     /// <summary>Fraction of the context at which pressure mode drops turns for this run.</summary>
