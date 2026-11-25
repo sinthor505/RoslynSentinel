@@ -2,7 +2,7 @@
 
 # Code TODO markers
 
-320 markers in 150 files. Links are relative to this file.
+323 markers in 151 files. Links are relative to this file.
 
 ## RoslynSentinel.AgentLoop/LmStudioAgentClient.cs (1)
 
@@ -66,20 +66,21 @@
 
 - [152](../../RoslynSentinel.Common/OperationBlobWriter.cs#L152) `// TODO cancellation: propagating OCE would report cancelled for a change already applied with no undo blob; see docs/current/proposals/proposal_throw_typed_exceptions_not_failure_results.md S1a`
 
-## RoslynSentinel.Common/PersistentWorkspaceManager.cs (12)
+## RoslynSentinel.Common/PersistentWorkspaceManager.cs (13)
 
-- [446](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L446) `// TODO name ListWorkspaceSolutions (it lists the solutions under the base directory) as an option here once Common`
-- [940](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L940) `// TODO a load failure is not a lookup miss (inventory C5b); it is coded NotFound through ToolNotFoundException; reclassify when a load-failure code exists.`
-- [984](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L984) `// TODO a seeding task still running from the previous load can add the old solution's effects after this clear (bounded by the seeder's 5 s budget); give the seeder a per-load generation if that shows up.`
-- [990](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L990) `// TODO an open that succeeds with zero projects still replaces a previously good solution (same as before this change); consider keeping the old one.`
-- [1023](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L1023) `// TODO a load failure is not a lookup miss (inventory C5b); it is coded NotFound through ToolNotFoundException; reclassify when a load-failure code exists.`
-- [1786](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L1786) `// TODO the debounce busy path waits up to DebounceWait while holding _solutionLock (accepted for v1, plan_stale_read_guard_followups Step 9c)`
-- [2368](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L2368) `// TODO _sessionHalted can no longer be set; remove the dead latch and its readers (HaltInfo, IdleRestartPolicy, HaltStamp) in a cleanup slice`
-- [2590](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L2590) `// TODO cancellation: rethrowing mid-loop would skip rollbackOnPartialFailure and workspace sync and leave written files on disk; decide cancel-vs-rollback semantics; see docs/current/proposals/proposal_throw_typed_exceptions_not_failure_results.md S1a`
-- [2707](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L2707) `// TODO cancellation: rethrowing mid-loop would skip rollbackOnPartialFailure and workspace sync and leave written files on disk; decide cancel-vs-rollback semantics; see docs/current/proposals/proposal_throw_typed_exceptions_not_failure_results.md S1a`
-- [2867](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L2867) `// TODO the release-on-exception path (Step 9b test row X) is untested: it needs a fault-injection seam (a test hook that throws after the lock is acquired and before the write completes) so a test can prove the lock is released when the write faults.`
-- [3226](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L3226) `// TODO this persisting-mismatch Warning reuses WorkspaceStaleText.Recovery, whose text talks about a broken .csproj/.sln; the persisting-mismatch case needs its own recovery wording.`
-- [3428](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L3428) `// TODO a ProjectLoadFailedException here does not re-baseline the structural file hashes (the debounce path does, under the lock), so reverting a broken project file to its previous content is hash-confirmed as a no-op and the failure stays until a LoadSolution(forceReload) or another edit.`
+- [498](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L498) `// TODO name ListWorkspaceSolutions (it lists the solutions under the base directory) as an option here once Common`
+- [992](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L992) `// TODO a load failure is not a lookup miss (inventory C5b); it is coded NotFound through ToolNotFoundException; reclassify when a load-failure code exists.`
+- [1036](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L1036) `// TODO a seeding task still running from the previous load can add the old solution's effects after this clear (bounded by the seeder's 5 s budget); give the seeder a per-load generation if that shows up.`
+- [1042](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L1042) `// TODO an open that succeeds with zero projects still replaces a previously good solution (same as before this change); consider keeping the old one.`
+- [1075](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L1075) `// TODO a load failure is not a lookup miss (inventory C5b); it is coded NotFound through ToolNotFoundException; reclassify when a load-failure code exists.`
+- [1838](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L1838) `// TODO the debounce busy path waits up to DebounceWait while holding _solutionLock (accepted for v1, plan_stale_read_guard_followups Step 9c)`
+- [2107](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L2107) `// TODO LoadSolution (WorkspaceProjectManagementImpl) and SubAgentModelRun.AwaitSolutionLoadAsync time out with the plain LoadWaitTimedOut text: they only see ISolutionProvider, which does not expose that a background reload is the load in progress.`
+- [2427](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L2427) `// TODO _sessionHalted can no longer be set; remove the dead latch and its readers (HaltInfo, IdleRestartPolicy, HaltStamp) in a cleanup slice`
+- [2649](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L2649) `// TODO cancellation: rethrowing mid-loop would skip rollbackOnPartialFailure and workspace sync and leave written files on disk; decide cancel-vs-rollback semantics; see docs/current/proposals/proposal_throw_typed_exceptions_not_failure_results.md S1a`
+- [2766](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L2766) `// TODO cancellation: rethrowing mid-loop would skip rollbackOnPartialFailure and workspace sync and leave written files on disk; decide cancel-vs-rollback semantics; see docs/current/proposals/proposal_throw_typed_exceptions_not_failure_results.md S1a`
+- [2926](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L2926) `// TODO the release-on-exception path (Step 9b test row X) is untested: it needs a fault-injection seam (a test hook that throws after the lock is acquired and before the write completes) so a test can prove the lock is released when the write faults.`
+- [3287](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L3287) `// TODO this persisting-mismatch Warning reuses WorkspaceStaleText.Recovery, whose text talks about a broken .csproj/.sln; the persisting-mismatch case needs its own recovery wording.`
+- [3489](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L3489) `// TODO a ProjectLoadFailedException here does not re-baseline the structural file hashes (the debounce path does, under the lock), so reverting a broken project file to its previous content is hash-confirmed as a no-op and the failure stays until a LoadSolution(forceReload) or another edit.`
 
 ## RoslynSentinel.Common/RoslynFormattingHelper.cs (2)
 
@@ -235,13 +236,17 @@
 - [811](../../RoslynSentinel.Engines.Basic/CompilerErrorLookupHelper.cs#L811) `// TODO FindExtensionMethods is named unconditionally; name it only when active (gated-tool rule)`
 - [919](../../RoslynSentinel.Engines.Basic/CompilerErrorLookupHelper.cs#L919) `// TODO share path matching with ValidateAndApplyHelper.DescribeUntouchedFileErrors`
 
+## RoslynSentinel.Engines.Basic/CopyAndObsoleteCallerRewrite.cs (1)
+
+- [700](../../RoslynSentinel.Engines.Basic/CopyAndObsoleteCallerRewrite.cs#L700) `// TODO moved mode (oldTypesGone) qualifies on "global using of old" and "old using must stay", where adding a using of the new namespace beside the kept old one is safe (old types gone, conflicts checked below); live ChangeNamespace dry run over RoslynSentinel.Git qualified 98+ references this way. Also check globalUsingPath scoping: an Engines.Basic file cited Common's obj GlobalUsings.g.cs.`
+
 ## RoslynSentinel.Engines.Basic/CopyAndObsoleteEdits.cs (1)
 
 - [182](../../RoslynSentinel.Engines.Basic/CopyAndObsoleteEdits.cs#L182) `// TODO a partial qualification inside a doc-comment cref (NameMemberCref/QualifiedCref) is not recognised here, so it still refuses a namespace change of the set`
 
 ## RoslynSentinel.Engines.Basic/CsprojEdgeWriter.cs (1)
 
-- [29](../../RoslynSentinel.Engines.Basic/CsprojEdgeWriter.cs#L29) `// TODO resolve the real relative csproj path of the referenced project (Step 26 passes projectReferenceInclude); the null default assumes sibling project folders`
+- [32](../../RoslynSentinel.Engines.Basic/CsprojEdgeWriter.cs#L32) `: edge.ToProject; // TODO an InternalsVisibleTo Include names the receiving ASSEMBLY; AugmentBaseline uses the receiver's AssemblyName but this writes the project name, which differ when the project sets AssemblyName`
 
 ## RoslynSentinel.Engines.Basic/DocTrailerEngine.cs (1)
 
@@ -727,14 +732,15 @@
 - [92](../../RoslynSentinel.Tools.Basic/SymbolNavigationImpl.cs#L92) `// TODO isCallable: SymbolNavigationImpl has no ActiveToolSurface, so hints name tools unconditionally (as the old text did)`
 - [282](../../RoslynSentinel.Tools.Basic/SymbolNavigationImpl.cs#L282) `// TODO hierarchy.Error is the type-not-found text (SymbolNavigationEngine.GetTypeHierarchyAsync), a lookup miss like the others: code it NotFound (TypeHierarchyReport has no error code field yet)`
 
-## RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs (6)
+## RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs (7)
 
 - [69](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L69) `// TODO reads existing text from disk, not the workspace document`
 - [245](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L245) `// TODO DeleteFile with no solution loaded returns NotFound; the cause is SolutionNotLoaded (ResolveFromWire yields an empty path), so the code is wrong.`
-- [914](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L914) `// TODO no shrink/no-type-left guard here (ApplyDiff files format has LargeShrinkRejectionThreshold; ReplaceSnippet has the no-type-left guard)`
-- [916](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L916) `// TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)`
-- [1063](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L1063) `// TODO no shrink/no-type-left guard here (ApplyDiff files format has LargeShrinkRejectionThreshold; ReplaceSnippet has the no-type-left guard)`
-- [1065](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L1065) `// TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)`
+- [543](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L543) `// TODO the three analyzer calls below each repeat the whole analysis (a FindReferences pass per moved type); expose one call that returns edges, cycles and package facts together`
+- [1165](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L1165) `// TODO no shrink/no-type-left guard here (ApplyDiff files format has LargeShrinkRejectionThreshold; ReplaceSnippet has the no-type-left guard)`
+- [1167](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L1167) `// TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)`
+- [1314](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L1314) `// TODO no shrink/no-type-left guard here (ApplyDiff files format has LargeShrinkRejectionThreshold; ReplaceSnippet has the no-type-left guard)`
+- [1316](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L1316) `// TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)`
 
 ## RoslynSentinel.Tools.Basic/WorkspaceBuildTestImpl.cs (1)
 
