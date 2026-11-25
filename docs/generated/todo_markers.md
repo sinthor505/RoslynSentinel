@@ -2,7 +2,7 @@
 
 # Code TODO markers
 
-321 markers in 150 files. Links are relative to this file.
+320 markers in 150 files. Links are relative to this file.
 
 ## RoslynSentinel.AgentLoop/LmStudioAgentClient.cs (1)
 
@@ -727,15 +727,14 @@
 - [92](../../RoslynSentinel.Tools.Basic/SymbolNavigationImpl.cs#L92) `// TODO isCallable: SymbolNavigationImpl has no ActiveToolSurface, so hints name tools unconditionally (as the old text did)`
 - [282](../../RoslynSentinel.Tools.Basic/SymbolNavigationImpl.cs#L282) `// TODO hierarchy.Error is the type-not-found text (SymbolNavigationEngine.GetTypeHierarchyAsync), a lookup miss like the others: code it NotFound (TypeHierarchyReport has no error code field yet)`
 
-## RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs (7)
+## RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs (6)
 
 - [69](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L69) `// TODO reads existing text from disk, not the workspace document`
 - [245](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L245) `// TODO DeleteFile with no solution loaded returns NotFound; the cause is SolutionNotLoaded (ResolveFromWire yields an empty path), so the code is wrong.`
-- [347](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L347) `// TODO ToolHintRatchetTests.Scan_HintCallLiterals_AreValid fails here ("Unknown tool 'ChangeNamespace'") until plan_multi_file_movefile_and_namespace_change_tool Step 32 adds the tool; expected red until then`
-- [915](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L915) `// TODO no shrink/no-type-left guard here (ApplyDiff files format has LargeShrinkRejectionThreshold; ReplaceSnippet has the no-type-left guard)`
-- [917](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L917) `// TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)`
-- [1064](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L1064) `// TODO no shrink/no-type-left guard here (ApplyDiff files format has LargeShrinkRejectionThreshold; ReplaceSnippet has the no-type-left guard)`
-- [1066](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L1066) `// TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)`
+- [914](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L914) `// TODO no shrink/no-type-left guard here (ApplyDiff files format has LargeShrinkRejectionThreshold; ReplaceSnippet has the no-type-left guard)`
+- [916](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L916) `// TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)`
+- [1063](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L1063) `// TODO no shrink/no-type-left guard here (ApplyDiff files format has LargeShrinkRejectionThreshold; ReplaceSnippet has the no-type-left guard)`
+- [1065](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L1065) `// TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)`
 
 ## RoslynSentinel.Tools.Basic/WorkspaceBuildTestImpl.cs (1)
 
