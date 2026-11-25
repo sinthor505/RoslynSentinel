@@ -1,6 +1,6 @@
 # Plan: Declare every startup flag and env var once, generate the configuration reference from it, and report effective values at runtime
 
-**Status:** APPROVED 2026-11-25. Declare every startup flag and env var once as a `StartupSetting<T>` and drive parsing, the generated reference, `McpServerStatus` and a configuration halt latch from that registry (33 slices, staged report-only before the halt).
+**Status:** IN PROGRESS 2026-11-25. Steps 1-4, 22a done (c284da15, 0655a422, 6aeae685, 51418125, 2714c690). Declare every startup flag and env var once as a `StartupSetting<T>` and drive parsing, the generated reference, `McpServerStatus` and a configuration halt latch from that registry (33 slices, staged report-only before the halt).
 
 ## Problem
 
@@ -379,6 +379,7 @@ Rules the bodies implement:
 - Change: move `private static void AddUnrecoverableBreakerFilter(IMcpRequestFilterBuilder filters)` (:1111-1162) into a new `public static class BreakerFilters` as `public static` (comment: public because Server.Advanced has no InternalsVisibleTo for its tests, the repo's existing pattern); the entry `("UnrecoverableBreaker", AddUnrecoverableBreakerFilter)` at :259 in `BuildCallToolFilterRegistrations` (:239) points at `BreakerFilters.AddUnrecoverableBreakerFilter`. `MoveMember` (toolset `moveExtract`).
 - Done when: `Build` 0 errors.
 - Lane: implementer.
+- Done: c284da15
 
 ### Step 2 - Contract skeleton
 - Files: `RoslynSentinel.Common/Configuration/StartupSetting.cs` (new), `RoslynSentinel.Common/Configuration/StartupSettings.cs` (new), `RoslynSentinel.Server.Advanced/ConfigurationReferenceRenderer.cs` (new)
@@ -390,6 +391,7 @@ Rules the bodies implement:
   `NEW-DTO: SettingRead<T> (Result, Common.Configuration)` / `Evaluated: tuple (forbidden, item 1); ConfigurationProblem - no value` / `Wire impact: none`.
 - Done when: `Build` 0 errors.
 - Lane: implementer.
+- Done: 0655a422
 
 ### Step 3 - Setting types and parsing
 - Files: `RoslynSentinel.Common/Configuration/StartupSetting.cs`
@@ -398,6 +400,7 @@ Rules the bodies implement:
 - Change: implement `StartupArgs`, the factories, `StartupSetting<T>` (`Read`, `Apply`, `Reset`, `Value`, texts, `Source`) per "Rules".
 - Done when: `Build` 0 errors.
 - Lane: implementer-senior (token lookahead and generic parsing; every later step depends on it).
+- Done: 6aeae685
 
 ### Step 4 - Registry
 - Files: `RoslynSentinel.Common/Configuration/StartupSettings.cs`
@@ -406,6 +409,7 @@ Rules the bodies implement:
 - Change: implement `Discover` (both; the `root` overload walks `GetReferencedAssemblies()` transitively, names starting `RoslynSentinel.`), `ConfigureAll` (both), `ConfigureGroup` (incl. `PostConfigure` invocation by reflection on the named static method), `ThrowIfInvalid`, `DescribeProblems`, `LastReport`, and the `UndeclaredEnvHint` text, e.g. "Undeclared ROSLYNSENTINEL_* names are listed with settings: nonDefault or settings: all." per "Rules".
 - Done when: `Build` 0 errors.
 - Lane: implementer-senior (reflection discovery and scope rules).
+- Done: 51418125
 
 ### Step 5 - Parser and registry tests (T1-T6b)
 - Files: `RoslynSentinel.Tests.Basic/StartupSettingParserTests.cs` (new), `RoslynSentinel.Tests.Basic/StartupSettingRegistryTests.cs` (new)
@@ -581,6 +585,7 @@ Rules the bodies implement:
 - Change: `ToolErrorCode.ConfigurationInvalid` const (class at `SentinelCallToolResult.cs:75`); map it in `ResultStatusExtensions.FromErrorCode` (`IResultStatus.cs:55`) to the status `PreconditionNotMet` maps to. If a test enumerates the codes, it is updated in this step.
 - Done when: `Build` 0 errors.
 - Lane: implementer.
+- Done: 2714c690
 
 ### Step 22b - Halt filter and shared refusal envelope (disabled)
 - Files: `RoslynSentinel.Server.Advanced/BreakerFilters.cs`, `RoslynSentinel.Server.Advanced/LoopLatchFilter.cs`
