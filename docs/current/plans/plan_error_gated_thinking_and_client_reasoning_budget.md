@@ -1,6 +1,6 @@
 # Plan: Eval client thinking on configurable triggers, with an observed reasoning budget
 
-**Status:** APPROVED 2026-11-25. Configurable thinking triggers (error, latchRefusal, firstTurn) with effort and an observed-only reasoning budget, then a 12-run smoke test; the enforced cut is parked.
+**Status:** IN PROGRESS 2026-11-25. Steps 1-5 done (d1720c89d, 39dbc2700, ed219aa64, 18df7ffc8, 9184930d0). Configurable thinking triggers (error, latchRefusal, firstTurn) with effort and an observed-only reasoning budget, then a 12-run smoke test; the enforced cut is parked.
 
 ## Problem
 
@@ -328,6 +328,7 @@ private, so each new test file carries its own small copies):
     interventions keyed by a kind, not a per-turn request decision; AgentChatMessage - model output,
     not harness decisions. Wire impact: none (transcript JSON only).
 - Done when: `Build` 0 errors.
+- Done: d1720c89d
 
 ### Step 2 - ThinkingOptions behaviour
 - Files: `RoslynSentinel.AgentLoop/ThinkingOptions.cs`
@@ -352,6 +353,7 @@ private, so each new test file carries its own small copies):
   - `Decide(signals)`: Off gives `new TurnThinking(false, None, null, null)`; Always gives
     `(true, None, null, null)`; Triggered: `fired = Triggers & signals`, `Requested = fired != None`.
 - Done when: `Build` 0 errors; no `NotImplementedException` left in the file.
+- Done: 39dbc2700
 
 ### Step 3 - Client: reasoning field and delta count
 - Files: `RoslynSentinel.AgentLoop/LmStudioAgentClient.cs`
@@ -380,6 +382,7 @@ private, so each new test file carries its own small copies):
     cut". Moving the continuation to the runner (a typed exception) is the route to finer stream control.`
   - Q16 default: the field is sent the same way for both backends (`lmstudio`, `llama-server`).
 - Done when: `Build` 0 errors.
+- Done: ed219aa64
 
 ### Step 4 - Tests for Steps 2 and 3
 - Files: `RoslynSentinel.Tests.Harness/ThinkingOptionsTests.cs` (new),
@@ -392,6 +395,7 @@ private, so each new test file carries its own small copies):
   the fixtures named in the test table intro.
   `FromEnvironment` tests pass a dictionary-backed `readVariable`, never the process environment.
 - Done when: `RunTest` on both classes passes (dispatcher runs it).
+- Done: 18df7ffc8
 
 ### Step 5 - Run totals
 - Files: `RoslynSentinel.AgentLoop/AgentTranscript.cs`
@@ -404,6 +408,7 @@ private, so each new test file carries its own small copies):
   `Thinking?.OverBudget == true`. `RunTotals` says it mirrors `scripts/Backfill-TranscriptSummary.ps1`:
   that script is not changed (the new totals are not backfilled; old transcripts have no thinking).
 - Done when: `Build` 0 errors.
+- Done: 9184930d0
 
 ### Step 6 - Runner wiring: settings, header stamp, warning
 - Files: `RoslynSentinel.AgentLoop/ModelAgentRunner.cs`, `RoslynSentinel.Tests.ModelEval/ModelEvalAssemblySetUp.cs`
