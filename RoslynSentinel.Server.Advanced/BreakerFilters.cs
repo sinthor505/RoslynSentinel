@@ -1,19 +1,15 @@
 using System.Diagnostics;
-using System.Threading;
 
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
+using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
 using RoslynSentinel.Common;
-using RoslynSentinel.Common.AgentLoop;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tools.Basic;
-using System.Text.Json.Nodes;
+using System.Text.Json;
 
 namespace RoslynSentinel.Server.Advanced;
 
@@ -23,6 +19,51 @@ namespace RoslynSentinel.Server.Advanced;
 /// </summary>
 public static class BreakerFilters
 {
+    /// <summary>The failure envelope as a protocol-level error result (the shape LoopLatchFilter.Refusal returns).</summary>
+    public static CallToolResult BuildErrorResult(ResultError error)
+    {
+        var envelope = new SentinelCallToolResult<object>
+        {
+            IsError = true,
+            ErrorData = error,
+        };
+        return new CallToolResult
+        {
+            Content = [new TextContentBlock { Text = JsonSerializer.Serialize(envelope, McpJsonUtilities.DefaultOptions) }],
+            IsError = true,
+        };
+    }
+
+    // Disabled in effect while StartupSettings.HaltOnErrors is false: Halted is then never true, so every call passes through.
+    public static void AddConfigurationHaltFilter(IMcpRequestFilterBuilder filters, Func<ConfigurationReport> report)
+    {
+        filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
+            ModelContextProtocol.Protocol.CallToolRequestParams,
+            ModelContextProtocol.Protocol.CallToolResult>(
+            async (context, cancellationToken) =>
+            {
+                try
+                {
+                    var current = report();
+                    var toolName = context.Params?.Name;
+
+                    if (current.Halted && !string.Equals(toolName, ServerStatusTools.ToolName, StringComparison.Ordinal))
+                    {
+                        return BuildErrorResult(new ResultError(
+                            ToolErrorCode.ConfigurationInvalid,
+                            $"The server's startup configuration has {current.Problems.Count} problem(s). {ServerStatusTools.ToolName} lists them.",
+                            StructuredDetail: current.Problems.Cast<object>().ToList()));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Configuration halt pre-check failed: {ex}");
+                }
+
+                return await next(context, cancellationToken);
+            }));
+    }
+
     public static void AddUnrecoverableBreakerFilter(IMcpRequestFilterBuilder filters)
     {
 

@@ -1,7 +1,5 @@
 using System.Diagnostics;
 using System.Text.Json;
-
-using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 
 namespace RoslynSentinel.Server.Advanced;
@@ -72,16 +70,7 @@ public static class LoopLatchFilter
     /// </summary>
     public static CallToolResult Refusal(string message)
     {
-        var envelope = new SentinelCallToolResult<object>
-        {
-            IsError = true,
-            ErrorData = new ResultError(ToolErrorCode.TargetIneligible, message),
-        };
-        return new CallToolResult
-        {
-            Content = [new TextContentBlock { Text = JsonSerializer.Serialize(envelope, McpJsonUtilities.DefaultOptions) }],
-            IsError = true,
-        };
+        return BreakerFilters.BuildErrorResult(new ResultError(ToolErrorCode.TargetIneligible, message));
     }
 
     /// <summary>
