@@ -1,6 +1,6 @@
 # Plan: multi-file MoveFile (a `moves` list, one compile gate, optional csproj edges) and a `ChangeNamespace` tool
 
-**Status:** IN PROGRESS 2026-11-25. Steps 1-13, 15-17, 19, 21, 22, 24, 25, 28, 30-33 done (9c8c5663..d2ee0705), Step 29 skipped (probe green); Step 35c CLEAN. R12/R15/R16/R17 settled 2026-11-25 (D17-D20); Steps 14, 18, 20, 23, 26, 27 next. Batched run. Nothing built; implements [proposal_multi_file_movefile_and_namespace_change_tool.md](../proposals/proposal_multi_file_movefile_and_namespace_change_tool.md) (ACCEPTED 2026-11-25). Revised 2026-11-25 with the owner's decisions D12-D16 and an independent review (P5-P16). Commit trailer for every slice: `Plan: plan_multi_file_movefile_and_namespace_change_tool` (the last slice adds `Closes:`).
+**Status:** IN PROGRESS 2026-11-25. Steps 1-13, 15-17, 19, 21, 22, 24, 25, 28, 30-33 done (9c8c5663..d2ee0705), Step 29 skipped (probe green); Step 35c CLEAN. Steps 14, 18, 20, 23, 26, 27 done (6d20e875..bd52884d) after D17-D20. Left: 34, 35a/b, 36, 37. Batched run. Nothing built; implements [proposal_multi_file_movefile_and_namespace_change_tool.md](../proposals/proposal_multi_file_movefile_and_namespace_change_tool.md) (ACCEPTED 2026-11-25). Revised 2026-11-25 with the owner's decisions D12-D16 and an independent review (P5-P16). Commit trailer for every slice: `Plan: plan_multi_file_movefile_and_namespace_change_tool` (the last slice adds `Closes:`).
 
 ## Problem
 
@@ -454,6 +454,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `implementer-senior` (behaviour-changing rewrite of the most used core write tool, 11 files, a schema change and removal of inline code).
 
 ### Step 14 - Awaitable reload signal: track the post-write reload as a load, and `ApplyOutcome.ReloadPending` (D12)
+- Done: 6d20e875, ratchet fix 5f4d7cc5. `LoadSolution` and `SubAgentModelRun.AwaitSolutionLoadAsync` still time out with the plain text (the flag is not on `ISolutionProvider`; TODO, left unless Step 35a shows it matters).
 - Files: `RoslynSentinel.Common/PersistentWorkspaceManager.cs` (call sites only, P16); `RoslynSentinel.Common/ApplyOutcome.cs`; `RoslynSentinel.Common/ValidateAndApplyHelper.cs` (the two post-apply returns).
   `ISolutionProvider` and `FakeWorkspaceManager` (`RoslynSentinel.Tests/Fakes/FakeWorkspaceManager.cs`, the only other `IWorkspaceManager` implementer; `ISolutionProvider` has the same two) are NOT changed under the
   recommended option (R16, b1).
@@ -506,6 +507,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `implementer` (D1: 2 files).
 
 ### Step 18 - Tests for the reload signal
+- Done: 942cf03f
 - Files: new `RoslynSentinel.Tests/WorkspaceReloadTrackingTests.cs` (beside `WorkspaceRefreshTests.cs`).
 - Depends on: Step 14
 - Effect: text-neutral
@@ -525,6 +527,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `test-writer`.
 
 ### Step 20 - In-process edge-gate lease (D13(f))
+- Done: 6990d6b0
 - Files: new `RoslynSentinel.Common/EdgeGateLease.cs` (class, `IEdgeGateLeaseSource`); `RoslynSentinel.Common/PersistentWorkspaceManager.cs` (a field, the interface implementation and one `await` at the top of `ApplyProposedChangesAsync`,
   `:2237`, before the call to `ApplyProposedChangesCoreAsync`; no signature change).
 - Depends on: Step 14 (same large class, sequenced)
@@ -561,6 +564,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `implementer` (D1: 2 files).
 
 ### Step 23 - Tests for the lease
+- Done: a29a769a
 - Files: new `RoslynSentinel.Tests.Basic/EdgeGateLeaseTests.cs`.
 - Depends on: Step 20
 - Effect: text-neutral
@@ -594,6 +598,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `implementer` (D1: 1 file).
 
 ### Step 26 - Wire D3 and the tool-level gate into `MoveFile` (D13)
+- Done: 1b7bea2e, refusal-facts fix bd52884d; regeneration 690c74f2 (budget 49500->50000, measured 49677). TODO: `AnalyzeEdgesAsync` runs the analysis three times for a cross-project move; csproj IVT item uses the project name while the in-memory attribute uses the assembly name.
 - Files: `RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs`; `RoslynSentinel.Engines.Basic/MoveSetPlanner.cs` (only to expose the analyzer result in the plan); `RoslynSentinel.Common/ToolParams.cs` (two description constants (new));
   `RoslynSentinel.Tests.Server/ClaudeLeanSchemaBudgetTests.cs` (D15).
 - Depends on: Steps 4, 8, 13, 14, 15, 20, 24, 25
@@ -610,6 +615,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `implementer-senior` (4 files, hot-path interaction with the write chokepoint and a deliberate retry protocol).
 
 ### Step 27 - D3 and gate tests
+- Done: 2ae10997 (T27.1-T27.7), e566cfeb (T27.8-T27.12); in-process third project worked, no OutOfProcess split (D20)
 - Files: new `RoslynSentinel.Tests.Basic/MoveSetEdgeAnalyzerTests.cs`; new `RoslynSentinel.Tests.Tools.Basic/MoveFileProjectEdgeTests.cs`.
 - Depends on: Step 26
 - Effect: text-neutral
@@ -704,7 +710,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `implementer` (D1: 1 file).
 
 ### Step 35 - LIVE: reload wait, 60-file timing, `ChangeNamespace` dry run
-- Partial 2026-11-25 (server 3b1c0d6f): (c) CLEAN - `GitEngine.cs` dry run validated, 23 files / 98 references; folder `RoslynSentinel.Git/` dry run validated, 144 files. Triaged defect: in moved mode `WhyQualify` qualifies (global using of the old namespace; old using must stay) where an added using is safe, and cites another project's `GlobalUsings.g.cs` (TODO in `CopyAndObsoleteCallerRewrite.cs`, INBOX 2026-11-25 03:45). (b) NOT RUN: the client still holds the pre-Step-13 `MoveFile` schema (`sourcePath`/`destinationPath`) after the restart; needs a `/mcp` reconnect (live-window step). (a) waits on Step 14.
+- Partial 2026-11-25 (server 3b1c0d6f): (c) CLEAN - `GitEngine.cs` dry run validated, 23 files / 98 references; folder `RoslynSentinel.Git/` dry run validated, 144 files. Triaged defect: in moved mode `WhyQualify` qualifies (global using of the old namespace; old using must stay) where an added using is safe, and cites another project's `GlobalUsings.g.cs` (TODO in `CopyAndObsoleteCallerRewrite.cs`, INBOX 2026-11-25 03:45). (b) NOT RUN yet: deferred until Batch E is done, so the timing runs with no agents compiling. (The client's ToolSearch listing still shows the pre-Step-13 `MoveFile` schema, but the server accepts `moves`/`dryRun`: a probe dry run succeeded on d718be1f, so no reconnect is needed.) (a) waits on Step 14.
 - Files: none (a dispatcher run after commit and a server restart; results recorded in this plan's Risks).
 - Depends on: Steps 13, 14, 26, 32 (all committed, server restarted; `McpServerStatus` `lastLaunch.servedSha` shows the commit)
 - Effect: text-neutral (measurement; dry runs only, nothing is written to the repo)
