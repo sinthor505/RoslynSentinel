@@ -9,6 +9,7 @@
 
   Checks:
     SIZE         byte/line counts for CLAUDE.md, TODO.md, CLOSED.md, MEMORY.md, MEMORY_CLOSED.md
+    SIZE-OVER    CLAUDE.md larger than its 15 KB budget
     CLAUDE       backticked repo paths in CLAUDE.md that do not exist
     MEM-INDEX    index links (MEMORY.md / MEMORY_CLOSED.md) pointing at a missing file
     MEM-ORPHAN   memory files in neither index
@@ -59,6 +60,12 @@ foreach ($f in @(
         Write-Host ('{0,-20} {1,7} lines {2,8} bytes' -f $i.Name, (Get-Content $f).Count, $i.Length)
     }
     else { Add-Finding 'SIZE' "missing: $f" }
+}
+# CLAUDE.md "What belongs in this file" sets a 15 KB budget and names this script as its check.
+$claudeBudget = 15KB
+$claudeFile = Join-Path $RepoRoot 'CLAUDE.md'
+if ((Test-Path $claudeFile) -and (Get-Item $claudeFile).Length -gt $claudeBudget) {
+    Add-Finding 'SIZE-OVER' ("CLAUDE.md is {0} bytes, over the {1}-byte budget" -f (Get-Item $claudeFile).Length, $claudeBudget)
 }
 $memFiles = Get-ChildItem $MemoryDir -Filter *.md -File | Where-Object { $_.Name -notin 'MEMORY.md', 'MEMORY_CLOSED.md' }
 Write-Host "memory files: $($memFiles.Count) ($([math]::Round(($memFiles | Measure-Object Length -Sum).Sum / 1KB)) KB)"

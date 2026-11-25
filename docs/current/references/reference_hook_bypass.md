@@ -1,7 +1,7 @@
 # Deliberate hook bypass
 
-**Status:** CURRENT 2026-11-09. The rule is in CLAUDE.md "Tool failures and hooks"; the block
-messages point here. The authoritative behaviour is the header of `.claude/hooks/enforce-dogfood.ps1`.
+**Status:** CURRENT 2026-11-25 (false-positive and subagent-list detail moved here from CLAUDE.md).
+The rule is in CLAUDE.md "Tool failures and hooks"; the block messages point here. The authoritative behaviour is the header of `.claude/hooks/enforce-dogfood.ps1`.
 
 A deliberate bypass is legitimate for a `.cs` file outside this repo, or a manual repo edit/read/git
 call you have decided is right (e.g. raw bytes, or a halted `Git` tool you already reported). Never for
@@ -29,4 +29,11 @@ a benign command can still be blocked. Never reword the shell command. Instead:
 - Reading or editing a non-C# file: use Read/Edit/Write/Grep on it (the hook ignores those for non-`.cs`).
 - A C# or git operation an MCP tool covers: use `Search`/`ReadFile`/`Git`.
 - A genuinely manual C#/git operation (see above): use a bypass route.
+- A read-only command on another repo, with its absolute path after `git -C`, is an allowed route,
+  not rewording.
 - Otherwise: report the false positive and stop.
+
+## Custom subagent definitions
+
+The hook also blocks `Read` on an in-repo `.cs`, so a custom subagent (`.claude/agents/*.md`) that
+lists `Read` must also list `ReadFile`, `GetMethodSource` and `Search`, or it has no legal way to read C#.

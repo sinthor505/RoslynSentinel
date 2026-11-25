@@ -158,3 +158,14 @@ and skip the injection.
   open items 4 and 6.
 - TODO.md "Token-path slip recovery design".
 - Memory: project_token_path_slips_eval_rules.
+
+## From TODO.md (2026-11-25)
+
+Open follow-ups from the TODO.md item "Slip recovery follow-ups (2026-11-19)", NOT DESIGNED:
+1. Near-miss items (`structuredDetail[0].nearMisses`, auto-correct) for `CreateFile`, `Member`, `MethodSignature` and the other helper-based tools (tiel fell back to `CreateFile` and got only the hint text).
+2. A `ReplaceSnippet` snippet-miss result echoes the model's `oldContent` including the wrong name, which hide mode cannot remove.
+3. The hide-only arm records nothing for ambiguous items (decided no).
+4. The eval arms ran on host presets; a defaults-sampler arm (fresh model load) was not run.
+5. Harness-side rollback and resample (this proposal).
+
+Finding: hints and hiding the name do not break a retype loop, auto-correct does ([finding_overnight_token_path_slips.md](../findings/finding_overnight_token_path_slips.md)).

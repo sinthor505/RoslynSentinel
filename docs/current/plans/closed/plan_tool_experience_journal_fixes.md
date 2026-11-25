@@ -711,3 +711,7 @@ Other risks:
 - **Wire-value changes:** `validated` (Step 21), `McpServerStatus` fields (Step 12), `GitLogResult` property (Step 10), `McpServerControl.toolsets` (Step 14). Baselines in `docs/known-failing-tests.*.txt` are stale-zero (memory `feedback_known_baselines_stale_zero_failures`): any red test is new.
 - **Test-coverage gap to watch (planner/reviewer, not implementer):** `MemberSingleDeclarationTests` and `AdminToolsTests` stay green through an implementation that never reaches the new path; the named new tests per step are the coverage definition, and the reviewer confirms each exercises the changed path rather than a shared helper.
 - **Time and size:** 48 steps, about 14 implementer-senior or multi-file D1 slices with owner questions in front of them; Batches A-E each need a build, a restart and a batch-end full run of the affected test projects.
+
+## From TODO.md (2026-11-25)
+
+Step 32 (remove the dead external-drift session halt), as tracked in TODO.md since 2026-11-15: nothing sets `_sessionHalted` (only `= false` in `ClearSessionHalt`, `PersistentWorkspaceManager.cs:605` as of 2026-11-25). Real reach recounted 2026-11-20: `IsSessionHalted` 21 hits in 15 files (4 production callers: HaltInfo, AdminTools, ServerStatusTools, IdleRestartMonitor), `KindExternalDrift` 2. Parked by owner 2026-11-20 as harmless dead code; unpark when it misleads a reader or blocks a change to those files. Code TODO at `PersistentWorkspaceManager.cs:2427`.

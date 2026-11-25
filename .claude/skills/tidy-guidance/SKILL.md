@@ -10,7 +10,7 @@ Follow CLAUDE.md: PowerShell for shell, ASCII-only punctuation, `Git` tool for c
 `listed`), no implementation edits to `.cs` in the main session. These files are Markdown/JSON/ps1,
 so editing them in the main session is allowed.
 
-Placement rules (from CLAUDE.md "Where guidance belongs"):
+Placement rules (from CLAUDE.md "What belongs in this file"):
 
 | Surface | Holds | Does not hold |
 | --- | --- | --- |

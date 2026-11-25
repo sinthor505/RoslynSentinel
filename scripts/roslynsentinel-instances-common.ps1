@@ -280,6 +280,7 @@ function Sync-RoslynSentinelSource {
                 return [pscustomobject]@{ Ok = $false; Error = "checkout of '$Branch' failed (current '$currentBranch'): $($r.Output)" }
             }
         }
+        # TODO an amend/rebase in the dev repo after a prebuild pulled the old commit wedges this clone (diverged, pull fails every launch); the clone is launcher-owned, so fetch + reset to origin/<Branch> instead
         $r = Invoke-NativeCaptured -File 'git' -Arguments @('-C', $SourceDir, 'pull', '--ff-only', 'origin', $Branch)
         if ($r.ExitCode -ne 0) {
             return [pscustomobject]@{ Ok = $false; Error = "git pull --ff-only origin $Branch failed (exit $($r.ExitCode)): $($r.Output)" }

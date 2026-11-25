@@ -10,11 +10,13 @@ metadata:
 
 # Reference: known-failing-test and known-build-warning baselines
 
-**Status:** CURRENT 2026-10-17. Verified against `docs/` and `scripts/build.ps1`.
+**Status:** CURRENT 2026-11-25. Owner ruling 2026-11-25: the **test** baseline is 0 failures; any
+failing test is new and gets reported. The `known-failing-tests.*.txt` files are stale (Advanced is
+dated 2026-09-05) and are not a pass list. The build-warning baselines remain in use.
 
 ## Purpose
-Before blaming a change for a red test or a new warning, diff against the recorded baseline. Report
-only NEW failures/warnings.
+Before blaming a change for a new warning, diff against the recorded warning baseline. Report only
+NEW warnings, and every failing test.
 
 ## How it works
 `scripts/build.ps1` records and diffs two baselines per flavor (`Advanced`, `Solution`; the `Basic` flavor and its baseline files were removed when Server.Basic was folded into Server.Advanced):

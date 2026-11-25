@@ -57,4 +57,4 @@ is atomic across hunks within one call — that part is working as designed.
 
 - Eval log: `lmstudio_logs/plan-eval-defect-remediation-v2 - 2026-09-08 17.49.md`
 - Related: `docs/current/project_diffengine_trailing_blank_anchor_fix.md`
-- Memory: `project_diffengine_anchor_collision_duplicate_trivia`
+- Memory: none (the memory copy was deleted 2026-11-25; this finding is the record)

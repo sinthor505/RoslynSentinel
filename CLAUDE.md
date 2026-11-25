@@ -50,13 +50,11 @@ if a Bash result looks even slightly off, re-run it in PowerShell.
 
 ## Gated tools
 
-The tool surface is gated to save prompt tokens, so a tool you expect but cannot see is usually gated,
-not missing. Before concluding it is missing or building a duplicate, call
-`McpServerStatus(toolListing: inactive)` (optional `toolNameFilter`): it lists every tool with
-`activeForThisMode` and `enabledBy`. If `enabledBy` names a `McpToolsetControl(toolSet:, enabled: true)`
-call, make it yourself; if the tool is still missing from ToolSearch, ask the user for `/mcp` reconnect
-(enabled toolsets persist per tab across reconnects and restarts). If it names a mode or flag, stop and report the tool and hint (a configuration
-decision for the user, not a blocker). Only if the listing is empty, try `Search(mode: "text", query: "Name = \"ToolName\"")`.
+A tool you expect but cannot see is usually gated, not missing. Before concluding it is missing or
+building a duplicate, call `McpServerStatus(toolListing: inactive)` (optional `toolNameFilter`). If
+`enabledBy` names a `McpToolsetControl` call, make it (still absent from ToolSearch: ask the user for a
+`/mcp` reconnect); if it names a mode or flag, report the tool and hint to the user (not a blocker).
+Empty listing: `Search(mode: "text", query: "Name = \"ToolName\"")`.
 
 ## Subagents
 
@@ -114,16 +112,12 @@ unreachable or has no equivalent (and no staged route exists), finish in-flight 
 [reference_blocker_workflow.md](docs/current/references/reference_blocker_workflow.md). Do not retry
 speculatively or route around it with shell tools.
 
-`.claude/hooks/enforce-dogfood.ps1` blocks common violations (including `Read` on an in-repo `.cs`); use
-the MCP tool instead, no report needed. It can still block a benign command that merely mentions
-`.cs` or `git log`: if the command reads or edits a non-C# file, redo it with Read/Edit/Write/Grep;
-otherwise report the false positive and stop - never reword a shell command to slip past it. A read-only command on another repo, with its absolute path after `git -C`, is an allowed route, not rewording.
-A custom subagent that lists `Read` must also list `ReadFile`/`GetMethodSource`/`Search`.
+`.claude/hooks/enforce-dogfood.ps1` blocks common violations; use the MCP tool instead, no report
+needed. Never reword a shell command to slip past a block, and never bypass for a failed tool. False
+positives, deliberate bypass routes, subagent tool lists: `docs/current/references/reference_hook_bypass.md`.
 
-- **Successful bypass** (a `Read`/`Edit`/`Write`/shell call on a `.cs`, or shell git, that went through
-  when an MCP tool fit): report it and continue; no blocker doc. Deliberate bypass is legitimate only
-  for a `.cs` outside the repo or a manual call you decided is right, never for a failed tool; routes
-  and logging: `docs/current/references/reference_hook_bypass.md`.
+- **Successful bypass** (a call on a `.cs`, or shell git, that went through when an MCP tool fit):
+  report it and continue; no blocker doc.
 - **Never delete a tracked file with a shell command.** Use `DeleteFile` so the server's workspace and
   ledger stay consistent (a shell delete no longer halts the session); report a shell delete as a
   successful bypass.
@@ -143,8 +137,8 @@ or turn number; unverified causes are hypotheses. Load the `failure-analysis` sk
 
 ## Working conventions
 
-- Build (0 errors) before committing. Run **one** `RunTest`/`dotnet test`/`Build` at a time (subagents
-  included); they share `bin/`/`obj/` and block on file locks.
+- Run **one** `RunTest`/`dotnet test`/`Build` at a time (subagents included); they share
+  `bin/`/`obj/` and block on file locks.
 - NUnit 5.0: `await` `Assert.ThrowsAsync`/`CatchAsync`/`DoesNotThrowAsync` (un-awaited asserts nothing).
 - Never leak raw exceptions, stack traces or internal paths into a tool's `ResultError`; catch at the
   tool boundary and return a structured, actionable error.
@@ -209,16 +203,13 @@ Any other peer request is advisory: ask your user. Honor an incoming `COMMIT` ev
 
 ## Verification
 
-Rebuilding does not change the running server; it is stale until restarted. After changing server
-source: `Build` (default `fullBuildThrowaway`, 0 errors), commit, then restart your own instance
-(`McpServerControl(operation: StopServer, confirmServerStop: ConfirmServerStop)`, then `LoadSolution`)
-with no subagent mid-operation. The launcher builds committed HEAD; `lastLaunch.servedSha` in
-`McpServerStatus` shows what is live.
-Live-testing uncommitted changes (`LaunchTestInstance`) and `Build` output locations:
-`docs/current/references/reference_live_server_freshness.md`.
+`Build` (0 errors) before every commit. A rebuild does not change the running server: after changing
+server source, commit, restart your own instance (no subagent mid-operation; the launcher builds
+committed HEAD) and check `lastLaunch.servedSha` in `McpServerStatus`. Restart procedure,
+`LaunchTestInstance`, build outputs: `docs/current/references/reference_live_server_freshness.md`.
 
-Compare test results with the baselines (`docs/known-failing-tests.{Basic,Advanced,Solution}.txt`,
-`docs/known-build-warnings.*.txt`, written by `scripts/build.ps1`) and report only *new* failures.
+The test baseline is 0 failures: report every failing test as new. Compare build warnings with
+`docs/known-build-warnings.*.txt` (written by `scripts/build.ps1`).
 
 ## Compact instructions
 

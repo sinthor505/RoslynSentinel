@@ -642,3 +642,15 @@ Implementer defaults (stated again in the steps that use them):
 - Q22 wire identity: a request-body test asserts no `reasoning` key when thinking is not requested.
 - Q26 host cap: whether a turn hit the host's own cap is derived by the analysis script from the
   injected marker in the reasoning text, not by a harness field.
+
+## From TODO.md (2026-11-25)
+
+Parked follow-ups (one TODO.md line "Thinking follow-ups"), with their unpark conditions:
+- Enforced reasoning cut and request-field budget delivery ("Deferred: enforced cut"): Qwen3.5 cannot be
+  steered shorter and the host already caps reasoning at ~3.9k tokens. Unpark when a model honours a
+  budget field or runaway thinking shows up in the observed-budget counts.
+- Thinking settings beyond ModelEval (Q13): `SubAgentModelRun` and PlanStepRunner stay Off. Unpark when
+  the smoke test or stage 1 keeps an arm worth using there.
+- Injected verification turn as a thinking trigger (Q24): no verification turn exists (the run ends when
+  the model returns no tool calls); a check turn changes run semantics and scoring. Unpark after the
+  trigger arms are measured.
