@@ -8,6 +8,12 @@ Only the newest month (2026-11) is kept here. Older entries are archived unchang
 [archive/closed_2026-10.md](archive/closed_2026-10.md), [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Startup configuration registry - resolved (2026-11-25)
+
+Startup configuration registry (2026-11-25) - every flag and env var declared once as `StartupSetting<T>`; generated `docs/generated/configuration.md`, `McpServerStatus(settings:)`, `--list-options`, config halt latch (staged); 33 slices across Common, AgentLoop, Server, PlanStepRunner and tests; run with `/implement-plan` - [plan](plans/plan_startup_configuration_registry.md)
+
+Evidence: plans/closed/plan_startup_configuration_registry.md; c284da15..f606147e; full suite 0 failures at f606147e
+
 ## Eval client thinking on configurable triggers with an observed reasoning budget - resolved (2026-11-25)
 
 Eval client thinking on configurable triggers with an observed reasoning budget (2026-11-25) - 11 steps in `RoslynSentinel.AgentLoop` plus a 12-run smoke test on 112/113; run with `/implement-plan` - [plan](plans/closed/plan_error_gated_thinking_and_client_reasoning_budget.md)

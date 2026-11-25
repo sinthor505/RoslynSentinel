@@ -1,6 +1,6 @@
 # Plan: Declare every startup flag and env var once, generate the configuration reference from it, and report effective values at runtime
 
-**Status:** IN PROGRESS 2026-11-25. Steps 1-21, 22a done (see per-step Done lines). Declare every startup flag and env var once as a `StartupSetting<T>` and drive parsing, the generated reference, `McpServerStatus` and a configuration halt latch from that registry (33 slices, staged report-only before the halt).
+**Status:** IMPLEMENTED 2026-11-25. All 33 slices done (c284da15 .. f606147e; per-step Done lines); full suite 0 failures at f606147e; server serves it with Configuration.problems empty, halted false. Declare every startup flag and env var once as a `StartupSetting<T>` and drive parsing, the generated reference, `McpServerStatus` and a configuration halt latch from that registry (33 slices, staged report-only before the halt).
 
 ## Problem
 
@@ -615,6 +615,7 @@ Rules the bodies implement:
 - Change: `public static CallToolResult BuildErrorResult(ResultError error)` in `BreakerFilters`, the envelope `LoopLatchFilter.Refusal` builds today (`LoopLatchFilter.cs:67-83`: `SentinelCallToolResult<object> { IsError = true, ErrorData = error }` serialized with `McpJsonUtilities.DefaultOptions` into a `TextContentBlock`, `IsError = true`); `LoopLatchFilter.Refusal(string message)` keeps its signature and returns `BreakerFilters.BuildErrorResult(new ResultError(ToolErrorCode.TargetIneligible, message))`. `public static void AddConfigurationHaltFilter(IMcpRequestFilterBuilder filters, Func<ConfigurationReport> report)`: when `report().Halted` and the tool name is not `ServerStatusTools.ToolName`, return `BuildErrorResult(new ResultError(ToolErrorCode.ConfigurationInvalid, <facts-only message: problem count and that McpServerStatus lists them>, StructuredDetail: report().Problems))`.
 - Done when: `Build` 0 errors.
 - Lane: implementer.
+- Done: 26aacbb1
 
 ### Step 23 - Register the halt filter
 - Files: `RoslynSentinel.Server.Advanced/ServiceRegistrationExtensionsBasic.cs`, `RoslynSentinel.Tests.Server/ToolTelemetryFilterOrderTests.cs`
@@ -623,6 +624,7 @@ Rules the bodies implement:
 - Change: in `BuildCallToolFilterRegistrations` (:239) add `("ConfigurationHalt", f => BreakerFilters.AddConfigurationHaltFilter(f, () => StartupSettings.LastReport))` unconditionally, directly after the `UnrecoverableBreaker` entry (:259), i.e. last in the fixed list; in `ToolTelemetryFilterOrderTests` the pinned filter counts at :80 and :101 go from 15 to 16 and 16 to 17 (with their comments and messages). `LoopLatchTests.cs:351` (`names[4]`) and `NearMissRecordTests.cs:141` (position relative to `ToolTelemetry`) are unaffected by an entry after :259.
 - Done when: `Build` 0 errors; dispatcher runs `ToolTelemetryFilterOrderTests`, `LoopLatchTests`, `NearMissRecordTests`.
 - Lane: implementer.
+- Done: 3959cb74
 
 ### Step 24 - Generated reference
 - Files: `RoslynSentinel.Tests.ModelEval/ConfigurationReferenceFreshnessTests.cs` (new), `docs/generated/configuration.md` (generated), `scripts/Generate-ArchitectureMap.ps1`, `docs/current/DOCUMENTATION_INDEX.md`
@@ -631,6 +633,7 @@ Rules the bodies implement:
 - Change: freshness test mirroring `ScenarioCatalogFreshnessTests` (regenerate when `ROSLYNSENTINEL_UPDATE_GENERATED_DOCS` is set, else compare) over `ConfigurationReferenceRenderer.RenderMarkdown(StartupSettings.Discover(typeof(ConfigurationReferenceFreshnessTests).Assembly))`; regenerate the doc; add the test filter to the script; add a DOCUMENTATION_INDEX row.
 - Done when: T9 passes.
 - Lane: test-writer.
+- Done: b7577a90
 
 ### Step 25 - Tests T7, T8, T10-T15
 - Sub-slices:
@@ -640,6 +643,7 @@ Rules the bodies implement:
 - Change notes: T10 scans `*.cs` under the repo root (`RepoRootLocator`), excluding `*/Worktree/`, `bin/`, `obj/`; a literal is a whole C# string literal matching `^ROSLYNSENTINEL_[A-Z0-9_]*[A-Z0-9]$`; declared names come from `Discover(typeof(EnvVarDeclarationGuardTests).Assembly)`. T11 arg sets: the flags in the server-argument string literals of `scripts/roslynsentinel-mcp-launch.ps1` (:992-1020; match `--[a-z][a-z0-9-]*` only inside the quoted argument strings, ignoring log text and regex literals); every `launchSettings.json` profile's `commandLineArgs`, split into tokens quote-aware (Windows command-line rules, `\"` quotes, trimmed, so a trailing `\r\n` is dropped); `SubAgentChildServerLauncher.BuildServerArguments` and `ErrorPolicyWiring.ChildServerArgs` output; asserts zero problems against `Discover(typeof(ServerStdio).Assembly)`. Fix `launchSettings.json`: `--solution-Path=` to `--solution=` (:46, :51), `admintools` to `admin` (:51).
 - Done when: T7, T8, T10-T15 pass.
 - Lane: test-writer.
+- Done: 563573fa (25a), 3ddfff73 (25b), 1e78fa1b (25c)
 
 ### Step 26 - Enable the halt
 - Files: `RoslynSentinel.Common/Configuration/StartupSettings.cs`, `docs/current/plans/plan_json_toolset_definitions.md`
@@ -648,6 +652,7 @@ Rules the bodies implement:
 - Change: `HaltOnErrors = true`. Add a Risks note to `plan_json_toolset_definitions.md`: its new flags are `StartupSetting` declarations in `ServerHostSettings`, and an unknown toolset name is `InvalidValue` (Q7).
 - Done when: `Build` 0 errors.
 - Lane: implementer.
+- Done: f606147e
 - Dispatcher verification after this step: `Search(mode: text, query: "NotImplementedException", fileGlob: "**/Configuration/**")` returns 0 and `ConfigurationReferenceRenderer.cs` has none; full `RunTest` baseline 0 failures; commit, restart the server, `McpServerStatus` shows `Configuration.Problems` empty and `Halted == false`; one manual `--list-options` run prints the server settings.
 
 ## Slice map
