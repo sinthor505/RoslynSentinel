@@ -529,6 +529,9 @@ public sealed class RunTotals
             AverageTurnDuration = averageTurnDuration,
             ToolErrorCodes = toolErrorCodes,
             CompilerErrorCodes = compilerErrorCodes,
+            // Not mirrored in scripts/Backfill-TranscriptSummary.ps1: old transcripts have no thinking, so the backfill leaves these at 0.
+            ThinkingTurnCount = turns.Count(turn => turn.Thinking?.Requested == true),
+            OverBudgetTurnCount = turns.Count(turn => turn.Thinking?.OverBudget == true),
         };
 
         // Sum of the non-null values, or null when every value is null.
