@@ -127,6 +127,12 @@ public class ServerBinaryStalenessTests
     }
 
     [Test]
+    public void ParseGitLog_CommitTouchingGit_IsIncluded()
+    {
+        Assert.That(Hashes("fed9876\tFix git\nRoslynSentinel.Git/x.cs\n\n"), Is.EqualTo(new[] { "fed9876" }));
+    }
+
+    [Test]
     public void ParseGitLog_MultiFileCommits_MatchOnAnyPathAndKeepLogOrder()
     {
         const string log =

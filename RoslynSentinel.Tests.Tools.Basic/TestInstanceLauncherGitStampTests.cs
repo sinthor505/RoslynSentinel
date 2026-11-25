@@ -81,6 +81,7 @@ public class TestInstanceLauncherGitStampTests
     }
 
     [TestCase("RoslynSentinel.Common/a.cs", "modified tracked file")]
+    [TestCase("RoslynSentinel.Git/new.cs", "untracked file in the Git project")]
     [TestCase("RoslynSentinel.Engines.Basic/sub/new.cs", "untracked file in a new directory matching the Engines.* glob")]
     [TestCase("RoslynSentinel.Tools.Basic/new.cs", "untracked file matching the Tools.* glob")]
     [TestCase("RoslynSentinel.Server.Advanced/new.cs", "untracked file matching the Server.* glob")]

@@ -115,11 +115,11 @@ public class TestInstanceLauncherTests
     }
 
     [Test]
-    public void GetSourceRoots_PicksCommonEnginesToolsAndServerFoldersOnly()
+    public void GetSourceRoots_PicksCommonGitEnginesToolsAndServerFoldersOnly()
     {
         foreach (var name in new[]
         {
-            "RoslynSentinel.Common", "RoslynSentinel.Engines.Basic", "RoslynSentinel.Tools.Advanced", "RoslynSentinel.Server.Advanced",
+            "RoslynSentinel.Common", "RoslynSentinel.Git", "RoslynSentinel.Engines.Basic", "RoslynSentinel.Tools.Advanced", "RoslynSentinel.Server.Advanced",
             "RoslynSentinel.Tests.Tools.Basic", "RoslynSentinel.Utilities.PlanStepRunner", "docs",
         })
         {
@@ -130,7 +130,7 @@ public class TestInstanceLauncherTests
 
         Assert.That(folders, Is.EquivalentTo(new[]
         {
-            "RoslynSentinel.Common", "RoslynSentinel.Engines.Basic", "RoslynSentinel.Tools.Advanced", "RoslynSentinel.Server.Advanced",
+            "RoslynSentinel.Common", "RoslynSentinel.Git", "RoslynSentinel.Engines.Basic", "RoslynSentinel.Tools.Advanced", "RoslynSentinel.Server.Advanced",
         }));
     }
 

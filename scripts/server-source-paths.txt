@@ -4,6 +4,7 @@
 # ServerBinaryStalenessTests.SourcePathPrefixes_MatchScriptsServerSourcePathsFile).
 # Read by the stdio launcher.
 RoslynSentinel.Common/
+RoslynSentinel.Git/
 RoslynSentinel.Engines.
 RoslynSentinel.Tools.
 RoslynSentinel.Server.

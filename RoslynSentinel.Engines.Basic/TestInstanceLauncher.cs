@@ -620,8 +620,7 @@ public sealed class TestInstanceLauncher
         Path.Combine(BuildIsolation.GetBuildRoot(solutionDirectory), BuildIsolation.ResolveInstanceId(), "bin", ServerProjectName, "debug");
 
     /// <summary>The server source folders (under the solution directory) plus solution-level build files whose
-    /// change makes an existing server build stale: Common, Engines.*, Tools.*, Server.* and Directory.Build/Packages files.</summary>
-    // TODO include RoslynSentinel.Git (and its pathspec in ReadGitStamp): see the TODO at ServerBinaryStaleness.SourcePathPrefixes.
+    /// change makes an existing server build stale: Common, Git, Engines.*, Tools.*, Server.* and Directory.Build/Packages files.</summary>
     public static IReadOnlyList<string> GetSourceRoots(string solutionDirectory)
     {
         var roots = new List<string>();
@@ -631,6 +630,7 @@ public sealed class TestInstanceLauncher
             {
                 var name = Path.GetFileName(directory);
                 if (name == "RoslynSentinel.Common"
+                    || name == "RoslynSentinel.Git"
                     || name.StartsWith("RoslynSentinel.Engines.", StringComparison.Ordinal)
                     || name.StartsWith("RoslynSentinel.Tools.", StringComparison.Ordinal)
                     || name.StartsWith("RoslynSentinel.Server.", StringComparison.Ordinal))
@@ -754,7 +754,7 @@ public sealed class TestInstanceLauncher
         // Dirty is "any change under these pathspecs"; null when git could not answer.
         var changes = reader.GetStatus(
             solutionDirectory,
-            ["RoslynSentinel.Common", "RoslynSentinel.Engines.*", "RoslynSentinel.Tools.*", "RoslynSentinel.Server.*"],
+            ["RoslynSentinel.Common", "RoslynSentinel.Git", "RoslynSentinel.Engines.*", "RoslynSentinel.Tools.*", "RoslynSentinel.Server.*"],
             TimeSpan.FromSeconds(20));
         bool? dirty = changes is null ? null : changes.Count > 0;
 
