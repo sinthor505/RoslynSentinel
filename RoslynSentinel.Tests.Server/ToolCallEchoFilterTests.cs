@@ -488,7 +488,8 @@ public class ToolCallEchoOptionsTests
     [TestCase("--echo-tool-args=true")]
     [TestCase("--echo-tool-args=TRUE")]
     [TestCase("--echo-tool-args=1")]
-    public void Configure_TrueOrOne_Enables(string arg)
+    [TestCase("--echo-tool-args=yes")]
+    public void Configure_TrueOneOrYes_Enables(string arg)
     {
         ToolCallEchoOptions.Configure(["--echo-tool-args=false"]);
         ToolCallEchoOptions.Configure([arg]);
@@ -496,13 +497,27 @@ public class ToolCallEchoOptionsTests
     }
 
     [TestCase("--echo-tool-args=banana")]
-    [TestCase("--echo-tool-args=yes")]
-    [TestCase("--echo-tool-args=")]
-    public void Configure_Banana_StaysDisabled(string arg)
+    public void Configure_Banana_StaysDisabledAndReportsInvalidValue(string arg)
     {
         ToolCallEchoOptions.Configure(["--echo-tool-args=true"]);
         ToolCallEchoOptions.Configure([arg]);
         Assert.That(ToolCallEchoOptions.Enabled, Is.False);
+
+        var problems = StartupSettings.ConfigureGroup(typeof(ToolCallEchoOptions), [arg]);
+        Assert.That(problems, Has.Count.EqualTo(1));
+        Assert.That(problems[0].Kind, Is.EqualTo(ConfigurationProblemKind.InvalidValue));
+        Assert.That(problems[0].RawValue, Is.EqualTo("banana"));
+    }
+
+    [TestCase("--echo-tool-args=")]
+    public void Configure_Blank_StaysDisabledWithoutProblem(string arg)
+    {
+        ToolCallEchoOptions.Configure(["--echo-tool-args=true"]);
+        ToolCallEchoOptions.Configure([arg]);
+        Assert.That(ToolCallEchoOptions.Enabled, Is.False);
+
+        var problems = StartupSettings.ConfigureGroup(typeof(ToolCallEchoOptions), [arg]);
+        Assert.That(problems, Is.Empty);
     }
 
     [Test]

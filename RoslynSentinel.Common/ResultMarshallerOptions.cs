@@ -18,31 +18,25 @@ public enum ResultMarshallerMode
 /// flip it at runtime. Default is <see cref="ResultMarshallerMode.On"/> (plan_wire_result_marshaller.md Step 6); <c>off</c> and
 /// <c>passthrough</c> stay selectable as escape hatches.
 /// </summary>
+[StartupSettingGroup("Result marshaller")]
 public static class ResultMarshallerOptions
 {
     /// <summary>Name of the environment variable that controls the feature.</summary>
     public const string EnvVarName = "ROSLYNSENTINEL_RESULT_MARSHALLER";
 
+    public static readonly StartupSetting<ResultMarshallerMode> ModeSetting = StartupSetting.Enum<ResultMarshallerMode>(null, EnvVarName, ResultMarshallerMode.On, "Wire result marshaller mode: on (default), passthrough or off.", SettingScope.Server, SettingKind.Live);
+
     /// <summary>The mode named by <see cref="EnvVarName"/>, re-read from the environment on each access.</summary>
-    public static ResultMarshallerMode Mode => Parse(Environment.GetEnvironmentVariable(EnvVarName));
+    public static ResultMarshallerMode Mode => ModeSetting.Value;
 
     /// <summary>
     /// <c>off</c>, <c>passthrough</c> or <c>on</c> (case-insensitive, surrounding whitespace ignored) select that mode;
     /// unset, empty and any unrecognized value select <see cref="ResultMarshallerMode.On"/> (a typo must not silently
-    /// disable offloading, so the default wins over the unknown value).
+    /// disable offloading, so the default wins over the unknown value). An unrecognized value is also reported as an
+    /// invalid setting by the registry.
     /// </summary>
     public static ResultMarshallerMode Parse(string? raw)
     {
-        var value = raw?.Trim();
-        if (string.IsNullOrEmpty(value))
-            return ResultMarshallerMode.On;
-
-        if (value.Equals("off", StringComparison.OrdinalIgnoreCase))
-            return ResultMarshallerMode.Off;
-
-        if (value.Equals("passthrough", StringComparison.OrdinalIgnoreCase))
-            return ResultMarshallerMode.Passthrough;
-
-        return ResultMarshallerMode.On;
+        return ModeSetting.Read(StartupArgs.Empty, _ => raw).Value;
     }
 }
