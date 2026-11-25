@@ -139,6 +139,60 @@ public class PlanStepRunnerSurfaceTests
         Assert.That(offenders, Is.Empty, "Prompts name tools outside PlanStepRunnerSurface: " + string.Join(", ", offenders));
     }
 
+    // ConfigureGroup writes the group's static setting state, so this must not run in parallel with other tests.
+    [Test]
+    [NonParallelizable]
+    public void InvalidSetting_RunnerFlag_YieldsProblemNamingTheSetting()
+    {
+        var problems = StartupSettings.ConfigureGroup(typeof(RunnerOptions), ["--turn-cap=abc"]);
+
+        Assert.That(problems, Has.Count.EqualTo(1));
+        var problem = problems[0];
+        Assert.Multiple(() =>
+        {
+            Assert.That(problem.Kind, Is.EqualTo(ConfigurationProblemKind.InvalidValue));
+            Assert.That(problem.SettingName, Is.EqualTo("RunnerOptions.TurnCap"));
+        });
+    }
+
+    // ConfigureGroup writes LlmOptions' static state; LlmOptions.Configure in finally restores the defaults for other tests.
+    [Test]
+    [NonParallelizable]
+    public void InvalidSetting_LlmValue_YieldsProblemNamingTheSetting()
+    {
+        try
+        {
+            var problems = StartupSettings.ConfigureGroup(typeof(LlmOptions), ["--llm-parallelism=0"]);
+
+            Assert.That(problems, Has.Count.EqualTo(1));
+            var problem = problems[0];
+            Assert.Multiple(() =>
+            {
+                Assert.That(problem.Kind, Is.EqualTo(ConfigurationProblemKind.InvalidValue));
+                Assert.That(problem.SettingName, Is.EqualTo("LlmOptions.Parallelism"));
+            });
+        }
+        finally
+        {
+            LlmOptions.Configure(Array.Empty<string>());
+        }
+    }
+
+    [Test]
+    public void MissingRequiredFlag_Throws()
+    {
+        // --repo is required and absent; the message names the missing flag.
+        var ex = Assert.Throws<ArgumentException>(() => RunnerOptions.Parse(["--plan-dir", "p"]));
+        Assert.That(ex.Message, Does.Contain("--repo"));
+    }
+
+    [Test]
+    public void InvalidBranchMode_Throws()
+    {
+        var ex = Assert.Throws<ArgumentException>(() => RunnerOptions.Parse(["--plan-dir", "p", "--repo", "r", "--branch-mode=bogus"]));
+        Assert.That(ex.Message, Does.Contain("--branch-mode"));
+    }
+
     /// <summary>Walks up from AppContext.BaseDirectory to the folder holding RoslynSentinel.slnx; null when absent.</summary>
     private static string? FindRepoRoot() => RepoRootLocator.TryFind(AppContext.BaseDirectory);
 
