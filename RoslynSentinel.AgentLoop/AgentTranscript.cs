@@ -166,6 +166,13 @@ public sealed class AgentTranscript
         get; set;
     }
 
+    /// <summary>Thinking settings the run used; null when the transcript predates this field; omitted from the JSON.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ThinkingOptions? Thinking
+    {
+        get; set;
+    }
+
     /// <summary>
     /// Turn numbers whose request first dropped a block of reasoning. Null when none or the transcript predates this field; omitted from the JSON.
     /// </summary>
@@ -283,6 +290,13 @@ public sealed class AgentTranscriptTurn
     /// <summary>The loop-assist assists this turn received; null, and so omitted from the JSON, when none.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<AgentAssist>? Assists
+    {
+        get; set;
+    }
+
+    /// <summary>The thinking decision for this turn; null, and so omitted from the JSON, when the run predates it.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public TurnThinking? Thinking
     {
         get; set;
     }
@@ -414,6 +428,18 @@ public sealed class RunTotals
 
     /// <summary>Total reasoning tokens across turns, null when no turn reported it.</summary>
     public int? ReasoningTokens
+    {
+        get; init;
+    }
+
+    /// <summary>Number of turns that requested thinking.</summary>
+    public int ThinkingTurnCount
+    {
+        get; init;
+    }
+
+    /// <summary>Number of turns whose reasoning exceeded the observed budget.</summary>
+    public int OverBudgetTurnCount
     {
         get; init;
     }

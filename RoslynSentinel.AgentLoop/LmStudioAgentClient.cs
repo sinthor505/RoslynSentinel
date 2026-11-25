@@ -195,7 +195,8 @@ public sealed class LmStudioAgentClient
         IReadOnlyList<AgentToolDefinition> tools,
         int maxTokens,
         CancellationToken cancellationToken = default,
-        ReasoningReplayPolicy? replayPolicy = null)
+        ReasoningReplayPolicy? replayPolicy = null,
+        ThinkingOptions? thinking = null)
     {
         try
         {
@@ -1266,6 +1267,13 @@ public sealed class AgentChatMessage
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? ReasoningTokens
+    {
+        get; init;
+    }
+
+    /// <summary>Number of reasoning deltas streamed for this message; null for non-assistant roles and when not measured; omitted from the JSON.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? ReasoningDeltaCount
     {
         get; init;
     }
