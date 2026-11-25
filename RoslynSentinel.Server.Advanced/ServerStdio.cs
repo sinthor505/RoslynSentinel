@@ -40,21 +40,8 @@ namespace RoslynSentinel.Server.Advanced
             // ── Arg parsing ──────────────────────────────────────────────────────
             ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath, out var baseRepoDirectory, out var includeTools, out var excludeTools, out var operatingMode);
             var hideTools = ServerStartupHelpers.ParseHideTools(args);
-            LlmOptions.Configure(args);
-            ReplaceSnippetOptions.Configure(args);
-            OrientationBreakerOptions.Configure(args);
-            LoopLatchOptions.Configure(args);
-            LiftRenamesOptions.Configure(args);
-            NearMissOptions.Configure(args);
             // TODO symbol member inventory untested (plan_error_policy_pointer arm I never reached a container); decide default after an eval that exercises containingType/filePath misses
-            NotFoundInventoryOptions.Configure(args);
-            ToolCallEchoOptions.Configure(args);
-            SchemaOptions.Configure(args);
-            EolPolicyOptions.Configure(args);
-            ErrorPolicyOptions.Configure(args);
-            AgentOperatingModeOptions.Configure(args);
-            FullSuiteStalenessOptions.Configure(args);
-            IdleRestartOptions.Configure(args);
+            StartupSettings.ConfigureAll(args, typeof(ServerStdio).Assembly, SettingScope.Server | SettingScope.ServerStdio);
 
             if (ServerStartupHelpers.HandleListTools(
                     args,
@@ -103,7 +90,8 @@ namespace RoslynSentinel.Server.Advanced
             var stoppedByScriptDetails = ServerStartupHelpers.ReadAndConsumeStoppedByScriptMarker();
 
             // ── Host ─────────────────────────────────────────────────────────────
-            var builder = Host.CreateApplicationBuilder(args);
+            // Plan startup_configuration_registry Q17: host builders get no args; settings are read through StartupSettings.
+            var builder = Host.CreateApplicationBuilder([]);
             ServerStartupHelpers.EnableValidateOnBuild(builder);
 
             builder.Logging.ClearProviders();

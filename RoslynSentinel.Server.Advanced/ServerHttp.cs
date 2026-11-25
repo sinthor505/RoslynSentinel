@@ -28,20 +28,8 @@ public class ServerHttp
         var port = ServerStartupHelpers.ParsePort(args, defaultPort: 5100);
         var bind = ServerStartupHelpers.ParseBind(args);
         var respawn = ServerStartupHelpers.ParseRespawn(args, "http");
-        LlmOptions.Configure(args);
-        ReplaceSnippetOptions.Configure(args);
-        OrientationBreakerOptions.Configure(args);
-        LoopLatchOptions.Configure(args);
-        LiftRenamesOptions.Configure(args);
-        NearMissOptions.Configure(args);
         // TODO symbol member inventory untested (plan_error_policy_pointer arm I never reached a container); decide default after an eval that exercises containingType/filePath misses
-        NotFoundInventoryOptions.Configure(args);
-        ToolCallEchoOptions.Configure(args);
-        SchemaOptions.Configure(args);
-        EolPolicyOptions.Configure(args);
-        ErrorPolicyOptions.Configure(args);
-        AgentOperatingModeOptions.Configure(args);
-        FullSuiteStalenessOptions.Configure(args);
+        StartupSettings.ConfigureAll(args, typeof(ServerHttp).Assembly, SettingScope.Server);
 
         if (ServerStartupHelpers.HandleListTools(
                 args,
@@ -70,7 +58,8 @@ public class ServerHttp
         var stoppedByScriptDetails = ServerStartupHelpers.ReadAndConsumeStoppedByScriptMarker();
 
         // ── Host ─────────────────────────────────────────────────────────────
-        var builder = WebApplication.CreateBuilder(args);
+        // Plan startup_configuration_registry Q17: host builders get no args; settings are read through StartupSettings.
+        var builder = WebApplication.CreateBuilder([]);
         builder.Host.UseDefaultServiceProvider((_, options) =>
         {
             options.ValidateOnBuild = true;
