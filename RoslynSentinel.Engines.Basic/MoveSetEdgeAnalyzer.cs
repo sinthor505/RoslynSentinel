@@ -9,6 +9,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.Text;
+using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Engines.Basic;
 
@@ -99,7 +100,7 @@ public static class MoveSetEdgeAnalyzer
 
     // Project names come from the plan (PlannedFileMove), which took them from Project.Name; paths are never compared here.
     private static Project? FindProject(Solution solution, string projectName)
-        => solution.Projects.FirstOrDefault(p => string.Equals(p.Name, projectName, StringComparison.Ordinal));
+        => ProjectLookup.FindProject(solution, projectName);
 
     // The shared analysis behind AnalyzeAsync, FindCycleEdgesAsync and FindMissingPackageFactsAsync.
     // Accepted: edges to add (ProjectReference edges first, then InternalsVisibleTo edges). Cyclic: ProjectReference candidates
