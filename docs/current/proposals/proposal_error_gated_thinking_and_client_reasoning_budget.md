@@ -62,6 +62,20 @@ from the same transcripts:
 - **112:** the 9B model's failures were silent. A tool reported success (`ReplaceRange` left
   unindented content, fixed in c8e46785), so a trigger on tool errors would almost never fire on 112.
   This is a hypothesis about the trigger's reach, not a measured effect.
+- **113, same 9B model, harder scenarios:** Qwen3.5-9B-MTP on the four Ornith comparison scenarios
+  (SweepConstructionSites, ThreadOptionalParameter, WideningRejectedByGate,
+  WidenToReadOnlyDictionary; 2 arms x 8 rounds, pinned to c52d49f4, `jobs_v2q9b_113_c52d49f4.csv`,
+  `timing_q9b_113.csv`) passed 14 of 64 runs. Ornith passed 40 of 65 on the same scenarios.
+  - **Failure mode:** 39 of the 64 runs hit the 25-turn cap (TurnCapExceeded). In those runs,
+    255 of 979 tool calls errored (26%). The top error codes were `ReplaceSnippet` ValidationFailed
+    (70) and NotFound (64), then `ReplaceRange` InvalidArgument (30) and `Member` InvalidArgument (18).
+  - **Not stuck repeating itself:** consecutive calls to the same tool are common (479), but exact
+    repeats are rare (33). The model keeps changing the edit and failing again.
+  - **Speed:** the median run took 1.7 min at 3.7 s per turn with no reasoning, against 5.0-8.2 min
+    per scenario for Ornith.
+
+  So the 9B model's failure mode depends on the scenario: silent on 112's two scenarios, error-driven
+  retry loops on 113's four. On the 113 scenarios a tool-error trigger would fire often.
 
 ## Proposal
 
@@ -106,9 +120,10 @@ transcript.
 
 ### Experiment once built
 
-Run on 85 first, where errors are common, then on 112. Use the evalqueue, pinned to one commit,
-standing contract only. The scenarios are the ones with retry loops on 85 (LargeBlockRewrite,
-RemovePinnedSentence, SweepConstructionSites) plus the four 113 comparison scenarios.
+Start with Qwen3.5-9B on the four 113 comparison scenarios: errors are common there, the baseline
+is fast (1.7 min per run) and passes only 14 of 64, and Ornith's 40 of 65 gives a reasoning reference
+point. Then run 85 (4B) on its retry-loop scenarios (LargeBlockRewrite, RemovePinnedSentence,
+SweepConstructionSites). Use the evalqueue, pinned to one commit, standing contract only.
 
 | Arm | Thinking | Budget |
 | --- | --- | --- |
@@ -158,8 +173,8 @@ Measure for each arm:
    once the error is resolved? Replaying it uses context, the resource that ran out in the Ornith
    StreamTruncated runs.
 4. **Trigger breadth.** Should the trigger also fire on the turn after a refusal hint, a
-   `ConcurrentEditRefused`, or the verification turn? On 112 the failures were silent, so an error-only
-   trigger does not reach them. A trigger on "first turn" or "turn before the final message" is a
+   `ConcurrentEditRefused`, or the verification turn? On 112's scenarios the failures were silent, so
+   an error-only trigger does not reach them; on 113's it would. A trigger on "first turn" or "turn before the final message" is a
    separate arm, if any.
 5. **Effort value.** Use `low`, or whichever level is cheapest per the probe; they measured the same.
    Re-check on the 9B model.
