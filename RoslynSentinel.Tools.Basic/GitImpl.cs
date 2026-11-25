@@ -3,590 +3,10 @@ using System.Text.Json.Serialization;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+
 using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Tools.Basic;
-
-// ─── Result types ────────────────────────────────────────────────────────────
-public record GitResult : IOperationResult
-{
-    public bool IsError
-    {
-        get; set;
-    }
-    public string? Error
-    {
-        get; set;
-    }
-
-    /// <summary>Canonical status: Success when not an error, otherwise <see cref="GitErrorCodes.ToResultStatus"/> of <see cref="Code"/>.</summary>
-    ResultStatus IOperationResult.Status => IsError ? GitErrorCodes.ToResultStatus(Code) : ResultStatus.Success;
-
-    /// <summary>The code the GitTool tool reports on failure: <see cref="ErrorKind"/>, or the fallback GitError. Null on success.</summary>
-    [JsonIgnore]
-    public string? Code => IsError ? ErrorKind ?? GitErrorCodes.Fallback : null;
-
-    /// <summary>Machine-readable cause of a failure, one of <see cref="GitErrorCodes"/>, when the cause is
-    /// known. Null means unclassified: the GitTool tool then reports the fallback code GitError. Never
-    /// serialized with a success payload.</summary>
-    [JsonIgnore]
-    public string? ErrorKind
-    {
-        get; set;
-    }
-
-    /// <summary>Short actionable next step for a classified failure (which call would work). Null when
-    /// the failure is unclassified.</summary>
-    [JsonIgnore]
-    public string? ErrorDetail
-    {
-        get; set;
-    }
-
-    /// <summary>Hints the engine attached to this result: keys plus call facts. The engine sets the keys and the tool
-    /// boundary renders them into the text slots; never serialized. Null when the engine attached none.</summary>
-    [JsonIgnore]
-    internal IReadOnlyList<GitHint>? Hints
-    {
-        get; set;
-    }
-}
-
-/// <summary>Specific ResultError.ErrorCode values for failed GitTool results. GitError stays the fallback.</summary>
-public static class GitErrorCodes
-{
-    /// <summary>Fallback when a failure has no more specific known cause.</summary>
-    public const string Fallback = "GitError";
-    /// <summary>A named path is missing from disk and the index, or resolves outside the repository.</summary>
-    public const string PathNotFound = "GitPathNotFound";
-    /// <summary>A named path is refused because .gitignore ignores it (the tool never force-adds).</summary>
-    public const string IgnoredPath = "GitIgnoredPath";
-    /// <summary>Commit refused because nothing (or nothing for the named paths) is staged.</summary>
-    public const string NothingToCommit = "GitNothingToCommit";
-    /// <summary>The operation failed and left (or found) a merge, rebase, revert, cherry-pick or am in progress.</summary>
-    public const string OperationInProgress = "GitOperationInProgress";
-    /// <summary>A ref (reset/revert ref, checkout branchName) was required and not supplied.</summary>
-    public const string RefRequired = "GitRefRequired";
-    /// <summary>action is missing, or not valid for this operation (tag, stash, worktree).</summary>
-    public const string ActionRequired = "GitActionRequired";
-    /// <summary>The named tag, branch, worktree or path already exists and the tool will not overwrite it.</summary>
-    public const string AlreadyExists = "GitAlreadyExists";
-    /// <summary>A tag, stash index, worktree, branch or ref does not exist.</summary>
-    public const string TargetNotFound = "GitTargetNotFound";
-    /// <summary>A tag name fails git check-ref-format.</summary>
-    public const string InvalidName = "GitInvalidName";
-    /// <summary>The operation needs a clean tracked tree (stash apply/pop) or a clean worktree (worktree remove) and the tree is dirty.</summary>
-    public const string WorkingTreeDirty = "GitWorkingTreeDirty";
-    /// <summary>Nothing to act on (stash push with no changes, hunk listing or staging with no unstaged changes).</summary>
-    public const string NoChanges = "GitNoChanges";
-    /// <summary>Applying a stash conflicted with the current tree. The attempt was rolled back and the entry kept.</summary>
-    public const string StashConflict = "GitStashConflict";
-    /// <summary>A safety rule refused the call (for example a worktree path inside the repository, or removing the main, current or locked worktree).</summary>
-    public const string Refused = "GitRefused";
-    /// <summary>The file kind is one hunk-level staging does not handle (untracked, new, deleted, binary, rename, mode-only).</summary>
-    public const string HunkUnsupported = "GitHunkUnsupported";
-    /// <summary>hunkIds or lineRange selects nothing, straddles a hunk, or is malformed.</summary>
-    public const string HunkSelection = "GitHunkSelection";
-    /// <summary>The hunkFingerprint no longer matches the file's current diff.</summary>
-    public const string HunkStale = "GitHunkStale";
-    /// <summary>git commit exited 1 and a blocking hook (pre-commit, prepare-commit-msg, commit-msg) exists, so the hook declined the commit; the hook's own output is in the error text. Not used when the index is empty and git printed its own nothing-to-commit status.</summary>
-    public const string HookRejected = "GitHookRejected";
-    /// <summary>git commit failed because another process holds the repository's index.lock; the error text carries git's own message.</summary>
-    public const string IndexLocked = "GitIndexLocked";
-
-    /// <summary>The missing-target kind (<see cref="MissingTargetKinds"/>) a not-found failure code names for the error-policy classifier, or null for every other code.</summary>
-    public static string? MissingTargetKind(string? code) => code switch
-    {
-        PathNotFound => MissingTargetKinds.File,
-        TargetNotFound => MissingTargetKinds.GitTarget,
-        _ => null
-    };
-
-    /// <summary>Maps a GitTool failure code to the canonical status. Every GitTool code is a refusal or failure, so none maps to a non-error status; an unknown or fallback code is Failed.</summary>
-    public static ResultStatus ToResultStatus(string? code) => code switch
-    {
-        // Not-found codes also carry a missing-target kind (MissingTargetKind) that GitTools records for the error-policy filter.
-        PathNotFound or TargetNotFound => ResultStatus.NotFound,
-        RefRequired or ActionRequired or InvalidName or HunkSelection or HunkStale => ResultStatus.InvalidInput,
-        IgnoredPath or NothingToCommit or NoChanges or OperationInProgress or AlreadyExists or WorkingTreeDirty
-            or StashConflict or Refused or HunkUnsupported => ResultStatus.NotApplicable,
-        // HookRejected is NotApplicable, not Failed: the call was valid and git ran; a repository-side gate (the hook) declined it, like the other refusals above, and the caller can fix what the hook reports and retry.
-        HookRejected => ResultStatus.NotApplicable,
-        _ => ResultStatus.Failed
-    };
-}
-
-
-public record GitRawResult
-{
-    public int ExitCode
-    {
-        get; set;
-    }
-    public string Stdout { get; set; } = "";
-    public string Stderr { get; set; } = "";
-}
-
-public record GitStatusEntry
-{
-    public string Status { get; set; } = "";
-    public string Path { get; set; } = "";
-
-    // Set only for renamed/copied entries: the path the file was renamed/copied FROM (Path is the new path).
-    public string? OriginalPath
-    {
-        get; set;
-    }
-}
-
-public record GitStatusResult : GitResult
-{
-    public string Branch { get; set; } = "";
-    public bool IsClean
-    {
-        get; set;
-    }
-    public List<GitStatusEntry> Staged { get; set; } = [];
-    public List<GitStatusEntry> Unstaged { get; set; } = [];
-    public List<string> Untracked { get; set; } = [];
-    // Set when the total entry count exceeds the caller's maxEntries (default 50); the lists above are
-    // then capped to a sample of the first 10 entries each and the Total*/*ByStatus counts carry the
-    // full picture. Re-call status with a larger maxEntries (max 5000) to get every entry.
-    public bool IsTruncated
-    {
-        get; set;
-    }
-    public int? TotalStagedCount
-    {
-        get; set;
-    }
-    public int? TotalUnstagedCount
-    {
-        get; set;
-    }
-    public int? TotalUntrackedCount
-    {
-        get; set;
-    }
-    public Dictionary<string, int>? StagedByStatus
-    {
-        get; set;
-    }
-    public Dictionary<string, int>? UnstagedByStatus
-    {
-        get; set;
-    }
-
-    /// <summary>Which multi-step operation the repository is in the middle of: "merge", "rebase",
-    /// "revert", "cherry-pick" or "am". Null when none is in progress. Set by status; when set,
-    /// GitTool(operation: abort) backs out of it.</summary>
-    public string? InProgress
-    {
-        get; set;
-    }
-
-    /// <summary>Set only by operation=abort: which in-progress operation was aborted.</summary>
-    public string? AbortedOperation
-    {
-        get; set;
-    }
-}
-
-public record GitCommitEntry
-{
-    public string Hash { get; set; } = "";
-    public string ShortHash { get; set; } = "";
-    public string Author { get; set; } = "";
-    public string Date { get; set; } = "";
-    public string Message { get; set; } = "";
-}
-
-public record GitLogResult : GitResult
-{
-    public List<GitCommitEntry> Commits { get; set; } = [];
-
-    /// <summary>One "&lt;shortHash&gt; &lt;subject&gt;" line per commit, joined with "\n"; set only when log runs with nameOnly, and Commits is then empty.</summary>
-    public string? NameOnlyLines
-    {
-        get; set;
-    }
-}
-
-public record GitDiffResult : GitResult
-{
-    public string Diff { get; set; } = "";
-    public int FilesChanged
-    {
-        get; set;
-    }
-
-       public string? Warning
-    {
-        get; set;
-    }
-}
-
-public record GitShowResult : GitResult
-{
-    public string Hash { get; set; } = "";
-    public string Author { get; set; } = "";
-    public string Date { get; set; } = "";
-    public string Message { get; set; } = "";
-    public string Diff { get; set; } = "";
-    public int FilesChanged
-    {
-        get; set;
-    }
-
-       public string? Warning
-    {
-        get; set;
-    }
-}
-
-public record GitCommitResult : GitResult
-{
-    public string CommitHash { get; set; } = "";
-
-    // Sibling of CommitHash, always its literal .Length - a byte-counted answer next to the hash
-    // so a caller never has to visually count/transcribe the hex string to know its length. See
-    // docs/current/findings/closed/finding_git_commit_commithash_length_unconfirmed_no_source_mechanism.md: every
-    // "41-character hash" report to date turned out to be an agent miscounting by eye, never an
-    // actual defect - this field makes that whole category of doubt unnecessary to raise.
-    public int CommitHashLength => CommitHash.Length;
-    public string Message { get; set; } = "";
-
-    public List<string> RemainingStaged { get; set; } = [];
-}
-
-public record GitRevertResult : GitResult
-{
-    public string CommitHash { get; set; } = "";
-
-    // See CommitHashLength on GitCommitResult - same rationale, applied here since revert returns
-    // a hash-typed field too (the finding doc's guardrail originally covered commit only).
-    public int CommitHashLength => CommitHash.Length;
-    public string Message { get; set; } = "";
-    public bool PendingCommit
-    {
-        get; set;
-    }
-}
-
-public record GitBranchEntry
-{
-    public string Name { get; set; } = "";
-    public bool IsCurrent
-    {
-        get; set;
-    }
-    public bool IsRemote
-    {
-        get; set;
-    }
-}
-
-public record GitBranchResult : GitResult
-{
-    public List<GitBranchEntry> Branches { get; set; } = [];
-    public string? Created
-    {
-        get; set;
-    }
-    public string? Deleted
-    {
-        get; set;
-    }
-}// Added by AddTopLevelType (expected - used for diagnostics)
-public record GitCheckoutResult : GitResult
-{
-    public string Branch { get; set; } = "";
-    public bool CreatedNewBranch
-    {
-        get; set;
-    }
-
-    /// <summary>Set when the call did something other than what its parameters literally asked
-    /// for, e.g. createBranch=true on a branch that already existed (plain checkout, startPoint
-    /// ignored). Null otherwise.</summary>
-    public string? Note
-    {
-        get; set;
-    }
-}// Added by AddTopLevelType (expected - used for diagnostics)
-public record GitRemoteResult : GitResult
-{
-    public string Operation { get; set; } = "";
-    public string Detail { get; set; } = "";
-}
-
-/// <summary>One tag in a tag list.</summary>
-public record GitTagEntry
-{
-    public string Name { get; set; } = "";
-
-    /// <summary>"lightweight" or "annotated".</summary>
-    public string Kind { get; set; } = "";
-
-    /// <summary>Abbreviated hash (7+ characters) of the commit the tag points at (peeled for annotated tags).</summary>
-    public string TargetHash { get; set; } = "";
-
-    /// <summary>Annotation subject for an annotated tag, otherwise the tagged commit's subject.</summary>
-    public string Subject { get; set; } = "";
-}
-
-/// <summary>Result of operation=tag. Which fields are set depends on the action: list sets Tags,
-/// TotalCount and IsTruncated; create sets Created, TargetHash and Annotated; delete sets Deleted,
-/// PreviousTargetHash and Note.</summary>
-public record GitTagResult : GitResult
-{
-    public string Action { get; set; } = "";
-    public List<GitTagEntry> Tags { get; set; } = [];
-    public int? TotalCount
-    {
-        get; set;
-    }
-    public bool IsTruncated
-    {
-        get; set;
-    }
-    public string? Created
-    {
-        get; set;
-    }
-    public string? Deleted
-    {
-        get; set;
-    }
-    public string? TargetHash
-    {
-        get; set;
-    }
-    public string? PreviousTargetHash
-    {
-        get; set;
-    }
-    public bool? Annotated
-    {
-        get; set;
-    }
-    public string? Note
-    {
-        get; set;
-    }
-}
-
-/// <summary>
-/// Result of operation=config. Get sets Value (null when the key is unset) and Note; set and unset
-/// (added in a later slice) also set PreviousValue and Changed.
-/// </summary>
-public record GitConfigResult : GitResult
-{
-    /// <summary>The action taken (get for now).</summary>
-    public string Action { get; set; } = "";
-
-    /// <summary>The config key as the caller gave it.</summary>
-    public string Key { get; set; } = "";
-
-    /// <summary>The value read for the key, exactly as stored; null when the key is unset.</summary>
-    public string? Value { get; set; }
-
-    /// <summary>The value before a set or unset; null for get.</summary>
-    public string? PreviousValue { get; set; }
-
-    /// <summary>True when a set or unset changed the stored value; false for get.</summary>
-    public bool Changed { get; set; }
-
-    /// <summary>A fact about the result, such as that the key is not set in any visible scope; null when the key has a value.</summary>
-    public string? Note { get; set; }
-}
-
-/// <summary>One entry in a stash list.</summary>
-public record GitStashEntry
-{
-    /// <summary>The N of stash@{N}; 0 is the newest entry.</summary>
-    public int Index
-    {
-        get; set;
-    }
-
-    /// <summary>Abbreviated hash of the stash commit.</summary>
-    public string Hash { get; set; } = "";
-
-    /// <summary>Branch the stash was made on, when the entry's subject names one.</summary>
-    public string? Branch
-    {
-        get; set;
-    }
-
-    /// <summary>The label given at push time, or git's default "&lt;hash&gt; &lt;subject&gt;" of the commit stashed on.</summary>
-    public string Message { get; set; } = "";
-
-    /// <summary>ISO 8601 commit date of the stash.</summary>
-    public string Date { get; set; } = "";
-}
-
-/// <summary>Result of operation=stash. Which fields are set depends on the action: list sets Entries,
-/// TotalCount and IsTruncated; push sets Created, Message, Note and Status; apply and pop set
-/// AppliedIndex, Note and Status.</summary>
-public record GitStashResult : GitResult
-{
-    public string Action { get; set; } = "";
-    public List<GitStashEntry> Entries { get; set; } = [];
-    public int? TotalCount
-    {
-        get; set;
-    }
-    public bool IsTruncated
-    {
-        get; set;
-    }
-    public bool? Created
-    {
-        get; set;
-    }
-    public int? AppliedIndex
-    {
-        get; set;
-    }
-    public string? Message
-    {
-        get; set;
-    }
-    public string? Note
-    {
-        get; set;
-    }
-    public GitStatusResult? Status
-    {
-        get; set;
-    }
-}
-
-/// <summary>One worktree in a worktree list (parsed from git worktree list --porcelain).</summary>
-public record GitWorktreeEntry
-{
-    /// <summary>Absolute path of the worktree, normalized to the platform separator.</summary>
-    public string Path { get; set; } = "";
-
-    /// <summary>Abbreviated HEAD commit hash, when git reports one.</summary>
-    public string? Head
-    {
-        get; set;
-    }
-
-    /// <summary>Short name of the checked-out branch; null for a detached HEAD.</summary>
-    public string? Branch
-    {
-        get; set;
-    }
-
-    /// <summary>True for the main worktree (the first entry git lists).</summary>
-    public bool IsMain
-    {
-        get; set;
-    }
-
-    /// <summary>True when this is the worktree the GitTool tool is operating in (the loaded solution's repository).</summary>
-    public bool IsCurrent
-    {
-        get; set;
-    }
-    public bool IsDetached
-    {
-        get; set;
-    }
-    public bool IsLocked
-    {
-        get; set;
-    }
-
-    /// <summary>True when git reports the worktree directory as missing or stale (git worktree prune would remove it).</summary>
-    public bool IsPrunable
-    {
-        get; set;
-    }
-}
-
-/// <summary>One zero-context hunk of a file's unstaged diff, as listed by operation=hunks.</summary>
-public record GitHunkEntry
-{
-    /// <summary>1-based hunk id; pass it in hunkIds when staging.</summary>
-    public int Index { get; set; }
-    public int OldStart { get; set; }
-    public int OldCount { get; set; }
-    public int NewStart { get; set; }
-    public int NewCount { get; set; }
-
-    /// <summary>Text after the second @@ in the hunk header (git's function-context hint); may be empty.</summary>
-    public string Header { get; set; } = "";
-    public int Added { get; set; }
-    public int Removed { get; set; }
-
-    /// <summary>The first few changed lines (+/-), decoded as UTF-8 and truncated.</summary>
-    public string Preview { get; set; } = "";
-}
-
-/// <summary>Result of operation=hunks: the unstaged hunks of one file. Fingerprint covers the whole file diff,
-/// not only the listed hunks, and must be passed back when staging.</summary>
-public record GitHunksResult : GitResult
-{
-    public string Path { get; set; } = "";
-    public string Fingerprint { get; set; } = "";
-    public int TotalHunks { get; set; }
-    public bool IsTruncated { get; set; }
-    public List<GitHunkEntry> Hunks { get; set; } = [];
-    public string? Note { get; set; }
-}
-
-/// <summary>Result of staging selected hunks of one file. The inherited GitStatusResult members are the
-/// repository status after the stage (copied from a StatusAsync result), so the caller sees the new index
-/// state without a second call. Only the index changes; the working tree is never touched.</summary>
-public record GitStageHunksResult : GitStatusResult
-{
-    public string Path { get; set; } = "";
-
-    /// <summary>The hunks that were staged, as numbered in the listing the selection was made from.</summary>
-    public List<GitHunkEntry> StagedHunks { get; set; } = [];
-
-    /// <summary>How many unstaged hunks the file still has after the stage.</summary>
-    public int RemainingUnstagedHunks { get; set; }
-
-    /// <summary>Set when the remaining hunk count is not what the selection predicts (verify with a staged diff), or when the status could not be read after the stage.</summary>
-    public string? Warning { get; set; }
-
-    /// <summary>Set when a hunk was staged only in part: which lines went in and that the rest of that hunk stays unstaged.</summary>
-    public string? Note { get; set; }
-}
-
-/// <summary>Result of operation=worktree. Which fields are set depends on the action: list sets Worktrees;
-/// add sets Added, Branch and Note; remove sets Removed, Branch, Note and, when uncommitted changes were
-/// discarded, DiscardedPaths.</summary>
-public record GitWorktreeResult : GitResult
-{
-    public string Action { get; set; } = "";
-    public List<GitWorktreeEntry> Worktrees { get; set; } = [];
-    public string? Added
-    {
-        get; set;
-    }
-    public string? Removed
-    {
-        get; set;
-    }
-    public string? Branch
-    {
-        get; set;
-    }
-    public List<string>? DiscardedPaths
-    {
-        get; set;
-    }
-    public string? Note
-    {
-        get; set;
-    }
-}
 
 // ── Operation implementations ─────────────────────────────────────────────
 
@@ -2407,11 +1827,11 @@ public class GitImpl : IGitOperations
 
     private static GitStageHunksResult StageHunksFailure(string path, string kind, string error, string detail,
         IReadOnlyList<GitHint>? hints = null) => new()
-    {
-        Path = path,
-        IsError = true,
-        ErrorKind = kind,
-        Error = error,
+        {
+            Path = path,
+            IsError = true,
+            ErrorKind = kind,
+            Error = error,
             ErrorDetail = detail,
             Hints = hints
         };
@@ -2543,7 +1963,7 @@ public class GitImpl : IGitOperations
         }
     }
 
-       /// <summary>
+    /// <summary>
     /// Best-effort check that <paramref name="text"/> decoded cleanly as UTF-8, for surfacing a
     /// warning rather than silently returning corrupted diff text - see
     /// docs/current/blockers/blocking_error_git_diff_mojibake_display.md. Two independent signals:
@@ -3205,14 +2625,14 @@ public class GitImpl : IGitOperations
 
     private static GitHunksResult HunksFailure(string path, string kind, string error, string detail,
         IReadOnlyList<GitHint>? hints = null) => new()
-    {
-        Path = path,
-        IsError = true,
-        ErrorKind = kind,
-        Error = error,
+        {
+            Path = path,
+            IsError = true,
+            ErrorKind = kind,
+            Error = error,
             ErrorDetail = detail,
             Hints = hints
-    };
+        };
 
     /// <summary>Keeps only the hints whose slot lives in Error. The CommitAsync copy of a stage failure drops ErrorDetail
     /// today, so an ErrorDetail-slot hint must not travel there (it would add a Detail that is null now).</summary>
@@ -4484,7 +3904,7 @@ public class GitImpl : IGitOperations
         }
     }
 
-       /// Lists branches (default), or creates/deletes one when <paramref name="branchName"/> is
+    /// Lists branches (default), or creates/deletes one when <paramref name="branchName"/> is
     /// given. Creation is a plain, non-destructive <c>git branch <name> [startPoint]</c> -> it
     /// does not switch to the new branch; use <c>checkout</c> for that, optionally with
     /// <c>createBranch=true</c> to do both in one call. Deletion uses the safe <c>-d</c> form
@@ -4536,7 +3956,12 @@ public class GitImpl : IGitOperations
     }
 
     private static GitBranchEntry ToBranchEntry(BranchRef branch) =>
-        new() { Name = branch.Name, IsCurrent = branch.IsCurrent, IsRemote = branch.IsRemote };
+        new()
+        {
+            Name = branch.Name,
+            IsCurrent = branch.IsCurrent,
+            IsRemote = branch.IsRemote
+        };
 
     /// <summary>The branch listing through the git CLI, with git's own error text; used when the reader could not answer.</summary>
     private async Task<GitBranchResult> BranchListViaCliAsync(string gitRoot, CancellationToken cancellationToken)
