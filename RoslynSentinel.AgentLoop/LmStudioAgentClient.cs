@@ -200,7 +200,7 @@ public sealed class LmStudioAgentClient
     {
         try
         {
-            return await CompleteOnceAsync(messages, tools, maxTokens, replayPolicy, cancellationToken);
+            return await CompleteOnceAsync(messages, tools, maxTokens, replayPolicy, thinking, cancellationToken);
         }
         // ContextSizeExceededException is deliberately excluded from this filter: the same prompt overflows again on retry.
         // A StreamTruncatedException whose attempt already streamed ~the whole token cap (Spent) is excluded too: the retry would
@@ -217,12 +217,12 @@ public sealed class LmStudioAgentClient
             // consecutive failure is treated as a real, non-transient problem.
             _logger.LogWarning(
                 ex, "LM Studio call failed ({Reason}); retrying once before giving up.", ex.Message);
-            return await CompleteOnceAsync(messages, tools, maxTokens, replayPolicy, cancellationToken);
+            return await CompleteOnceAsync(messages, tools, maxTokens, replayPolicy, thinking, cancellationToken);
         }
         catch (StreamRunawayException ex)
         {
             _logger.LogWarning(ex, "LM Studio stream ran away ({Reason}); retrying once before giving up.", ex.Message);
-            return await CompleteOnceAsync(messages, tools, maxTokens, replayPolicy, cancellationToken);
+            return await CompleteOnceAsync(messages, tools, maxTokens, replayPolicy, thinking, cancellationToken);
         }
     }
 
@@ -241,6 +241,7 @@ public sealed class LmStudioAgentClient
         IReadOnlyList<AgentToolDefinition> tools,
         int maxTokens,
         ReasoningReplayPolicy? replayPolicy,
+        ThinkingOptions? thinking,
         CancellationToken cancellationToken)
     {
         await _loadedModelStatusCheck;
@@ -256,6 +257,7 @@ public sealed class LmStudioAgentClient
             // TODO per-request sampler path on /v1/chat/completions (top_k, min_p, repetition_penalty, penalties) so those fields can be enforced; deferred until a comparison needs it (docs/current/findings/finding_overnight_token_path_slips.md, item 7)
             Temperature = LlmOptions.Temperature,
             TopP = LlmOptions.TopP,
+            Reasoning = thinking is null ? null : new ResponsesReasoning { Effort = thinking.Effort },
         };
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "responses")
@@ -296,6 +298,7 @@ public sealed class LmStudioAgentClient
         var reasoningLoopDetector = new StreamPhraseLoopDetector();
         var contentLoopDetector = new StreamPhraseLoopDetector();
         var functionCallText = new StringBuilder();
+        var reasoningDeltaCount = 0;
 
         await foreach (var (eventType, data) in ReadServerSentEventsAsync(reader, cancellationToken))
         {
@@ -313,6 +316,10 @@ public sealed class LmStudioAgentClient
                             ? existing
                             : reasoningBuilders[evt.ItemId] = new StringBuilder();
                         sb.Append(evt.Delta);
+                        // Hook point for an enforced reasoning budget (cut and continue). Not built; design and probe facts:
+                        // docs/current/plans/plan_error_gated_thinking_and_client_reasoning_budget.md, "Deferred: enforced
+                        // cut". Moving the continuation to the runner (a typed exception) is the route to finer stream control.
+                        reasoningDeltaCount++;
                         // One line per delta (normally one token), as for the content channel: scripts/Find-TypoTokenStream.ps1 reads both.
                         _logger.LogInformation("LM Studio reasoning: {Delta}", evt.Delta);
                         if (reasoningLoopDetector.Append(evt.Delta) is { } reasoningLoop)
@@ -492,6 +499,7 @@ public sealed class LmStudioAgentClient
             Role = "assistant",
             Content = string.IsNullOrEmpty(messageText) ? null : messageText,
             ReasoningContent = string.IsNullOrEmpty(reasoningText) ? null : reasoningText,
+            ReasoningDeltaCount = reasoningDeltaCount > 0 ? reasoningDeltaCount : null,
             ToolCalls = toolCalls,
             TotalTokens = completedResponse.Usage?.TotalTokens,
             InputTokens = completedResponse.Usage?.InputTokens,
@@ -940,6 +948,13 @@ public sealed class LmStudioAgentClient
         {
             get; set;
         }
+
+        public ResponsesReasoning? Reasoning { get; init; }
+    }
+
+    private sealed class ResponsesReasoning
+    {
+        public required string Effort { get; init; }
     }
 
     private sealed class InputMessageItem
