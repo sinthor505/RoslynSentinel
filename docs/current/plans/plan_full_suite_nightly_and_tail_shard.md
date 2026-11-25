@@ -135,17 +135,16 @@ plus a per-test timeline):**
 - Effect: behaviour-changing for agents: a session start prints one block when there is full-suite debt; silent otherwise.
 - Change:
   - `oop-areas.json`: area name to path globs, from the OutOfProcess inventory (2026-11-24): `git` (`RoslynSentinel.Git/**`,
-    `RoslynSentinel.Tests.Git/**` and `RoslynSentinel.Tools.Basic/Git*.cs`, the layout after
-    `plan_isolate_git_area_into_own_project.md` Steps 14 and 16-18; until those land, also `RoslynSentinel.Common/Git/**`
-    (that plan's Step 9 folder) and the flat `RoslynSentinel.Common/Git*.cs`, `Libgit2*.cs`, `CliGitReader*.cs`,
-    `FallbackGitReader*.cs`, `RepoWorktrees*.cs`, `ShortHashLengths*.cs`; drop the interim globs when the Git project exists),
+    `RoslynSentinel.Tests.Git/**`, and the tool-side `RoslynSentinel.Tools.Basic/GitTools.cs`, `GitRemoteTools.cs`,
+    `GitStatusRenameHints.cs`, whose tool-level fixtures live in Tests.Git; not `GitHintText.cs` or
+    `GitHintApplyingOperations.cs`: a hint-text edit is not a Git behaviour change, and the nightly run is the backstop),
     `runtest` (`RoslynSentinel.Engines.Basic/TestRun*.cs`, `RoslynSentinel.Engines.Basic/TestSuiteFilter.cs`,
     `RoslynSentinel.Engines.Basic/TestProjectDetector.cs`, `RoslynSentinel.Tools.Basic/WorkspaceBuildTestImpl.cs`),
     `build` (`RoslynSentinel.Engines.Basic/BuildEngine.cs`, `RoslynSentinel.Engines.Basic/BuildIsolation.cs`,
     `RoslynSentinel.Common/BuildResult*.cs`), `process` (`RoslynSentinel.Common/ChildProcessCapture.cs`,
     `RoslynSentinel.Engines.Basic/KillOnCloseJob.cs`, `RoslynSentinel.Engines.Basic/TestInstanceLauncher*.cs`,
     `RoslynSentinel.Engines.Basic/DocTrailerEngine.cs`), `scripts` (`scripts/Invoke-WorktreeTests.ps1`), and the test side
-    (`RoslynSentinel.Tests.Tools.Basic/Git*.cs`, `RunTestTests.cs`, `Build*Tests.cs`).
+    (`RoslynSentinel.Tests.Tools.Basic/RunTestTests.cs`, `Build*Tests.cs`).
   - Hook (runs on `startup` and `clear`, like `repo-hygiene-session-start.ps1`): read the marker; report when it is missing,
     red, older than 26 hours (the nightly missed), or when `git diff --name-only <headSha> HEAD` plus uncommitted changes match
     an area. Output: one line per reason and the matched areas, e.g.
@@ -178,8 +177,9 @@ plus a per-test timeline):**
     leading and trailing dots stop a prefix match (`GitInProcessCommitRouteTests` against `GitInProcessCommitRouteSetupTests`).
   - The project's `summary.json` row sums both TRX files; a missing shard TRX with a non-zero exit is a failure like a missing
     main TRX (lines 341-343). `-Sequential` and filtered runs keep today's single process.
-- Done when: parse check; dispatcher runs `-Projects RoslynSentinel.Tests.Tools.Basic,RoslynSentinel.Tests.Server -Suite full`
-  and gets the same test totals as `48fb08e2` (3,783 and 1,029) with two TRX files per project. Lane: `implementer-senior` (the
+- Done when: parse check; dispatcher runs `-Projects RoslynSentinel.Tests.Tools.Basic,RoslynSentinel.Tests.Git,RoslynSentinel.Tests.Server -Suite full`
+  and gets the same test totals as an unsharded run at the starting commit (the `48fb08e2` totals predate the Tests.Git
+  split) with two TRX files per project that has a class-level `[NonParallelizable]` fixture. Lane: `implementer-senior` (the
   TRX and summary aggregation is the risky part).
 
 ### Step 8 - Timing script reads shard TRX files
@@ -191,18 +191,16 @@ plus a per-test timeline):**
 - Done when: parse check; `pwsh -NoProfile -File scripts\Get-TestRunTimings.Tests.ps1` passes (dispatcher). Lane: `implementer`.
 
 ### Step 9 - Parallel children for Git parity fixtures that own a repo per test
-- Files, per slice (each at most 3 test files; listed at their pre-move location in `RoslynSentinel.Tests.Tools.Basic/`,
-  expected in `RoslynSentinel.Tests.Git/` by the time this step runs):
+- Files, per slice (each at most 3 test files, all in `RoslynSentinel.Tests.Git/`, namespace still
+  `RoslynSentinel.Tests.Tools.Basic`):
   - 9a: `GitWorktreeRepoLocalConfigTests.cs`, `GitStageToolParityTests.cs` (the 330-480 s tail)
   - 9b: `GitCommitReadsParityTests.cs`, `GitDiffShowToolParityTests.cs`, `GitLogToolParityTests.cs`
   - 9c: `GitPatchParityCorpusMoreTests.cs`, `GitCasCommitTests.cs`, `GitCommitUntrackedParityTests.cs`
   - 9d: `GitRelativeWorktreeTests.cs`, `GitReaderParityTests.cs`
   - 9e (optional, last): `GitCommitSeamParityTests.cs` (sets `GIT_TRACE2_EVENT` process-wide under a static `TraceGate`;
     parallel siblings would inherit it while a trace test runs)
-- Depends on: `plan_isolate_git_area_into_own_project.md` Steps 16-18 (they move these fixtures into
-  `RoslynSentinel.Tests.Git`; that plan has priority and its session messages before its Step 17). Run Step 9 after the move,
-  against the fixtures' new paths, or drop it if the move already parallelises or restructures them. 9b-9e each after the
-  previous slice's three green runs.
+- Depends on: none (the move into `RoslynSentinel.Tests.Git` landed with `plan_isolate_git_area_into_own_project.md`
+  Steps 16-18). 9b-9e each after the previous slice's three green runs.
 - Effect: text-neutral (test code only).
 - Change: add `[Parallelizable(ParallelScope.Children)]` and `[FixtureLifeCycle(LifeCycle.InstancePerTestCase)]` with a comment
   stating that every test builds its own repo in `[SetUp]`. Any instance `[OneTimeSetUp]`/`[OneTimeTearDown]` becomes `static`
