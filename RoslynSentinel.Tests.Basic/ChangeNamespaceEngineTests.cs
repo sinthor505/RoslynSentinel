@@ -278,14 +278,31 @@ public class ChangeNamespaceEngineTests
     [Test]
     public async Task Change_OldNamespaceEmptied_DanglingUsingIsRemoved()
     {
+        // The dangling-using sweep only reports a using that nothing else touched: a file that uses a moved type has its 'using Old;' replaced by the caller pass,
+        // so it never dangles (see the next test). The directive that dangles belongs to a file that uses no moved type at all and sits outside the reference sites.
+        var unused = ("Consumers/Unused.cs", Lf("using Demo.Models;", "", "namespace Demo.Consumers;", "", "public class Unused { }"));
+        var solution = CreateSolution((FooRelative, FooSource), unused);
+
+        var result = await PlanAsync(solution, Move(FooRelative, "Demo.Models", "Demo.Other"));
+
+        Assert.That(result.IsRefusal, Is.False, result.Refusal?.Message);
+        Assert.That(result.DanglingUsings, Has.Some.Property(nameof(DanglingUsing.Resolution)).EqualTo(DanglingUsingResolution.Removed));
+        Assert.That(NewTextOf(result, "Consumers/Unused.cs"), Does.Not.Contain("using Demo.Models;"));
+        AssertOnlyFiles(result, FooRelative, "Consumers/Unused.cs");
+        Assert.That(await CompileErrorsAfterAsync(solution, result), Is.Empty);
+    }
+
+    [Test]
+    public async Task Change_OldNamespaceEmptied_UsingOfAFileThatUsesAMovedTypeIsSwitchedNotReportedDangling()
+    {
         var caller = ("Consumers/User.cs", Lf("using Demo.Models;", "", "namespace Demo.Consumers;", "", "public class User { public Foo F = new Foo(); }"));
         var solution = CreateSolution((FooRelative, FooSource), caller);
 
         var result = await PlanAsync(solution, Move(FooRelative, "Demo.Models", "Demo.Other"));
 
         Assert.That(result.IsRefusal, Is.False, result.Refusal?.Message);
-        Assert.That(result.DanglingUsings, Has.Some.Property(nameof(DanglingUsing.Resolution)).EqualTo(DanglingUsingResolution.Removed));
-        Assert.That(NewTextOf(result, "Consumers/User.cs"), Does.Not.Contain("using Demo.Models;"));
+        Assert.That(result.DanglingUsings ?? Enumerable.Empty<DanglingUsing>(), Is.Empty, "The caller pass already replaced 'using Demo.Models;', so nothing is left to dangle.");
+        Assert.That(NewTextOf(result, "Consumers/User.cs"), Does.Contain("using Demo.Other;").And.Not.Contain("using Demo.Models;"));
         Assert.That(await CompileErrorsAfterAsync(solution, result), Is.Empty);
     }
 
@@ -316,7 +333,43 @@ public class ChangeNamespaceEngineTests
     [Test]
     public async Task Change_OverlappingEdits_RefusesWithEditOverlap_NotSkipped()
     {
-        // Foo is moved and also names Bar, which is moved too: the qualified reference inside Foo is an edit in the caller role on top of Foo's own declaration edit.
+        // Through ChangeNamespaceEngine this cannot happen: one call has one target namespace (D7), so a set member's simple names for other members are never edited
+        // (they land in the same namespace) and a qualified name only has its qualifier replaced, a span the namespace swap and the using edits never touch (see the next
+        // test). The overlap-refusing path of the shared core is reachable with two targets, so it is driven through the set overload of the core directly:
+        // Foo carries a redundant 'using Demo.Models;' and moves to Alpha while Bar moves to Beta. As a caller Foo drops that using (nothing else of Demo.Models is used)
+        // and adds 'using Beta;'; as a declaration owner it needs 'using Demo;' for Base, which Demo.Models saw implicitly and Alpha does not. Both roles anchor at the
+        // start of the 'using Demo.Models;' line, and the caller role's removal is ordered ahead of the owner role's insertion, which then falls inside the removed span.
+        var foo = ("Models/Foo.cs", Lf("using Demo.Models;", "", "namespace Demo.Models;", "", "public class Foo { public Bar B; public Base X; }"));
+        var bar = ("Models/Bar.cs", Lf("namespace Demo.Models;", "", "public class Bar { }"));
+        var baseType = ("Base.cs", Lf("namespace Demo;", "", "public class Base { }"));
+        var solution = CreateSolution(foo, bar, baseType);
+
+        var result = await CopyAndObsoleteCallerRewrite.RewriteAsync(solution,
+            [Move("Models/Foo.cs", "Demo.Models", "Alpha"), Move("Models/Bar.cs", "Demo.Models", "Beta")],
+            cancellationToken: CancellationToken.None);
+
+        AssertRefused(result, ToolErrorCode.PreconditionNotMet);
+        Assert.That(result.Refusal!.StructuredDetail, Has.Some.InstanceOf<EditOverlap>());
+    }
+
+    [Test]
+    public void Change_ApplyStrict_RefusesAnOverlapWhereApplySkipsIt()
+    {
+        // The shared Apply keeps skipping an edit that starts inside an earlier one (the live copyAndObsolete path relies on it); ApplyStrict reports the pair instead.
+        const string text = "0123456789";
+        var edits = new List<(int Position, int Length, string Text)> { (2, 4, "X"), (4, 0, "Y") };
+        var overlaps = new List<EditOverlap>();
+
+        Assert.That(CopyAndObsoleteEdits.Apply(text, edits), Is.EqualTo("01X6789"));
+        Assert.That(CopyAndObsoleteEdits.ApplyStrict("file.cs", text, edits, overlaps), Is.Null);
+        Assert.That(overlaps, Is.EqualTo(new[] { new EditOverlap("file.cs", 2, 4, 4, 0) }));
+        Assert.That(CopyAndObsoleteEdits.OverlapRefusal(overlaps).ErrorCode, Is.EqualTo(ToolErrorCode.PreconditionNotMet));
+    }
+
+    [Test]
+    public async Task Change_SetMemberNamedByItsQualifiedName_IsRewrittenOnceWithoutOverlap()
+    {
+        // Foo is moved and names Bar, which is moved too, by its qualified name: the qualifier edit and Foo's own namespace swap are disjoint spans, so there is no overlap.
         var foo = ("Models/Foo.cs", Lf("namespace Demo.Models;", "", "public class Foo { public Demo.Models.Bar B; }"));
         var bar = ("Models/Bar.cs", Lf("namespace Demo.Models;", "", "public class Bar { }"));
         var solution = CreateSolution(foo, bar);
@@ -325,7 +378,8 @@ public class ChangeNamespaceEngineTests
             Move("Models/Foo.cs", "Demo.Models", "Demo.Other"),
             Move("Models/Bar.cs", "Demo.Models", "Demo.Other"));
 
-        AssertRefused(result, ToolErrorCode.PreconditionNotMet);
-        Assert.That(result.Refusal!.StructuredDetail, Has.Some.InstanceOf<EditOverlap>());
+        Assert.That(result.IsRefusal, Is.False, result.Refusal?.Message);
+        Assert.That(NewTextOf(result, "Models/Foo.cs"), Does.Contain("namespace Demo.Other;").And.Contain("Demo.Other.Bar").And.Not.Contain("Demo.Models"));
+        Assert.That(await CompileErrorsAfterAsync(solution, result), Is.Empty);
     }
 }
