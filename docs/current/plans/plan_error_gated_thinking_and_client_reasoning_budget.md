@@ -1,6 +1,6 @@
 # Plan: Eval client thinking on configurable triggers, with an observed reasoning budget
 
-**Status:** IN PROGRESS 2026-11-25. Steps 1-5 done (d1720c89d, 39dbc2700, ed219aa64, 18df7ffc8, 9184930d0). Configurable thinking triggers (error, latchRefusal, firstTurn) with effort and an observed-only reasoning budget, then a 12-run smoke test; the enforced cut is parked.
+**Status:** IN PROGRESS 2026-11-25. Steps 1-9 done (d1720c89d, 39dbc2700, ed219aa64, 18df7ffc8, 9184930d0, 9d52066e, 734d7dfb, a1f5ced3, 72b28140; fix-up b59fb544). Configurable thinking triggers (error, latchRefusal, firstTurn) with effort and an observed-only reasoning budget, then a 12-run smoke test; the enforced cut is parked.
 
 ## Problem
 
@@ -434,6 +434,7 @@ private, so each new test file carries its own small copies):
 - Change in `ModelEvalAssemblySetUp.cs`: after `ModelAgentRunner.ContractStamp = ...` (`:57`):
   `ModelAgentRunner.ThinkingDefault = ThinkingOptions.FromEnvironment();`.
 - Done when: `Build` 0 errors.
+- Done: 9d52066e
 
 ### Step 7 - Runner loop: per-turn decision and turn record
 - Files: `RoslynSentinel.AgentLoop/ModelAgentRunner.cs`
@@ -464,6 +465,7 @@ private, so each new test file carries its own small copies):
     destructuring at `:600` (inside the loop, because it can `break` early); `pendingSignals |=
     ThinkingTriggers.LatchRefusal;` inside `if (ToolLoopLatch.RefusalMessage(toolCall.Name, resultJson) is { } refusalMessage)` (`:709`).
 - Done when: `Build` 0 errors.
+- Done: 734d7dfb
 
 ### Step 8 - Runner tests
 - Files: `RoslynSentinel.Tests.Harness/ThinkingRunnerTests.cs` (new)
@@ -476,6 +478,7 @@ private, so each new test file carries its own small copies):
   `IAgentToolHost` ctor at `:161` with `LoopAssistOptions.Off` and an explicit `thinking:` argument,
   except the static-default test). Class `[NonParallelizable]` with a comment.
 - Done when: `RunTest` on the class passes (dispatcher runs it).
+- Done: a1f5ced3
 
 ### Step 9 - Docs and arm table script
 - Files: `docs/current/references/reference_model_eval_procedure.md`, `scripts/Get-ThinkingArmTable.ps1` (new)
@@ -511,6 +514,7 @@ private, so each new test file carries its own small copies):
       the outcome files. Tolerates transcripts without the new fields (columns show 0 or blank).
 - Done when: the script runs on an existing evalqueue job folder (e.g. the c52d49f4 113 jobs) and
   prints one row per arm without errors.
+- Done: 72b28140
 
 ### Step 10 - Stub sweep and full test run
 - Files: none changed (fix-ups only if something fails)
