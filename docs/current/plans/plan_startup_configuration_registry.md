@@ -1,6 +1,6 @@
 # Plan: Declare every startup flag and env var once, generate the configuration reference from it, and report effective values at runtime
 
-**Status:** IN PROGRESS 2026-11-25. Steps 1-4, 22a done (c284da15, 0655a422, 6aeae685, 51418125, 2714c690). Declare every startup flag and env var once as a `StartupSetting<T>` and drive parsing, the generated reference, `McpServerStatus` and a configuration halt latch from that registry (33 slices, staged report-only before the halt).
+**Status:** IN PROGRESS 2026-11-25. Steps 1-9, 11, 13-15, 22a done (see per-step Done lines). Declare every startup flag and env var once as a `StartupSetting<T>` and drive parsing, the generated reference, `McpServerStatus` and a configuration halt latch from that registry (33 slices, staged report-only before the halt).
 
 ## Problem
 
@@ -417,6 +417,7 @@ Rules the bodies implement:
 - Effect: tests only. Fixture group classes declared inside the test files, flags prefixed `--test-fixture-`, env names prefixed `TESTFIXTURE_` (never `ROSLYNSENTINEL_`); T4's undeclared `ROSLYNSENTINEL_*` name is built by concatenation (`"ROSLYNSENTINEL" + "_TEST_UNDECLARED"`, comment: keeps T10 from treating it as a name). Tests use `Discover(IEnumerable<Type>)` and the list overload of `ConfigureAll`, never `Discover(Assembly)`.
 - Done when: T1-T6b pass.
 - Lane: test-writer.
+- Done: 0a41fc63
 
 ### Step 6 - Migrate LlmOptions
 - Files: `RoslynSentinel.Common/LlmOptions.cs`
@@ -425,6 +426,7 @@ Rules the bodies implement:
 - Change: per Execution rules; 13 settings, scope `Server | PlanStepRunner`; `Parallelism` and `StreamIdleTimeoutSeconds` use `Int(..., minValue: 1)`; `--llm-host-sampler` is `HostSamplerSetting` via `Custom` whose parse keeps today's behaviour (malformed pairs skipped, always returns true); `HostSampler` stays a `{ get; private set; }` property, assigned in `PostConfigure` from `HostSamplerSetting.Value` plus today's fold of `TopK`/`MinP`/`RepeatPenalty` (:171-178); `Configure` becomes `StartupSettings.ConfigureGroup(typeof(LlmOptions), args);`; delete the private `GetArgValue` (:189). One `WriteFile`.
 - Done when: `Build` 0 errors.
 - Lane: implementer.
+- Done: cc04aa92
 
 ### Step 7 - Migrate ReplaceSnippetOptions, SchemaOptions, ErrorPolicyOptions
 - Files: `RoslynSentinel.Common/ReplaceSnippetOptions.cs`, `RoslynSentinel.Common/SchemaOptions.cs`, `RoslynSentinel.Common/ErrorPolicyOptions.cs`
@@ -432,6 +434,7 @@ Rules the bodies implement:
 - Effect: as Step 6. `SchemaOptions.ConfigureHiddenParameters` and `EffectiveHiddenParameters()` keep their signatures; `--hide-params` is a `Custom` string set. `ErrorPolicyOptions` scope `Server | PlanStepRunner`, others `Server`; its descriptor fields are `ModeSetting` (`--error-policy-mode` / `ROSLYNSENTINEL_ERROR_POLICY_MODE`) and `FileSetting` (`--error-policy-file` / `ROSLYNSENTINEL_ERROR_POLICY_FILE`). `ErrorPolicyOptions.Configure` keeps its contract: it first evaluates both settings with `Read(StartupArgs.Parse(args), StartupSettings.EnvironmentReader)` and the cross-field rule (Inline needs a readable file, `ErrorPolicyOptions.cs:21-37`), throws `ArgumentException` before assigning anything if either fails (old values survive, as today), else calls `ConfigureGroup`; the same cross-field rule is its `PostConfigure` for the `ConfigureAll` path (on a problem the group resets, so Mode falls back to Off rather than Inline with no file).
 - Done when: `Build` 0 errors.
 - Lane: implementer.
+- Done: f16f7295, 1bcefe84
 
 ### Step 8 - Migrate EolPolicyOptions, AgentOperatingModeOptions, FullSuiteStalenessOptions
 - Files: `RoslynSentinel.Common/EolPolicyOptions.cs`, `RoslynSentinel.Common/AgentOperatingModeOptions.cs`, `RoslynSentinel.Common/FullSuiteStalenessOptions.cs`
@@ -439,6 +442,7 @@ Rules the bodies implement:
 - Effect: as Step 6. `AgentOperatingModeOptions`: `Configured` becomes an `Enum` descriptor (kebab names such as `single-agent` match per Q22); `Effective`/`Source`/`ResolveOnce` unchanged; the `_latched` reset that `Configure` does today moves to `PostConfigure`. `FullSuiteStalenessOptions`: max-age days via `Custom` (double, must be > 0, today's check at :28), max fast runs `Int(minValue: 1)` if today's code rejects values below 1 (keep whatever bound the code has). Remove the `// TODO share GetArgValue` at `FullSuiteStalenessOptions.cs:38`. Scope `Server`.
 - Done when: `Build` 0 errors.
 - Lane: implementer.
+- Done: 888ac302
 
 ### Step 9 - Migrate LoopLatchOptions, LiftRenamesOptions, NearMissOptions
 - Files: `RoslynSentinel.Common/LoopLatchOptions.cs`, `RoslynSentinel.Common/LiftRenamesOptions.cs`, `RoslynSentinel.Common/NearMissOptions.cs`
@@ -446,6 +450,7 @@ Rules the bodies implement:
 - Effect: as Step 6. `LoopLatchOptions.GetFlagValue` and `ParseEnabled` STAY (still called by `NotFoundInventoryOptions.cs:27` until Step 10); `LiftRenames` and `NearMiss` stop calling them; `OverrideForCurrentContext` unchanged. Scope `Server`.
 - Done when: `Build` 0 errors.
 - Lane: implementer.
+- Done: 47e6f24f
 
 ### Step 10 - Migrate IdleRestartOptions, NotFoundInventoryOptions
 - Files: `RoslynSentinel.Common/IdleRestartOptions.cs`, `RoslynSentinel.Common/NotFoundInventoryOptions.cs`, `RoslynSentinel.Tests.Basic/NotFoundInventoryOptionsTests.cs`
@@ -468,6 +473,7 @@ Rules the bodies implement:
 - Effect: Q22 only: `--echo-tool-args=yes` now enables echo (`ToolCallEchoFilterTests.cs:499` `Configure_Banana_StaysDisabled("--echo-tool-args=yes")` moves to the enabled cases; the other banana values assert disabled plus an `InvalidValue` problem); an unknown `ResultMarshaller` value becomes Invalid. ResultMarshaller is an env-only `Live` setting, preserving the per-access read that `LargeResultOffloadFilterTests`, `ToolCallEchoFilterTests` and `WirePathRelativizeFilterTests` rely on; `ResultMarshallerOptions.EnvVarName` stays `const`, `Parse` stays public (delegating per Execution rules). Scope `Server`.
 - Done when: `Build` 0 errors.
 - Lane: implementer.
+- Done: b5848b71
 
 ### Step 11b - Migrate WirePathOptions
 - Files: `RoslynSentinel.Common/WirePathOptions.cs`
@@ -491,6 +497,7 @@ Rules the bodies implement:
 - Change: `RepoRootLocator` gets `[StartupSettingGroup("Repository roots")]` and `RepoRootSetting` for `ROSLYNSENTINEL_REPO_ROOT` (const at :6, env-only `Live`, scope `Server | PlanStepRunner | AgentLoop | TestHarness`); its read at :47 uses `RepoRootSetting.Value`. `ToolTelemetry` gets `[StartupSettingGroup("Instance identity")]` and `InstanceIdSetting` for `ROSLYNSENTINEL_INSTANCE_ID` (const at :18, env-only `Live`, scope `Server`); its read at :92 uses `InstanceIdSetting.Value`. `BuildIsolation.cs:23` drops its literal and references the `ToolTelemetry` const; its read at :104 uses `ToolTelemetry.InstanceIdSetting.Value`.
 - Done when: `Build` 0 errors.
 - Lane: implementer.
+- Done: f4fe4bbc
 
 ### Step 14 - AgentLoop env reads
 - Files: `RoslynSentinel.AgentLoop/LoopAssist.cs`, `RoslynSentinel.AgentLoop/ReasoningReplayPolicy.cs`, `RoslynSentinel.AgentLoop/LmStudioAgentClient.cs`
@@ -499,6 +506,7 @@ Rules the bodies implement:
 - Change: env-only `Live` descriptors, scope `AgentLoop`, each taking the existing `const` (`LoopAssistOptions.EnabledVariable`/`RoleVariable` :39-40; `ReasoningReplayPolicy` pressure :21, window :48). `LoopAssistOptions.FromEnvironment(Func<string,string?>)` reads via `Read(StartupArgs.Empty, reader)`; its default reader (:47) becomes `StartupSettings.EnvironmentReader`; an invalid value keeps the default, as `IsTruthy` does today (no new throw). `ReasoningReplayPolicy`: pressure via `Custom` (double in (0,1], today's check), window as `NullableInt(minValue: 0)` (or the bound today's parser enforces). The internal raw-text helpers `ParseWindowOverride(string?)` and `ParsePressureFractionOverride(string?)` keep their signatures and delegate via `<Setting>.Read(StartupArgs.Empty, _ => text)`; on a `Problem` they throw their existing `FormatException` with message `StartupSettings.DescribeProblems([problem])`, which contains the env name, so `ReasoningReplayPolicyTests.ParsePressureFractionOverride_Throws_WhenNotAFractionAboveZero` (`Tests.ErrorVariants/ReasoningReplayPolicyTests.cs:197-200`) and `LmStudioAgentClientInputItemsTests.ParseReasoningWindowOverride_Throws_WhenNotANonNegativeInteger` (:136-140) stay green (`LmStudioAgentClient.ParseReasoningWindowOverride` forwards to `ParseWindowOverride`). `LmStudioAgentClient.cs:817` const stays; its read at :826 uses the `ReasoningReplayPolicy` window descriptor.
 - Done when: `Build` 0 errors.
 - Lane: implementer.
+- Done: e47ef3d7
 
 ### Step 14b - EvalQueueSetupMarker and External env vars
 - Files: `RoslynSentinel.AgentLoop/EvalQueueSetupMarker.cs`, `RoslynSentinel.Common/Configuration/ExternalEnvironmentSettings.cs` (new), `RoslynSentinel.Engines.Advanced/CommentingEngine.cs`
@@ -507,6 +515,7 @@ Rules the bodies implement:
 - Change: `EvalQueueSetupMarker` (:15) env-only `Live` descriptor, scope `AgentLoop`. New `[StartupSettingGroup("External environment")] public static class ExternalEnvironmentSettings` declaring `NUGET_PACKAGES` and `CLAUDE_CODE_SESSION_ID` (kind `External`, scope `Server`, Q8); `CommentingEngine.cs:478` reads its descriptor. (`ServiceRegistrationExtensionsBasic.cs:467` moves in Step 20.)
 - Done when: `Build` 0 errors.
 - Lane: implementer.
+- Done: 5aa50c88
 
 ### Step 15 - ThinkingOptions
 - Files: `RoslynSentinel.AgentLoop/ThinkingOptions.cs`, `RoslynSentinel.Tests.Harness/ThinkingOptionsTests.cs`
@@ -515,6 +524,7 @@ Rules the bodies implement:
 - Change: `[StartupSettingGroup("Thinking (ModelEval)")]`; its four `const string` names (`ROSLYNSENTINEL_MODELEVAL_THINKING` off|triggered|always, `_THINKING_TRIGGERS` comma list error,latchRefusal,firstTurn, `_THINKING_EFFORT` non-blank string default `low`, `_REASONING_BUDGET` positive int, unset = none) become env-only `Live` descriptors, scope `AgentLoop` (`Enum`, `Custom`, `Custom`, `NullableInt(minValue: 1)`). `FromEnvironment(Func<string,string?>? readVariable)` keeps its signature, reads via `Read(StartupArgs.Empty, readVariable ?? StartupSettings.EnvironmentReader)` and throws `ConfigurationInvalidException` on any problem; remove `InvalidThinkingSettingException`. Per Q22 a blank effort is unset (default `low`), no longer a throw. `ThinkingOptionsTests.cs`: the `FromEnvironment_InvalidValue_Throws` cases assert `ConfigurationInvalidException` with `Problems[0].EnvName` equal to the variable (replacing `ex.Variable`); the two blank-effort cases (`"   "`, `""`) move to the unset test and expect `low`; `FromEnvironment_EmptyStringIsUnsetExceptEffort` becomes "empty string is unset" for all four.
 - Done when: `Build` 0 errors.
 - Lane: implementer.
+- Done: 3fc5b101
 
 ### Step 16 - Server host flags
 - Files: `RoslynSentinel.Server.Advanced/ServerHostSettings.cs` (new), `RoslynSentinel.Server.Advanced/ServerStartupHelpers.cs`, `RoslynSentinel.Server.Advanced/ServerStdio.cs`
