@@ -625,6 +625,7 @@ namespace RoslynSentinel.Common.SnippetMatching
                 var newContentNote = label == "oldContent"
                     ? " - and write newContent the same way, or the escapes will be written into the code"
                     : string.Empty;
+                // TODO The model reads this text and the file JSON-encoded, so "plain quotes (\")" arrives as (\") and the file's line as .\"; - the example shows the escaped form as the plain one (thinking smoke 192447 T8-T13: reasoning "has \"; instead of \";", oldContent kept .\"; on the line); name the characters instead of showing them, or give the corrected line in a form that survives JSON encoding
                 var what = (sawQuote, sawBackslash) switch
                 {
                     (true, true) => "backslash-escaped quotes (\\\") and doubled backslashes (\\\\) where the file has plain quotes (\") and single backslashes (\\)",
