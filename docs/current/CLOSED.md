@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Plan: Move the Git area into its own production project (RoslynSentinel.Git) and its own test project (RoslynSentinel.Tests.Git) - resolved (2026-11-24)
+
+Plan: Move the Git area into its own production project (RoslynSentinel.Git) and its own test project (RoslynSentinel.Tests.Git) - [doc](plans/closed/plan_isolate_git_area_into_own_project.md)
+
+Evidence: IMPLEMENTED 2026-11-24. RoslynSentinel.Git and RoslynSentinel.Tests.Git exist (7aa47fc6..bcc5031d, docs 24703556); full run 0 failures, Tests.Tools.Basic wall 1,189 s -> 277 s, Tests.Git 760 s (Step 23 table). Step 19 partial: GitImpl -> GitEngine done, namespace rename carried by proposal_multi_file_movefile_and_namespace_change_tool.md.
+
 ## RunTest no-TRX message named no exit code or cause for a silent exit (INBOX 2026-11-24 22:10) - resolved (2026-11-24)
 
 A `dotnet test` that exited without a TRX and printed nothing (the worktree MSBuild node handshake failure) reported only "No TRX result file was produced".

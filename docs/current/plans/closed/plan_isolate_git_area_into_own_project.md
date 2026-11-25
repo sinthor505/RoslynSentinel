@@ -1,6 +1,6 @@
 # Plan: Move the Git area into its own production project (RoslynSentinel.Git) and its own test project (RoslynSentinel.Tests.Git)
 
-**Status:** IN PROGRESS 2026-11-24. Steps 1a-14 done (7aa47fc6..43cb32cd; RoslynSentinel.Git exists); batched run, owner away; decisions D-a to D-f in Decision.
+**Status:** IMPLEMENTED 2026-11-24. RoslynSentinel.Git and RoslynSentinel.Tests.Git exist (7aa47fc6..bcc5031d, docs 24703556); full run 0 failures, Tests.Tools.Basic wall 1,189 s -> 277 s, Tests.Git 760 s (Step 23 table). Step 19 partial: GitImpl -> GitEngine done, namespace rename carried by proposal_multi_file_movefile_and_namespace_change_tool.md.
 
 ## Problem
 
@@ -8,7 +8,7 @@ Git is 55% of the full run's summed test-seconds (4,516 of 8,134 in run `48fb08e
 its production files are about 3.3% of commits (110 of about 3,300 in 60 days). Today "did Git change" is a file-name guess
 (`[Category("OutOfProcess")]` plus hand-kept globs), and the Git fixtures share `RoslynSentinel.Tests.Tools.Basic` (918 s
 wall, the full run's critical path) with everything else. Evidence, motivation, alternatives and the Area 2/3 inventories:
-[proposal_isolate_heavy_test_areas_by_project.md](../proposals/proposal_isolate_heavy_test_areas_by_project.md) (the design;
+[proposal_isolate_heavy_test_areas_by_project.md](../../proposals/proposal_isolate_heavy_test_areas_by_project.md) (the design;
 this plan does not repeat it).
 
 The second goal is single responsibility (owner, 2026-11-24). `RoslynSentinel.Common` has become a catch-all project:
@@ -86,7 +86,7 @@ Dated entries; later entries do not override earlier ones unless they say so.
 - **2026-11-24, scope (owner):** Area 1 (Git) only, proposal items 0-5. Areas 2 (Build/RunTest) and 3
   (PersistentWorkspaceManager) are out of scope; a later plan covers them.
 - **2026-11-24, selection rule (owner):** `scripts/test-areas.json` and the selection rule are owned by
-  [plan_full_suite_nightly_and_tail_shard.md](./plan_full_suite_nightly_and_tail_shard.md) (its Step 5 area list), not this plan.
+  [plan_full_suite_nightly_and_tail_shard.md](../plan_full_suite_nightly_and_tail_shard.md) (its Step 5 area list), not this plan.
   This plan's Step 21 only records, as a handoff note, that the Git area's watch list becomes the `RoslynSentinel.Git`
   project directory and `RoslynSentinel.Tests.Git`. That plan belongs to another session and is not edited here.
 - **2026-11-24, open question 1 (owner):** `GitWorktree/` moves to the Git project; `Utilities.PlanStepRunner` and
@@ -691,6 +691,23 @@ Depends on: Step 9f (the moved files are in one folder; the seam files stay outs
 - Done when: both searches return no Git-plan stub or obsolete member.
 
 ### Step 23 - Measure and close
+- Done: full run at bcc5031d (`c:\tmp\rs-testtrees\_results\bcc5031d-20261124-220550-24616`, 1 overlapping run) against the Step 9a
+  baseline 042035a6 (`042035a6-20261124-184659-62000`, 4 overlapping runs, so its walls are inflated). Outcome: **adopted**.
+
+  | Measure | Baseline 042035a6 | Final bcc5031d |
+  | --- | --- | --- |
+  | Failures (baseline 0) | 0 | 0 |
+  | Tests total | 12,274 | 12,286 (+12: tests added by Steps 2-10/14) |
+  | `Tests.Tools.Basic` wall / tests / test-seconds | 1,189 s / 3,888 / 8,659 | 277 s / 2,576 / 2,140 |
+  | `Tests.Git` wall / tests / test-seconds | - | 760 s / 1,324 / 4,517 (OutOfProcess 1,173 tests, 4,511 s) |
+  | Total wall / summed test-seconds | 1,598 s / 9,982 | 1,421 s / 7,926 |
+
+  `Tests.Git` is now the full run's critical path (760 s) instead of `Tests.Tools.Basic`; the full-run total moved little because
+  that tail moved with the fixtures (context: run `48fb08e2` had 1,378 s total, Tools.Basic 918 s wall, Git 4,516 summed seconds).
+  The payoff is task-end runs: a change outside `RoslynSentinel.Git/`, `RoslynSentinel.Tests.Git/` and the three tool-side Git files
+  can skip `Tests.Git` (about 4,500 summed test-seconds) once the nightly plan's selection rule lands; until then selection is a
+  directory test on `git diff --name-only`. Step 19's namespace half is carried by
+  [proposal_multi_file_movefile_and_namespace_change_tool.md](../../proposals/proposal_multi_file_movefile_and_namespace_change_tool.md).
 - Files: this plan; `proposal_isolate_heavy_test_areas_by_project.md` Status line; `docs/current/TODO.md`/`CLOSED.md` entries
 - Depends on: Step 22. Effect: text-neutral.
 - Change: one full run at the final commit on an otherwise idle machine; compare per-project wall and summed seconds with the Step 9a baseline run
@@ -762,10 +779,10 @@ Decided items are in Decision (D-a to D-f, seam, `TryGetGitRoot`); what remains 
 
 ## Related
 
-- Design: [proposal_isolate_heavy_test_areas_by_project.md](../proposals/proposal_isolate_heavy_test_areas_by_project.md)
+- Design: [proposal_isolate_heavy_test_areas_by_project.md](../../proposals/proposal_isolate_heavy_test_areas_by_project.md)
 - Nightly plan (owns the selection rule, `test-areas.json`, Step 9 parity-fixture edits, run `48fb08e2` comparison):
-  [plan_full_suite_nightly_and_tail_shard.md](./plan_full_suite_nightly_and_tail_shard.md)
-- Context: [plan_shorten_verification_loop.md](./plan_shorten_verification_loop.md), `docs/current/references/reference_architecture_map.md`,
+  [plan_full_suite_nightly_and_tail_shard.md](../plan_full_suite_nightly_and_tail_shard.md)
+- Context: [plan_shorten_verification_loop.md](../plan_shorten_verification_loop.md), `docs/current/references/reference_architecture_map.md`,
   blocker `blocking_error_movemember_no_retype_tool_for_di_chain_call_sites.md`,
   `blockers/closed/blocking_error_movetype_cannot_relocate_namespace_type_across_projects.md`
 - Skills: `.claude/skills/plan-writer/SKILL.md`, `.claude/skills/dto-conventions/SKILL.md`

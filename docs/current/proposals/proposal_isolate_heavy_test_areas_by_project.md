@@ -1,6 +1,6 @@
 # Isolate the heavy test areas (Git, then Build/RunTest) into their own projects so their slow tests run only when they change
 
-**Status:** ACCEPTED 2026-11-24 for Area 1 (Git): [plan_isolate_git_area_into_own_project.md](../plans/plan_isolate_git_area_into_own_project.md) (open questions 2, 4, 5 settled there). Areas 2 and 3 and the selection rule (owned by `plan_full_suite_nightly_and_tail_shard.md`) remain proposed.
+**Status:** ACCEPTED 2026-11-24; Area 1 (Git) IMPLEMENTED 2026-11-24 by [plan_isolate_git_area_into_own_project.md](../plans/closed/plan_isolate_git_area_into_own_project.md) (Tests.Tools.Basic wall 1,189 s -> 277 s; Tests.Git 760 s; open questions 2, 4, 5 settled there). Areas 2 and 3 and the selection rule (owned by `plan_full_suite_nightly_and_tail_shard.md`) remain proposed.
 
 ## Motivation
 
