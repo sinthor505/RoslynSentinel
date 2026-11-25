@@ -102,14 +102,14 @@ runs) against the server log within a few hundred ms.
 
 ## Tools — prefer these over raw grepping
 
-- **`Parse-AgentLog.ps1`** (repo root) — parses `agent.log` into per-turn objects: `ReasoningText`,
+- **`scripts/Parse-AgentLog.ps1`** — parses `agent.log` into per-turn objects: `ReasoningText`,
   `ContentText`, `ToolCalls[]` with already-parsed `Args`/`ResultOrError`, plus `TotalToolErrors`
   and `ToolErrorCountsByName` rollups. Accepts a single file or a directory (recursed).
   - It does **not** determine pass/fail — cross-reference NUnit console output or `.trx` for that.
   - Known gap: it can drop `ContentText` for a turn whose tool-call and model-response lines were
     logged separately under the same turn number. If a turn's `ContentText` is unexpectedly empty,
     read the raw `agent.log` around that turn before concluding the model said nothing.
-- **`roslynsentinel-interrogate.ps1`** (repo root) — replays a run's `transcript.json` back to the
+- **`scripts/roslynsentinel-interrogate.ps1`** — replays a run's `transcript.json` back to the
   model with a follow-up `-Question` to get the model's own stated reasoning. Takes
   `-TranscriptPath`, `-Question`, `-Model`, `-HostAddress`, `-DryRun` (reconstructs without
   spending inference time). Use only if the caller explicitly asks for the model's self-account.
