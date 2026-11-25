@@ -105,13 +105,21 @@ internal static class MoveFileCopyAndObsolete
     // beside the text). The write is verbatim, so a caller whose file on disk starts with the UTF-8 BOM gets U+FEFF put back in front of its text; the copy
     // and the original already carry theirs (they were built from the decoded bytes). Line endings need no such step: the rewrite splices into the text
     // with the file's own endings. A file that cannot be read keeps the engine's text (the chokepoint's drift check reports an unreadable file).
-    private static async Task<DocumentChangeSet> WithDiskBomsAsync(CopyAndObsoleteMigrationResult migration, CancellationToken cancellationToken)
+    private static Task<DocumentChangeSet> WithDiskBomsAsync(CopyAndObsoleteMigrationResult migration, CancellationToken cancellationToken)
+        => WithDiskBomsAsync(migration.Changes!, migration.MigratedCallers.Select(caller => caller.FilePath), cancellationToken);
+
+    /// <summary>
+    /// A copy of <paramref name="changes"/> in which every path of <paramref name="paths"/> whose file on disk starts with the UTF-8 BOM gets U+FEFF put back in
+    /// front of its text (a path not in the set is ignored). The texts of the other paths are returned as they are. Shared by every write that rewrites
+    /// existing workspace documents and applies them verbatim (copyAndObsolete callers, ChangeNamespace).
+    /// </summary>
+    internal static async Task<DocumentChangeSet> WithDiskBomsAsync(IReadOnlyDictionary<FilePathWrapper, string> changes, IEnumerable<FilePathWrapper> paths, CancellationToken cancellationToken)
     {
-        var changes = new DocumentChangeSet();
-        changes.Merge(migration.Changes!);
-        foreach (var caller in migration.MigratedCallers)
+        var restored = new DocumentChangeSet();
+        restored.Merge(changes);
+        foreach (var path in paths)
         {
-            if (caller.NewText.Length > 0 && caller.NewText[0] == Bom)
+            if (!changes.TryGetValue(path, out var text) || (text.Length > 0 && text[0] == Bom))
             {
                 continue;
             }
@@ -119,11 +127,11 @@ internal static class MoveFileCopyAndObsolete
             try
             {
                 var head = new byte[3];
-                await using var stream = new FileStream(caller.FilePath.Absolute, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                await using var stream = new FileStream(path.Absolute, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
                 var read = await stream.ReadAsync(head, cancellationToken);
                 if (read == 3 && head[0] == 0xEF && head[1] == 0xBB && head[2] == 0xBF)
                 {
-                    changes[caller.FilePath] = Bom + caller.NewText;
+                    restored[path] = Bom + text;
                 }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -132,7 +140,7 @@ internal static class MoveFileCopyAndObsolete
             }
         }
 
-        return changes;
+        return restored;
     }
 
     // Facts only: what was copied and marked, which callers moved (mode and count), which stay with the blocking error, duplicated static state, the fall-back and the rounds.

@@ -160,7 +160,10 @@ public static class CopyAndObsoleteEdits
     }
 
     // Namespaces the copy needs a using directive for (sorted, System first), or a refusal when a name cannot be fixed by a using.
-    private static List<string> CollectUsings(FilePathWrapper source, CompilationUnitSyntax root, SemanticModel model, string oldNamespace, string newNamespace, CancellationToken cancellationToken, out CopyAndObsoleteEditResult? refusal)
+    // isSetMember (a namespace change of several files at once, null for copyAndObsolete): true for a top-level type that moves with the set. Such a type is
+    // never imported by a using for the old namespace (it is gone from there; the caller rewrite pass supplies the using for its new namespace), a
+    // namespace-qualified reference to it is rewritten by that pass instead of refused, and a partial qualification that leads to it is not refused here.
+    private static List<string> CollectUsings(FilePathWrapper source, CompilationUnitSyntax root, SemanticModel model, string oldNamespace, string newNamespace, CancellationToken cancellationToken, out CopyAndObsoleteEditResult? refusal, Func<INamedTypeSymbol, bool>? isSetMember = null)
     {
         refusal = null;
         var visibleFromOld = WithAncestors(oldNamespace);
@@ -173,10 +176,43 @@ public static class CopyAndObsoleteEdits
         var partial = new SortedSet<string>(StringComparer.Ordinal);
         var selfQualified = new SortedSet<string>(StringComparer.Ordinal);
 
+        bool IsSet(INamedTypeSymbol type) => isSetMember is not null && isSetMember(type.OriginalDefinition);
+
+        // A namespace name that is only the left part of the qualification of a set member's type ("Sub" of Sub.Type).
+        // TODO a partial qualification inside a doc-comment cref (NameMemberCref/QualifiedCref) is not recognised here, so it still refuses a namespace change of the set
+        bool LeadsToSetMember(SimpleNameSyntax name)
+        {
+            if (isSetMember is null)
+            {
+                return false;
+            }
+
+            ExpressionSyntax node = name;
+            while (true)
+            {
+                ExpressionSyntax? parent = node.Parent switch
+                {
+                    QualifiedNameSyntax qualified when qualified.Left == node => qualified,
+                    MemberAccessExpressionSyntax access when access.Expression == node => access,
+                    _ => null,
+                };
+                if (parent is null)
+                {
+                    return false;
+                }
+
+                node = parent;
+                if (model.GetSymbolInfo(node, cancellationToken).Symbol is INamedTypeSymbol type && IsSet(type))
+                {
+                    return true;
+                }
+            }
+        }
+
         // A top-level type outside this file adds a using when the old namespace sees it and the new one does not.
         void AddNeeded(INamedTypeSymbol? target)
         {
-            if (target?.OriginalDefinition is { ContainingType: null } top && !top.ContainingNamespace.IsGlobalNamespace && !IsDeclaredIn(top, root.SyntaxTree))
+            if (target?.OriginalDefinition is { ContainingType: null } top && !top.ContainingNamespace.IsGlobalNamespace && !IsDeclaredIn(top, root.SyntaxTree) && !IsSet(top))
             {
                 var ns = top.ContainingNamespace.ToDisplayString();
                 if (visibleFromOld.Contains(ns) && !visibleFromNew.Contains(ns) && !existing.Contains(ns))
@@ -212,12 +248,12 @@ public static class CopyAndObsoleteEdits
                 case INamedTypeSymbol type when !qualifiedRight:
                     target = type;
                     break;
-                case INamedTypeSymbol { ContainingType: null } qualified when IsDeclaredIn(qualified, root.SyntaxTree):
+                case INamedTypeSymbol { ContainingType: null } qualified when IsDeclaredIn(qualified, root.SyntaxTree) && !IsSet(qualified):
                     selfQualified.Add(qualified.Name);
                     break;
                 case INamespaceSymbol { ContainingNamespace: { IsGlobalNamespace: false } parent } when !qualifiedRight:
                     var parentName = parent.ToDisplayString();
-                    if (visibleFromOld.Contains(parentName) && !visibleFromNew.Contains(parentName))
+                    if (visibleFromOld.Contains(parentName) && !visibleFromNew.Contains(parentName) && !LeadsToSetMember(name))
                     {
                         partial.Add(name.Identifier.ValueText);
                     }
@@ -236,8 +272,11 @@ public static class CopyAndObsoleteEdits
 
         if (partial.Count > 0)
         {
+            var partialFacts = $"'{source.Absolute}' names the namespace(s) {string.Join(", ", partial.Select(Describe))} by a partial qualification that resolves from {Describe(oldNamespace)} but not from {Describe(newNamespace)}, and a using directive cannot import a namespace name.";
             refusal = CopyAndObsoleteEditResult.Refused(ToolErrorCode.TargetIneligible,
-                $"copyAndObsolete: '{source.Absolute}' names the namespace(s) {string.Join(", ", partial.Select(Describe))} by a partial qualification that resolves from {Describe(oldNamespace)} but not from {Describe(newNamespace)}, and a using directive cannot import a namespace name. Options: write those references fully qualified first, or use namespaceHandling keep to move the file as it is.");
+                isSetMember is null
+                    ? $"copyAndObsolete: {partialFacts} Options: write those references fully qualified first, or use namespaceHandling keep to move the file as it is."
+                    : $"{partialFacts} Options: write those references fully qualified first, or leave the file out of the namespace change.");
         }
         else if (selfQualified.Count > 0)
         {
@@ -352,6 +391,134 @@ public static class CopyAndObsoleteEdits
         return builder.ToString();
     }
 
+    /// <summary>
+    /// The overlap-refusing variant of <see cref="Apply"/> (which stays as it is, shared with the copyAndObsolete engines and skips an overlapping edit): splices
+    /// the same way, but when an edit starts inside the span of an earlier one the pair is added to <paramref name="overlaps"/> as an <see cref="EditOverlap"/> and
+    /// null is returned, so a caller can refuse instead of writing a file with a lost edit. Insertions at one position and an edit that starts exactly where the
+    /// previous one ends are not overlaps. The caller de-duplicates identical edits first.
+    /// </summary>
+    internal static string? ApplyStrict(string filePath, string text, List<(int Position, int Length, string Text)> edits, List<EditOverlap> overlaps)
+    {
+        var before = overlaps.Count;
+        var builder = new StringBuilder(text.Length + 64);
+        var cursor = 0;
+        var last = (Position: 0, Length: 0);
+
+        foreach (var edit in edits.OrderBy(edit => edit.Position))
+        {
+            if (edit.Position < cursor)
+            {
+                overlaps.Add(new EditOverlap(filePath, last.Position, last.Length, edit.Position, edit.Length));
+                continue;
+            }
+
+            builder.Append(text, cursor, edit.Position - cursor);
+            builder.Append(edit.Text);
+            cursor = edit.Position + edit.Length;
+            last = (edit.Position, edit.Length);
+        }
+
+        if (overlaps.Count > before)
+        {
+            return null;
+        }
+
+        builder.Append(text, cursor, text.Length - cursor);
+        return builder.ToString();
+    }
+
+    /// <summary>The refusal for the <see cref="EditOverlap"/> items <see cref="ApplyStrict"/> collected: facts and options, the items in StructuredDetail.</summary>
+    internal static ResultError OverlapRefusal(IReadOnlyList<EditOverlap> overlaps)
+    {
+        const int MaxNamed = 10;
+        var files = overlaps.Select(overlap => overlap.FilePath).Distinct(PathComparison.Comparer).Order(PathComparison.Comparer).ToList();
+        var named = string.Join(", ", files.Take(MaxNamed).Select(file => $"'{file}'")) + (files.Count > MaxNamed ? $" and {files.Count - MaxNamed} more" : string.Empty);
+        return new ResultError(ToolErrorCode.PreconditionNotMet,
+            $"The namespace change would give {overlaps.Count} pair(s) of edits that overlap in {files.Count} file(s): {named}, so nothing was rewritten. The offsets are in the structured detail. Options: make the references around the overlap fully qualified first, or leave those files out of the namespace change.",
+            null,
+            overlaps.Cast<object>().ToList());
+    }
+
+    /// <summary>
+    /// The declaration-owner edits of one file that moves with a namespace change (the set overload of <see cref="CopyAndObsoleteCallerRewrite"/>), added to
+    /// <paramref name="edits"/> as positions in the document's current text: the namespace declaration(s) named <see cref="NamespaceMove.OldNamespace"/> now name
+    /// the new one (a global-namespace source gets a file-scoped namespace), plus a using directive for every namespace the code reached by being inside the old
+    /// namespace that the new one does not also see. Top-level types of the files in <paramref name="setMembers"/> are not imported: they move too. Returns the
+    /// refusal (facts and options) when the text is not a shape the namespace swap can edit; null otherwise.
+    /// </summary>
+    internal static async Task<ResultError?> AddMovedFileEditsAsync(Document document, NamespaceMove move, IReadOnlyCollection<FilePathWrapper> setMembers, List<(int Position, int Length, string Text)> edits, CancellationToken cancellationToken)
+    {
+        var source = move.FilePath;
+        if (await document.GetSyntaxRootAsync(cancellationToken) is not CompilationUnitSyntax root || await document.GetSemanticModelAsync(cancellationToken) is not { } model)
+        {
+            return new ResultError(ToolErrorCode.PreconditionNotMet,
+                $"'{source.Absolute}' has no syntax tree or semantic model in the loaded solution, so its namespace could not be changed. Options: leave the file out of the namespace change.");
+        }
+
+        var text = (await document.GetTextAsync(cancellationToken)).ToString();
+        var scope = root.DescendantNodes(node => node is CompilationUnitSyntax or BaseNamespaceDeclarationSyntax).ToList();
+        var declarations = scope.Where(node => node is BaseTypeDeclarationSyntax or DelegateDeclarationSyntax).ToList();
+        var namespaceDeclarations = scope.OfType<BaseNamespaceDeclarationSyntax>().ToList();
+
+        var structureRefusal = CheckMovedStructure(source, root, move.OldNamespace, declarations, namespaceDeclarations);
+        if (structureRefusal is not null)
+        {
+            return structureRefusal;
+        }
+
+        var members = new HashSet<string>(setMembers.Select(member => member.Absolute), PathComparison.Comparer);
+        bool IsSetMember(INamedTypeSymbol type) => type.DeclaringSyntaxReferences.Any(reference => reference.SyntaxTree.FilePath is { Length: > 0 } path && members.Contains(path));
+
+        var usings = CollectUsings(source, root, model, move.OldNamespace, move.NewNamespace, cancellationToken, out var usingsRefusal, IsSetMember);
+        if (usingsRefusal is not null)
+        {
+            return usingsRefusal.Refusal;
+        }
+
+        AddUsingEdits(edits, root, text, DetectEol(text), usings, move.OldNamespace, move.NewNamespace);
+        foreach (var namespaceDeclaration in namespaceDeclarations.Where(ns => string.Equals(ns.Name.ToString(), move.OldNamespace, StringComparison.Ordinal)))
+        {
+            edits.Add((namespaceDeclaration.Name.SpanStart, namespaceDeclaration.Name.Span.Length, move.NewNamespace));
+        }
+
+        return null;
+    }
+
+    // The same four shape checks as CheckStructure, worded for a namespace change (CheckStructure's texts name copyAndObsolete and namespaceHandling keep).
+    private static ResultError? CheckMovedStructure(FilePathWrapper source, CompilationUnitSyntax root, string oldNamespace, List<SyntaxNode> declarations, List<BaseNamespaceDeclarationSyntax> namespaceDeclarations)
+    {
+        if (declarations.Count == 0)
+        {
+            return new ResultError(ToolErrorCode.TargetIneligible,
+                $"'{source.Absolute}' declares no top-level type (class, struct, interface, enum, record or delegate), so there is no namespace to change. Options: leave the file out of the namespace change.");
+        }
+
+        var found = declarations.Select(DeclaredNamespace).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+        if (found.Count != 1 || !string.Equals(found[0], oldNamespace, StringComparison.Ordinal))
+        {
+            return new ResultError(ToolErrorCode.PreconditionNotMet,
+                $"'{source.Absolute}' declares its top-level types in {string.Join(", ", found.Select(Describe))}, but the namespace change reads {Describe(oldNamespace)}. Options: run the change again on the current file, or split the file so each part sits in one namespace.");
+        }
+
+        if (namespaceDeclarations.Any(ns => ns.Parent is BaseNamespaceDeclarationSyntax))
+        {
+            return new ResultError(ToolErrorCode.TargetIneligible,
+                $"'{source.Absolute}' builds the namespace {Describe(oldNamespace)} from nested namespace blocks, and renaming one name would change only part of it. Options: write it as one declaration ('namespace {oldNamespace}' or 'namespace {oldNamespace};') first, or leave the file out of the namespace change.");
+        }
+
+        if (oldNamespace.Length == 0)
+        {
+            var others = root.Members.Where(member => member is not (BaseTypeDeclarationSyntax or DelegateDeclarationSyntax)).Select(member => member.Kind().ToString()).Distinct().ToList();
+            if (others.Count > 0)
+            {
+                return new ResultError(ToolErrorCode.TargetIneligible,
+                    $"'{source.Absolute}' declares types in the global namespace next to {string.Join(", ", others)}, and a file-scoped namespace around all of that would change what the other members mean. Options: move those members out first, or leave the file out of the namespace change.");
+            }
+        }
+
+        return null;
+    }
+
     internal static string DetectEol(string text)
     {
         var crlf = 0;
@@ -423,11 +590,11 @@ public static class CopyAndObsoleteEdits
         return simple?.Identifier.ValueText is "Obsolete" or "ObsoleteAttribute";
     }
 
-    private static string DeclaredNamespace(SyntaxNode declaration) => string.Join(".", declaration.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().Reverse().Select(ns => ns.Name.ToString()));
+    internal static string DeclaredNamespace(SyntaxNode declaration) => string.Join(".", declaration.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().Reverse().Select(ns => ns.Name.ToString()));
 
     private static string Describe(string ns) => ns.Length == 0 ? "the global namespace" : $"'{ns}'";
 
-    private static string NameOf(SyntaxNode declaration) => declaration switch
+    internal static string NameOf(SyntaxNode declaration) => declaration switch
     {
         BaseTypeDeclarationSyntax type => type.Identifier.ValueText,
         DelegateDeclarationSyntax delegateDeclaration => delegateDeclaration.Identifier.ValueText,

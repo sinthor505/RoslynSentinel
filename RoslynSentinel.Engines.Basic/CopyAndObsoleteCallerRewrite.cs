@@ -118,6 +118,365 @@ public static class CopyAndObsoleteCallerRewrite
         return new CallerRewriteResult(results, facts, null);
     }
 
+    /// <summary>
+    /// The set overload, for a namespace change: each <see cref="NamespaceMove"/> moves the top-level types of one file from its old namespace to its new one. The types
+    /// are moved, not copied (the old ones are gone, so a using directive of the new namespace is safe even in a file that declares code inside the old namespace).
+    /// Every file of the set is rewritten once for both roles. As the declaration owner its namespace declaration names the new namespace and it gets a using for the
+    /// old-namespace types it reached implicitly, but none for a sibling that moves with it. As a caller its references to the moved types of any move of the set (its own
+    /// types included) are switched as in the explicit-argument overload; a simple name that already reaches the type from the file's new namespace is left alone, and a
+    /// namespace-qualified reference to a type of the set is rewritten, not refused. Callers outside the set are rewritten as in the explicit-argument overload, once per
+    /// distinct (old, new) pair. Paths in <paramref name="excludedPaths"/> are left out of the caller role only (a listed set member still gets its own edits);
+    /// <paramref name="forcedModes"/> works as in the explicit-argument overload; generated callers are never changed.
+    /// All edits of a file are applied together. Identical edits are merged; two that overlap are not skipped, the pass refuses with one
+    /// <see cref="EditOverlap"/> item per pair in <c>Refusal.StructuredDetail</c>. Afterwards a plain <c>using Old;</c> or <c>global using Old;</c> that bound before the
+    /// move and binds to nothing now (the old namespace is gone) is reported in <see cref="CallerRewriteResult.DanglingUsings"/>: removed in the returned text, or left as it
+    /// is as <see cref="DanglingUsingResolution.RefusedGlobal"/> when a global using cannot be removed safely (generated file, or shared with a project where it still binds).
+    /// Refusals (facts and options): empty new namespace; a file listed twice; a file that is not a document of the solution or declares no top-level type in its old
+    /// namespace; a file shape the namespace swap cannot edit; overlapping edits. A move whose old and new namespace are equal is skipped with a fact.
+    /// </summary>
+    public static async Task<CallerRewriteResult> RewriteAsync(Solution solution, IReadOnlyList<NamespaceMove> moves, IReadOnlyDictionary<FilePathWrapper, CallerRewriteMode>? forcedModes = null, IReadOnlyCollection<FilePathWrapper>? excludedPaths = null, CancellationToken cancellationToken = default)
+    {
+        var facts = new List<string>();
+        var members = new Dictionary<FilePathWrapper, NamespaceMove>();
+        foreach (var move in moves)
+        {
+            if (move.NewNamespace.Length == 0)
+            {
+                return CallerRewriteResult.Refused(ToolErrorCode.InvalidArgument,
+                    $"The new namespace of '{move.FilePath.Absolute}' is the global namespace, so its callers have no namespace to switch to. Options: name a namespace, or leave the file out of the namespace change.");
+            }
+
+            if (string.Equals(move.OldNamespace, move.NewNamespace, StringComparison.Ordinal))
+            {
+                facts.Add($"'{move.FilePath.Absolute}' already declares '{move.NewNamespace}', so it was left unchanged.");
+                continue;
+            }
+
+            if (!members.TryAdd(move.FilePath, move))
+            {
+                return CallerRewriteResult.Refused(ToolErrorCode.InvalidArgument,
+                    $"'{move.FilePath.Absolute}' is listed in more than one namespace move. Options: list each file once.");
+            }
+        }
+
+        if (members.Count == 0)
+        {
+            return new CallerRewriteResult([], facts, null, []);
+        }
+
+        // The moved types, grouped by (old, new) namespace pair: the callers of one pair share one using decision.
+        var sourceDocuments = new Dictionary<FilePathWrapper, Document>();
+        var symbolsByPair = new Dictionary<(string Old, string New), List<INamedTypeSymbol>>();
+        foreach (var (memberPath, memberMove) in members.OrderBy(entry => entry.Key))
+        {
+            var lookup = DocumentLookup.TryGetDocument(solution, memberPath);
+            if (!lookup.TryGetDocument(out var memberDocument))
+            {
+                return CallerRewriteResult.Refused(lookup.ToResultError());
+            }
+
+            sourceDocuments[memberPath] = memberDocument;
+            var typeNames = await DeclaredTopLevelTypeNamesAsync(memberDocument, memberMove.OldNamespace, cancellationToken);
+            var symbols = typeNames.Count == 0 ? new List<INamedTypeSymbol>() : await FindMovedTypesAsync(memberDocument, typeNames, facts, cancellationToken);
+            if (symbols.Count == 0)
+            {
+                var described = memberMove.OldNamespace.Length == 0 ? "the global namespace" : $"'{memberMove.OldNamespace}'";
+                return CallerRewriteResult.Refused(ToolErrorCode.PreconditionNotMet,
+                    $"'{memberPath.Absolute}' declares no top-level type in {described}, so there is nothing to move and no callers could be found. Options: run the change again on the current file, or leave the file out of the namespace change.");
+            }
+
+            var pair = (memberMove.OldNamespace, memberMove.NewNamespace);
+            if (!symbolsByPair.TryGetValue(pair, out var pairSymbols))
+            {
+                pairSymbols = [];
+                symbolsByPair[pair] = pairSymbols;
+            }
+
+            pairSymbols.AddRange(symbols);
+        }
+
+        // Reference sites per file and pair; movedStarts holds, per file, where a reference to ANY moved type starts.
+        var sitesByPath = new Dictionary<string, List<((string Old, string New) Pair, List<(Document Document, TextSpan Span, string TypeName)> Sites)>>(PathComparison.Comparer);
+        var movedStarts = new Dictionary<string, HashSet<int>>(PathComparison.Comparer);
+        foreach (var (pair, pairSymbols) in symbolsByPair.OrderBy(entry => entry.Key.Old, StringComparer.Ordinal).ThenBy(entry => entry.Key.New, StringComparer.Ordinal))
+        {
+            var found = await FindReferenceSitesAsync(solution, pairSymbols, cancellationToken);
+            foreach (var (sitePath, sites) in found)
+            {
+                if (!sitesByPath.TryGetValue(sitePath, out var perPair))
+                {
+                    perPair = [];
+                    sitesByPath[sitePath] = perPair;
+                }
+
+                perPair.Add((pair, sites));
+                if (!movedStarts.TryGetValue(sitePath, out var starts))
+                {
+                    starts = [];
+                    movedStarts[sitePath] = starts;
+                }
+
+                starts.UnionWith(sites.Select(site => site.Span.Start));
+            }
+        }
+
+        // A global using of an old namespace makes the callers of that pair qualify (the sweep below decides what happens to the directive itself).
+        var globalUsings = new Dictionary<string, string?>(StringComparer.Ordinal);
+        if (sitesByPath.Count > 0)
+        {
+            foreach (var oldNamespace in symbolsByPair.Keys.Select(pair => pair.Old).Where(ns => ns.Length > 0).Distinct(StringComparer.Ordinal))
+            {
+                globalUsings[oldNamespace] = await FindGlobalUsingAsync(solution, oldNamespace, cancellationToken);
+            }
+        }
+
+        var allPaths = sitesByPath.Keys
+            .Concat(sourceDocuments.Values.Select(document => document.FilePath ?? string.Empty).Where(path => path.Length > 0))
+            .Distinct(PathComparison.Comparer)
+            .Order(PathComparison.Comparer)
+            .ToList();
+
+        var results = new Dictionary<FilePathWrapper, CallerFileRewrite>();
+        var overlaps = new List<EditOverlap>();
+        foreach (var path in allPaths)
+        {
+            var wrapped = new FilePathWrapper(path);
+            var isMember = members.TryGetValue(wrapped, out var move);
+            var callerRole = !(excludedPaths?.Contains(wrapped) ?? false);
+            if (!isMember && !callerRole)
+            {
+                continue;
+            }
+
+            sitesByPath.TryGetValue(path, out var perPair);
+            var document = isMember ? sourceDocuments[wrapped] : perPair![0].Sites[0].Document;
+            var edits = new List<(int Position, int Length, string Text)>();
+            string? plannedText = null;
+            var qualified = false;
+            var rewritten = 0;
+
+            // Caller role: the references in this file to the moved types of every pair.
+            if (callerRole && perPair is not null)
+            {
+                CallerRewriteMode? forced = forcedModes is not null && forcedModes.TryGetValue(wrapped, out var forcedMode) ? forcedMode : null;
+                foreach (var (pair, sites) in perPair)
+                {
+                    var plan = await PlanFileEditsAsync(path, document, sites, pair.Old, pair.New, forced, globalUsings.GetValueOrDefault(pair.Old), facts, oldTypesGone: true, selfNewNamespace: move?.NewNamespace, allMovedStarts: movedStarts[path], cancellationToken);
+                    if (plan is not { } planned)
+                    {
+                        break;
+                    }
+
+                    plannedText = planned.FileText;
+                    edits.AddRange(planned.Edits);
+                    qualified |= planned.Mode == CallerRewriteMode.Qualify;
+                    rewritten += planned.Rewritten;
+                }
+            }
+
+            if (!isMember && (plannedText is null || edits.Count == 0))
+            {
+                continue;
+            }
+
+            var text = plannedText ?? (await document.GetTextAsync(cancellationToken)).ToString();
+
+            // Declaration-owner role: the namespace swap and the usings the move makes necessary.
+            if (isMember)
+            {
+                var refusal = await AddMovedFileEditsAsync(document, move!, members.Keys, edits, cancellationToken);
+                if (refusal is not null)
+                {
+                    return CallerRewriteResult.Refused(refusal);
+                }
+            }
+
+            var newText = ApplyStrict(path, text, edits.Distinct().ToList(), overlaps);
+            if (newText is null || (!isMember && string.Equals(newText, text, StringComparison.Ordinal)))
+            {
+                continue;
+            }
+
+            results[wrapped] = new CallerFileRewrite(wrapped, newText, qualified ? CallerRewriteMode.Qualify : CallerRewriteMode.Using, rewritten);
+        }
+
+        if (overlaps.Count > 0)
+        {
+            return CallerRewriteResult.Refused(OverlapRefusal(overlaps));
+        }
+
+        var dangling = await SweepDanglingUsingsAsync(solution, symbolsByPair.Keys.Select(pair => pair.Old), results, facts, cancellationToken);
+        return new CallerRewriteResult(results.Values.OrderBy(file => file.FilePath).ToList(), facts, null, dangling);
+    }
+
+    // The names of the top-level types (and delegates) the document declares directly in the namespace.
+    private static async Task<List<string>> DeclaredTopLevelTypeNamesAsync(Document document, string ns, CancellationToken cancellationToken)
+    {
+        var names = new List<string>();
+        if (await document.GetSyntaxRootAsync(cancellationToken) is not { } root)
+        {
+            return names;
+        }
+
+        foreach (var declaration in root.DescendantNodes(node => node is CompilationUnitSyntax or BaseNamespaceDeclarationSyntax).Where(node => node is BaseTypeDeclarationSyntax or DelegateDeclarationSyntax))
+        {
+            var name = NameOf(declaration);
+            if (name.Length > 0 && string.Equals(DeclaredNamespace(declaration), ns, StringComparison.Ordinal) && !names.Contains(name))
+            {
+                names.Add(name);
+            }
+        }
+
+        return names;
+    }
+
+    // After the rewrite: the plain "using Old;" / "global using Old;" directives that bound in the baseline and bind to nothing once the rewritten texts are in place.
+    // A removable one is deleted from the file's text (the file joins <paramref name="files"/> when it was not there) and reported Removed; a global using that is in a
+    // generated file, or that still binds in another project sharing the file, stays and is reported RefusedGlobal. A non-global one that cannot be removed is a fact.
+    private static async Task<List<DanglingUsing>> SweepDanglingUsingsAsync(Solution baseline, IEnumerable<string> oldNamespaces, Dictionary<FilePathWrapper, CallerFileRewrite> files, List<string> facts, CancellationToken cancellationToken)
+    {
+        var dangling = new List<DanglingUsing>();
+        var olds = oldNamespaces.Where(ns => ns.Length > 0).Distinct(StringComparer.Ordinal).ToList();
+        if (olds.Count == 0)
+        {
+            return dangling;
+        }
+
+        var rewrittenSolution = baseline;
+        foreach (var file in files.Values)
+        {
+            foreach (var id in baseline.GetDocumentIdsWithFilePath(file.FilePath.Absolute))
+            {
+                rewrittenSolution = rewrittenSolution.WithDocumentText(id, SourceText.From(file.NewText));
+            }
+        }
+
+        var probe = new Regex(@"\busing\s+(?:global::)?(?:" + string.Join("|", olds.Select(Regex.Escape)) + @")\s*;");
+        var baselineHolds = new Dictionary<(ProjectId Project, string Namespace), bool>();
+
+        async Task<bool> HeldBeforeAsync(ProjectId project, string ns)
+        {
+            if (!baselineHolds.TryGetValue((project, ns), out var holds))
+            {
+                var compilation = baseline.GetProject(project) is { } baselineProject ? await baselineProject.GetCompilationAsync(cancellationToken) : null;
+                holds = compilation is not null && NamespaceExists(compilation, ns);
+                baselineHolds[(project, ns)] = holds;
+            }
+
+            return holds;
+        }
+
+        var documents = rewrittenSolution.Projects.SelectMany(project => project.Documents)
+            .Where(document => document.FilePath is { Length: > 0 })
+            .GroupBy(document => document.FilePath!, PathComparison.Comparer)
+            .OrderBy(group => group.Key, PathComparison.Comparer);
+        foreach (var group in documents)
+        {
+            var copies = group.ToList();
+            var text = (await copies[0].GetTextAsync(cancellationToken)).ToString();
+            if (!probe.IsMatch(text) || await copies[0].GetSyntaxRootAsync(cancellationToken) is not CompilationUnitSyntax root)
+            {
+                continue;
+            }
+
+            // A directive is unbound when it binds to nothing in the project of every copy of the file; it is mixed when it binds in some.
+            HashSet<int>? unboundEverywhere = null;
+            var unboundSomewhere = new HashSet<int>();
+            foreach (var copy in copies)
+            {
+                var starts = await UnboundUsingStartsAsync(copy, olds, cancellationToken);
+                unboundEverywhere = unboundEverywhere is null ? starts : unboundEverywhere.Intersect(starts).ToHashSet();
+                unboundSomewhere.UnionWith(starts);
+            }
+
+            var removals = new List<(int Position, int Length, string Text)>();
+            var bomOffset = text.Length > 0 && text[0] == Bom ? 1 : 0;
+            var generated = IsGenerated(copies[0], root);
+            foreach (var directive in root.DescendantNodes(node => node is CompilationUnitSyntax or BaseNamespaceDeclarationSyntax).OfType<UsingDirectiveSyntax>())
+            {
+                var start = directive.SpanStart;
+                if (!unboundSomewhere.Contains(start))
+                {
+                    continue;
+                }
+
+                var ns = UsingName(directive);
+                var isGlobal = !directive.GlobalKeyword.IsKind(SyntaxKind.None);
+                var everywhere = unboundEverywhere!.Contains(start);
+                if (everywhere)
+                {
+                    var heldBefore = false;
+                    foreach (var copy in copies)
+                    {
+                        heldBefore |= await HeldBeforeAsync(copy.Project.Id, ns);
+                    }
+
+                    if (!heldBefore)
+                    {
+                        continue;
+                    }
+                }
+
+                if (isGlobal && (generated || !everywhere))
+                {
+                    dangling.Add(new DanglingUsing(group.Key, ns, DanglingUsingResolution.RefusedGlobal));
+                }
+                else if (generated || !everywhere)
+                {
+                    facts.Add($"'{group.Key}' has 'using {ns};', which no longer binds, but the file is {(generated ? "generated" : "shared with a project where the namespace still exists")}, so the directive was left in place.");
+                }
+                else
+                {
+                    removals.Add(RemoveDirective(text, bomOffset, directive));
+                    dangling.Add(new DanglingUsing(group.Key, ns, DanglingUsingResolution.Removed));
+                }
+            }
+
+            if (removals.Count > 0)
+            {
+                var wrapped = new FilePathWrapper(group.Key);
+                files.TryGetValue(wrapped, out var existing);
+                files[wrapped] = new CallerFileRewrite(wrapped, Apply(text, removals), existing?.Mode ?? CallerRewriteMode.Using, existing?.ReferencesRewritten ?? 0);
+            }
+        }
+
+        return dangling;
+    }
+
+    // The span starts of the plain using directives of the document that name one of the namespaces and bind to nothing in the document's project.
+    private static async Task<HashSet<int>> UnboundUsingStartsAsync(Document document, List<string> namespaces, CancellationToken cancellationToken)
+    {
+        var starts = new HashSet<int>();
+        if (await document.GetSyntaxRootAsync(cancellationToken) is not CompilationUnitSyntax root || await document.GetSemanticModelAsync(cancellationToken) is not { } model)
+        {
+            return starts;
+        }
+
+        foreach (var directive in root.DescendantNodes(node => node is CompilationUnitSyntax or BaseNamespaceDeclarationSyntax).OfType<UsingDirectiveSyntax>())
+        {
+            if (directive.Alias is null && directive.StaticKeyword.IsKind(SyntaxKind.None) && directive.Name is { } name
+                && namespaces.Contains(UsingName(directive), StringComparer.Ordinal)
+                && model.GetSymbolInfo(name, cancellationToken).Symbol is null)
+            {
+                starts.Add(directive.SpanStart);
+            }
+        }
+
+        return starts;
+    }
+
+    // True when the compilation has a namespace of this name (declared by source or reached through a reference).
+    private static bool NamespaceExists(Compilation compilation, string ns)
+    {
+        INamespaceSymbol? scope = compilation.GlobalNamespace;
+        foreach (var part in ns.Split('.'))
+        {
+            scope = scope?.GetMembers(part).OfType<INamespaceSymbol>().FirstOrDefault();
+        }
+
+        return scope is not null;
+    }
+
     // The symbols of the listed top-level types as declared in the source document; a listed name the document does not declare is a fact.
     private static async Task<List<INamedTypeSymbol>> FindMovedTypesAsync(Document sourceDocument, IReadOnlyCollection<string> typeNames, List<string> facts, CancellationToken cancellationToken)
     {
@@ -213,7 +572,24 @@ public static class CopyAndObsoleteCallerRewrite
     // One caller file: classifies its references, picks the mode and splices the edits; null when the file is generated, unreadable or would not change.
     private static async Task<CallerFileRewrite?> RewriteFileAsync(string path, List<(Document Document, TextSpan Span, string TypeName)> sites, string oldNamespace, string newNamespace, CallerRewriteMode? forced, string? globalUsingPath, List<string> facts, CancellationToken cancellationToken)
     {
-        var document = sites[0].Document;
+        var plan = await PlanFileEditsAsync(path, sites[0].Document, sites, oldNamespace, newNamespace, forced, globalUsingPath, facts, oldTypesGone: false, selfNewNamespace: null, allMovedStarts: null, cancellationToken);
+        if (plan is not { } planned)
+        {
+            return null;
+        }
+
+        var newText = Apply(planned.FileText, planned.Edits);
+        return string.Equals(newText, planned.FileText, StringComparison.Ordinal) ? null : new CallerFileRewrite(new FilePathWrapper(path), newText, planned.Mode, planned.Rewritten);
+    }
+
+    // One file's caller edits as positions in FileText; null when the file is generated or unreadable (a fact says so). Mode is the mode applied (the forced one when
+    // given); Rewritten counts the references that now name the new namespace.
+    // oldTypesGone: the types moved instead of being copied (a namespace change), so a using directive of the new namespace is safe even in a file that declares code
+    // inside the old namespace (a copy leaves the old type there, found before any using). selfNewNamespace: the file itself moves and will declare that namespace, so a
+    // simple name that already reaches a type of it (or of a namespace enclosing it) needs no edit. allMovedStarts: where every reference to a moved type of the whole set
+    // starts in this file, so none of them counts as a use of the old namespace.
+    private static async Task<(string FileText, List<(int Position, int Length, string Text)> Edits, CallerRewriteMode Mode, int Rewritten)?> PlanFileEditsAsync(string path, Document document, List<(Document Document, TextSpan Span, string TypeName)> sites, string oldNamespace, string newNamespace, CallerRewriteMode? forced, string? globalUsingPath, List<string> facts, bool oldTypesGone, string? selfNewNamespace, HashSet<int>? allMovedStarts, CancellationToken cancellationToken)
+    {
         if (await document.GetSyntaxRootAsync(cancellationToken) is not CompilationUnitSyntax root || await document.GetSemanticModelAsync(cancellationToken) is not { } model)
         {
             facts.Add($"'{path}' has no syntax tree or semantic model in the loaded solution, so its references were left unchanged.");
@@ -283,13 +659,25 @@ public static class CopyAndObsoleteCallerRewrite
             }
         }
 
+        if (selfNewNamespace is not null && (string.Equals(selfNewNamespace, newNamespace, StringComparison.Ordinal) || selfNewNamespace.StartsWith(newNamespace + ".", StringComparison.Ordinal)))
+        {
+            simple.Clear();
+        }
+
         var oldUsings = root.DescendantNodes(node => node is CompilationUnitSyntax or BaseNamespaceDeclarationSyntax)
             .OfType<UsingDirectiveSyntax>()
             .Where(directive => IsPlain(directive) && string.Equals(UsingName(directive), oldNamespace, StringComparison.Ordinal))
             .ToList();
 
+        var exclusionStarts = referenceStarts;
+        if (allMovedStarts is not null)
+        {
+            exclusionStarts = new HashSet<int>(referenceStarts);
+            exclusionStarts.UnionWith(allMovedStarts);
+        }
+
         List<INamedTypeSymbol>? used = null;
-        List<INamedTypeSymbol> Used() => used ??= CollectUsedTypes(model, root, referenceStarts, cancellationToken);
+        List<INamedTypeSymbol> Used() => used ??= CollectUsedTypes(model, root, exclusionStarts, cancellationToken);
 
         string? WhyQualify()
         {
@@ -303,25 +691,31 @@ public static class CopyAndObsoleteCallerRewrite
                 return "types of the global namespace are found before any using directive";
             }
 
-            if (DeclaresWithin(root, oldNamespace))
+            // A file inside the old namespace needs no using of it; once the old types are gone from there, a using of the new namespace is safe, so the checks of
+            // the old using (none found, several scopes, other types of the old namespace in use) do not apply to it.
+            var insideOld = DeclaresWithin(root, oldNamespace);
+            if (insideOld && !oldTypesGone)
             {
                 return $"the file declares code inside '{oldNamespace}', where its own types are found before a using directive";
             }
 
-            if (oldUsings.Count == 0)
+            if (!insideOld)
             {
-                return $"no 'using {oldNamespace};' directive was found, so how the simple names resolve is unknown";
-            }
+                if (oldUsings.Count == 0)
+                {
+                    return $"no 'using {oldNamespace};' directive was found, so how the simple names resolve is unknown";
+                }
 
-            if (oldUsings.Select(directive => directive.Parent).Distinct().Count() > 1)
-            {
-                return $"'using {oldNamespace};' appears in more than one scope";
-            }
+                if (oldUsings.Select(directive => directive.Parent).Distinct().Count() > 1)
+                {
+                    return $"'using {oldNamespace};' appears in more than one scope";
+                }
 
-            var needing = Used().Where(type => IsInNamespace(type, oldNamespace)).Select(type => type.Name).Distinct().Order(StringComparer.Ordinal).ToList();
-            if (needing.Count > 0)
-            {
-                return $"the file also uses {string.Join(", ", needing.Select(name => $"'{name}'"))} from '{oldNamespace}', so that using must stay";
+                var needing = Used().Where(type => IsInNamespace(type, oldNamespace)).Select(type => type.Name).Distinct().Order(StringComparer.Ordinal).ToList();
+                if (needing.Count > 0)
+                {
+                    return $"the file also uses {string.Join(", ", needing.Select(name => $"'{name}'"))} from '{oldNamespace}', so that using must stay";
+                }
             }
 
             var conflicts = FindNameConflicts(model.Compilation, Used(), newNamespace);
@@ -359,8 +753,7 @@ public static class CopyAndObsoleteCallerRewrite
         }
 
         rewritten += simple.Count;
-        var newText = Apply(text, edits);
-        return string.Equals(newText, text, StringComparison.Ordinal) ? null : new CallerFileRewrite(new FilePathWrapper(path), newText, applied, rewritten);
+        return (text, edits, applied, rewritten);
     }
 
     // Adds "using <newNamespace>;" (sorted among the plain usings of the scope that held the old using, else at the top of the file) and removes the old usings.
@@ -399,15 +792,21 @@ public static class CopyAndObsoleteCallerRewrite
             // Insertions were added first so an insertion at the start of a removed line is emitted before the removal.
             foreach (var directive in oldUsings)
             {
-                var start = LineStart(text, directive.SpanStart, bomOffset);
-                if (!string.IsNullOrWhiteSpace(text[start..directive.SpanStart]))
-                {
-                    start = directive.SpanStart;
-                }
-
-                edits.Add((start, directive.FullSpan.End - start, string.Empty));
+                edits.Add(RemoveDirective(text, bomOffset, directive));
             }
         }
+    }
+
+    // The edit that deletes a using directive with its line (only the directive itself when other code shares the line).
+    private static (int Position, int Length, string Text) RemoveDirective(string text, int bomOffset, UsingDirectiveSyntax directive)
+    {
+        var start = LineStart(text, directive.SpanStart, bomOffset);
+        if (!string.IsNullOrWhiteSpace(text[start..directive.SpanStart]))
+        {
+            start = directive.SpanStart;
+        }
+
+        return (start, directive.FullSpan.End - start, string.Empty);
     }
 
     private static (int Position, int Length, string Text) InsertBefore(string text, string eol, int bomOffset, UsingDirectiveSyntax directive, string line)

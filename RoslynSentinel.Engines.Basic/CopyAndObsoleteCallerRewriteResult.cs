@@ -26,7 +26,8 @@ public sealed record CallerFileRewrite(FilePathWrapper FilePath, string NewText,
 /// <param name="Files">The changed caller files, ordered by path; files with no reference, or whose text would not change, are absent.</param>
 /// <param name="Facts">Observations about the pass, one sentence each; empty when there is nothing to note.</param>
 /// <param name="Refusal">The refusal, with its error code and a facts-and-options message; null when the pass ran.</param>
-public sealed record CallerRewriteResult(IReadOnlyList<CallerFileRewrite> Files, IReadOnlyList<string> Facts, ResultError? Refusal)
+/// <param name="DanglingUsings">Set of namespace moves only (<see cref="CopyAndObsoleteCallerRewrite"/> set overload): the <c>using Old;</c> / <c>global using Old;</c> directives the move left unresolved and how each was handled; null on every other path.</param>
+public sealed record CallerRewriteResult(IReadOnlyList<CallerFileRewrite> Files, IReadOnlyList<string> Facts, ResultError? Refusal, IReadOnlyList<DanglingUsing>? DanglingUsings = null)
 {
     /// <summary>True when the pass did not run.</summary>
     public bool IsRefusal => Refusal is not null;
