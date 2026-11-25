@@ -128,6 +128,12 @@ public static class ToolParams
     public const string MoveFileMoves =
  "Pairs of sourcePath and destinationPath; a single move is a list of one.";
 
+    public const string AddProjectReferences =
+        "true = when the moved files need project references to compile, add them to the project file in the same undoable change. false (default): the needed references are only reported.";
+
+    public const string AddInternalsVisibleTo =
+        "true = when the moved files need InternalsVisibleTo across the new project boundary, add it to the project file in the same undoable change. false (default): the needed grants are only reported.";
+
     // Added by ModifyAttribute batch support
     public const string AttributeEdits =
     "Batch form of the singular filePath/targetName/existingAttribute/action/newAttribute params - use it instead of them, not with them. " + BatchSemantics;

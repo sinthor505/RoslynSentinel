@@ -26,10 +26,10 @@ public static class CsprojEdgeWriter
                 }
 
                 var tag = kind == ProjectEdgeKind.ProjectReference ? "ProjectReference" : "InternalsVisibleTo";
-                // TODO resolve the real relative csproj path of the referenced project (Step 26 passes projectReferenceInclude); the null default assumes sibling project folders
+                // MoveFileTool passes the real relative csproj path of the referenced project; the null default (sibling project folders) is only for a caller that has no project file paths.
                 var value = kind == ProjectEdgeKind.ProjectReference
                     ? (projectReferenceInclude?.Invoke(edge.ToProject) ?? $@"..\{edge.ToProject}\{edge.ToProject}.csproj")
-                    : edge.ToProject;
+                    : edge.ToProject; // TODO an InternalsVisibleTo Include names the receiving ASSEMBLY; AugmentBaseline uses the receiver's AssemblyName but this writes the project name, which differ when the project sets AssemblyName
                 var escaped = EscapeAttribute(value);
                 if (text.Contains($"<{tag} Include=\"{escaped}\"", StringComparison.OrdinalIgnoreCase)
                     || !seen.Add($"{tag}|{escaped}"))

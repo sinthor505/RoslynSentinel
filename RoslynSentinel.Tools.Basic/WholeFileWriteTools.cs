@@ -297,6 +297,9 @@ public class WholeFileWriteTools
         [Description(ToolParams.MoveFileMoves)] List<FileMovePair> moves,
         [Description("keep: the text moves unchanged, a .cs namespace stays as written. copyAndObsolete (.cs): copies the file with the folder-derived namespace, marks the old types [Obsolete], migrates callers best effort; refused when the namespace would not change or a type is partial across files. update: not supported yet. Non-.cs files accept only keep.")] MoveFileNamespaceHandling namespaceHandling,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
+        // Owner exception to the mandatory-parameter rule (plan D3, R3): both default to false so the tool never widens project references or visibility unasked.
+        [Description(ToolParams.AddProjectReferences)] bool addProjectReferences = false,
+        [Description(ToolParams.AddInternalsVisibleTo)] bool addInternalsVisibleTo = false,
         CancellationToken cancellationToken = default)
     {
         try
@@ -380,54 +383,27 @@ public class WholeFileWriteTools
             }
 
             plan = await MoveSetPlanner.CheckProjectsAndCollectFactsAsync(plan, solution, cancellationToken);
-            var changes = plan.Changes;
-            IReadOnlyCollection<FilePathWrapper> deletePaths = plan.DeletePaths;
             var solutionRoot = _workspaceManager.GetSolutionRoot();
             string Display(FilePathWrapper path) => EditEffectNames.DisplayPath(path.Absolute, solutionRoot);
             var movesText = DescribeMoves(plan.Moves, Display);
 
-            // verbatim: the decoded text (BOM kept as a leading U+FEFF) is written back byte-exact; no EOL or BOM normalization, every other chokepoint guard still applies.
-            var apply = await ValidateAndApplyHelper.ValidateAndApplyAsync(
-                _validationEngine, _workspaceManager, _logger, changes, MoveFileOperation.Name,
-                dryRun: dryRun,
-                cancellationToken: cancellationToken,
-                deletePaths: deletePaths,
-                verbatim: true,
-                describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable),
-                describeEditImpact: async (report, ct) =>
-                {
-                    var inner = EditImpactGate.Describer(_workspaceManager, changes, _activeToolSurface, null, deletePaths);
-                    var (impactText, impactDetail) = await inner(report, ct);
-                    var setGroups = MoveSetErrorGrouper.Group(report, plan.Moves);
-                    if (setGroups.Count == 0)
-                    {
-                        return (impactText, impactDetail);
-                    }
+            // D3: the project edges the set needs. With a toggle off each needed edge is a fact; with a toggle on and an edge found, the edge gate below runs.
+            var gateFacts = new List<MoveFact>();
+            var edges = await AnalyzeEdgesAsync(plan, solution, addProjectReferences, addInternalsVisibleTo, gateFacts, cancellationToken);
+            if (addProjectReferences && gateFacts.Where(f => f.Kind == MoveFactKind.EdgeWouldCloseCycle).Select(f => f.Detail).ToList() is { Count: > 0 } cycles)
+            {
+                return MoveFileError(ToolErrorCode.InvalidArgument, $"MoveFile: moving {movesText} cannot get the references it needs: {string.Join(" ", cycles)} Nothing was moved. Options: move the files that use each other into one project, or move a different set.");
+            }
 
-                    // Facts and options only: each group names the file its errors bind to; the outside group is one v1 bucket.
-                    var builder = new System.Text.StringBuilder(impactText ?? string.Empty);
-                    foreach (var group in setGroups)
-                    {
-                        if (builder.Length > 0)
-                        {
-                            builder.Append(' ');
-                        }
+            var gateEdges = edges.Where(e => e.Kind == ProjectEdgeKind.ProjectReference ? addProjectReferences : addInternalsVisibleTo).ToList();
+            if (FindProjectWithoutFile(solution, gateEdges) is { } fileless)
+            {
+                return MoveFileError(ToolErrorCode.InvalidArgument, $"MoveFile: project '{fileless}' has no project file on disk, so the needed edge cannot be added to it. Nothing was moved. Options: leave {MoveFileParameterNames.AddProjectReferences} and {MoveFileParameterNames.AddInternalsVisibleTo} false and add the edge by hand.");
+            }
 
-                        var scope = group.OutsideSet ? "outside the move set" : "in the move set";
-                        builder.Append($"Compile errors ({group.Diagnostics.Count}) bind to {EditEffectNames.DisplayPath(group.FilePath, solutionRoot)} ({scope}). Option: include these files in moves.");
-                    }
-
-                    var items = new List<object>(impactDetail ?? Array.Empty<object>()) { setGroups };
-                    return (builder.ToString(), items);
-                },
-                recordEffects: () =>
-                {
-                    foreach (var move in plan.Moves)
-                    {
-                        ToolCallContext.Current?.RecordEffect(
-                            EditEffectKind.FileMoved, Display(move.Source), null, Path.GetFileNameWithoutExtension(move.Source.Absolute), null, null, Display(move.Destination));
-                    }
-                });
+            var apply = gateEdges.Count > 0
+                ? await ApplyWithEdgeGateAsync(plan, gateEdges, addProjectReferences, addInternalsVisibleTo, dryRun, gateFacts, cancellationToken)
+                : await ApplyMoveAsync(plan, plan.Changes, dryRun, null, cancellationToken);
 
             if (apply.Error is { } error)
             {
@@ -438,6 +414,16 @@ public class WholeFileWriteTools
                         Message = $"MoveFile: moving {movesText} would break the build; nothing was moved. {error.Message}"
                     }
                     : error;
+                if (gateFacts.Where(f => f.Kind == MoveFactKind.WorkspaceChangedDuringGate).ToList() is { Count: > 0 } missed)
+                {
+                    // The edge gate's second window miss: the refusal above came from a check that ran without the added references, so it says so.
+                    refusal = refusal with
+                    {
+                        Message = $"{refusal.Message} Note: {missed[0].Detail}",
+                        Findings = (refusal.Findings ?? []).Concat(LiftMoveFacts(missed)).ToList()
+                    };
+                }
+
                 return new SentinelCallToolResult<AppliedChangeSummary> { IsError = true, ErrorData = refusal };
             }
 
@@ -457,8 +443,26 @@ public class WholeFileWriteTools
                 description += " " + kept.Detail;
             }
 
+            // The edge gate's facts (project file edits, pending reload) are also in the description; every fact is lifted to a finding below.
+            foreach (var edgeFact in gateFacts.Where(f => f.Kind is MoveFactKind.CsprojEdgeAdded or MoveFactKind.ReloadPending && f.Detail is not null))
+            {
+                description += $" Note: {edgeFact.Detail}";
+            }
+
             var affectedFiles = plan.Moves.SelectMany(m => new[] { m.Source, m.Destination }).ToList();
-            var findings = (apply.Findings ?? []).Concat(LiftMoveFacts(plan.Facts)).ToList();
+            if (!apply.DryRun && gateFacts.Any(f => f.Kind == MoveFactKind.CsprojEdgeAdded))
+            {
+                // The gate wrote these project files in the same change as the move.
+                foreach (var projectName in gateEdges.Select(e => e.FromProject).Distinct())
+                {
+                    if (ProjectLookup.FindProject(solution, projectName)?.FilePath is { } csprojPath)
+                    {
+                        affectedFiles.Add(_workspaceManager.ResolveFromWire(csprojPath));
+                    }
+                }
+            }
+
+            var findings = (apply.Findings ?? []).Concat(LiftMoveFacts(plan.Facts.Concat(gateFacts).ToList())).ToList();
             return new SentinelCallToolResult<AppliedChangeSummary>
             {
                 IsError = false,
@@ -524,6 +528,253 @@ public class WholeFileWriteTools
             IsError = true,
             ErrorData = new ResultError(errorCode, message)
         };
+
+    /// <summary>
+    /// Test seam for the MoveFile edge gate (plan Step 26, D13(e)): runs between the gate's compile and its apply on each attempt, so a test can move the workspace
+    /// inside that window (for example a foreign write) and exercise the retry. Null in production. Set per tool instance (precedent: PersistentWorkspaceManager.PostWriteFoldOverride).
+    /// </summary>
+    internal Func<CancellationToken, Task>? BetweenEdgeGateAndApply
+    {
+        get; set;
+    }
+
+    // D3: the project edges the move set needs, found on the committed solution. Facts are added to `facts`: package references and cycles always, and one
+    // MissingProjectReference / MissingInternalsVisibleTo per needed edge whose toggle is off. Returns every needed edge (both kinds; the toggles are applied by the caller).
+    // TODO the three analyzer calls below each repeat the whole analysis (a FindReferences pass per moved type); expose one call that returns edges, cycles and package facts together
+    private async Task<IReadOnlyList<NeededProjectEdge>> AnalyzeEdgesAsync(
+        MoveSetPlanResult plan, Solution committed, bool addProjectReferences, bool addInternalsVisibleTo, List<MoveFact> facts, CancellationToken cancellationToken)
+    {
+        if (!plan.Moves.Any(m => IsCSharpPath(m.Source.Absolute) && m.SourceProjectName is not null && m.DestinationProjectName is not null
+                && !string.Equals(m.SourceProjectName, m.DestinationProjectName, StringComparison.Ordinal)))
+        {
+            return [];
+        }
+
+        try
+        {
+            var edges = await MoveSetEdgeAnalyzer.AnalyzeAsync(plan, committed, cancellationToken);
+            foreach (var cyclic in await MoveSetEdgeAnalyzer.FindCycleEdgesAsync(plan, committed, cancellationToken))
+            {
+                facts.Add(new MoveFact(
+                    MoveFactKind.EdgeWouldCloseCycle,
+                    $"{cyclic.FromProject} -> {cyclic.ToProject}",
+                    $"a ProjectReference from '{cyclic.FromProject}' to '{cyclic.ToProject}' would close a project cycle, because '{cyclic.ToProject}' already depends on '{cyclic.FromProject}': {cyclic.Reason}"));
+            }
+
+            facts.AddRange(await MoveSetEdgeAnalyzer.FindMissingPackageFactsAsync(plan, committed, cancellationToken));
+            foreach (var edge in edges)
+            {
+                if (edge.Kind == ProjectEdgeKind.ProjectReference && !addProjectReferences)
+                {
+                    facts.Add(new MoveFact(
+                        MoveFactKind.MissingProjectReference,
+                        $"{edge.FromProject} -> {edge.ToProject}",
+                        $"project '{edge.FromProject}' needs a ProjectReference to '{edge.ToProject}': {edge.Reason} Option: {MoveFileParameterNames.AddProjectReferences} true adds it to the project file in the same undoable change."));
+                }
+                else if (edge.Kind == ProjectEdgeKind.InternalsVisibleTo && !addInternalsVisibleTo)
+                {
+                    facts.Add(new MoveFact(
+                        MoveFactKind.MissingInternalsVisibleTo,
+                        $"{edge.FromProject} -> {edge.ToProject}",
+                        $"project '{edge.FromProject}' needs to grant InternalsVisibleTo '{edge.ToProject}': {edge.Reason} Option: {MoveFileParameterNames.AddInternalsVisibleTo} true adds it to the project file in the same undoable change."));
+                }
+            }
+
+            return edges;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException && !addProjectReferences && !addInternalsVisibleTo)
+        {
+            // With both toggles off the analysis only adds facts; the compile gate still judges the move itself, so a failed analysis must not fail an otherwise valid move.
+            _logger.LogWarning(ex, "MoveFile edge analysis failed; the move continues without edge facts");
+            return [];
+        }
+    }
+
+    // The first project (by name) among the edges' projects whose project file cannot be edited: the referencing or granting project, and for a ProjectReference the referenced one (its path becomes the Include).
+    private static string? FindProjectWithoutFile(Solution committed, IReadOnlyList<NeededProjectEdge> edges)
+    {
+        var names = edges.Select(e => e.FromProject)
+            .Concat(edges.Where(e => e.Kind == ProjectEdgeKind.ProjectReference).Select(e => e.ToProject))
+            .Distinct();
+        return names.FirstOrDefault(name => ProjectLookup.FindProject(committed, name)?.FilePath is not { } path || !File.Exists(path));
+    }
+
+    // The change set plus one spliced project file per project that gains an edge. The csproj is read as bytes and its text goes in verbatim (the Step 25 contract), keyed by its path, so
+    // the chokepoint writes it in the same change as the move (one changeId, one UndoChange) and treats it as a structural write (full reload). A project the committed solution no longer has is skipped,
+    // as AugmentBaseline skips it.
+    private async Task<DocumentChangeSet> WithCsprojEdgesAsync(DocumentChangeSet changes, Solution committed, IReadOnlyList<NeededProjectEdge> edges, CancellationToken cancellationToken)
+    {
+        var withEdges = new DocumentChangeSet(changes);
+        foreach (var edgesOfProject in edges.GroupBy(e => e.FromProject))
+        {
+            if (ProjectLookup.FindProject(committed, edgesOfProject.Key)?.FilePath is not { } csprojPath)
+            {
+                continue;
+            }
+
+            var directory = Path.GetDirectoryName(csprojPath)!;
+            var bytes = await File.ReadAllBytesAsync(csprojPath, cancellationToken);
+            var text = CsprojEdgeWriter.Splice(
+                bytes,
+                edgesOfProject.ToList(),
+                referenced => Path.GetRelativePath(directory, ProjectLookup.FindProject(committed, referenced)!.FilePath!).Replace('/', '\\'));
+            if (!string.Equals(text, System.Text.Encoding.UTF8.GetString(bytes), StringComparison.Ordinal))
+            {
+                withEdges[_workspaceManager.ResolveFromWire(csprojPath)] = text;
+            }
+        }
+
+        return withEdges;
+    }
+
+    private Task<string> DescribeMoveValidationFailureAsync(DiagnosticReport report, CancellationToken cancellationToken) =>
+        CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, cancellationToken, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable);
+
+    // The edit-impact describer plus the grouped-refusal wrapper (Step 15): the same text, plus one structured item that groups the errors by the set file they bind to.
+    private Func<DiagnosticReport, CancellationToken, Task<(string? Text, IReadOnlyList<object>? StructuredDetail)>> MoveEditImpactDescriber(
+        MoveSetPlanResult plan, IReadOnlyDictionary<FilePathWrapper, string> changes) =>
+        async (report, ct) =>
+        {
+            var solutionRoot = _workspaceManager.GetSolutionRoot();
+            var inner = EditImpactGate.Describer(_workspaceManager, changes, _activeToolSurface, null, plan.DeletePaths);
+            var (impactText, impactDetail) = await inner(report, ct);
+            var setGroups = MoveSetErrorGrouper.Group(report, plan.Moves);
+            if (setGroups.Count == 0)
+            {
+                return (impactText, impactDetail);
+            }
+
+            // Facts and options only: each group names the file its errors bind to; the outside group is one v1 bucket.
+            var builder = new System.Text.StringBuilder(impactText ?? string.Empty);
+            foreach (var group in setGroups)
+            {
+                if (builder.Length > 0)
+                {
+                    builder.Append(' ');
+                }
+
+                var scope = group.OutsideSet ? "outside the move set" : "in the move set";
+                builder.Append($"Compile errors ({group.Diagnostics.Count}) bind to {EditEffectNames.DisplayPath(group.FilePath, solutionRoot)} ({scope}). Option: include these files in moves.");
+            }
+
+            var items = new List<object>(impactDetail ?? Array.Empty<object>()) { setGroups };
+            return (builder.ToString(), (IReadOnlyList<object>?)items);
+        };
+
+    // One FileMoved effect per pair; recorded by the helper just before the chokepoint, which commits them only if the write stands.
+    private Action RecordMoveEffects(MoveSetPlanResult plan) => () =>
+    {
+        var solutionRoot = _workspaceManager.GetSolutionRoot();
+        foreach (var move in plan.Moves)
+        {
+            ToolCallContext.Current?.RecordEffect(
+                EditEffectKind.FileMoved,
+                EditEffectNames.DisplayPath(move.Source.Absolute, solutionRoot),
+                null,
+                Path.GetFileNameWithoutExtension(move.Source.Absolute),
+                null,
+                null,
+                EditEffectNames.DisplayPath(move.Destination.Absolute, solutionRoot));
+        }
+    };
+
+    // The one apply call every MoveFile path shares. verbatim: the decoded text (BOM kept as a leading U+FEFF) is written back byte-exact; no EOL or BOM normalization, every other chokepoint guard still applies.
+    // preValidatedAgainst: the committed solution the edge gate compiled this exact set against (with its added edges); null compiles as usual.
+    private Task<ApplyOutcome> ApplyMoveAsync(
+        MoveSetPlanResult plan, IReadOnlyDictionary<FilePathWrapper, string> changes, bool dryRun, Solution? preValidatedAgainst, CancellationToken cancellationToken) =>
+        ValidateAndApplyHelper.ValidateAndApplyAsync(
+            _validationEngine, _workspaceManager, _logger, changes, MoveFileOperation.Name,
+            dryRun: dryRun,
+            cancellationToken: cancellationToken,
+            deletePaths: plan.DeletePaths,
+            verbatim: true,
+            describeValidationFailure: DescribeMoveValidationFailureAsync,
+            describeEditImpact: MoveEditImpactDescriber(plan, changes),
+            recordEffects: RecordMoveEffects(plan),
+            preValidatedAgainst: preValidatedAgainst);
+
+    // True while the committed solution is still the instance the gate worked from.
+    private async Task<bool> CommittedIsAsync(Solution committed, CancellationToken cancellationToken) =>
+        ReferenceEquals(await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken), committed);
+
+    // D13 (plan Step 26): compile the set against the committed solution plus the needed edges, and on a pass write the csproj edits and the move as ONE change.
+    // The lease (a real apply only) is taken here, in this method, because its fallback flow identity is an AsyncLocal that only flows down from the method that set it:
+    // the holder's own apply then passes the chokepoint wait. One automatic retry when the workspace moved between compile and apply; a second miss returns the refusal plus a fact.
+    private async Task<ApplyOutcome> ApplyWithEdgeGateAsync(
+        MoveSetPlanResult plan, IReadOnlyList<NeededProjectEdge> edges, bool addReferences, bool addInternalsVisibleTo, bool dryRun, List<MoveFact> facts, CancellationToken cancellationToken)
+    {
+        EdgeGateLease.Holder? holder = null;
+        try
+        {
+            if (!dryRun && (_workspaceManager as IEdgeGateLeaseSource)?.Lease is { } lease)
+            {
+                try
+                {
+                    holder = await lease.AcquireAsync(cancellationToken);
+                }
+                catch (TimeoutException ex)
+                {
+                    return new ApplyOutcome(null, new ResultError(ToolErrorCode.WriteLockBusy, $"MoveFile: {ex.Message} Nothing was moved. Option: retry in a moment."), dryRun);
+                }
+            }
+
+            var last = default(ApplyOutcome)!;
+            for (var attempt = 1; attempt <= 2; attempt++)
+            {
+                var committed = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+                var augmented = MoveSetEdgeAnalyzer.AugmentBaseline(committed, edges, addReferences, addInternalsVisibleTo);
+                var compiled = await ValidationEngine.ValidateChangesAgainstBaselineAsync(committed, augmented, plan.Changes, plan.DeletePaths, cancellationToken);
+                if (compiled.Report.IsError)
+                {
+                    var rejection = await ValidateAndApplyHelper.BuildValidationRejectionAsync(
+                        MoveFileOperation.Name, compiled.Report, plan.Changes, _workspaceManager, DescribeMoveValidationFailureAsync, MoveEditImpactDescriber(plan, plan.Changes), cancellationToken);
+                    last = new ApplyOutcome(null, rejection, dryRun, Validation: compiled.Report);
+                    if (await CommittedIsAsync(committed, cancellationToken))
+                    {
+                        return last;    // a genuine error: the workspace did not move during the compile, so a retry would compile the same thing
+                    }
+
+                    continue;
+                }
+
+                var withEdges = await WithCsprojEdgesAsync(plan.Changes, committed, edges, cancellationToken);
+                if (BetweenEdgeGateAndApply is { } seam)
+                {
+                    await seam(cancellationToken);
+                }
+
+                last = await ApplyMoveAsync(plan, withEdges, dryRun, committed, cancellationToken);
+                if (last.Error is null)
+                {
+                    foreach (var edge in edges)
+                    {
+                        var what = edge.Kind == ProjectEdgeKind.ProjectReference ? $"a ProjectReference to '{edge.ToProject}'" : $"InternalsVisibleTo '{edge.ToProject}'";
+                        facts.Add(new MoveFact(MoveFactKind.CsprojEdgeAdded, $"{edge.FromProject} -> {edge.ToProject}", $"{(dryRun ? "would add" : "added")} {what} to the project file of '{edge.FromProject}'."));
+                    }
+
+                    if (last.ReloadPending)
+                    {
+                        facts.Add(new MoveFact(MoveFactKind.ReloadPending, string.Join(", ", edges.Select(e => e.FromProject).Distinct()), "the project file was written; a background reload of the workspace follows, and the next call waits for it."));
+                    }
+
+                    return last;
+                }
+
+                // A refusal because the workspace moved (the helper recompiled without the edges, or the chokepoint's foreign-write re-validation fired) is a window miss; anything else stands.
+                if (last.Error.ErrorCode != ToolErrorCode.ConcurrentEditRefused && await CommittedIsAsync(committed, cancellationToken))
+                {
+                    return last;
+                }
+            }
+
+            facts.Add(new MoveFact(MoveFactKind.WorkspaceChangedDuringGate, "workspace", "the workspace changed during the call; the check ran without the added references; a retry recomputes them."));
+            return last;
+        }
+        finally
+        {
+            holder?.Dispose();
+        }
+    }
 
     /// <summary>
     /// Fraction of <paramref name="oldContent"/>'s line count that <paramref name="newContent"/>
