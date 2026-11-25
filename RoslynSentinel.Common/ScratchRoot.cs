@@ -1,11 +1,14 @@
 namespace RoslynSentinel.Common;
 
 /// <summary>Resolves the out-of-repo folders that hold test, eval and run output.</summary>
+[StartupSettingGroup("Scratch roots")]
 public static class ScratchRoot
 {
     public const string EnvironmentVariable = "ROSLYNSENTINEL_SCRATCH_ROOT";
     public const string ResultsRootEnvironmentVariable = "ROSLYNSENTINEL_RESULTS_ROOT";
     public const string DefaultFolderName = "RoslynSentinel-ScratchDir";
+    public static readonly StartupSetting<string?> ScratchRootSetting = StartupSetting.String(null, EnvironmentVariable, null, "Out-of-repo root folder for test, eval and run output.", SettingScope.Server | SettingScope.PlanStepRunner | SettingScope.AgentLoop | SettingScope.TestHarness, SettingKind.Live);
+    public static readonly StartupSetting<string?> ResultsRootSetting = StartupSetting.String(null, ResultsRootEnvironmentVariable, null, "Out-of-repo folder for model evaluation results.", SettingScope.Server | SettingScope.PlanStepRunner | SettingScope.AgentLoop | SettingScope.TestHarness, SettingKind.Live);
 
     /// <summary>Checks ROSLYNSENTINEL_SCRATCH_ROOT FIRST (expanded; must be absolute, else InvalidOperationException
     /// with the value and an example) and returns without touching RepoRootLocator when it is set; unset/blank ->
@@ -14,7 +17,7 @@ public static class ScratchRoot
     /// Result is a full path without a trailing separator.</summary>
     public static string Resolve(string? sourceRepoRoot = null)
     {
-        string? configured = ReadAbsoluteEnvironment(EnvironmentVariable);
+        string? configured = ReadAbsoluteEnvironment(ScratchRootSetting);
         if (configured is not null)
         {
             return configured;
@@ -30,7 +33,7 @@ public static class ScratchRoot
     /// <summary>ROSLYNSENTINEL_RESULTS_ROOT (absolute, else InvalidOperationException) else Combine(Resolve(), "ModelTestingResults").</summary>
     public static string ResultsRoot(string? sourceRepoRoot = null)
     {
-        string? configured = ReadAbsoluteEnvironment(ResultsRootEnvironmentVariable);
+        string? configured = ReadAbsoluteEnvironment(ResultsRootSetting);
         return configured ?? Path.Combine(Resolve(sourceRepoRoot), "ModelTestingResults");
     }
 
@@ -40,9 +43,9 @@ public static class ScratchRoot
         return Path.Combine(Resolve(sourceRepoRoot), "TestRuns");
     }
 
-    private static string? ReadAbsoluteEnvironment(string variable)
+    private static string? ReadAbsoluteEnvironment(StartupSetting<string?> setting)
     {
-        string? raw = Environment.GetEnvironmentVariable(variable);
+        string? raw = setting.Value;
         if (string.IsNullOrWhiteSpace(raw))
         {
             return null;
@@ -53,7 +56,7 @@ public static class ScratchRoot
         if (expanded.Contains('%') || !Path.IsPathFullyQualified(expanded))
         {
             throw new InvalidOperationException(
-                $"Environment variable {variable} is '{value}', which is not an absolute path. Set it to a fully qualified folder, for example C:\\scratch.");
+                $"Environment variable {setting.EnvName} is '{value}', which is not an absolute path. Set it to a fully qualified folder, for example C:\\scratch.");
         }
 
         return Trim(Path.GetFullPath(expanded));

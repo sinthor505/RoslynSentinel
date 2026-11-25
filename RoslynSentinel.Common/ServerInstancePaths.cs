@@ -12,12 +12,16 @@ namespace RoslynSentinel.Common;
 /// them, not here.
 /// </para>
 /// </summary>
+[StartupSettingGroup("Instance paths")]
 public sealed class ServerInstancePaths
 {
     private const string WorkingDirFlag = "--working-dir";
     public const string TabStateDirFlag = "--tab-state-dir";
     private const string StopMarkerFileName = "stopped-by-script.marker";
     private const string CrashLogFileName = "crash.log";
+
+    public static readonly StartupSetting<string?> WorkingDirSetting = StartupSetting.String(WorkingDirFlag, null, null, "Working directory for per-process logs and the stop marker.", SettingScope.Server);
+    public static readonly StartupSetting<string?> TabStateDirSetting = StartupSetting.String(TabStateDirFlag, null, null, "Per-tab state directory for the REPL console.", SettingScope.Server);
 
     private static readonly Lazy<ServerInstancePaths> CurrentLazy = new(
         () => Resolve(Environment.GetCommandLineArgs(), AppContext.BaseDirectory));
@@ -57,8 +61,9 @@ public sealed class ServerInstancePaths
     /// <summary>Resolves the paths from <paramref name="args"/> and the directory the server binary runs from.</summary>
     public static ServerInstancePaths Resolve(string[] args, string binaryDirectory)
     {
-        var requested = GetArgValue(args, WorkingDirFlag);
-        var tabStateArg = GetArgValue(args, TabStateDirFlag);
+        var parsed = StartupArgs.Parse(args);
+        var requested = WorkingDirSetting.Read(parsed, StartupSettings.EnvironmentReader).Value;
+        var tabStateArg = TabStateDirSetting.Read(parsed, StartupSettings.EnvironmentReader).Value;
         var tabStateDir = string.IsNullOrWhiteSpace(tabStateArg) ? null : Path.GetFullPath(tabStateArg);
         if (!string.IsNullOrWhiteSpace(requested))
         {
@@ -70,22 +75,5 @@ public sealed class ServerInstancePaths
         var binaryDir = Path.TrimEndingDirectorySeparator(Path.GetFullPath(binaryDirectory));
         var legacyMarker = Path.GetFullPath(Path.Combine(binaryDir, "..", StopMarkerFileName));
         return new ServerInstancePaths(binaryDir, false, legacyMarker, tabStateDir);
-    }
-
-    // Mirrors ServerStartupHelpers.GetArgValue (Common cannot reference Server.Advanced): accepts
-    // "--flag=value" and "--flag value"; null when absent or the two-token form lacks its value.
-    private static string? GetArgValue(string[] args, string flag)
-    {
-        var inlinePrefix = flag + "=";
-        foreach (var arg in args)
-        {
-            if (arg.StartsWith(inlinePrefix, StringComparison.Ordinal))
-            {
-                return arg[inlinePrefix.Length..];
-            }
-        }
-
-        var index = Array.FindIndex(args, a => a.Equals(flag, StringComparison.Ordinal));
-        return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
     }
 }
