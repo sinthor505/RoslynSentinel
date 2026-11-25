@@ -22,7 +22,7 @@ namespace RoslynSentinel.Common;
 /// <c>RoslynSentinel.Tests.TestSolutionFixture</c>, which stands up a disposable on-disk copy of
 /// the Samples/ContosoOrders scenario and loads it through this class.
 /// </summary>
-public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IUnrecoverableBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver, IScopedOperationLedger, IWorkspaceReader, IWorkspaceReloadFailureProvider, IEditAttributionLedgerProvider, IEditEffectIndexProvider, IObservedContentLedger
+public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IUnrecoverableBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver, IScopedOperationLedger, IWorkspaceReader, IWorkspaceReloadFailureProvider, IEditAttributionLedgerProvider, IEditEffectIndexProvider, IObservedContentLedger, IEdgeGateLeaseSource
 {
     private readonly ILogger<IWorkspaceManager> _logger;
     private readonly ActiveToolSurface? _activeToolSurface;
@@ -393,6 +393,13 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     /// contend on MSBuild loads.
     /// </summary>
     public TimeSpan DefaultLoadTimeout { get; set; } = SolutionLoadWait.DefaultTimeout;
+
+    // In-process edge-gate lease (plan_multi_file_movefile Step 20, D13(f)). Not _solutionLock and not CrossProcessWriteLock: it is a plain
+    // in-process object that other writers wait on at the top of ApplyProposedChangesAsync. Tests shorten it via Lease.MaxWait.
+    private readonly EdgeGateLease _edgeGateLease = new();
+
+    /// <inheritdoc />
+    public EdgeGateLease Lease => _edgeGateLease;
 
     private readonly IRepoProbe? _repoProbe;
 
@@ -2295,9 +2302,12 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     {
         try
         {
-            return await ApplyProposedChangesCoreAsync(
+            // Waits (bounded by Lease.MaxWait) only while ANOTHER flow holds the edge-gate lease; a no-op otherwise. Holds no workspace lock.
+            var leaseWait = await _edgeGateLease.WaitForOtherHolderAsync(cancellationToken);
+            var applied = await ApplyProposedChangesCoreAsync(
                 changes, retryCount, validateChanges, rollbackOnPartialFailure, progress, cancellationToken,
                 deletePaths, exactRestore, operationLabel, staleReadPolicy, verbatim);
+            return leaseWait is { } waitResult ? waitResult.AppendFindingTo(applied) : applied;
         }
         finally
         {
