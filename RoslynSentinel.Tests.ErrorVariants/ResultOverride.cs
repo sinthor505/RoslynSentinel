@@ -295,6 +295,7 @@ public static class ResultOverride
         CompletedAt = turn.CompletedAt,
         ToolCalls = calls,
         Assists = turn.Assists is null ? null : [.. turn.Assists],
+        Thinking = turn.Thinking,
     };
 
     private static AgentToolCallRecord CopyCall(AgentToolCallRecord call, string resultJson, string? trailingText) => new()

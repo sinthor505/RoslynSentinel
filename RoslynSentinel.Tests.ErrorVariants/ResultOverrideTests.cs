@@ -350,6 +350,7 @@ public sealed class ResultOverrideTests
         // every property is populated non-default on the original, then compared one by one.
         var turn = MakeTurn(1, MakeCall(ErrorEnvelope("X", "first"), true), MakeCall("{\"isError\":false}", false));
         turn.Assists = [new AgentAssist("injection", "Search", 2, "text")];
+        turn.Thinking = new TurnThinking(true, ThinkingTriggers.Error, 3, false);
         var transcript = BuildTranscript(turn);
         var originalCall = turn.ToolCalls[0];
         var variant = SyntheticVariant("X") with { Message = "different", Trailing = "different trailing" };
