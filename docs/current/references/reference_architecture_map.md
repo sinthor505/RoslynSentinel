@@ -11,21 +11,23 @@ pointers: open the cited file for detail, and trust the source over this doc if 
 
 ## How it works
 
-### Layers and projects (one-way: Common <- Engines <- Tools <- Server)
+### Layers and projects (one-way: Common <- Git <- Engines <- Tools <- Server)
 
 | Layer | Projects | Owns |
 | --- | --- | --- |
-| Common | `RoslynSentinel.Common` | Workspace manager, result types, filters' helpers, schema patcher, toolset catalog |
+| Common | `RoslynSentinel.Common` | Workspace manager, result types, filters' helpers, schema patcher, toolset catalog; the git seam (`IRepoQuery`/`RepoQueryProvider`, `IRepoProbe`) that Common code calls instead of the git readers |
+| Git | `RoslynSentinel.Git` | Git plumbing (`IGitReader` and its CLI/libgit2/fallback readers, `GitProcess`, hooks, commit routes, warmup), the Git engine `GitEngine` behind `IGitOperations` with its result DTOs and hint keys (no tool names; `Tools.Basic/GitHintText` renders hints), and the `GitWorktree/` harness. Namespaces still `RoslynSentinel.Common`/`RoslynSentinel.Tools.Basic` (rename pending a namespace-change tool). The only `LibGit2Sharp` reference |
 | Engines | `Engines.Basic`, `Engines.Advanced` | Roslyn analysis/refactoring logic. No MCP types |
 | Tools | `Tools.Basic`, `Tools.Advanced`, `Tools.Experimental` | `[McpServerToolType]` classes plus the `*Impl` classes behind the Basic tools |
 | Server | `Server.Advanced` (the only server project; the former `Server.Basic` was folded in) | Entry points, arg parsing, mode resolution, DI + request filters. No tool/engine logic |
-| Harness | `AgentLoop` (`RoslynSentinel.AgentLoop`, namespace `RoslynSentinel.Common.AgentLoop` kept), `Utilities.PlanStepRunner` | `AgentLoop`: the agent-loop harness (runner, transcript, `LmStudioAgentClient`, tool hosts, run archive); references only `Common`. `Utilities.PlanStepRunner`: plan-step runner exe; references only `Common` and `AgentLoop`. Consumers of `AgentLoop`: `Tools.Advanced` (SubAgent), `PlanStepRunner` and test projects; `ToolLoopLatch`, `LoopLatchOptions` and `ErrorPolicyDocument` stay in `Common` (server-side) |
+| Harness | `AgentLoop` (`RoslynSentinel.AgentLoop`, namespace `RoslynSentinel.Common.AgentLoop` kept), `Utilities.PlanStepRunner` | `AgentLoop`: the agent-loop harness (runner, transcript, `LmStudioAgentClient`, tool hosts, run archive); references only `Common`. `Utilities.PlanStepRunner`: plan-step runner exe; references only `Common`, `Git` (worktree harness) and `AgentLoop`. Consumers of `AgentLoop`: `Tools.Advanced` (SubAgent), `PlanStepRunner` and test projects; `ToolLoopLatch`, `LoopLatchOptions` and `ErrorPolicyDocument` stay in `Common` (server-side) |
 
 Sibling projects cannot see each other (`Tools.Advanced` cannot reach `Tools.Basic`; `Engines.Basic`
 cannot reach `Engines.Advanced`): shared helpers go one layer down. Advanced builds on Basic, it is
 not a fork. Tests: `Tests`, `Tests.Basic/Advanced`, `Tests.Tools.Basic/Advanced`, `Tests.Server`,
 `Tests.Battery.Basic/Advanced`, `Tests.ModelEval`, `Tests.Harness` (model-free harness tests: SubAgent tool,
-PlanStepRunner), `Tests.Asyncify`.
+PlanStepRunner), `Tests.Asyncify`, `Tests.Git` (the Git OutOfProcess fixtures and Git tool-level tests; flat folder,
+namespace `RoslynSentinel.Tests.Tools.Basic` kept).
 
 Tool-class shapes vary: some Basic tools are a thin class over an `*Impl` (e.g. `WorkspaceTools` ->
 `WorkspaceReadNavigationImpl`; `RefactoringStructuralTools` -> `RefactoringStructuralImpl`), others

@@ -660,6 +660,7 @@ Depends on: Step 9f (the moved files are in one folder; the seam files stay outs
   returns nothing outside comments and docs; dispatcher: all Step 2 pins, `BareFileWriteRatchetTests`, `GitToolsSmokeTests` pass.
 
 ### Step 20 - Wiring finish: generated docs, CLAUDE.md, architecture map
+- Done: generated doc in bcc5031d; CLAUDE.md layering line and architecture map in the Step 20-22 doc commit (CLAUDE.md was already over its 15 KB budget at 15,978 bytes before this step; the edit adds 66 bytes)
 - Files: `docs/generated/architecture_projects.md` (generated; do not edit by hand), `CLAUDE.md`,
   `docs/current/references/reference_architecture_map.md`
 - Depends on: Step 19. Lane: main session (CLAUDE.md is owner-approved wording). Effect: text-neutral (docs).
@@ -671,6 +672,7 @@ Depends on: Step 9f (the moved files are in one folder; the seam files stay outs
 - Done when: `ArchitectureDocFreshnessTests` passes; `pwsh scripts/Test-GuidanceHygiene.ps1` reports no new finding.
 
 ### Step 21 - Handoff to the nightly plan owner (message only)
+- Done: message sent 2026-11-24 to roslynsentinel-ec (owner of the nightly plan); no reply requested
 - Files: none. Depends on: Step 18. Effect: text-neutral.
 - Change: `SendMessage` to the session that owns `plan_full_suite_nightly_and_tail_shard.md` (find it with `ListAgents`); do not edit that plan. Content:
   the Git area's watch list in `scripts/test-areas.json` is the directory `RoslynSentinel.Git/` plus `RoslynSentinel.Tests.Git/`, plus the tool-side
@@ -680,6 +682,7 @@ Depends on: Step 9f (the moved files are in one folder; the seam files stay outs
 - Done when: the message is sent; the reply, or its absence, is noted in the commit message of Step 22.
 
 ### Step 22 - Closing stub sweep
+- Done: no plan stub (`NotImplementedException`, "TODO implement") or `[Obsolete]` Git/hint member remains; the plan's own TODOs (namespace rename at `GitEngine.cs`/`GitProcess.cs`, `GitStatusRenameHints` blob read) have INBOX lines. Pre-existing TODOs that moved with the files and have no INBOX line: `GitEngine.cs` RunGitAsync line re-join, `Libgit2GitReader.cs`, `.IndexWrites.cs`, `.Patch.cs` (2), `GitPatchParityHarness.cs` (2) - left as found. `SplitProjectByFolder` remains a simulation (`ProjectStructureEngine.cs` `SplitProjectByFolderAsync`, blocker doc).
 - Files: this plan's files. Depends on: Steps 1-21. Effect: text-neutral. Lane: `explore-tier1`.
 - Change: `Search(mode: text, query: "NotImplementedException", fileGlob: "RoslynSentinel.{Git,Tools.Basic,Common}/**/*.cs")` and
   `Search(mode: text, query: "TODO implement \\(Step", ...)`; fail the plan if any stub from Steps 1a-1b or 10a remains. Also confirm the
