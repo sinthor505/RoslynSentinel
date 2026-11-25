@@ -32,6 +32,10 @@ namespace RoslynSentinel.Common;
 /// <param name="Findings">
 /// Non-fatal observations from the write chokepoint, copied from <c>ApplyChangesResult.Findings</c> on a successful apply. Null on error, on a dry run, and when there are none. The one exception is an evaluation-only near-miss correction (<see cref="NearMissCorrection"/>): its findings are added after the apply's own, and are also present on a dry run that would have been corrected.
 /// </param>
+/// <param name="ReloadPending">
+/// True on a successful apply that wrote a structural file (project, props, targets), so a full workspace reload was started in the
+/// background: the workspace reports Loading until it ends and the next read waits for it. False on error, on a dry run, and for an ordinary source edit.
+/// </param>
 public record ApplyOutcome(
     string? ChangeId,
     ResultError? Error,
@@ -40,5 +44,6 @@ public record ApplyOutcome(
     string? NotReversibleReason = null,
     DiagnosticReport? Validation = null,
     List<FileLineChange>? LineChanges = null,
-    List<Finding>? Findings = null
+    List<Finding>? Findings = null,
+    bool ReloadPending = false
 );

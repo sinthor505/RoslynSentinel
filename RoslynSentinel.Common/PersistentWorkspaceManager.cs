@@ -175,6 +175,9 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     private TaskCompletionSource? _loadSignal;
     // Failure text of the last finished load, cleared by the next successful one; backs LoadState.LastLoadFailure.
     private string? _lastLoadFailure;
+    // Post-write background reloads currently tracked as loads (a subset of _loadsInProgress); lets the load-wait timeout text
+    // say that the wait was for such a reload. Interlocked; read lock-free.
+    private int _backgroundReloadsInProgress;
     // Sticky record of the last failed load/reload, cleared by the next successful full load or reload.
     private WorkspaceReloadFailure? _reloadFailure;
     // Changed .cs files the per-file fold could not read, so CurrentSolution still holds their old text. Non-empty means the
@@ -305,13 +308,18 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     // Records the load outcome, then lowers the pending count; the terminal status is written first so a
     // lock-free reader that sees count 0 never sees a stale terminal status. The signal completes outside
     // the lock, after the caller has released _solutionLock.
-    private void EndLoadTracking(SolutionLoadStatus terminal, string? failure)
+    // keepLastFailure: leave _lastLoadFailure as it is (a background reload that failed with the old workspace kept must not
+    // erase the text of the last LoadSolution failure).
+    private void EndLoadTracking(SolutionLoadStatus terminal, string? failure, bool keepLastFailure = false)
     {
         TaskCompletionSource? toComplete = null;
         lock (_loadStatusSync)
         {
             Volatile.Write(ref _terminalLoadStatus, (int)terminal);
-            Volatile.Write(ref _lastLoadFailure, failure);
+            if (!keepLastFailure)
+            {
+                Volatile.Write(ref _lastLoadFailure, failure);
+            }
             var remaining = _loadsInProgress - 1;
             Volatile.Write(ref _loadsInProgress, remaining);
             if (remaining == 0)
@@ -322,6 +330,43 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         }
 
         toComplete?.TrySetResult();
+    }
+
+    // Starts a post-write background reload (the work in body) as a tracked load: the status is already Loading when this returns
+    // (Begin runs synchronously, before the pool hop), so the writing call's caller and the next call's read entry see it, and the
+    // writing call itself never waits. Every Begin is paired with an End: in the task's finally, or here when the task could not be queued.
+    // The terminal status follows the LoadSolutionAsync rule: a reload that fails keeps the old workspace, which stays usable, so
+    // it ends Loaded; _lastLoadFailure is left alone (the failure is recorded by RecordReloadFailure in body).
+    private void RunTrackedBackgroundReload(Func<Task> body)
+    {
+        BeginLoadTracking();
+        Interlocked.Increment(ref _backgroundReloadsInProgress);
+        try
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await body();
+                }
+                finally
+                {
+                    EndBackgroundReloadTracking();
+                }
+            });
+        }
+        catch
+        {
+            EndBackgroundReloadTracking();
+            throw;
+        }
+    }
+
+    private void EndBackgroundReloadTracking()
+    {
+        var terminal = CurrentSolution is { ProjectIds.Count: > 0 } ? SolutionLoadStatus.Loaded : SolutionLoadStatus.Failed;
+        EndLoadTracking(terminal, null, keepLastFailure: true);
+        Interlocked.Decrement(ref _backgroundReloadsInProgress);
     }
 
     /// <summary>
@@ -2051,7 +2096,11 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         {
             if (await WaitForLoadAsync(SolutionLoadWait.DefaultTimeout, cancellationToken) == SolutionLoadStatus.Loading)
             {
-                throw new SolutionLoadTimeoutException(SolutionNotLoadedMessage.LoadWaitTimedOut(SolutionLoadWait.DefaultTimeout));
+                // D18: when the load being waited on includes a post-write background reload, the text names it.
+                // TODO LoadSolution (WorkspaceProjectManagementImpl) and SubAgentModelRun.AwaitSolutionLoadAsync time out with the plain LoadWaitTimedOut text: they only see ISolutionProvider, which does not expose that a background reload is the load in progress.
+                throw new SolutionLoadTimeoutException(Volatile.Read(ref _backgroundReloadsInProgress) > 0
+                    ? SolutionNotLoadedMessage.LoadWaitTimedOutAfterReload(SolutionLoadWait.DefaultTimeout)
+                    : SolutionNotLoadedMessage.LoadWaitTimedOut(SolutionLoadWait.DefaultTimeout));
             }
         }
 
@@ -2878,7 +2927,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             if (foldFailed && !needsFullReload && _workspace != null && !string.IsNullOrEmpty(SolutionPath)
                 && Interlocked.CompareExchange(ref _foldFailureReloadQueued, 1, 0) == 0)
             {
-                _ = Task.Run(async () =>
+                // Tracked as a load (D12): the status is Loading from here until the reload ends.
+                RunTrackedBackgroundReload(async () =>
                 {
                     try
                     {
@@ -2901,7 +2951,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
 
             if (needsFullReload && _workspace != null && !string.IsNullOrEmpty(SolutionPath))
             {
-                _ = Task.Run(async () =>
+                // Tracked as a load (D12): the status is Loading when this call returns, so the next call's read entry waits for the reload.
+                RunTrackedBackgroundReload(async () =>
                 {
                     try
                     {

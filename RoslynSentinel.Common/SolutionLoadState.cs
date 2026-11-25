@@ -116,6 +116,13 @@ public static class SolutionNotLoadedMessage
         return $"The solution is still loading after waiting {seconds} s, so this call did not run. The load is continuing and has its own time limit. Retry in a few seconds, or call McpServerStatus and wait until solutionLoadStatus is Loaded.";
     }
 
+    /// <summary>The message for a wait that timed out while the load in progress is a background reload after a project-file write.</summary>
+    public static string LoadWaitTimedOutAfterReload(TimeSpan waited)
+    {
+        var seconds = (int)Math.Ceiling(waited.TotalSeconds);
+        return $"The solution is still loading after waiting {seconds} s, so this call did not run. The load in progress is a background reload after a project-file write (the write itself succeeded), and it is continuing. Retrying this call works once the reload finishes: retry in a few seconds, or call McpServerStatus and wait until solutionLoadStatus is Loaded.";
+    }
+
     /// <summary>The message for a load that was cancelled due to timeout.</summary>
     public static string LoadCancelledAfterTimeout(TimeSpan limit)
     {
