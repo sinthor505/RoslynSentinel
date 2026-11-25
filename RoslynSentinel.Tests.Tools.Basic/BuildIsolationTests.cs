@@ -91,6 +91,7 @@ public class BuildIsolationTests
     [TestCase("RoslynSentinel.Engines.Basic/TestInstanceLauncher.cs")]
     [TestCase("RoslynSentinel.Tests/TestSolutionFixture.cs")]
     [TestCase("RoslynSentinel.Tests.Tools.Basic/LoadSolutionForceReloadRestoreIntegrationTests.cs")]
+    [TestCase("RoslynSentinel.Tests.Tools.Basic/LoadSolutionHandWrittenCsprojRestoreIntegrationTests.cs")]
     [Category("MsBuildPins")]
     public void DotnetSpawningCallers_StripTheInheritedMsBuildPinsThroughTheSharedList(string relativePath)
     {
