@@ -18,6 +18,7 @@
 | RoslynSentinel.Tests.Battery.Advanced | RoslynSentinel.Engines.Advanced, RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Advanced, RoslynSentinel.Tests.Support.Basic |
 | RoslynSentinel.Tests.Battery.Basic | RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Basic |
 | RoslynSentinel.Tests.ErrorVariants | RoslynSentinel.AgentLoop, RoslynSentinel.Common |
+| RoslynSentinel.Tests.Git | RoslynSentinel.Common, RoslynSentinel.Engines.Basic, RoslynSentinel.Git, RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Basic, RoslynSentinel.Tools.Basic |
 | RoslynSentinel.Tests.Harness | RoslynSentinel.AgentLoop, RoslynSentinel.Common, RoslynSentinel.Git, RoslynSentinel.Server.Advanced, RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Basic, RoslynSentinel.Tools.Advanced, RoslynSentinel.Utilities.PlanStepRunner |
 | RoslynSentinel.Tests.Integration | RoslynSentinel.Common, RoslynSentinel.Server.Advanced, RoslynSentinel.Tests |
 | RoslynSentinel.Tests.ModelEval | RoslynSentinel.AgentLoop, RoslynSentinel.Common, RoslynSentinel.Server.Advanced, RoslynSentinel.Tests, RoslynSentinel.Tests.Harness |

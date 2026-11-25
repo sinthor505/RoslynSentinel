@@ -567,6 +567,11 @@ Depends on: Step 9f (the moved files are in one folder; the seam files stay outs
   `GitToolsSmokeTests`, `ArchitectureDocFreshnessTests` pass; any `TOOL-GAP:` recorded.
 
 ### Step 15 - Thin-tools check
+- Done (batch D, no commit; checked by the orchestrator): `Tools.Basic/Git*.cs` is exactly the five tool-side files (`GitTools`, `GitRemoteTools`,
+  `GitStatusRenameHints`, `GitHintApplyingOperations`, `GitHintText`). The done-when search is NOT empty: `GitStatusRenameHints.Findings` and
+  `IdenticalContentFindings` take an `IGitReader` and call `reader.ReadBlobAtHead` (a tool-side finding that compares blob content; no git invocation
+  or parsing). Accepted as a deviation: `// TODO Step 15` marker above `IdenticalContentFindings` (added in b792a478) and an INBOX line. Recommendation:
+  later move the blob read behind a `GitEngine`/`IGitOperations` method so Tools.Basic names no reader type.
 - Files: `GitTools.cs`, `GitRemoteTools.cs` (read-mostly). Depends on: Step 14. Lane: `explore-tier1` then `implementer` only for any fix.
 - Effect: text-neutral.
 - Change: confirm `Tools.Basic` Git files are only the five tool-side files (`GitTools` about 246 lines, `GitRemoteTools` 149, `GitStatusRenameHints`,
@@ -576,6 +581,9 @@ Depends on: Step 9f (the moved files are in one folder; the seam files stay outs
   returns nothing.
 
 ### Step 16 - Tests, part 1: inventory and shared helpers first
+- Done (batch D, no commit; inventory in Appendix C): no helper needed lifting. Decision (orchestrator): `McpServerStatusGitBackendTests` moves with
+  the Git fixtures (it is mostly Git-project subject matter and uses `GitReaderParityTests.ScriptedReader` and Git internals), so no staying file uses a
+  nested type of a moving fixture and no moving file uses a helper from a staying file (the build after Step 18 is the proof).
 - Files: `docs/current/plans/` Appendix C (dispatcher), and the helper files named below
 - Depends on: Step 15. Lane: dispatcher inventory, then `implementer` per helper slice (3 files each). Effect: text-neutral (test code only).
 - Change: (1) write the move inventory into Appendix C: every `Tests.Tools.Basic` file that is Git-subject (the 42 `Git*.cs` files with
@@ -593,6 +601,10 @@ Depends on: Step 9f (the moved files are in one folder; the seam files stay outs
   reference from a staying file to a nested type of a moving fixture.
 
 ### Step 17 - Tests, part 2: gather the Git fixtures into a `Git/` folder (same project)
+- Done (folded into Step 18, orchestrator decision, batch D): no `Git/` gathering folder. A wildcard link stand-in (Tests.Git compiles
+  `..\RoslynSentinel.Tests.Tools.Basic\Git*.cs` plus four wildcarded non-`Git*` names; Tests.Tools.Basic has the matching `Compile Remove`) puts all 61
+  files in the new compilation at once, so each `MoveFile` goes straight to `RoslynSentinel.Tests.Git/` (61 calls instead of 122). The nightly-plan
+  session had already been told that the fixtures move between projects.
 - Files: per slice at most 8 test files (`MoveFile` into `RoslynSentinel.Tests.Tools.Basic/Git/`, `namespaceHandling: keep`)
 - Depends on: Step 16. Lane: `implementer-sweep`, about 7 slices for about 52 files, one operation each; needs `HOLD`. Effect: text-neutral.
 - Heads-up (D-f, no wait): before the first slice, `SendMessage` the nightly-plan owner session that the Git fixtures are moving between projects and
@@ -604,6 +616,11 @@ Depends on: Step 9f (the moved files are in one folder; the seam files stay outs
   classes). (Group): `Glob RoslynSentinel.Tests.Tools.Basic/Git*.cs` (root) returns only the stay-list files of Appendix C.
 
 ### Step 18 - Tests, part 3: one `SplitProjectByFolder` creates `RoslynSentinel.Tests.Git`
+- Done (route: hand-written csproj plus stand-in as in Step 14, `SplitProjectByFolder` not used): 88975f2d (18A: `RoslynSentinel.Tests.Git.csproj`, `AssemblyInfo.cs`
+  with `Parallelizable(ParallelScope.Fixtures)`, its own `LeakDetectorSetUp.cs` with the `RepoQueryProvider` seam install, slnx entry, IVT for `Tests.Git`
+  added to Common, Git and Tools.Basic (not Engines.Basic: the compiler did not ask), one shell `dotnet restore` before the first LoadSolution),
+  b8a7dc82 (18B1: 30 files), ee4e95bc (18B2: 31 files, stand-in removed). Layout: flat at `RoslynSentinel.Tests.Git/`; namespaces unchanged
+  (`RoslynSentinel.Tests.Tools.Basic`, four files keep `RoslynSentinel.Tests.Battery.Basic`). Scripts discover the project by glob; no list needed an entry.
 - Files: `RoslynSentinel.Tests.Git/` (created by the split), `AssemblyInfo.cs`, the setup fixture, `.csproj`, `RoslynSentinel.slnx`, IVT lines
 - Depends on: Step 17. Lane: `implementer-sweep` for the call, `implementer` for the fix-ups (3 files per slice). Effect: text-neutral.
 - Change: toolset `projectAdmin`: `SplitProjectByFolder(sourceProjectName: RoslynSentinel.Tests.Tools.Basic, folderName: Git, targetProjectName:
@@ -619,6 +636,12 @@ Depends on: Step 9f (the moved files are in one folder; the seam files stay outs
   directories) and the `OutOfProcess` category is still excluded from the fast suite for the moved fixtures (`TestSuiteFilter`).
 
 ### Step 19 - Rename: namespace `RoslynSentinel.Git` and `GitImpl` -> `GitEngine` (D-d)
+- Done (partial by design, D-e default): b792a478. (a) `RenameSymbol` GitImpl -> GitEngine (118 sites, 3 projects, 23 files; it renamed the file to
+  `GitEngine.cs` itself, so `SyncTypeAndFilename` was not needed); the `BareFileWriteRatchetTests` key follows. (b) TOOL-GAP: no tool changes a namespace
+  with its `using` sites (only `PreviewMoveFileToNamespaceFolder`, inactive, preview only); namespaces unchanged (plumbing `RoslynSentinel.Common`, engine and
+  DTOs `RoslynSentinel.Tools.Basic`, worktree `RoslynSentinel.Common.GitWorktree`); `// TODO rename namespace` markers in `GitEngine.cs` and `GitProcess.cs`,
+  a TODO.md line and INBOX lines. The `Git` shadowing check was not needed (no namespace rename). Left cosmetic `GitImpl` names the tool does not follow:
+  see the INBOX line of 2026-11-25 04:50 (`_gitImpl` field, test helper names, 13 comments), so the done-when search for `GitImpl` is not empty.
 - Files: every file in `RoslynSentinel.Git/` plus all `using` sites; measured before the slice. Depends on: Step 18. Lane: `implementer-senior`
   (more than the sweep limits). Needs `HOLD` coordination. Effect: text-neutral (namespaces and a class name; no wire change: DTO type names are not
   serialized and the property names are unchanged).
@@ -808,6 +831,23 @@ attention at the project split (a `<see cref>` to a type in the new project beco
 
 ## Appendix C - Test move inventory (filled by Step 16)
 
-To be written: move list, `GitImpl`-constructing fixtures (17 files, 22 sites per the proposal; this session saw 20 files with `GitImpl` references
-in `Tests.Tools.Basic`, `Tests.Basic` and production), lifted helpers (`ScriptedReader`), stay list, per-file decision for the three seam-consumer
-fixtures (`McpServerStatusGitBackendTests`, `ServerBinaryStalenessGitTests`, `TestInstanceLauncherGitStampTests`).
+Written by the batch D orchestrator (explore-tier2 inventory, 2026-11-24, then confirmed by the build after the move).
+
+- **Move list: 61 files into `RoslynSentinel.Tests.Git/`** (all from the `RoslynSentinel.Tests.Tools.Basic` root): the 57 `Git*.cs` files (54 fixtures plus
+  the support files `GitHookTestSupport`, `GitCommitMessageTestSupport`, `GitPatchParityHarness`) and `CasCommitTestSupport` (support), `ShortHashLengthsTests`,
+  `RepoPathWorktreeTests`, `McpServerStatusGitBackendTests`. The proposal's "42 OutOfProcess `Git*.cs`" differs because the fixtures were gathered by
+  subject, not by category; Search/Glob counts above are the authority.
+- **Stay list (3 Git-flavoured files plus unrelated users of `GitTestRepo`):** `ServerBinaryStalenessGitTests` (Common seam consumer, uses Git-project
+  internals through the existing IVT), `TestInstanceLauncherGitStampTests` (Engines.Basic), `ChildProcessCaptureTests` (Common). `DocCloseTests`,
+  `DocTrailerEngineTests`, `NotFoundEvidenceTests` use `GitTestRepo` only as a fixture and stay. `McpServerStatusGitBackendTests` was contradicted as a
+  stay candidate (uses `GitReaderParityTests.ScriptedReader` and `Libgit2GitReader`/`CliGitReader`/`ShortHashLengths` internals) and moved.
+- **Helpers:** none lifted. The only cross-link (staying file using a moving file's type) was `ScriptedReader`, resolved by moving the user. No moving file uses a
+  helper from a staying file. Other projects with Git-subject fixtures are not in scope: `Tests.Harness` (`WorktreeTeardownTests`, `RunStampTests`),
+  `Tests.Basic` (`BareFileWriteRatchetTests`, `ResidualMentionScannerTests`), `Tests.ModelEval` and `Tests.Server` (tool-name mentions or `GitTestRepo` only).
+- **`GitImpl` (now `GitEngine`) construction:** 23 files (118 semantic sites); the internal constructor `(ISolutionProvider, ILogger, IGitReader,
+  InProcessCommitRoute?, Action<string>?)` is used by about 14 fixtures, hence the IVT from `RoslynSentinel.Git` to `RoslynSentinel.Tests.Git`.
+- **Fast-suite membership:** fixtures without `[Category("OutOfProcess")]` that now run in the fast suite of Tests.Git: `GitCommitMessageTests`,
+  `GitHintApplyTests`, `GitHintRenderLiteralTests`, `GitHunkParserTests`, `GitCommitTrailersTests`, `GitCommitRoutePinRatchetTests` (also `Ratchet`),
+  `ShortHashLengthsTests` outer class.
+- **Setup:** `LeakDetectorSetUp` (global namespace) derives from `WorkingDirectoryLeakDetector` (Tests project: snapshot, `TestHostAmbientDefaults.Apply`,
+  leak assertion) and adds the Step 10d `[OneTimeSetUp]` that installs `RepoQueryProvider.Current ??= GitReaders.Default`; Tests.Git carries its own copy.
