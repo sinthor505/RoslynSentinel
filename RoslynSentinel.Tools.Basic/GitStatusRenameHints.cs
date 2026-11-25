@@ -336,14 +336,18 @@ internal static class GitStatusRenameHints
                 .ToHashSet(StringComparer.Ordinal);
             foreach (var destination in created)
             {
-                if (destination.AfterSourceFromFilePath is null)
+                // legacy single-move shape: no afterSourceFromFilePath
+                var isLegacySingleMove = destination.AfterSourceFromFilePath is null && created.Count == 1 && deleted.Count == 1;
+                if (destination.AfterSourceFromFilePath is null && !isLegacySingleMove)
                 {
                     continue;
                 }
 
-                var matches = deleted
-                    .Where(d => string.Equals(d.FilePath, destination.AfterSourceFromFilePath, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
+                var matches = isLegacySingleMove
+                    ? deleted
+                    : deleted
+                        .Where(d => string.Equals(d.FilePath, destination.AfterSourceFromFilePath, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
                 if (matches.Count != 1)
                 {
                     continue;
