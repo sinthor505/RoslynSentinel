@@ -5,7 +5,8 @@
 .DESCRIPTION
   Sets ROSLYNSENTINEL_UPDATE_GENERATED_DOCS=1 and runs the architecture doc freshness tests,
   which regenerate docs/generated/architecture_tools.md and docs/generated/architecture_projects.md,
-  and the model-eval scenario catalog freshness tests, which regenerate docs/generated/modeleval_scenarios.md.
+  the model-eval scenario catalog freshness tests, which regenerate docs/generated/modeleval_scenarios.md,
+  and the configuration reference freshness test, which regenerates docs/generated/configuration.md.
   Then displays git status --short to show what changed.
 
 .EXAMPLE
@@ -29,6 +30,13 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 dotnet test "$repoRoot\RoslynSentinel.Tests.ModelEval" --filter ScenarioCatalogFreshness -v minimal
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Test failed during regeneration" -ForegroundColor Red
+    exit $LASTEXITCODE
+}
+
+dotnet test "$repoRoot\RoslynSentinel.Tests.ModelEval" --filter ConfigurationReferenceFreshness -v minimal
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Test failed during regeneration" -ForegroundColor Red

@@ -32,7 +32,7 @@ superseded or abandoned); a doc moves there when its Status line reaches a close
 | [templates/](./templates/) | - | One template per genre, plus the house-style README |
 | [archive/](./archive/) | - | Frozen pre-taxonomy docs that fit no genre, and the monthly `closed_*.md` rollups |
 
-Generated tool and project tables are in `docs/generated/`; the known-failing-test and build-warning
+Generated tool and project tables are in `docs/generated/` (the startup configuration reference is [generated/configuration.md](../generated/configuration.md)); the known-failing-test and build-warning
 baselines are `docs/known-*.txt`.
 
 ## Where to start
