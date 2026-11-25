@@ -120,6 +120,7 @@ public static class SolutionNotLoadedMessage
     public static string LoadWaitTimedOutAfterReload(TimeSpan waited)
     {
         var seconds = (int)Math.Ceiling(waited.TotalSeconds);
+        // hint-ok: same wording family as LoadWaitTimedOut (a baseline entry); McpServerStatus is always active, so no IsCallable guard is needed
         return $"The solution is still loading after waiting {seconds} s, so this call did not run. The load in progress is a background reload after a project-file write (the write itself succeeded), and it is continuing. Retrying this call works once the reload finishes: retry in a few seconds, or call McpServerStatus and wait until solutionLoadStatus is Loaded.";
     }
 
