@@ -105,6 +105,9 @@ public sealed class ModelAgentRunner
         get; set;
     }
 
+    // Intentional deviation: a mutable static so one assembly-setup line configures every ModelEval construction site (16 sites, no shared factory); production stays Off.
+    public static ThinkingOptions? ThinkingDefault { get; set; }
+
     private readonly LmStudioAgentClient _llm;
     private readonly IAgentToolHost _toolHost;
     private readonly int _turnCap;
@@ -113,6 +116,7 @@ public sealed class ModelAgentRunner
     private readonly int _repeatedFailureLimit;
     private readonly ILogger<ModelAgentRunner> _logger;
     private readonly LoopAssistOptions _loopAssist;
+    private readonly ThinkingOptions _thinking;
 
     /// <summary>
     /// Runs against a real <see cref="McpClient"/>, wrapped in a <see cref="McpClientToolHost"/>.
@@ -126,8 +130,9 @@ public sealed class ModelAgentRunner
         int turnCap = 25,
         TimeSpan? wallClockCap = null,
         ILogger<ModelAgentRunner>? logger = null,
-        LoopAssistOptions? loopAssist = null)
-        : this(llm, new McpClientToolHost(mcpClient), repeatedFailureLimit, maxTokensPerTurn, turnCap, wallClockCap, logger, loopAssist)
+        LoopAssistOptions? loopAssist = null,
+        ThinkingOptions? thinking = null)
+        : this(llm, new McpClientToolHost(mcpClient), repeatedFailureLimit, maxTokensPerTurn, turnCap, wallClockCap, logger, loopAssist, thinking)
     {
     }
 
@@ -158,6 +163,9 @@ public sealed class ModelAgentRunner
     /// Loop-assist switches (collapse of repeated rejected calls in the replayed history, plus a fact-only
     /// injection). Null reads ROSLYNSENTINEL_MODELEVAL_LOOP_ASSIST / _ROLE from the environment; off unless set.
     /// </param>
+    /// <param name="thinking">
+    /// Thinking budget for this runner. Null falls back to <see cref="ThinkingDefault"/>, then to <see cref="ThinkingOptions.Off"/>.
+    /// </param>
     public ModelAgentRunner(
         LmStudioAgentClient llm,
         IAgentToolHost toolHost,
@@ -166,7 +174,8 @@ public sealed class ModelAgentRunner
         int turnCap = 25,
         TimeSpan? wallClockCap = null,
         ILogger<ModelAgentRunner>? logger = null,
-        LoopAssistOptions? loopAssist = null)
+        LoopAssistOptions? loopAssist = null,
+        ThinkingOptions? thinking = null)
     {
         if (repeatedFailureLimit < 1)
         {
@@ -184,6 +193,7 @@ public sealed class ModelAgentRunner
         _maxTokensPerTurn = maxTokensPerTurn;
         _logger = logger ?? NullLogger<ModelAgentRunner>.Instance;
         _loopAssist = loopAssist ?? LoopAssistOptions.FromEnvironment();
+        _thinking = thinking ?? ThinkingDefault ?? ThinkingOptions.Off;
     }
 
     /// <param name="runId">
@@ -346,6 +356,11 @@ public sealed class ModelAgentRunner
         transcript.Settings = RunSettings.Build(LlmOptions.Temperature, LlmOptions.TopP, LlmOptions.HostSampler, _llm.ReportedSampler, loadSettings, acceptedUnverifiedSampler: LlmOptions.AcceptUnverifiedSampler);
         var settingsReported = _llm.ReportedSampler is not null;
         transcript.ReasoningReplayMode = replayPolicy.Mode;
+        transcript.Thinking = _thinking;
+        if (_thinking.Mode != ThinkingMode.Off && !_thinking.IsKnownEffort)
+        {
+            _logger.LogWarning("{Warning}", string.Format(ThinkingOptions.CustomEffortWarningFormat, _thinking.Effort, _llm.Model));
+        }
         _logger.LogInformation("Reasoning replay mode: {Mode} (context length {ContextLength}).", replayPolicy.Mode, contextLength);
         var cumulativeTokens = 0;
         // messages.Count when cumulativeTokens was last updated: the messages after it are the growth since then.
@@ -1089,7 +1104,8 @@ public sealed class ModelAgentRunner
     // Relaxed escaping keeps backticks, quotes and arrows readable in transcript.json (the default HTML-safe encoder
     // writes them as ` and similar). Only the file changes: the model request is serialized elsewhere and the
     // loaders decode both forms.
-    private static readonly JsonSerializerOptions TranscriptFileOptions = new()
+    // Internal, not private: ThinkingRunnerTests.Serialize_WritesEnumNames reads it (Tests.Harness has InternalsVisibleTo).
+    internal static readonly JsonSerializerOptions TranscriptFileOptions = new()
     {
         WriteIndented = true,
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,

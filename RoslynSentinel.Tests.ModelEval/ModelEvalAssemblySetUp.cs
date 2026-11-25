@@ -55,6 +55,8 @@ public class ModelEvalAssemblySetUp
         // Reads ROSLYNSENTINEL_MODELEVAL_CONTRACT / _CONTRACT_ENDINGS (unset = legacy contract, system endings). Runs before the
         // Assert.Ignore model check below so a bad value fails loudly rather than being skipped.
         ModelAgentRunner.ContractStamp = EvalContractOptions.BuildContractStamp();
+        // Reads the thinking-budget env vars (ThinkingOptions.FromEnvironment); unset = Off. Every ModelEval runner without an explicit thinking argument picks this up.
+        ModelAgentRunner.ThinkingDefault = ThinkingOptions.FromEnvironment();
 
         if (string.IsNullOrEmpty(LlmOptions.Model))
         {
