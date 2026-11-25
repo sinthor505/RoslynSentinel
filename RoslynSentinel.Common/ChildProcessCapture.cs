@@ -20,7 +20,7 @@ public sealed record ChildProcessCaptureResult(
 /// timeout. Here the reads are chunked loops into StringBuilders, so partial text survives cancellation.
 /// </summary>
 /// <remarks>
-/// Differs from <see cref="GitProcess"/>, which is synchronous, returns null on a held pipe and discards the text: this
+/// Differs from <c>GitProcess</c> (RoslynSentinel.Git), which is synchronous, returns null on a held pipe and discards the text: this
 /// helper is async, gives the reads a drain grace after exit, then cancels them and keeps what was read, and reports
 /// DrainTimedOut so the caller can continue with the real exit code and possibly incomplete output.
 /// </remarks>

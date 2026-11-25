@@ -13,6 +13,7 @@
 
 	<ItemGroup>
 	  <ProjectReference Include="..\RoslynSentinel.Common\RoslynSentinel.Common.csproj" />
+	  <ProjectReference Include="..\RoslynSentinel.Git\RoslynSentinel.Git.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

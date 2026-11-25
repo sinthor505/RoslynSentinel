@@ -17,7 +17,7 @@ internal sealed record ChangedCommit(string ShortHash, string Subject, IReadOnly
 
 /// <summary>
 /// The typed read-only git queries the server runs on its own behalf (staleness check, build stamp, not-found evidence,
-/// residual-mention scan, doc trailer scan). Implemented by <see cref="IGitReader"/>; every method returns null when git
+/// residual-mention scan, doc trailer scan). Implemented by <c>IGitReader</c> (RoslynSentinel.Git); every method returns null when git
 /// cannot answer and never throws for those conditions. <paramref name="cliTimeout"/> bounds the CLI implementation only.
 /// </summary>
 internal interface IRepoQuery

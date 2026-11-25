@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\RoslynSentinel.AgentLoop\RoslynSentinel.AgentLoop.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Common\RoslynSentinel.Common.csproj" />
+    <ProjectReference Include="..\RoslynSentinel.Git\RoslynSentinel.Git.csproj" />
   </ItemGroup>
 
   <ItemGroup>

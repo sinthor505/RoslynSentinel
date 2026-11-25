@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Configurations>Debug;Release;DebugVisualStudio</Configurations>
+  </PropertyGroup>
+
+	<ItemGroup>
+		<Using Include="RoslynSentinel.Common" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\RoslynSentinel.Common\RoslynSentinel.Common.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="LibGit2Sharp" Version="0.32.0" />
+	</ItemGroup>
+
+	<!-- INTERIM (plan_isolate_git_area_into_own_project Step 14B removes this: files move physically into this project) -->
+	<ItemGroup>
+		<Compile Include="..\RoslynSentinel.Common\Git\**\*.cs" LinkBase="Git" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="RoslynSentinel.Engines.Basic" />
+		<InternalsVisibleTo Include="RoslynSentinel.Tools.Basic" />
+		<InternalsVisibleTo Include="RoslynSentinel.Tests" />
+		<InternalsVisibleTo Include="RoslynSentinel.Tests.Basic" />
+		<InternalsVisibleTo Include="RoslynSentinel.Tests.Tools.Basic" />
+		<InternalsVisibleTo Include="RoslynSentinel.Tests.Server" />
+		<InternalsVisibleTo Include="RoslynSentinel.Tests.ModelEval" />
+		<InternalsVisibleTo Include="RoslynSentinel.Tests.Harness" />
+	</ItemGroup>
+
+</Project>

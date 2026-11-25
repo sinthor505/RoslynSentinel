@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -12,7 +12,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="LibGit2Sharp" Version="0.32.0" />
 		<PackageReference Include="Microsoft.Build.Framework" Version="18.9.6" ExcludeAssets="runtime" PrivateAssets="all">
 			<IncludeAssets>compile; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>
@@ -25,6 +24,11 @@
 		<PackageReference Include="ModelContextProtocol" Version="2.4.0" />
 		<PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
 	</ItemGroup>	
+
+	<!-- INTERIM (plan_isolate_git_area_into_own_project Step 14B removes this: files move physically into RoslynSentinel.Git) -->
+	<ItemGroup>
+		<Compile Remove="Git\**\*.cs" />
+	</ItemGroup>
 
 	<ItemGroup>
 		<InternalsVisibleTo Include="RoslynSentinel.Tests" />
@@ -40,6 +44,8 @@
 			<!-- ModelEvalAssemblySetUp stamps runs via the internal GitReaders.Default. -->
 			<InternalsVisibleTo Include="RoslynSentinel.Tests.ModelEval" />
 			<InternalsVisibleTo Include="RoslynSentinel.Tests.Harness" />
+		<!-- The Git project (Git\ folder code) uses internal Common types (IRepoQuery, ChangedCommit, WorkingTreeChange, ...). -->
+		<InternalsVisibleTo Include="RoslynSentinel.Git" />
 	</ItemGroup>
 
 </Project>

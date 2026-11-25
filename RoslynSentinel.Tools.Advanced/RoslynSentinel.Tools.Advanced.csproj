@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -14,6 +14,7 @@
   <ItemGroup>
     <ProjectReference Include="..\RoslynSentinel.AgentLoop\RoslynSentinel.AgentLoop.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Common\RoslynSentinel.Common.csproj" />
+    <ProjectReference Include="..\RoslynSentinel.Git\RoslynSentinel.Git.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Engines.Advanced\RoslynSentinel.Engines.Advanced.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Engines.Basic\RoslynSentinel.Engines.Basic.csproj" />
   </ItemGroup>
