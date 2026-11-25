@@ -334,7 +334,7 @@ its subject with direct `new CoreRefactoringTools(` and test-local `NormalizingM
 
 ### Step 7 - Relocate the baselined classes (MoveFile is live; batches 7.1-7.6 whole files, 7.7+ class extraction)
 MoveFile (`MoveFile(sourcePath, destinationPath, namespaceHandling: keep)`, compile gate, cross-project allowed) is live, so the
-earlier TOOL-GAP is gone. The existing TODO.md entry "Core split test-move remainder" is done by batch 7.5.
+earlier TOOL-GAP is gone. (2026-11-25: the call shape is now `MoveFile(moves: [{sourcePath, destinationPath}], namespaceHandling: keep)`; see plan_multi_file_movefile_and_namespace_change_tool.) The existing TODO.md entry "Core split test-move remainder" is done by batch 7.5.
 
 - Depends on: Steps 1, 3c, 6b, 6c (so a move needs no edit beyond the file's own path).
 - Effect: text-neutral (tests change project; their code and namespace do not).

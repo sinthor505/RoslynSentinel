@@ -22,7 +22,7 @@ through model output.
 ### Decided (todo review 2026-11-10, owner's decisions are final)
 - **Scope:** any text file, `.cs` and non-C# alike. Refuse binary files and directories, refuse when the
   destination exists, refuse when the source is missing.
-- **Signature:** `MoveFile(sourcePath, destinationPath, namespaceHandling)`, all three mandatory.
+- **Signature:** `MoveFile(sourcePath, destinationPath, namespaceHandling)`, all three mandatory. (2026-11-25: `sourcePath`/`destinationPath` became pairs of a required `moves` list, see plan_multi_file_movefile_and_namespace_change_tool.)
   `namespaceHandling` is one enum: `keep | update | copyAndObsolete`. For non-`.cs` files only `keep` is valid.
 - **Slicing:**
   - Slice 1 = the plain move (`keep`); `update` and `copyAndObsolete` are refused with a "not yet supported"
