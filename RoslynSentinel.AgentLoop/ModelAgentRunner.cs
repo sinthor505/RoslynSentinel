@@ -374,8 +374,16 @@ public sealed class ModelAgentRunner
         var identicalSuccessCount = 0;
         var identicalSuccessNudged = false;
 
+        // The first live request of this run, so a seeded or resumed run also gets firstTurn on its first live request;
+        // seeded turns contribute no error signals.
+        var pendingSignals = ThinkingTriggers.FirstTurn;
+
         while (turnNumber < _turnCap)
         {
+            // Read and reset at the top of the loop, so no path (including the malformed-markup continue) needs an end-of-turn copy.
+            var turnSignals = pendingSignals;
+            pendingSignals = ThinkingTriggers.None;
+
             if (overallStopwatch.Elapsed > _wallClockCap)
             {
                 stopReason = AgentStopReason.WallClockCapExceeded;
@@ -407,10 +415,15 @@ public sealed class ModelAgentRunner
             using var callCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             var remaining = _wallClockCap - overallStopwatch.Elapsed;
             callCts.CancelAfter(remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero);
+            var turnThinking = _thinking.Decide(turnSignals);
+            if (turnThinking.Requested)
+            {
+                _logger.LogInformation("Turn {Turn}: thinking requested (triggers: {Triggers}, effort: {Effort})", turnNumber, turnThinking.FiredTriggers, _thinking.Effort);
+            }
             AgentChatMessage modelMessage;
             try
             {
-                modelMessage = await _llm.CompleteAsync(replayMessages, toolDefinitions, _maxTokensPerTurn, callCts.Token, replayPolicy);
+                modelMessage = await _llm.CompleteAsync(replayMessages, toolDefinitions, _maxTokensPerTurn, callCts.Token, replayPolicy, turnThinking.Requested ? _thinking : null);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && callCts.IsCancellationRequested)
             {
@@ -492,8 +505,18 @@ public sealed class ModelAgentRunner
                 ModelLatency = turnStopwatch.Elapsed,
                 StartedAt = turnStartedAt,
                 CompletedAt = turnCompletedAt,
+                Thinking = _thinking.Mode == ThinkingMode.Off ? null : (turnThinking with
+                {
+                    ReasoningDeltas = modelMessage.ReasoningDeltaCount,
+                    // Observed reasoning budget: an inactive, experimental feature of unknown value; it never cuts the stream and can be removed if it causes problems. See docs/current/plans/plan_error_gated_thinking_and_client_reasoning_budget.md, "Deferred: enforced cut".
+                    OverBudget = turnThinking.Requested && _thinking.ReasoningBudget is { } budget ? (modelMessage.ReasoningDeltaCount ?? 0) > budget : null,
+                }),
             };
             transcript.Turns.Add(turnRecord);
+            if (turnRecord.Thinking?.OverBudget == true)
+            {
+                _logger.LogInformation("Turn {Turn}: reasoning {Deltas} deltas exceeded the observed budget {Budget} (not enforced)", turnNumber, modelMessage.ReasoningDeltaCount, _thinking.ReasoningBudget);
+            }
             RecordAssists(transcript, turnRecord, turnAssists);
             messages.Add(modelMessage);
             await WriteTranscriptAsync(transcript, transcriptDirectory, cancellationToken);
@@ -613,6 +636,10 @@ public sealed class ModelAgentRunner
                     FormatForAgentLog(turnNumber, callIndexInTurn, toolCall.Name, "args", toolCall.ArgumentsJson, transcriptDirectory));
 
                 var (resultJson, isError, latency, callStartedAt, callCompletedAt, trailingText, meta) = await ExecuteToolCallAsync(toolCall, cancellationToken);
+                if (isError)
+                {
+                    pendingSignals |= ThinkingTriggers.Error;
+                }
                 turnRecord.ToolCalls.Add(new AgentToolCallRecord
                 {
                     ToolName = toolCall.Name,
@@ -723,6 +750,7 @@ public sealed class ModelAgentRunner
 
                 if (ToolLoopLatch.RefusalMessage(toolCall.Name, resultJson) is { } refusalMessage)
                 {
+                    pendingSignals |= ThinkingTriggers.LatchRefusal;
                     var refusalCount = latchRefusals.GetValueOrDefault(toolCall.Name) + 1;
                     latchRefusals[toolCall.Name] = refusalCount;
                     RecordAssists(transcript, turnRecord, [new AgentAssist(AgentAssist.LatchKind, toolCall.Name, refusalCount, refusalMessage)]);
