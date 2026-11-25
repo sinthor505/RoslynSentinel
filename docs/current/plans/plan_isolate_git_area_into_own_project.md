@@ -469,6 +469,10 @@ Depends on: Step 9f (the moved files are in one folder; the seam files stay outs
   3 assemblies, else `implementer`. Done when: `Build` 0 errors and the 10c filter passes in every touched assembly with results unchanged.
 
 ### Step 11 - Split the DTO records out of `GitImpl.cs` (Lane A, after Step 8)
+- Done: 1b2f5602 (25 types, one file per type: `MoveType` creates one file per type named after it, so the four thematic files of the Change
+  text were not possible; the tool reformatted `GitImpl.cs` accessors, +90/-78 whitespace-only, and left two stray marker comments, removed by
+  hand; INBOX line filed). decf3ad8 fixed three Batch B test regressions (probe tables miss inherited `IRepoQuery` methods; one engine-direct
+  line-range test asserted `ErrorDetail`, now asserts the `HunkSelection` hint).
 - Files: `RoslynSentinel.Tools.Basic/GitImpl.cs` (source) plus new files in `RoslynSentinel.Tools.Basic/` (target). Depends on: Step 8.
   Effect: text-neutral (namespace `RoslynSentinel.Tools.Basic` and every property kept; same assembly).
 - Why a separate step: `GitImpl.cs:11-611` holds about 35 public wire types ahead of the engine class (`:612`); `MoveFile` moves a file, so the
@@ -485,6 +489,10 @@ Depends on: Step 9f (the moved files are in one folder; the seam files stay outs
 - Done when: `Build` 0 errors; `GetFileOutline(GitImpl.cs)` shows only `GitImpl` at top level; dispatcher: the Step 2 pins and `GitToolsSmokeTests` pass.
 
 ### Step 12 - Spike: the move and the split in a throwaway worktree
+- Done: spike report in Appendix B (no commit; worktree removed). Verdict: MoveFile down inside Common works; `SplitProjectByFolder` is a stub
+  (blocker `blocking_error_splitprojectbyfolder_is_a_stub.md`); cross-project single-file MoveFile cannot move the reader cluster
+  (blocker `blocking_error_movefile_has_no_multi_file_cross_project_move.md`). Step 14 therefore ran the hand-edited csproj/slnx route
+  plus per-file MoveFile (see Step 14 Done).
 - Files: none in the repo (a worktree under the scratch root, `ROSLYNSENTINEL_SCRATCH_ROOT`)
 - Depends on: Steps 11d and 9f. Lane: dispatcher-run (`explore-tier2` or main session), not an implementer slice. Effect: text-neutral.
 - Change, in the throwaway worktree: (1) `MoveFile` the DTO files, `IGitOperations.cs`, `GitHunkParser.cs`, `GitImpl.cs` down into
@@ -504,6 +512,8 @@ Depends on: Step 9f (the moved files are in one folder; the seam files stay outs
   recorded; the dispatcher continues Steps 15-18 prerequisites that do not depend on the project.
 
 ### Step 13 - Move the engine down into `RoslynSentinel.Common/Git/` (D-b)
+- Done: 56a5c1b2 (28 MoveFile calls, 0 refusals; `Common.csproj` gained `<Using Include="RoslynSentinel.Common" />`; `GitErrorCodes` is a
+  dependency of `GitResult` and moves first; `GitStatusResult` before `GitStageHunksResult`/`GitStashResult`; BareFileWriteRatchetTests key updated).
 - Files: the DTO files of Step 11, `IGitOperations.cs`, `GitHunkParser.cs`, `GitImpl.cs` (all from `RoslynSentinel.Tools.Basic/`)
 - Depends on: Steps 8, 10c, 11d, 12. Lane: `implementer-sweep` (1 operation: `MoveFile` with `namespaceHandling: keep`; at most 8 files per slice,
   1 project). Needs `HOLD` coordination. Effect: text-neutral (namespace `RoslynSentinel.Tools.Basic` kept on purpose; the rename is Step 19).
@@ -521,6 +531,13 @@ Depends on: Step 9f (the moved files are in one folder; the seam files stay outs
   dispatcher: the Step 2 pins, `BareFileWriteRatchetTests`, `GitToolsSmokeTests` pass.
 
 ### Step 14 - One `SplitProjectByFolder`: `Common/Git/` becomes `RoslynSentinel.Git`
+- Done (route changed, owner-authorized bypass for csproj/slnx only; no `.cs` was hand-moved): 99a8d79e (14A: `RoslynSentinel.Git.csproj` hand-written,
+  compiles `Common/Git/**` through a link stand-in while Common removes the folder; LibGit2Sharp moved; IVT, ProjectReferences, slnx; two dangling
+  crefs in `ChildProcessCapture.cs`/`RepoQuery.cs` made text), 197df57b (14B1: 30 files, MoveFile one per call, intra-project because both paths
+  are in the Git compilation), dcd159f1 (14B2: last 30 files, stand-in removed, `Common/Git` gone, ratchets re-keyed to `RoslynSentinel.Git/`,
+  `RoslynSentinel.Git` added to ErrorPolicyKind `ScannedProjects` and the FirstMatch/Whitespace/Newline project lists, Common IVT `Tests.ModelEval`
+  dropped, `architecture_projects.md` regenerated), 43cb32cd (follow-up: staleness/test-instance-launcher source lists omitted the new project).
+  Layout: files at `RoslynSentinel.Git/` root, `RoslynSentinel.Git/GitWorktree/`; namespaces unchanged. Step 18 (tests) can reuse this route.
 - Files: all of `RoslynSentinel.Common/Git/**` (Appendix B plus the Step 1a, 11 and 13 files); both `.csproj` files, `.slnx`, consumers' `.csproj`
   files, the ratchets below
 - Depends on: Steps 10d and 13. Needs `HOLD` coordination. Effect: text-neutral (namespaces unchanged: `RoslynSentinel.Common`,
@@ -708,7 +725,13 @@ Decided items are in Decision (D-a to D-f, seam, `TryGetGitRoot`); what remains 
 10. **Public surface of the engine in Common during Steps 13-14.** Between them, the public DTOs and `IGitOperations` live in the Common assembly
     under namespace `RoslynSentinel.Tools.Basic`; tool schemas are built from the DTO types' shapes, not their assembly, so no schema change is expected
     (checked by `GitToolsSmokeTests` and the server golden tests in the Step 14 run).
-11. **Tiers.** Slices are sized to depth tier 1 and sweep tier 0 as of this draft; if `.claude/implementer-tiers.json` is raised, Steps 9, 13 and 17 shrink
+11. **TOOL-GAPs found by the Step 12 spike (open, blockers written):** `SplitProjectByFolder` is a stub and `MoveFile` has no multi-file cross-project move
+    (Appendix B). Step 14 used the link-stand-in route instead; Steps 18 (tests) and any later split reuse it unless the tool is implemented. Recommendation: either
+    implement `SplitProjectByFolder` (move files, ProjectReference to the source project, package/IVT fix-up report) or make it throw `ToolNotImplementedException` so
+    it cannot report success.
+12. **Server-binary staleness lists name projects by path** (found in Step 14B2, fixed in 43cb32cd): any further new production project must be added to
+    `ServerBinaryStaleness.SourcePathPrefixes`, `scripts/server-source-paths.txt` and `TestInstanceLauncher` (Step 19/18 add no production project; a later area plan will).
+13. **Tiers.** Slices are sized to depth tier 1 and sweep tier 0 as of this draft; if `.claude/implementer-tiers.json` is raised, Steps 9, 13 and 17 shrink
     (sweep tier 1 allows 15 files per operation). Re-read the file before dispatching.
 
 ## Related
@@ -760,6 +783,28 @@ Non-Git Common referencers now: none in code. `PersistentWorkspaceManager.cs`, `
 the seam (`IRepoProbe`, `RepoQueryProvider`; `RepoQuery.cs` stays in the Common root). Three prose references remain and will need
 attention at the project split (a `<see cref>` to a type in the new project becomes CS1574): `ChildProcessCapture.cs:23` (cref `GitProcess`),
 `RepoQuery.cs:20` (cref `IGitReader`), `RepoQuery.cs:54` (text only); `ToolCallTranscript.cs:44` is text only.
+
+**Step 12 spike report (batch C, 2026-11-24, throwaway worktree at `1b2f5602`, removed afterwards):**
+- (1) `MoveFile` down into `Common/Git/`: works. One file per call (a comma list gives `NotFound`), about 20 s each, self-validating. Needs
+  `<Using Include="RoslynSentinel.Common" />` in `Common.csproj` first (without it 213 CS0246). Order: `GitErrorCodes`, `GitResult`, the 7 `*Entry`,
+  the `*Result` files (`GitStatusResult` before `GitStageHunksResult`/`GitStashResult`), `IGitOperations`, `GitHunkParser`, `GitImpl`. `GitImpl` and the
+  DTOs use nothing from Engines.Basic or Tools.Basic. Full Build 0 errors. (The real move in Step 13 took 28 calls, no refusals.)
+- (2) `SplitProjectByFolder`: TOOL-GAP, a stub (`SolutionStructureEngine.SplitProjectByFolderAsync`, `// TODO ... is a simulation`): it runs
+  `dotnet new classlib`, counts documents, moves 0 files while reporting "Moved 32 files" (60 were there), writes a csproj with no Common
+  reference, adds a slnx entry with an odd `BuildType` line, and touches no ProjectReference, IVT, package or the `GitWorktree/` subfolder.
+  Blocker: `blocking_error_splitprojectbyfolder_is_a_stub.md`.
+- Cross-project single-file `MoveFile` into a pre-built Git project works top-down only (`GitImpl`, `IGitOperations`, `GitHunkParser` moved green;
+  `GitResult` before its derived records gave 1391 errors, `GitProcess` before the readers 45, `Libgit2GitReader.Hooks.cs` alone 178): TOOL-GAP, no
+  multi-file atomic move. Blocker: `blocking_error_movefile_has_no_multi_file_cross_project_move.md`.
+- Route that worked in Step 14: hand-written csproj with a link stand-in (`<Compile Include="..\RoslynSentinel.Common\Git\**\*.cs" LinkBase="Git" />`;
+  Common `<Compile Remove="Git\**\*.cs" />`) so the Git compilation already holds the files, then per-file `MoveFile` inside that one project (60 calls,
+  0 refusals, 15-20 s each), then remove the stand-in. The same trick applies to Step 18 (tests).
+- Common internals the Git code uses (Common IVT to Git is required): `IRepoQuery`, `ChangedCommit`, `WorkingTreeChange` (`RepoQuery.cs`; 12 CS0122
+  with the IVT removed). Common IVT: `Tests` (`ISnippetMatcher`) and `Tests.Server` (`PersistentWorkspaceManager.RecordReloadFailure`/`ClearReloadFailure`)
+  are still needed, so Step 14d's "drop those three" was wrong for two; `Tests.ModelEval` dropped; `Tests.Harness` needed (`WorkingTreeChange`).
+- Warnings: delta 0 (10 CS0618 in Tests.Server before and after); doc diagnostics are off, so no CS1574 ever appeared; the two crefs that really dangled
+  were made text anyway. First `LoadSolution(forceReload)` right after adding a brand-new csproj failed ("Unable to find project information for
+  'RoslynSentinel.Git.csproj'") until `dotnet restore RoslynSentinel.slnx` ran in the shell (minor bypass: restore has no MCP tool).
 
 ## Appendix C - Test move inventory (filled by Step 16)
 
