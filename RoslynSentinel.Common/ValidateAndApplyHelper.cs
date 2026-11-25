@@ -112,7 +112,7 @@ public static class ValidateAndApplyHelper
         Func<DiagnosticReport, CancellationToken, Task<NearMissCorrection?>>? tryAutoCorrect = null,
         // Forwarded to the chokepoint: writes the given text byte-exact (skips only EOL/BOM normalization; every other guard still applies). For MoveFile.
         bool verbatim = false,
-        // The committed solution the caller already compiled exactly `changes` (and removePaths/deletePaths) against, error-free. When the workspace's committed
+        // The committed solution, or a candidate derived from it, that the caller already compiled exactly `changes` (and removePaths/deletePaths) against, error-free. When the workspace's committed
         // solution is still that same instance, this helper skips its own whole-set compile; otherwise (the workspace moved on) it compiles as usual. Everything
         // else still runs: pre-images, expectedEdits tripwire, dry run, MarkGatePassed (so the chokepoint re-validates after a foreign write), and the chokepoint's own
         // drift, stale-read, EOL and ledger checks. For MoveFile(copyAndObsolete), whose migration ends with a clean compile of the exact set. Null (default) = always compile.
@@ -206,23 +206,8 @@ public static class ValidateAndApplyHelper
 
         if (correction is null && validation.IsError)
         {
-            var detail = validation.Diagnostics;
-            var (impactText, impactDetail) = describeEditImpact != null ? await describeEditImpact(validation, cancellationToken) : (null, null);
-            var untouchedText = impactText ?? DescribeUntouchedFileErrors(changes.Keys.Select(k => (string)k), detail.Select(d => d.FilePath.ToString()));
-            var detailString = describeValidationFailure != null
-                ? await describeValidationFailure(validation, cancellationToken)
-                : validation.Diagnostics.ToJson();
-            var validationError = new ResultError(
-                ToolErrorCode.ValidationFailed,
-                $"{operationName}: the change was valid and matched its target(s), but introduces new compiler errors - change not applied. " +
-                (impactText is null ? (untouchedText is null ? "" : untouchedText + " ") : impactText.TrimEnd()) +
-                (impactText is null ? "Fix the issue(s) below and retry." : ""),
-                detailString,
-                impactDetail ?? detail.Cast<object>().ToList());
-            // Foreign-agent findings for the files that failed the compile gate; null when there are none so single-agent output is unchanged.
-            var validationFindings = EditAttributionFindings.ForCurrentCaller(
-                workspaceManager, detail.Select(d => d.FilePath.ToString()));
-            return new ApplyOutcome(null, validationError with { Findings = validationFindings.Count > 0 ? validationFindings.ToList() : null }, dryRun, Validation: validation);
+            var rejection = await BuildValidationRejectionAsync(operationName, validation, changes, workspaceManager, describeValidationFailure, describeEditImpact, cancellationToken);
+            return new ApplyOutcome(null, rejection, dryRun, Validation: validation);
         }
 
         // The chokepoint re-runs this gate if another agent writes before this change lands.
@@ -319,6 +304,35 @@ public static class ValidateAndApplyHelper
         }
 
         return new ApplyOutcome(changeId, null, false, appliedDiff, LineChanges: lineChanges, Findings: successFindings);
+    }
+
+    // Builds the ValidationFailed rejection for a compile-gate failure (shared with tool-level gates; text unchanged).
+    internal static async Task<ResultError> BuildValidationRejectionAsync(
+        string operationName,
+        DiagnosticReport validation,
+        IReadOnlyDictionary<FilePathWrapper, string> changes,
+        IWorkspaceManager workspaceManager,
+        Func<DiagnosticReport, CancellationToken, Task<string>>? describeValidationFailure,
+        Func<DiagnosticReport, CancellationToken, Task<(string? Text, IReadOnlyList<object>? StructuredDetail)>>? describeEditImpact,
+        CancellationToken cancellationToken)
+    {
+        var detail = validation.Diagnostics;
+        var (impactText, impactDetail) = describeEditImpact != null ? await describeEditImpact(validation, cancellationToken) : (null, null);
+        var untouchedText = impactText ?? DescribeUntouchedFileErrors(changes.Keys.Select(k => (string)k), detail.Select(d => d.FilePath.ToString()));
+        var detailString = describeValidationFailure != null
+            ? await describeValidationFailure(validation, cancellationToken)
+            : validation.Diagnostics.ToJson();
+        var validationError = new ResultError(
+            ToolErrorCode.ValidationFailed,
+            $"{operationName}: the change was valid and matched its target(s), but introduces new compiler errors - change not applied. " +
+            (impactText is null ? (untouchedText is null ? "" : untouchedText + " ") : impactText.TrimEnd()) +
+            (impactText is null ? "Fix the issue(s) below and retry." : ""),
+            detailString,
+            impactDetail ?? detail.Cast<object>().ToList());
+        // Foreign-agent findings for the files that failed the compile gate; null when there are none so single-agent output is unchanged.
+        var validationFindings = EditAttributionFindings.ForCurrentCaller(
+            workspaceManager, detail.Select(d => d.FilePath.ToString()));
+        return validationError with { Findings = validationFindings.Count > 0 ? validationFindings.ToList() : null };
     }
 
     // The apply's own findings followed by the correction's; the existing list unchanged (null stays null) when there is no correction.
