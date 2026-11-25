@@ -1,6 +1,6 @@
 # Plan: multi-file MoveFile (a `moves` list, one compile gate, optional csproj edges) and a `ChangeNamespace` tool
 
-**Status:** APPROVED 2026-11-25. Batched run, owner away; R12/R15/R16/R17 deferred to the tracker (Steps 14, 20, 26 wait on them). Nothing built; implements [proposal_multi_file_movefile_and_namespace_change_tool.md](../proposals/proposal_multi_file_movefile_and_namespace_change_tool.md) (ACCEPTED 2026-11-25). Revised 2026-11-25 with the owner's decisions D12-D16 and an independent review (P5-P16). Commit trailer for every slice: `Plan: plan_multi_file_movefile_and_namespace_change_tool` (the last slice adds `Closes:`).
+**Status:** IN PROGRESS 2026-11-25. Steps 1-12 done (9c8c5663..ca33514d), Step 29 skipped (probe green). Batched run, owner away; R12/R15/R16/R17 deferred to the tracker (Steps 14, 20, 26 wait on them). Nothing built; implements [proposal_multi_file_movefile_and_namespace_change_tool.md](../proposals/proposal_multi_file_movefile_and_namespace_change_tool.md) (ACCEPTED 2026-11-25). Revised 2026-11-25 with the owner's decisions D12-D16 and an independent review (P5-P16). Commit trailer for every slice: `Plan: plan_multi_file_movefile_and_namespace_change_tool` (the last slice adds `Closes:`).
 
 ## Problem
 
@@ -263,6 +263,7 @@ Wire impact: none (summarised into the description and findings)
 The slice map (two agents at most, disjoint files per round) is at the end of this section.
 
 ### Step 1 - Contract skeleton for Part 1 (compile-green, no behaviour)
+- Done: 9c8c5663
 - Files: new `RoslynSentinel.Engines.Basic/FileMovePair.cs` (`FileMovePair`, `MoveSetRequest`, `MoveFileParameterNames`); new `RoslynSentinel.Engines.Basic/MoveSetPlanResult.cs`
   (`MoveSetPlanResult`, `PlannedFileMove`, `MoveOffender`, `MoveOffenderReason`, `MoveFact`, `MoveFactKind`, `NeededProjectEdge`, `ProjectEdgeKind`, `MoveSetErrorGroup`, `MoveSetRefusedException`); new
   `RoslynSentinel.Engines.Basic/MoveSetPlanner.cs`. Three files, one write each (`CreateFile`), definitions before users.
@@ -283,6 +284,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `implementer` (D1: 3 files, 3 writes).
 
 ### Step 2 - Funnel the `MoveFileTool` test call sites, part 1: the helper and the `tools.MoveFileTool(` form
+- Done: 4ddbabd2
 - Files: `RoslynSentinel.Tests.Tools.Basic/MoveFileTests.cs`. Measured 2026-11-25: 16 `MoveFileTool` call sites in this file, in two textual forms: `tools.MoveFileTool(` (8: lines 65, 88, 107, 128, 148, 187, 211, 235)
   and `BuildTools(manager).MoveFileTool(` (8: lines 267, 281, 297, 315, 331 and three more). `MoveFileCopyAndObsoleteTests.cs:106` is the single call site of its private helper `CopyAsync` (used 17 times), so it
   needs no funnel; Step 13 edits that one line.
@@ -294,6 +296,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `implementer` (D1: 1 file, 9 edits; split from Step 3 because two textual forms plus the helper is two operations, over the S0 limit).
 
 ### Step 3 - Funnel the `MoveFileTool` test call sites, part 2: the `BuildTools(manager).MoveFileTool(` form
+- Done: 6be9c93a
 - Files: `RoslynSentinel.Tests.Tools.Basic/MoveFileTests.cs`.
 - Depends on: Step 2 (same file, helper must exist)
 - Effect: text-neutral
@@ -303,6 +306,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `implementer` (D1: 1 file, 8 edits).
 
 ### Step 4 - Extract the helper's rejection builder (text-neutral prerequisite for D13(d))
+- Done: 1b9a55bc
 - Files: `RoslynSentinel.Common/ValidateAndApplyHelper.cs` (rejection block `:207-227`, measured; the review cited `:205-226`), plus a new `RoslynSentinel.Common/ValidationRejection.cs` only if the builder
   cannot be an `internal static` method in place. `plan_shared_tool_execution_pipeline.md` (DRAFT, parked) targets the same spot (`:199-202`, its Step at line 101); re-check its status before editing.
 - Depends on: none
@@ -315,6 +319,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `implementer` (D1: 1-2 files).
 
 ### Step 5 - Contract skeleton for Part 2, the D10 comment and the stale stub hint
+- Done: 8ff1ff03
 - Files: new `RoslynSentinel.Engines.Basic/NamespaceMove.cs` (`NamespaceMove`, `ChangeNamespaceRequest`, `EditOverlap`, `DanglingUsing`, `DanglingUsingResolution`); new
   `RoslynSentinel.Engines.Basic/ChangeNamespaceEngine.cs`; `RoslynSentinel.Engines.Basic/ProjectStructureEngine.cs` (comment and hint text). Three files.
 - Depends on: none (Part 2 does not need Part 1)
@@ -329,6 +334,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `implementer` (D1: 3 files).
 
 ### Step 6 - D5 probe: does `LoadSolution` restore a hand-written csproj that an existing project references?
+- Done: b89965a5 (GREEN for forceReload and default LoadSolution; Step 29 skipped)
 - Files: new `RoslynSentinel.Tests.Tools.Basic/LoadSolutionHandWrittenCsprojRestoreIntegrationTests.cs`; `RoslynSentinel.Tests.Tools.Basic/BuildIsolationTests.cs` (one `TestCase` row).
 - Depends on: none
 - Effect: text-neutral (tests only)
@@ -342,6 +348,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `test-writer`.
 
 ### Step 7 - Planner stage 1: expansion, eligibility, cap
+- Done: 0f572308
 - Files: `RoslynSentinel.Engines.Basic/MoveSetPlanner.cs`.
 - Depends on: Step 1
 - Effect: text-neutral (no caller yet; the tool still runs its inline code)
@@ -354,6 +361,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `implementer` (D1: 1 file, about 8 edits).
 
 ### Step 8 - `ValidationEngine.ValidateChangesAgainstBaselineAsync` (new static; existing core delegates)
+- Done: c5b83276
 - Files: `RoslynSentinel.Common/ValidationEngine.cs` (289 lines).
 - Depends on: none
 - Effect: text-neutral (same results for every existing caller). Hot path: the static core is called by 4 production sites (`CopyAndObsoleteMigration.cs:191`, `BasicRefactoringEngine.cs:1096`, `MemberRefactoringEngine.cs:5329`
@@ -368,6 +376,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `implementer` (D1: 1 file, about 5 edits).
 
 ### Step 9 - Planner tests, part A (expansion, eligibility, cap)
+- Done: 483758ca
 - Files: new `RoslynSentinel.Tests.Basic/MoveSetPlannerEligibilityTests.cs`; new fixture helper `RoslynSentinel.Tests.Basic/MoveSetFixture.cs` (writes real files under the scratch root; stage 1 reads disk only, so no solution is needed).
   Placement is subject to `TestPlacementRatchetTests`.
 - Depends on: Step 7
@@ -378,6 +387,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `test-writer`.
 
 ### Step 10 - Planner stage 2: project check and facts
+- Done: ad3ae76b (deviation: added trailing defaulted `SourceFolders` to `MoveSetPlanResult`; stage 2 needs folder-pair source roots)
 - Files: `RoslynSentinel.Engines.Basic/MoveSetPlanner.cs`.
 - Depends on: Step 7
 - Effect: text-neutral
@@ -391,6 +401,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `implementer` (D1: 1 file, about 8 edits).
 
 ### Step 11 - Tests for `ValidateChangesAgainstBaselineAsync`
+- Done: ae9c5994, fix ca33514d
 - Files: new `RoslynSentinel.Tests.Basic/ValidationEngineBaselineSplitTests.cs`.
 - Depends on: Step 8
 - Effect: text-neutral
@@ -400,6 +411,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `test-writer`.
 
 ### Step 12 - Planner tests, part B (project check, facts)
+- Done: b6cffe60
 - Files: new `RoslynSentinel.Tests.Basic/MoveSetPlannerFactsTests.cs` (uses `MoveSetFixture` and `TestSolutionBuilder.CreateSolutionWithProject("Demo", csprojPath, documents)`).
 - Depends on: Step 10
 - Effect: text-neutral
@@ -606,6 +618,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `implementer-senior` (over D1 limits: two 400-600 line files, six changes, shared by the live `copyAndObsolete` path).
 
 ### Step 29 - Conditional: `LoadSolution` restore fix (only if a Step 6 probe was RED-NU1105)
+- Skipped: Step 6 probes GREEN (b89965a5)
 - Files: probably `RoslynSentinel.Tools.Basic/WorkspaceProjectManagementImpl.cs` (`RestoreBeforeLoadAsync` at `:702`); the exact file is decided by the Step 6 failure text, which the dispatcher puts in the brief.
 - Depends on: Step 6 (only if red)
 - Effect: behaviour-changing (a load that previously failed now restores first), only if the probe is red; if both probes are GREEN, record "D5 closed: probes green" here and skip.
