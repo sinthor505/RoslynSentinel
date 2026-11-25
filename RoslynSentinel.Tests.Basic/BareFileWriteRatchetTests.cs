@@ -62,7 +62,7 @@ public class BareFileWriteRatchetTests
         // Debug dumps (two sites).
         ["RoslynSentinel.Tools.Advanced/AsyncifyTools.cs::AsyncifyLoopTool"] = 2,
         // Temp patch file for hunk staging, deleted after use.
-        ["RoslynSentinel.Tools.Basic/GitImpl.cs::StageHunksAsync"] = 1,
+        ["RoslynSentinel.Common/Git/GitImpl.cs::StageHunksAsync"] = 1,
         // Blocker .md document written by the PlanStepRunner utility.
         ["RoslynSentinel.Utilities.PlanStepRunner/Program.cs::WriteBlockerDoc"] = 1,
     };
