@@ -1,6 +1,6 @@
 # Plan: Move the Git area into its own production project (RoslynSentinel.Git) and its own test project (RoslynSentinel.Tests.Git)
 
-**Status:** IN PROGRESS 2026-11-24. Steps 1a-10 done (7aa47fc6..906e0e8b); batched run, owner away; decisions D-a to D-f in Decision.
+**Status:** IN PROGRESS 2026-11-24. Steps 1a-14 done (7aa47fc6..43cb32cd; RoslynSentinel.Git exists); batched run, owner away; decisions D-a to D-f in Decision.
 
 ## Problem
 
