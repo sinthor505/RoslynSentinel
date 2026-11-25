@@ -13,7 +13,7 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 /// lines go in only when the range covers the first added line), the staged bytes stay byte-exact (CRLF), a cut that cannot be made
 /// safely is refused with facts and options, and a change to the file's index entry between reading
 /// the diff and applying the patch is refused as GitHunkStale. The race is made deterministic with the internal
-/// <c>afterHunkDiffLoaded</c> constructor argument of <see cref="GitImpl"/>.
+/// <c>afterHunkDiffLoaded</c> constructor argument of <see cref="GitEngine"/>.
 /// </summary>
 // KNOWN FLAKE on full/parallel runs (spawns git): disregard a failure here when the change did not touch process spawning; re-run the class alone first.
 [TestFixture]
@@ -76,10 +76,10 @@ public class GitStageLineRangeTests
         return (baseText, blockA, blockB);
     }
 
-    private static GitImpl NewImpl(Action<string>? afterHunkDiffLoaded = null) =>
-        new(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitImpl>.Instance, GitReaders.Default, afterHunkDiffLoaded: afterHunkDiffLoaded);
+    private static GitEngine NewImpl(Action<string>? afterHunkDiffLoaded = null) =>
+        new(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitEngine>.Instance, GitReaders.Default, afterHunkDiffLoaded: afterHunkDiffLoaded);
 
-    private Task<GitStageHunksResult> StageRangeAsync(GitImpl impl, string lineRange) =>
+    private Task<GitStageHunksResult> StageRangeAsync(GitEngine impl, string lineRange) =>
         impl.StageHunksAsync(_dir, Rel, hunkIds: null, hunkFingerprint: null, lineRange, CancellationToken.None);
 
     // The staged blob; ASCII content only, so decoding keeps every byte including CR.

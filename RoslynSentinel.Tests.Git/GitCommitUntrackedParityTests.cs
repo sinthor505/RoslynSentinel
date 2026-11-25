@@ -54,8 +54,8 @@ public class GitCommitUntrackedParityTests
 
     private static FallbackGitReader Composite() => new(new Libgit2GitReader(), new CliGitReader(), _ => { });
 
-    private static GitImpl Impl(IGitReader reader) =>
-        new(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitImpl>.Instance, reader);
+    private static GitEngine Impl(IGitReader reader) =>
+        new(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitEngine>.Instance, reader);
 
     private static void Write(string directory, string relativePath, string content) =>
         WriteBytes(directory, relativePath, System.Text.Encoding.UTF8.GetBytes(content));

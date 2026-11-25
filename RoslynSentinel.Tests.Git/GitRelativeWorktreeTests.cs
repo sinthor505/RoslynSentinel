@@ -119,8 +119,8 @@ public class GitRelativeWorktreeTests
 
     private static string Json(object? value) => JsonSerializer.Serialize(value);
 
-    private static GitImpl Impl(IGitReader reader) =>
-        new(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitImpl>.Instance, reader);
+    private static GitEngine Impl(IGitReader reader) =>
+        new(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitEngine>.Instance, reader);
 
     /// <summary>Keeps git's relative gitdir/commondir files but drops the extension flag, which makes libgit2 open both repositories.</summary>
     private void DropExtensionFlagKeepRelativePaths()
@@ -269,8 +269,8 @@ public class GitRelativeWorktreeTests
         var dir = Dir(linkedWorktree);
         var composite = new FallbackGitReader(new Libgit2GitReader(), new CliGitReader(), _ => { });
 
-        var statusViaComposite = await Impl(composite).StatusAsync(dir, GitImpl.DefaultStatusMaxEntries, CancellationToken.None);
-        var statusViaCli = await Impl(new CliGitReader()).StatusAsync(dir, GitImpl.DefaultStatusMaxEntries, CancellationToken.None);
+        var statusViaComposite = await Impl(composite).StatusAsync(dir, GitEngine.DefaultStatusMaxEntries, CancellationToken.None);
+        var statusViaCli = await Impl(new CliGitReader()).StatusAsync(dir, GitEngine.DefaultStatusMaxEntries, CancellationToken.None);
         var logViaComposite = await Impl(composite).LogAsync(dir, 20, null, null, null, false, false, CancellationToken.None);
         var logViaCli = await Impl(new CliGitReader()).LogAsync(dir, 20, null, null, null, false, false, CancellationToken.None);
 

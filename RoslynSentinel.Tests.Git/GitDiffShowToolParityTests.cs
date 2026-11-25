@@ -10,7 +10,7 @@ using static RoslynSentinel.Tests.Battery.Basic.GitTestRepo;
 namespace RoslynSentinel.Tests.Tools.Basic;
 
 /// <summary>
-/// Runs the Git tool's diff and show (<see cref="GitImpl.DiffAsync"/>, <see cref="GitImpl.ShowAsync"/>) with a libgit2-only reader and a CLI-only reader on
+/// Runs the Git tool's diff and show (<see cref="GitEngine.DiffAsync"/>, <see cref="GitEngine.ShowAsync"/>) with a libgit2-only reader and a CLI-only reader on
 /// throwaway repos and asserts the response DTOs serialize identically. Covered: the diff name-status list (nameOnly) for working, staged, a ref and a range, the
 /// name-status list of show, and the show header (hash, author, date, message). A case libgit2 declines (renames, submodules, conflicts, an annotated tag, a
 /// configured diff.renames and so on) goes through the production composite: the test asserts the CLI answered and that its DTO equals the CLI-only one. The
@@ -61,8 +61,8 @@ public class GitDiffShowToolParityTests
 
     // ---- helpers ----
 
-    private static GitImpl Impl(IGitReader reader) =>
-        new(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitImpl>.Instance, reader);
+    private static GitEngine Impl(IGitReader reader) =>
+        new(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitEngine>.Instance, reader);
 
     private static string Serialize<T>(T value) => JsonSerializer.Serialize(value);
 
@@ -1206,7 +1206,7 @@ public class GitDiffShowToolParityTests
         RunGit(_repo, "add", "a.txt");
 
         var before = GitReaders.Default.Libgit2Count;
-        var result = await new GitImpl(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly)).DiffAsync(_repo, "staged", null, 65536, true, false, CancellationToken.None);
+        var result = await new GitEngine(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly)).DiffAsync(_repo, "staged", null, 65536, true, false, CancellationToken.None);
 
         Assert.Multiple(() =>
         {

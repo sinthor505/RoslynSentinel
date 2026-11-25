@@ -35,7 +35,7 @@
 			<InternalsVisibleTo Include="RoslynSentinel.Engines.Basic" />
 			<!-- StaleReadGuardTests uses the internal AddExternalChangeForTest drift seam. -->
 			<InternalsVisibleTo Include="RoslynSentinel.Tests.Basic" />
-		<!-- The tool layer uses internal Common types. (The Git-internals reason, GitImpl over GitProcess, moved to RoslynSentinel.Git.) -->
+		<!-- The tool layer uses internal Common types. (The Git-internals reason, GitEngine over GitProcess, moved to RoslynSentinel.Git.) -->
 		<InternalsVisibleTo Include="RoslynSentinel.Tools.Basic" />
 			<!-- EvalRunStamp (Harness) reads the internal WorkingTreeChange returned by the repo-query seam. -->
 			<InternalsVisibleTo Include="RoslynSentinel.Tests.Harness" />

@@ -124,7 +124,7 @@ public class GitCommitTrailerTests
         Assert.That(Git("log", "-1", "--format=%s", "HEAD"), Is.EqualTo(ForeignSubject),
             "precondition: the post-commit hook must have moved HEAD onto a foreign commit, or this test proves nothing.");
 
-    private GitImpl NewGitImpl() =>
+    private GitEngine NewGitImpl() =>
         new(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly) { SolutionPath = Path.Combine(_repoDir, "Fake.sln") });
 
     // ----- on / off -----
@@ -410,10 +410,10 @@ public class GitCommitTrailerTests
     {
         string[] before = ["old", "older"];
 
-        Assert.That(GitImpl.IsOwnHead(before, ["merge", "old", "theirs"], replacesHead: false, mergeHead: "theirs"), Is.True);
-        Assert.That(GitImpl.IsOwnHead(before, ["merge", "old", "other"], replacesHead: false, mergeHead: "theirs"), Is.False, "a different second parent.");
-        Assert.That(GitImpl.IsOwnHead(before, ["merge", "old"], replacesHead: false, mergeHead: "theirs"), Is.False, "a merge was expected but the commit has one parent.");
-        Assert.That(GitImpl.IsOwnHead(before, ["foreign", "merge"], replacesHead: false, mergeHead: "theirs"), Is.False, "a foreign commit on top of the merge.");
-        Assert.That(GitImpl.IsOwnHead(before, ["merge", "old", "theirs"], replacesHead: false), Is.False, "two parents without a MERGE_HEAD snapshot are not provable.");
+        Assert.That(GitEngine.IsOwnHead(before, ["merge", "old", "theirs"], replacesHead: false, mergeHead: "theirs"), Is.True);
+        Assert.That(GitEngine.IsOwnHead(before, ["merge", "old", "other"], replacesHead: false, mergeHead: "theirs"), Is.False, "a different second parent.");
+        Assert.That(GitEngine.IsOwnHead(before, ["merge", "old"], replacesHead: false, mergeHead: "theirs"), Is.False, "a merge was expected but the commit has one parent.");
+        Assert.That(GitEngine.IsOwnHead(before, ["foreign", "merge"], replacesHead: false, mergeHead: "theirs"), Is.False, "a foreign commit on top of the merge.");
+        Assert.That(GitEngine.IsOwnHead(before, ["merge", "old", "theirs"], replacesHead: false), Is.False, "two parents without a MERGE_HEAD snapshot are not provable.");
     }
 }

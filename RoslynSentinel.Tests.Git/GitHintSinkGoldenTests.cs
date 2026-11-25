@@ -278,9 +278,9 @@ public class GitHintSinkGoldenTests
             File.WriteAllText(Path.Combine(root, "a.txt"), "three");
             GitTestRepo.RunGit(root, "add", "a.txt");
         };
-        var ops = new GitHintApplyingOperations(new GitImpl(
+        var ops = new GitHintApplyingOperations(new GitEngine(
             new FakeWorkspaceManager(WorkspaceAccess.ReadOnly),
-            NullLogger<GitImpl>.Instance,
+            NullLogger<GitEngine>.Instance,
             GitReaders.Default,
             afterHunkDiffLoaded: changeIndexUnderTheCall));
 

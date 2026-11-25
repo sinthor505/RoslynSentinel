@@ -9,7 +9,7 @@ using static RoslynSentinel.Tests.Battery.Basic.GitTestRepo;
 namespace RoslynSentinel.Tests.Tools.Basic;
 
 /// <summary>
-/// Runs the Git tool's status path (<see cref="GitImpl.StatusAsync"/>, the code behind <c>Git(operation: status)</c>) once with a
+/// Runs the Git tool's status path (<see cref="GitEngine.StatusAsync"/>, the code behind <c>Git(operation: status)</c>) once with a
 /// libgit2-only reader and once with a CLI-only reader on throwaway repos built with
 /// <see cref="RoslynSentinel.Tests.Battery.Basic.GitTestRepo"/>, and asserts the response DTOs serialize identically (every field is
 /// compared; nothing is ignored, the DTO carries no timings). Neither reader can fall back, so a libgit2 failure fails the test
@@ -57,8 +57,8 @@ public class GitStatusToolParityTests
 
     // ---- helpers ----
 
-    private static GitImpl Impl(IGitReader reader) =>
-        new(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitImpl>.Instance, reader);
+    private static GitEngine Impl(IGitReader reader) =>
+        new(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitEngine>.Instance, reader);
 
     private static void Write(string directory, string relativePath, string content)
     {
@@ -81,7 +81,7 @@ public class GitStatusToolParityTests
     /// Runs status through both backends, asserts the DTOs are deeply equal (compared as JSON, so every serialized field counts)
     /// and returns the CLI-backed DTO for content assertions.
     /// </summary>
-    private static async Task<GitStatusResult> BothBackendsAsync(string gitRoot, int maxEntries = GitImpl.DefaultStatusMaxEntries)
+    private static async Task<GitStatusResult> BothBackendsAsync(string gitRoot, int maxEntries = GitEngine.DefaultStatusMaxEntries)
     {
         var lib = await Impl(new Libgit2GitReader()).StatusAsync(gitRoot, maxEntries, CancellationToken.None);
         var cli = await Impl(new CliGitReader()).StatusAsync(gitRoot, maxEntries, CancellationToken.None);
@@ -504,8 +504,8 @@ public class GitStatusToolParityTests
 
         // libgit2 reports git add -N as added-and-modified where git says " A" and cannot tell them apart, so it declines.
         var composite = new FallbackGitReader(new Libgit2GitReader(), new CliGitReader(), _ => { });
-        var viaComposite = await Impl(composite).StatusAsync(_repo, GitImpl.DefaultStatusMaxEntries, CancellationToken.None);
-        var viaCli = await Impl(new CliGitReader()).StatusAsync(_repo, GitImpl.DefaultStatusMaxEntries, CancellationToken.None);
+        var viaComposite = await Impl(composite).StatusAsync(_repo, GitEngine.DefaultStatusMaxEntries, CancellationToken.None);
+        var viaCli = await Impl(new CliGitReader()).StatusAsync(_repo, GitEngine.DefaultStatusMaxEntries, CancellationToken.None);
 
         Assert.Multiple(() =>
         {
@@ -563,8 +563,8 @@ public class GitStatusToolParityTests
         Write(_repo, "lib/dirty.txt", "untracked inside the submodule\n");
 
         var composite = new FallbackGitReader(new Libgit2GitReader(), new CliGitReader(), _ => { });
-        var viaComposite = await Impl(composite).StatusAsync(_repo, GitImpl.DefaultStatusMaxEntries, CancellationToken.None);
-        var viaCli = await Impl(new CliGitReader()).StatusAsync(_repo, GitImpl.DefaultStatusMaxEntries, CancellationToken.None);
+        var viaComposite = await Impl(composite).StatusAsync(_repo, GitEngine.DefaultStatusMaxEntries, CancellationToken.None);
+        var viaCli = await Impl(new CliGitReader()).StatusAsync(_repo, GitEngine.DefaultStatusMaxEntries, CancellationToken.None);
 
         Assert.Multiple(() =>
         {
@@ -587,7 +587,7 @@ public class GitStatusToolParityTests
 
         // The same composite shape production uses (GitReaders.Default), on a private instance so parallel fixtures cannot move its counters.
         var composite = new FallbackGitReader(new Libgit2GitReader(), new CliGitReader(), _ => { });
-        var result = await Impl(composite).StatusAsync(_repo, GitImpl.DefaultStatusMaxEntries, CancellationToken.None);
+        var result = await Impl(composite).StatusAsync(_repo, GitEngine.DefaultStatusMaxEntries, CancellationToken.None);
 
         Assert.Multiple(() =>
         {
@@ -607,7 +607,7 @@ public class GitStatusToolParityTests
         CommitAll(_repo, "base");
 
         var before = GitReaders.Default.Libgit2Count;
-        var result = await new GitImpl(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly)).StatusAsync(_repo, GitImpl.DefaultStatusMaxEntries, CancellationToken.None);
+        var result = await new GitEngine(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly)).StatusAsync(_repo, GitEngine.DefaultStatusMaxEntries, CancellationToken.None);
 
         Assert.Multiple(() =>
         {

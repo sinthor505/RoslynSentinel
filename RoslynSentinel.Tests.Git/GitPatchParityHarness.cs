@@ -34,11 +34,11 @@ internal static class GitPatchParityHarness
     private static readonly object RecordLock = new();
 
     private static readonly MethodInfo RejoinLinesMethod =
-        typeof(GitImpl).GetMethod("RejoinLines", BindingFlags.NonPublic | BindingFlags.Static)
+        typeof(GitEngine).GetMethod("RejoinLines", BindingFlags.NonPublic | BindingFlags.Static)
         ?? throw new InvalidOperationException("GitImpl.RejoinLines was not found by reflection.");
 
     private static readonly MethodInfo DetectDecodeCorruptionMethod =
-        typeof(GitImpl).GetMethod("DetectDecodeCorruption", BindingFlags.NonPublic | BindingFlags.Static)
+        typeof(GitEngine).GetMethod("DetectDecodeCorruption", BindingFlags.NonPublic | BindingFlags.Static)
         ?? throw new InvalidOperationException("GitImpl.DetectDecodeCorruption was not found by reflection.");
 
     /// <summary>Runs git with the same -c core.quotePath=false prefix as the tool and returns the exit code and the untrimmed stdout bytes.</summary>
@@ -108,9 +108,9 @@ internal static class GitPatchParityHarness
     /// <summary>The tool-visible text and Warning for a diff target, from the real GitImpl.DiffAsync (git CLI route).</summary>
     internal static async Task<(string Text, string? Warning)> CliToolTextAsync(string dir, string target)
     {
-        var impl = new GitImpl(
+        var impl = new GitEngine(
             new FakeWorkspaceManager(WorkspaceAccess.ReadOnly),
-            NullLogger<GitImpl>.Instance,
+            NullLogger<GitEngine>.Instance,
             new CliGitReader(), // CLI-only: this side is the oracle, so it must never route through libgit2.
             new InProcessCommitRoute());
         var result = await impl.DiffAsync(dir, target, null, DiffMaxBytes, nameOnly: false, stat: false, CancellationToken.None);

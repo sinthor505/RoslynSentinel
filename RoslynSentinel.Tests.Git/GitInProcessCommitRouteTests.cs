@@ -70,8 +70,8 @@ public class GitInProcessCommitRouteTests
 
     private static FallbackGitReader Composite() => new(new Libgit2GitReader(), new CliGitReader(), _ => { });
 
-    private static GitImpl NewImpl(InProcessCommitRoute route) =>
-        new(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitImpl>.Instance, Composite(), route);
+    private static GitEngine NewImpl(InProcessCommitRoute route) =>
+        new(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitEngine>.Instance, Composite(), route);
 
     private static void Write(string directory, string relativePath, string content)
     {
@@ -868,7 +868,7 @@ public class GitInProcessCommitRouteTests
     }
 
     /// <summary>A logger whose every write throws, so the only thing that keeps the commit result is the guard around the post-commit read.</summary>
-    private sealed class ThrowingLogger : Microsoft.Extensions.Logging.ILogger<GitImpl>
+    private sealed class ThrowingLogger : Microsoft.Extensions.Logging.ILogger<GitEngine>
     {
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
@@ -888,7 +888,7 @@ public class GitInProcessCommitRouteTests
         var proxy = System.Reflection.DispatchProxy.Create<IGitReader, ThrowingReaderProxy>();
         ((ThrowingReaderProxy)proxy).Target = Composite();
         var commitsBefore = int.Parse(RunGit(directory, "rev-list", "--count", "HEAD"));
-        var impl = new GitImpl(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), new ThrowingLogger(), proxy, route);
+        var impl = new GitEngine(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), new ThrowingLogger(), proxy, route);
 
         var result = await impl.CommitAsync(directory, "guarded subject", null, null, amend: false, CancellationToken.None);
 

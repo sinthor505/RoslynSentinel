@@ -19,7 +19,7 @@ phased plan: `docs/current/proposals/proposal_dto_ownership_role_lineage.md`. En
 - Where to look: `Search(mode: record)` / `Search(mode: class)` with a name fragment, and
   `Search(mode: symbol)` for a candidate. Until the generated DTO catalog lands (proposal Phase 1), there is
   no shape search; check the 2-3 most likely names by role and domain (e.g. for a git result, the
-  `Git*Result` family in `RoslynSentinel.Tools.Basic/GitImpl.cs`).
+  `Git*Result` family in `RoslynSentinel.Git/GitResult.cs`).
 - Known gap: `Search(mode: references)` on a type name without `filePath` returns NotFound
   (`docs/current/blockers/blocking_error_search_references_by_name_excludes_types.md`). Pass the declaring
   file's `filePath` to list a type's usages.

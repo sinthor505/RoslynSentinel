@@ -103,6 +103,7 @@ internal static class GitStatusRenameHints
                 FindingSeverity.Info))];
     }
 
+    // TODO Step 15: rename-hint finding reads blobs through IGitReader in Tools.Basic; decide whether it belongs behind a GitEngine/IGitOperations method (plan_isolate_git_area_into_own_project)
     /// <summary>
     /// Tier 2: pairs a deleted path with the first (path order) unclaimed untracked file holding exactly its HEAD content.
     /// </summary>

@@ -10,10 +10,11 @@ namespace RoslynSentinel.Tools.Basic;
 
 // ── Operation implementations ─────────────────────────────────────────────
 
-public class GitImpl : IGitOperations
+// TODO rename namespace to RoslynSentinel.Git (no ChangeNamespace tool; see plan_isolate_git_area_into_own_project Step 19)
+public class GitEngine : IGitOperations
 {
     private readonly ISolutionProvider _workspaceManager;
-    private readonly ILogger<GitImpl> _logger;
+    private readonly ILogger<GitEngine> _logger;
 
     /// <summary>
     /// Bound on how long a single git subprocess invocation may run. Applied whenever no caller-
@@ -57,12 +58,12 @@ public class GitImpl : IGitOperations
     // The default-on in-process commit route (git config roslynsentinel.inProcessCommit=false turns it off; see CommitAsync and InProcessCommitRoute). Injectable so a test sees its own counters and can move the branch mid-commit; production uses the shared one.
     private readonly InProcessCommitRoute _commitRoute;
 
-    public GitImpl(ISolutionProvider workspaceManager)
-        : this(workspaceManager, new NullLogger<GitImpl>(), GitReaders.Default)
+    public GitEngine(ISolutionProvider workspaceManager)
+        : this(workspaceManager, new NullLogger<GitEngine>(), GitReaders.Default)
     {
     }
 
-    public GitImpl(ISolutionProvider workspaceManager, ILogger<GitImpl> logger)
+    public GitEngine(ISolutionProvider workspaceManager, ILogger<GitEngine> logger)
         : this(workspaceManager, logger, GitReaders.Default)
     {
     }
@@ -71,7 +72,7 @@ public class GitImpl : IGitOperations
     // before it re-reads the file's index entry, so a test can stage the same file as "another session" at exactly that moment.
     private readonly Action<string>? _afterHunkDiffLoaded;
 
-    internal GitImpl(ISolutionProvider workspaceManager, ILogger<GitImpl> logger, IGitReader gitReader, InProcessCommitRoute? commitRoute = null,
+    internal GitEngine(ISolutionProvider workspaceManager, ILogger<GitEngine> logger, IGitReader gitReader, InProcessCommitRoute? commitRoute = null,
         Action<string>? afterHunkDiffLoaded = null)
     {
         _workspaceManager = workspaceManager;

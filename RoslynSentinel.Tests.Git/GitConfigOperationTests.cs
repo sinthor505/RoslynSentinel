@@ -95,8 +95,8 @@ public class GitConfigOperationTests
 
     private static FallbackGitReader Composite() => new(new Libgit2GitReader(), new CliGitReader(), _ => { });
 
-    private static GitImpl NewImpl(IGitReader? reader = null) =>
-        new(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitImpl>.Instance, reader ?? Composite());
+    private static GitEngine NewImpl(IGitReader? reader = null) =>
+        new(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitEngine>.Instance, reader ?? Composite());
 
     private string NewRepo(string name)
     {

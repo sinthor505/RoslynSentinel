@@ -85,8 +85,8 @@ public class GitStatusRenameHintTests
 
     private async Task<GitStatusResult> StatusAsync(IGitReader reader)
     {
-        var impl = new GitImpl(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitImpl>.Instance, reader);
-        return await impl.StatusAsync(_repoDir, GitImpl.DefaultStatusMaxEntries, CancellationToken.None);
+        var impl = new GitEngine(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitEngine>.Instance, reader);
+        return await impl.StatusAsync(_repoDir, GitEngine.DefaultStatusMaxEntries, CancellationToken.None);
     }
 
     // The blob a MoveFile call writes: the deleted source (before text, no after text) and the created destination (after text), tool name move_file.

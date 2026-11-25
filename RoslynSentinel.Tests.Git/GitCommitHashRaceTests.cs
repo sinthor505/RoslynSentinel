@@ -259,7 +259,7 @@ public class GitCommitHashRaceTests
 
     // ----- fallback rules (summary line unusable) -----
 
-    private GitImpl NewGitImpl() =>
+    private GitEngine NewGitImpl() =>
         new(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly) { SolutionPath = Path.Combine(_repoDir, "Fake.sln") });
 
     private string[] HeadWithParents() =>
@@ -325,15 +325,15 @@ public class GitCommitHashRaceTests
     {
         string[] old = ["old", "older"];
 
-        Assert.That(GitImpl.IsOwnHead(old, ["new", "old"], replacesHead: false), Is.True, "new commit on top of the old HEAD");
-        Assert.That(GitImpl.IsOwnHead(old, ["foreign", "new"], replacesHead: false), Is.False, "another commit on top of ours");
-        Assert.That(GitImpl.IsOwnHead(old, ["old", "older"], replacesHead: false), Is.False, "HEAD did not move");
-        Assert.That(GitImpl.IsOwnHead(null, ["root"], replacesHead: false), Is.True, "root commit on an unborn branch");
-        Assert.That(GitImpl.IsOwnHead(null, ["foreign", "root"], replacesHead: false), Is.False, "a commit exists on a branch that was unborn");
-        Assert.That(GitImpl.IsOwnHead(old, ["amended", "older"], replacesHead: true), Is.True, "amend keeps the old HEAD's parents");
-        Assert.That(GitImpl.IsOwnHead(old, ["old", "older"], replacesHead: true), Is.False, "amend that changed nothing");
-        Assert.That(GitImpl.IsOwnHead(old, ["foreign", "amended"], replacesHead: true), Is.False, "foreign commit on top of an amend");
-        Assert.That(GitImpl.IsOwnHead(null, ["amended"], replacesHead: true), Is.False, "nothing to amend");
-        Assert.That(GitImpl.IsOwnHead(old, null, replacesHead: false), Is.False, "HEAD unreadable");
+        Assert.That(GitEngine.IsOwnHead(old, ["new", "old"], replacesHead: false), Is.True, "new commit on top of the old HEAD");
+        Assert.That(GitEngine.IsOwnHead(old, ["foreign", "new"], replacesHead: false), Is.False, "another commit on top of ours");
+        Assert.That(GitEngine.IsOwnHead(old, ["old", "older"], replacesHead: false), Is.False, "HEAD did not move");
+        Assert.That(GitEngine.IsOwnHead(null, ["root"], replacesHead: false), Is.True, "root commit on an unborn branch");
+        Assert.That(GitEngine.IsOwnHead(null, ["foreign", "root"], replacesHead: false), Is.False, "a commit exists on a branch that was unborn");
+        Assert.That(GitEngine.IsOwnHead(old, ["amended", "older"], replacesHead: true), Is.True, "amend keeps the old HEAD's parents");
+        Assert.That(GitEngine.IsOwnHead(old, ["old", "older"], replacesHead: true), Is.False, "amend that changed nothing");
+        Assert.That(GitEngine.IsOwnHead(old, ["foreign", "amended"], replacesHead: true), Is.False, "foreign commit on top of an amend");
+        Assert.That(GitEngine.IsOwnHead(null, ["amended"], replacesHead: true), Is.False, "nothing to amend");
+        Assert.That(GitEngine.IsOwnHead(old, null, replacesHead: false), Is.False, "HEAD unreadable");
     }
 }

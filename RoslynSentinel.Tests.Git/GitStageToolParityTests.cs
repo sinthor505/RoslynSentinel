@@ -57,8 +57,8 @@ public class GitStageToolParityTests
 
     // ---- helpers ----
 
-    private static GitImpl Impl(IGitReader reader) =>
-        new(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitImpl>.Instance, reader);
+    private static GitEngine Impl(IGitReader reader) =>
+        new(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitEngine>.Instance, reader);
 
     private static FallbackGitReader Composite() => new(new Libgit2GitReader(), new CliGitReader(), _ => { });
 
@@ -129,7 +129,7 @@ public class GitStageToolParityTests
     /// </summary>
     private async Task<(GitStatusResult Result, string Directory)> ParityAsync(
         Action<string> arrange,
-        Func<GitImpl, string, Task<GitStatusResult>> run,
+        Func<GitEngine, string, Task<GitStatusResult>> run,
         string autocrlf = "false",
         Func<string, string>? locate = null)
     {
@@ -163,7 +163,7 @@ public class GitStageToolParityTests
     /// </summary>
     private async Task<GitStatusResult> DeclineParityAsync(
         Action<string> arrange,
-        Func<GitImpl, string, Task<GitStatusResult>> run,
+        Func<GitEngine, string, Task<GitStatusResult>> run,
         Action<IGitReader, string> direct,
         string reasonFragment,
         string autocrlf = "false")
@@ -194,10 +194,10 @@ public class GitStageToolParityTests
         return cli;
     }
 
-    private static Task<GitStatusResult> StageListed(GitImpl impl, string repo, params string[] paths) =>
+    private static Task<GitStatusResult> StageListed(GitEngine impl, string repo, params string[] paths) =>
         impl.StageAsync(repo, GitStageScope.listed, Json(paths), CancellationToken.None);
 
-    private static Task<GitStatusResult> Unstage(GitImpl impl, string repo, params string[] paths) =>
+    private static Task<GitStatusResult> Unstage(GitEngine impl, string repo, params string[] paths) =>
         impl.UnstageAsync(repo, paths.Length == 0 ? null : Json(paths), CancellationToken.None);
 
     private static void StageAllDirect(IGitReader reader, string repo) =>

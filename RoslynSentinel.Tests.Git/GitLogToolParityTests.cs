@@ -10,7 +10,7 @@ using static RoslynSentinel.Tests.Battery.Basic.GitTestRepo;
 namespace RoslynSentinel.Tests.Tools.Basic;
 
 /// <summary>
-/// Runs the Git tool's log path (<see cref="GitImpl.LogAsync"/>, the code behind <c>Git(operation: log)</c>) with a libgit2-only reader and a
+/// Runs the Git tool's log path (<see cref="GitEngine.LogAsync"/>, the code behind <c>Git(operation: log)</c>) with a libgit2-only reader and a
 /// CLI-only reader on throwaway repos and asserts the response DTOs serialize identically. Cases libgit2 cannot reproduce (pickaxe, follow,
 /// ranges, merges under a path filter, non-UTF-8 commits, ...) go through the production composite instead: the test asserts the CLI
 /// answered and that its DTO equals the CLI-only one. Neither single-backend reader can fall back, so a libgit2 failure fails the test.
@@ -58,8 +58,8 @@ public class GitLogToolParityTests
 
     // ---- helpers ----
 
-    private static GitImpl Impl(IGitReader reader) =>
-        new(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitImpl>.Instance, reader);
+    private static GitEngine Impl(IGitReader reader) =>
+        new(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitEngine>.Instance, reader);
 
     private static Task<GitLogResult> LogWith(IGitReader reader, string gitRoot, int count, string? refName, string? paths, string? pickaxe = null, bool pickaxeRegex = false, bool follow = false, bool nameOnly = false) =>
         Impl(reader).LogAsync(gitRoot, count, refName, paths, pickaxe, pickaxeRegex, follow, CancellationToken.None, nameOnly);
@@ -957,7 +957,7 @@ public class GitLogToolParityTests
         Commit(_repo, "first\n");
 
         var before = GitReaders.Default.Libgit2Count;
-        var result = await new GitImpl(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly)).LogAsync(_repo, 20, null, null, null, false, false, CancellationToken.None);
+        var result = await new GitEngine(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly)).LogAsync(_repo, 20, null, null, null, false, false, CancellationToken.None);
 
         Assert.Multiple(() =>
         {

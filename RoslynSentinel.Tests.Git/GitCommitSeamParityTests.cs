@@ -16,7 +16,7 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 /// Reader level: the CLI-only and libgit2-only readers agree with git on repositories of every shape the flow meets, the composite SERVES the plain cases from libgit2 (counter delta,
 /// no decline, no recorded failure) and DECLINES the ones libgit2 cannot answer like git (an ambiguous or ref-shadowed abbreviation, a tag prefix, a re-encoded message, an
 /// unusual upstream, a detached HEAD) with exactly the CLI answer. Tool level: the Git tool's commit DTO (success and every error text) and the repository state are the same
-/// whether the composite or the CLI-only reader backs <see cref="GitImpl"/>. Spawn level: with git's own trace2 log on, a plain commit, an amend with and without an upstream and a
+/// whether the composite or the CLI-only reader backs <see cref="GitEngine"/>. Spawn level: with git's own trace2 log on, a plain commit, an amend with and without an upstream and a
 /// commit with trailers each start exactly one top-level git process, <c>git commit</c> itself.
 /// </summary>
 // KNOWN FLAKE on full/parallel runs (spawns git): disregard a failure here when the change did not touch process spawning; re-run the class alone first.
@@ -864,10 +864,10 @@ public class GitCommitSeamParityTests
 
     // ---- tool level ----
 
-    /// <summary>Plays one scenario against a fresh repository with <paramref name="reader"/> behind a <see cref="GitImpl"/>; returns the normalized DTO and the facts about the repository afterwards.</summary>
+    /// <summary>Plays one scenario against a fresh repository with <paramref name="reader"/> behind a <see cref="GitEngine"/>; returns the normalized DTO and the facts about the repository afterwards.</summary>
     private async Task<(string Json, string Facts)> RunToolScenarioAsync(string scenario, IGitReader reader)
     {
-        var impl = new GitImpl(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitImpl>.Instance, reader);
+        var impl = new GitEngine(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitEngine>.Instance, reader);
         var name = scenario + (reader is FallbackGitReader ? "-composite" : "-cli");
         string directory;
         GitCommitResult result;
@@ -1112,8 +1112,8 @@ public class GitCommitSeamParityTests
     {
         var route = inProcessRoute ? new InProcessCommitRoute() : null;
         var impl = route is null
-            ? new GitImpl(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitImpl>.Instance, GitReaders.Default)
-            : new GitImpl(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitImpl>.Instance, GitReaders.Default, route);
+            ? new GitEngine(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitEngine>.Instance, GitReaders.Default)
+            : new GitEngine(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitEngine>.Instance, GitReaders.Default, route);
         var name = "spawn-" + scenario;
         string directory;
         Func<Task<GitCommitResult>> commit;

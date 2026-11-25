@@ -55,8 +55,8 @@ public class GitInProcessCommitRouteSetupTests
 
     private static FallbackGitReader Composite() => new(new Libgit2GitReader(), new CliGitReader(), _ => { });
 
-    private static GitImpl NewImpl(InProcessCommitRoute route) =>
-        new(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitImpl>.Instance, Composite(), route);
+    private static GitEngine NewImpl(InProcessCommitRoute route) =>
+        new(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitEngine>.Instance, Composite(), route);
 
     private static void Write(string directory, string relativePath, string content)
     {

@@ -10,8 +10,8 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 
 /// <summary>
 /// The Git tool classifies the paths it is asked to stage, commit or hunk-stage by reading the index (ls-files), HEAD's tree (ls-tree) and the
-/// ignore rules (check-ignore). These tests run the tool entry points that do so (<see cref="GitImpl.HunksAsync"/> read-only,
-/// <see cref="GitImpl.StageAsync"/> with the index reset between runs) with a libgit2-only and a CLI-only reader and assert the response DTOs
+/// ignore rules (check-ignore). These tests run the tool entry points that do so (<see cref="GitEngine.HunksAsync"/> read-only,
+/// <see cref="GitEngine.StageAsync"/> with the index reset between runs) with a libgit2-only and a CLI-only reader and assert the response DTOs
 /// serialize identically, then compare the three reader methods directly. A case libgit2 declines goes through the production composite: the test
 /// asserts the CLI answered and that its answer equals the CLI-only one. Neither single-backend reader can fall back, so a libgit2 failure fails
 /// the test.
@@ -58,8 +58,8 @@ public class GitPathClassificationToolParityTests
 
     // ---- helpers ----
 
-    private static GitImpl Impl(IGitReader reader) =>
-        new(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitImpl>.Instance, reader);
+    private static GitEngine Impl(IGitReader reader) =>
+        new(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitEngine>.Instance, reader);
 
     private static void Write(string directory, string relativePath, string content)
     {
@@ -554,7 +554,7 @@ public class GitPathClassificationToolParityTests
         Write(_repo, "a.txt", "a\nchanged\n");
 
         var before = GitReaders.Default.Libgit2Count;
-        var hunks = await new GitImpl(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly)).HunksAsync(_repo, Json(["a.txt"]), 20, CancellationToken.None);
+        var hunks = await new GitEngine(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly)).HunksAsync(_repo, Json(["a.txt"]), 20, CancellationToken.None);
 
         Assert.Multiple(() =>
         {

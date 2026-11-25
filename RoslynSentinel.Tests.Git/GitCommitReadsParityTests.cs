@@ -14,7 +14,7 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 /// Reader level: the CLI-only and libgit2-only readers agree on repositories of every shape the commit flow meets (unborn, root, merge, detached, linked worktree,
 /// MERGE_HEAD of every kind), the composite SERVES the normal cases from libgit2 (counter delta, no decline, no recorded failure) and DECLINES the unusual ones
 /// (shallow clone, replace refs, a MERGE_HEAD git would peel or resolve differently) with exactly the CLI answer. Tool level: the Git tool's commit and revert DTOs and the
-/// repository state they leave are the same whether the composite reader or the CLI-only reader backs <see cref="GitImpl"/>, in the scenarios the plan names
+/// repository state they leave are the same whether the composite reader or the CLI-only reader backs <see cref="GitEngine"/>, in the scenarios the plan names
 /// (trailers on and off, amend, unborn branch, detached HEAD, merge resolution, a post-commit hook moving HEAD, a linked worktree).
 /// </summary>
 // KNOWN FLAKE on full/parallel runs (spawns git): disregard a failure here when the change did not touch process spawning; re-run the class alone first.
@@ -523,12 +523,12 @@ public class GitCommitReadsParityTests
         Json(result with { CommitHash = result.CommitHash.Length == 40 ? "<hash>" : result.CommitHash });
 
     /// <summary>
-    /// Plays one scenario against a fresh repository with <paramref name="reader"/> behind a <see cref="GitImpl"/> and returns the normalized DTO and the facts about the new commit.
+    /// Plays one scenario against a fresh repository with <paramref name="reader"/> behind a <see cref="GitEngine"/> and returns the normalized DTO and the facts about the new commit.
     /// Every scenario ends with the commit (or revert) the Git tool makes; the arrange steps use plain git.
     /// </summary>
     private async Task<(string Json, string Facts)> RunScenarioAsync(string scenario, IGitReader reader)
     {
-        var impl = new GitImpl(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitImpl>.Instance, reader);
+        var impl = new GitEngine(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitEngine>.Instance, reader);
         var name = scenario + (reader is FallbackGitReader ? "-composite" : "-cli");
         var trailers = scenario.Contains("trailers", StringComparison.Ordinal);
         if (trailers)

@@ -423,7 +423,7 @@ public class GitToolsSmokeTests
         try
         {
             using var workspaceManager = new FakeWorkspaceManager(WorkspaceAccess.ReadOnly) { SolutionPath = Path.Combine(outsideDir, "Fake.sln") };
-            var gitImpl = new GitImpl(workspaceManager, NullLogger<GitImpl>.Instance);
+            var gitImpl = new GitEngine(workspaceManager, NullLogger<GitEngine>.Instance);
 
             var root = gitImpl.TryGetGitRoot(out var factError, out var failure);
             var error = GitHintText.JoinRootFailure(factError, failure);

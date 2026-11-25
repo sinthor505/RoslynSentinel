@@ -10,8 +10,8 @@ using static RoslynSentinel.Tests.Battery.Basic.GitTestRepo;
 namespace RoslynSentinel.Tests.Tools.Basic;
 
 /// <summary>
-/// Runs the Git tool's branch list (<see cref="GitImpl.BranchAsync"/> without a branch name), stash list and stash apply
-/// (<see cref="GitImpl.StashAsync"/>, which counts entries around the apply) with a libgit2-only reader and a CLI-only reader on throwaway repos and
+/// Runs the Git tool's branch list (<see cref="GitEngine.BranchAsync"/> without a branch name), stash list and stash apply
+/// (<see cref="GitEngine.StashAsync"/>, which counts entries around the apply) with a libgit2-only reader and a CLI-only reader on throwaway repos and
 /// asserts the response DTOs serialize identically. A case libgit2 declines (a detached HEAD, branch.sort) goes through the production composite: the test asserts the CLI answered and that its DTO equals the CLI-only one. Neither
 /// single-backend reader can fall back, so a libgit2 failure fails the test. Tag list and worktree list are not covered because they stay on the CLI.
 /// </summary>
@@ -57,8 +57,8 @@ public class GitRefListToolParityTests
 
     // ---- helpers ----
 
-    private static GitImpl Impl(IGitReader reader) =>
-        new(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitImpl>.Instance, reader);
+    private static GitEngine Impl(IGitReader reader) =>
+        new(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitEngine>.Instance, reader);
 
     private static string Serialize<T>(T value) => JsonSerializer.Serialize(value);
 
@@ -547,7 +547,7 @@ public class GitRefListToolParityTests
         CommitBaseline();
 
         var before = GitReaders.Default.Libgit2Count;
-        var result = await new GitImpl(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly)).BranchAsync(_repo, null, null, false, CancellationToken.None);
+        var result = await new GitEngine(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly)).BranchAsync(_repo, null, null, false, CancellationToken.None);
 
         Assert.Multiple(() =>
         {
