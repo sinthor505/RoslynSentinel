@@ -707,6 +707,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
   csproj items "not updated", `LoadSolution(forceReload)` for a destination in no loaded project, a `ReloadPending` fact). States the workflow positively; names the gated tool only through `McpToolsetControl(toolSet: moveExtract, enabled: true)`. Marks the interim
   link-stand-in recipe as superseded.
 - Done when: the file exists, is ASCII-only, and is linked from this plan.
+- Done 2026-11-25: [reference_split_folder_into_new_project_with_movefile.md](../references/reference_split_folder_into_new_project_with_movefile.md) (ASCII-only; the interim link-stand-in recipe is marked superseded).
 - Lane: `implementer` (D1: 1 file).
 
 ### Step 35 - LIVE: reload wait, 60-file timing, `ChangeNamespace` dry run
