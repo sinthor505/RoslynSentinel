@@ -76,7 +76,8 @@
 
       <root>\source\          prod clone of the dev repo (git clone on first use, then
                               git pull --ff-only origin <Branch> on every launch; -SkipSourceSync when the
-                              shim already did it). A failed pull keeps the current HEAD and is logged.
+                              shim already did it). Diverged history resets the clone to origin/<Branch>;
+                              any other failed pull keeps the current HEAD. Both are logged.
       <root>\builds\<sha8>\   immutable build of one commit: Advanced\ (the server) + 'complete' marker +
                               'lastused' stamp. <sha8> is the first 8 chars of the commit sha. Shared
                               read-only by every window on that commit.

@@ -11,7 +11,8 @@
 
     Layout under the instances root (default %USERPROFILE%\RoslynSentinelInstances):
 
-      source\                 prod clone of the dev repo (git clone, then git pull --ff-only on launch)
+      source\                 prod clone of the dev repo (git clone, then git pull --ff-only on launch;
+                              reset to origin when its history has diverged)
       builds\<sha8>\Advanced\ immutable build of one commit (<sha8> = first 8 chars of the commit sha), plus
                               builds\<sha8>\complete (marker) and
                               builds\<sha8>\lastused (touched by every launch that selects the build)
@@ -228,7 +229,9 @@ function Repair-RoslynSentinelSourceClone {
 #   launch cannot corrupt each other (first rename wins, the loser deletes its own copy).
 # - A failed pull (dev repo mid-rebase, no network equivalent, diverged history) is NOT fatal: the
 #   current HEAD is kept and the failure is returned in PullError. Before giving up, a failed pull triggers
-#   Repair-RoslynSentinelSourceClone (stale index.lock / half-applied files) and one retry.
+#   Repair-RoslynSentinelSourceClone (stale index.lock / half-applied files) and one retry; if the clone has
+#   diverged from origin/$Branch (dev repo amended or rebased a commit the clone already pulled), it is reset
+#   to origin/$Branch and the discarded commits are logged.
 # Returns { Sha; PullOk; PullError; Cloned }. Throws only when no usable source clone exists afterwards.
 # $Log is an optional scriptblock taking one message string.
 function Sync-RoslynSentinelSource {
@@ -280,11 +283,30 @@ function Sync-RoslynSentinelSource {
                 return [pscustomobject]@{ Ok = $false; Error = "checkout of '$Branch' failed (current '$currentBranch'): $($r.Output)" }
             }
         }
-        # TODO an amend/rebase in the dev repo after a prebuild pulled the old commit wedges this clone (diverged, pull fails every launch); the clone is launcher-owned, so fetch + reset to origin/<Branch> instead
         $r = Invoke-NativeCaptured -File 'git' -Arguments @('-C', $SourceDir, 'pull', '--ff-only', 'origin', $Branch)
         if ($r.ExitCode -ne 0) {
             return [pscustomobject]@{ Ok = $false; Error = "git pull --ff-only origin $Branch failed (exit $($r.ExitCode)): $($r.Output)" }
         }
+        return [pscustomobject]@{ Ok = $true; Error = $null }
+    }
+
+    # Resets the clone to origin/$Branch when (and only when) its HEAD is not an ancestor of the fetched branch.
+    # Returns $null when this is not a divergence (wrong branch, fetch failed, HEAD can fast-forward), else { Ok; Error }.
+    function Invoke-SyncDivergenceReset {
+        $r = Invoke-NativeCaptured -File 'git' -Arguments @('-C', $SourceDir, 'rev-parse', '--abbrev-ref', 'HEAD')
+        if ($r.ExitCode -ne 0 -or $r.Output.Trim() -ne $Branch) { return $null }
+        $r = Invoke-NativeCaptured -File 'git' -Arguments @('-C', $SourceDir, 'fetch', 'origin', $Branch)
+        if ($r.ExitCode -ne 0) { return $null }
+        # Exit 0 = HEAD is an ancestor (fast-forward possible, so the pull failed for another reason); 1 = diverged.
+        $r = Invoke-NativeCaptured -File 'git' -Arguments @('-C', $SourceDir, 'merge-base', '--is-ancestor', 'HEAD', 'FETCH_HEAD')
+        if ($r.ExitCode -ne 1) { return $null }
+        $r = Invoke-NativeCaptured -File 'git' -Arguments @('-C', $SourceDir, 'log', '--format=%h %s', 'FETCH_HEAD..HEAD')
+        $discarded = (($r.Output -split "`r?`n") | Where-Object { $_.Trim() }) -join '; '
+        $r = Invoke-NativeCaptured -File 'git' -Arguments @('-C', $SourceDir, 'reset', '--hard', 'FETCH_HEAD')
+        if ($r.ExitCode -ne 0) {
+            return [pscustomobject]@{ Ok = $false; Error = "clone diverged from origin/$Branch and git reset --hard FETCH_HEAD failed (exit $($r.ExitCode)): $($r.Output)" }
+        }
+        Write-SyncLog "Source: clone had diverged from origin/$Branch; reset to it, discarding clone-only commits (still in the clone's reflog): $discarded"
         return [pscustomobject]@{ Ok = $true; Error = $null }
     }
 
@@ -302,6 +324,17 @@ function Sync-RoslynSentinelSource {
             $pullOk = $attempt.Ok
             $pullError = $attempt.Error
             if ($pullOk) { Write-SyncLog 'Source: pull succeeded after healing the clone.' }
+        }
+    }
+    if (-not $pullOk) {
+        # Diverged history: an amend or rebase in the dev repo after this clone pulled the old commit (the
+        # post-commit prebuild pulls within seconds) leaves the clone with commits origin lacks, and every later
+        # ff-only pull fails the same way. Nobody commits in this launcher-owned clone, so reset it to
+        # origin/<Branch>; the discarded commits are logged and stay reachable through the clone's reflog.
+        $diverged = Invoke-SyncDivergenceReset
+        if ($diverged) {
+            $pullOk = $diverged.Ok
+            $pullError = $diverged.Error
         }
     }
     if (-not $pullOk) { Write-SyncLog "Source: PULL FAILED, continuing on current HEAD. $pullError" }

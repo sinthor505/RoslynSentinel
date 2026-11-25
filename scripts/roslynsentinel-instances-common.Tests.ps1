@@ -106,6 +106,16 @@ try {
     $sync = Sync-RoslynSentinelSource -SourceDir $f.Clone -DevRepo $f.Origin -Branch 'master'
     Assert-That ($sync.PullOk -and $sync.Sha -eq $f.NewSha) 'Sync: ordinary pull still works'
 
+    # --- Sync: diverged clone (dev repo amended a commit the clone already pulled) resets to origin ---
+    $f = New-Fixture 'sync-diverged'
+    Set-Content -LiteralPath (Join-Path $f.Clone 'a.txt') -Value 'clone-only'
+    $null = Invoke-Git $f.Clone @('commit', '-q', '-a', '-m', 'clone-only')
+    $logged = New-Object System.Collections.Generic.List[string]
+    $sync = Sync-RoslynSentinelSource -SourceDir $f.Clone -DevRepo $f.Origin -Branch 'master' -Log { param($m) $logged.Add($m) }
+    Assert-That ($sync.PullOk -and -not $sync.PullError -and $sync.Sha -eq $f.NewSha) 'Sync: diverged clone reset to origin, PullOk true, served the new HEAD'
+    Assert-That ((Get-Content -LiteralPath (Join-Path $f.Clone 'a.txt') -Raw).Trim() -eq 'two') 'Sync: diverged clone working tree matches origin'
+    Assert-That (@($logged | Where-Object { $_ -match 'diverged' -and $_ -match 'clone-only' }).Count -eq 1) 'Sync: discarded clone-only commit is logged'
+
     # --- ConvertTo-PullErrorText ---
     $text = ConvertTo-PullErrorText ("line one`r`nline two " + ([string][char]0x00e9) + (' y' * 400))
     Assert-That ($text.Length -le 300 -and $text -notmatch '[^\x20-\x7E]') 'PullErrorText: flattened, ASCII, capped at 300'

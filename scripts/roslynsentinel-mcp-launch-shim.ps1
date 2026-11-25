@@ -12,8 +12,9 @@
        file is flipped) %USERPROFILE%\RoslynSentinelInstances. With no root the layout is not opted into
        and this shim simply runs the dev repo's own launcher, i.e. the legacy path.
     2. Clones the dev repo (the repo this shim lives in) into <root>\source on first use and runs
-       `git pull --ff-only origin <Branch>`. A failed pull (dev repo mid-rebase, diverged history) keeps
-       the current source HEAD and is logged to <root>\launch-startup.log.
+       `git pull --ff-only origin <Branch>`. Diverged history (an amend or rebase in the dev repo) resets
+       the clone to origin/<Branch>; any other failed pull (dev repo mid-rebase, no access) keeps the
+       current source HEAD. Both are logged to <root>\launch-startup.log.
     3. Runs <root>\source\scripts\roslynsentinel-mcp-launch.ps1, so the launcher always matches the
        commit it builds, passing -InstancesRoot, -Branch, -DevRepo and -SkipSourceSync plus every
        remaining argument (the server args) verbatim.

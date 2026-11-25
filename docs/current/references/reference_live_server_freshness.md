@@ -51,7 +51,9 @@ Set `ROSLYNSENTINEL_INSTANCES_ROOT` (or flip `$UseDefaultInstancesRootWhenUnset`
 `%USERPROFILE%\RoslynSentinelInstances` instead of `bin-vscode\`:
 
 - `source\` is a prod clone of this repo (`git pull --ff-only` on every launch, branch `master`), so only
-  **committed** code reaches a window's server.
+  **committed** code reaches a window's server. If the clone has diverged (an amend or rebase here after a
+  launch or prebuild pulled the old commit), the launcher resets it to `origin/master` and logs the discarded
+  commits in `launch.log`; they stay in the clone's reflog.
 - `builds\<sha>\Advanced\` is an immutable build keyed by commit (a `complete` marker file; built in a
   throwaway `git worktree`, published by rename, shared read-only by every window on that commit, last good
   build used if a build fails).
