@@ -9,10 +9,13 @@ namespace RoslynSentinel.Common.AgentLoop;
 /// "SetUp is complete and the agent run is starting", so a test longer than -NoRunFolderMinutes is not
 /// flagged SetupStalled. Written once per process per job id.
 /// </summary>
+[StartupSettingGroup("Eval queue")]
 public static class EvalQueueSetupMarker
 {
     /// <summary>Environment variable the evalqueue sets to the job id it is running.</summary>
     public const string JobEnvironmentVariable = "ROSLYNSENTINEL_EVALQUEUE_JOB";
+
+    public static readonly StartupSetting<string?> JobSetting = StartupSetting.String(null, JobEnvironmentVariable, null, "Job id the evalqueue script is running; when present, the process writes the setup-complete marker.", SettingScope.AgentLoop, SettingKind.Live);
 
     private static readonly object Gate = new object();
     private static string? lastWrittenJobId;
@@ -30,7 +33,7 @@ public static class EvalQueueSetupMarker
     {
         try
         {
-            string? jobId = Environment.GetEnvironmentVariable(JobEnvironmentVariable);
+            string? jobId = JobSetting.Value;
             if (string.IsNullOrEmpty(jobId))
             {
                 return;

@@ -2,6 +2,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Engines.Advanced;
@@ -475,7 +476,7 @@ public class CommentingEngine
     // any document under an obj/bin folder or under the user's NuGet global-packages folder.
     private static readonly string[] NuGetPackagesRoots = new[]
         {
-            Environment.GetEnvironmentVariable("NUGET_PACKAGES"),
+            ExternalEnvironmentSettings.NuGetPackagesSetting.Value,
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget", "packages"),
         }
         .Where(p => !string.IsNullOrEmpty(p))
