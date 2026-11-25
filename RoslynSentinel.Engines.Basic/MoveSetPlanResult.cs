@@ -12,7 +12,9 @@ public sealed record MoveSetPlanResult(
     DocumentChangeSet Changes,
     IReadOnlyList<FilePathWrapper> DeletePaths,
     IReadOnlyList<MoveFact> Facts,
-    IReadOnlyList<NeededProjectEdge> Edges);
+    IReadOnlyList<NeededProjectEdge> Edges,
+    // Added in Step 10: stage 2 needs the folder-pair source roots; PlannedFileMove does not carry them.
+    IReadOnlyList<string>? SourceFolders = null);
 
 /// <summary>One planned file move, with its source and destination projects when known.</summary>
 public sealed record PlannedFileMove(
