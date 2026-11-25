@@ -29,7 +29,8 @@ public static class MoveSetErrorGrouper
             var lines = new List<string>();
             foreach (var error in errors)
             {
-                if (error.FilePath.Equals(move.Destination))
+                // FilePathWrapper.Equals is the path-aware comparison (PathComparison); the receiver order keeps the path ratchet quiet.
+                if (move.Destination.Equals(error.FilePath))
                 {
                     lines.Add($"{error.Id}: {error.Message}");
                     bound.Add(error);
