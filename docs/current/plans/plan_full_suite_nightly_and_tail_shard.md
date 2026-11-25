@@ -134,9 +134,11 @@ plus a per-test timeline):**
 - Depends on: Step 3
 - Effect: behaviour-changing for agents: a session start prints one block when there is full-suite debt; silent otherwise.
 - Change:
-  - `oop-areas.json`: area name to path globs, from the OutOfProcess inventory (2026-11-24): `git` (`RoslynSentinel.Common/Git*.cs`,
-    `RoslynSentinel.Common/Libgit2*.cs`, `RoslynSentinel.Common/CliGitReader*.cs`, `RoslynSentinel.Common/FallbackGitReader*.cs`,
-    `RoslynSentinel.Common/RepoWorktrees*.cs`, `RoslynSentinel.Common/ShortHashLengths*.cs`, `RoslynSentinel.Tools.Basic/Git*.cs`),
+  - `oop-areas.json`: area name to path globs, from the OutOfProcess inventory (2026-11-24): `git` (`RoslynSentinel.Git/**`,
+    `RoslynSentinel.Tests.Git/**` and `RoslynSentinel.Tools.Basic/Git*.cs`, the layout after
+    `plan_isolate_git_area_into_own_project.md` Steps 14 and 16-18; until those land, also `RoslynSentinel.Common/Git/**`
+    (that plan's Step 9 folder) and the flat `RoslynSentinel.Common/Git*.cs`, `Libgit2*.cs`, `CliGitReader*.cs`,
+    `FallbackGitReader*.cs`, `RepoWorktrees*.cs`, `ShortHashLengths*.cs`; drop the interim globs when the Git project exists),
     `runtest` (`RoslynSentinel.Engines.Basic/TestRun*.cs`, `RoslynSentinel.Engines.Basic/TestSuiteFilter.cs`,
     `RoslynSentinel.Engines.Basic/TestProjectDetector.cs`, `RoslynSentinel.Tools.Basic/WorkspaceBuildTestImpl.cs`),
     `build` (`RoslynSentinel.Engines.Basic/BuildEngine.cs`, `RoslynSentinel.Engines.Basic/BuildIsolation.cs`,
@@ -189,14 +191,18 @@ plus a per-test timeline):**
 - Done when: parse check; `pwsh -NoProfile -File scripts\Get-TestRunTimings.Tests.ps1` passes (dispatcher). Lane: `implementer`.
 
 ### Step 9 - Parallel children for Git parity fixtures that own a repo per test
-- Files, per slice (each at most 3 test files in `RoslynSentinel.Tests.Tools.Basic/`):
+- Files, per slice (each at most 3 test files; listed at their pre-move location in `RoslynSentinel.Tests.Tools.Basic/`,
+  expected in `RoslynSentinel.Tests.Git/` by the time this step runs):
   - 9a: `GitWorktreeRepoLocalConfigTests.cs`, `GitStageToolParityTests.cs` (the 330-480 s tail)
   - 9b: `GitCommitReadsParityTests.cs`, `GitDiffShowToolParityTests.cs`, `GitLogToolParityTests.cs`
   - 9c: `GitPatchParityCorpusMoreTests.cs`, `GitCasCommitTests.cs`, `GitCommitUntrackedParityTests.cs`
   - 9d: `GitRelativeWorktreeTests.cs`, `GitReaderParityTests.cs`
   - 9e (optional, last): `GitCommitSeamParityTests.cs` (sets `GIT_TRACE2_EVENT` process-wide under a static `TraceGate`;
     parallel siblings would inherit it while a trace test runs)
-- Depends on: none. 9b-9e each after the previous slice's three green runs.
+- Depends on: `plan_isolate_git_area_into_own_project.md` Steps 16-18 (they move these fixtures into
+  `RoslynSentinel.Tests.Git`; that plan has priority and its session messages before its Step 17). Run Step 9 after the move,
+  against the fixtures' new paths, or drop it if the move already parallelises or restructures them. 9b-9e each after the
+  previous slice's three green runs.
 - Effect: text-neutral (test code only).
 - Change: add `[Parallelizable(ParallelScope.Children)]` and `[FixtureLifeCycle(LifeCycle.InstancePerTestCase)]` with a comment
   stating that every test builds its own repo in `[SetUp]`. Any instance `[OneTimeSetUp]`/`[OneTimeTearDown]` becomes `static`
