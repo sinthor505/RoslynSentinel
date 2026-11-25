@@ -1,6 +1,6 @@
 # Plan: multi-file MoveFile (a `moves` list, one compile gate, optional csproj edges) and a `ChangeNamespace` tool
 
-**Status:** IN PROGRESS 2026-11-25. Steps 1-12 done (9c8c5663..ca33514d), Step 29 skipped (probe green). Batched run, owner away; R12/R15/R16/R17 deferred to the tracker (Steps 14, 20, 26 wait on them). Nothing built; implements [proposal_multi_file_movefile_and_namespace_change_tool.md](../proposals/proposal_multi_file_movefile_and_namespace_change_tool.md) (ACCEPTED 2026-11-25). Revised 2026-11-25 with the owner's decisions D12-D16 and an independent review (P5-P16). Commit trailer for every slice: `Plan: plan_multi_file_movefile_and_namespace_change_tool` (the last slice adds `Closes:`).
+**Status:** IN PROGRESS 2026-11-25. Steps 1-13, 15-17, 19, 21, 22, 24, 25 done (9c8c5663..fd379c8f), Step 29 skipped (probe green); `ToolHintRatchetTests` red on the `ChangeNamespace` hint literal until Step 32. Batched run, owner away; R12/R15/R16/R17 deferred to the tracker (Steps 14, 20, 26 wait on them). Nothing built; implements [proposal_multi_file_movefile_and_namespace_change_tool.md](../proposals/proposal_multi_file_movefile_and_namespace_change_tool.md) (ACCEPTED 2026-11-25). Revised 2026-11-25 with the owner's decisions D12-D16 and an independent review (P5-P16). Commit trailer for every slice: `Plan: plan_multi_file_movefile_and_namespace_change_tool` (the last slice adds `Closes:`).
 
 ## Problem
 
@@ -421,6 +421,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `test-writer`.
 
 ### Step 13 - Rewrite `MoveFileTool` to `moves` (behaviour-changing)
+- Done: 93b1a245, hint fix 48352081, regeneration + budget 49000->49500 (measured 49136) 88b921a2. `FileMoveMemory` is recorded after a successful apply, not in `recordEffects`.
 - Files: `RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs`; new `RoslynSentinel.Tools.Basic/MoveFileOperation.cs` (P13); `RoslynSentinel.Common/ToolParams.cs` (a description constant `MoveFileMoves` (new), the
   convention for list-parameter text, as `ModifierEdits` at `:123`); `RoslynSentinel.Common/ToolEnums.cs` (the `MoveFileNamespaceHandling` doc comment at `:150-154`, already stale: it says `copyAndObsolete` is
   not supported); `RoslynSentinel.Tests.Tools.Basic/MoveFileTests.cs` (the helper body and the one directory test); `RoslynSentinel.Tests.Tools.Basic/MoveFileCopyAndObsoleteTests.cs` (`CopyAsync`, line 106);
@@ -462,6 +463,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `implementer-senior` (3 files, a chokepoint and load-tracking interaction in a 3897-line class).
 
 ### Step 15 - Grouped refusal: errors grouped by the set file they bind to
+- Done: 2eff9aea, bce7456b, fd379c8f
 - Files: new `RoslynSentinel.Engines.Basic/MoveSetErrorGrouper.cs`; `RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs` (the describer wrapper in `MoveFileTool`).
 - Depends on: Step 13
 - Effect: behaviour-changing (a gate refusal for a set carries one more structured item)
@@ -473,6 +475,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `implementer` (D1: 2 files).
 
 ### Step 16 - Tool-level tests for the set path
+- Done: 4ef73106
 - Files: new `RoslynSentinel.Tests.Tools.Basic/MoveFileSetTests.cs`.
 - Depends on: Step 13
 - Effect: text-neutral
@@ -483,6 +486,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `test-writer`.
 
 ### Step 17 - `GitStatusRenameHints`: read multi-pair `move_file` blobs
+- Done: ba01c3f1, legacy single-move blob fix 914ab7d6
 - Files: `RoslynSentinel.Tools.Basic/GitStatusRenameHints.cs`; `RoslynSentinel.Tools.Basic/GitTools.cs` (`:53`, the consumer). Existing test consumers: `GitStatusRenameHintTests` (2 sites) and `MoveFileCopyAndObsoleteTests.cs:235`.
 - Depends on: Step 13 (for `MoveFileOperation`)
 - Effect: behaviour-changing (a multi-pair `move_file` blob now yields definitive rename hints instead of none)
@@ -503,6 +507,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `test-writer`.
 
 ### Step 19 - Rename-hint tests for multi-pair blobs
+- Done: a28a2ed9
 - Files: new `RoslynSentinel.Tests.Git/GitStatusRenameHintMultiPairTests.cs` (beside `GitStatusRenameHintTests.cs`).
 - Depends on: Step 17
 - Effect: text-neutral
@@ -525,6 +530,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `implementer-senior` (new concurrency primitive wired into the write chokepoint).
 
 ### Step 21 - Tests for the grouped refusal
+- Done: a3bde8f6
 - Files: new `RoslynSentinel.Tests.Tools.Basic/MoveFileSetErrorGroupTests.cs`.
 - Depends on: Step 15
 - Effect: text-neutral
@@ -534,6 +540,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `test-writer`.
 
 ### Step 22 - Contract skeleton for D3 (edge analysis, csproj writer)
+- Done: b5c8f634
 - Files: new `RoslynSentinel.Engines.Basic/MoveSetEdgeAnalyzer.cs`; new `RoslynSentinel.Engines.Basic/CsprojEdgeWriter.cs`.
 - Depends on: Step 1
 - Effect: text-neutral
@@ -555,6 +562,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `test-writer`.
 
 ### Step 24 - Edge analysis body
+- Done: aa9e9f5b, fd379c8f. Cycles and missing packages come from public `FindCycleEdgesAsync` / `FindMissingPackageFactsAsync` (Step 26 calls both); IVT `FromProject` = granting project; in-memory IVT uses the receiver's assembly name.
 - Files: `RoslynSentinel.Engines.Basic/MoveSetEdgeAnalyzer.cs`.
 - Depends on: Step 22
 - Effect: text-neutral
@@ -567,6 +575,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `implementer-senior` (P12: a multi-part semantic analysis with a measured-cost short-circuit).
 
 ### Step 25 - Csproj splice body
+- Done: 3bbe79e6. `Splice` gained optional `projectReferenceInclude`; Step 26 must pass the real csproj path (default `..\{name}\{name}.csproj` is a placeholder, TODO in code).
 - Files: `RoslynSentinel.Engines.Basic/CsprojEdgeWriter.cs`.
 - Depends on: Step 22
 - Effect: text-neutral
