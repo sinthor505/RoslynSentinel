@@ -10,11 +10,14 @@ namespace RoslynSentinel.Tests;
 
 public static class TestSolutionBuilder
 {
-    public static Solution CreateSolutionWithProject(string projectName, (string name, string content)[] documents)
-    {
-        var workspace = new AdhocWorkspace();
-        var projectId = ProjectId.CreateNewId();
+    // One shared set of framework references for every solution this class builds. MetadataReference
+    // instances are immutable and thread-safe, and Roslyn caches the parsed metadata per instance, so
+    // reusing them makes a first compilation ~7x cheaper than CreateFromFile per call (probe:
+    // RoslynSentinel.Tests/Probes/TestSetupTimingProbe.cs, C1 vs C2).
+    private static readonly IReadOnlyList<MetadataReference> FrameworkReferences = BuildFrameworkReferences();
 
+    private static IReadOnlyList<MetadataReference> BuildFrameworkReferences()
+    {
         var references = new List<MetadataReference>();
 
         // Use a more robust way to get all required base assemblies for .NET 10 tests
@@ -52,6 +55,15 @@ public static class TestSolutionBuilder
             references.Add(MetadataReference.CreateFromFile(objectAssembly));
         }
 
+        return references.AsReadOnly();
+    }
+
+    public static Solution CreateSolutionWithProject(string projectName, (string name, string content)[] documents)
+    {
+        var workspace = new AdhocWorkspace();
+        var projectId = ProjectId.CreateNewId();
+        var references = FrameworkReferences;
+
         // Create a mock project FilePathWrapper for test purposes
         var projectPath = Path.Combine(Path.GetTempPath(), "TestProj", $"{projectName}.csproj");
 
@@ -82,39 +94,7 @@ public static class TestSolutionBuilder
     {
         var workspace = new AdhocWorkspace();
         var projectId = ProjectId.CreateNewId();
-
-        var references = new List<MetadataReference>();
-        var coreDir = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
-
-        string[] candidateNames = {
-            "System.Runtime.dll",
-            "mscorlib.dll",
-            "System.Collections.dll",
-            "System.Linq.dll",
-            "System.Console.dll",
-            "System.Private.CoreLib.dll",
-            "netstandard.dll",
-            "System.Threading.dll",
-            "System.Threading.Tasks.dll",
-            "System.Net.Http.dll",
-            "System.Collections.Concurrent.dll",
-            "System.Text.RegularExpressions.dll",
-        };
-
-        foreach (var name in candidateNames)
-        {
-            var path = Path.Combine(coreDir, name);
-            if (File.Exists(path))
-            {
-                references.Add(MetadataReference.CreateFromFile(path));
-            }
-        }
-
-        var objectAssembly = typeof(object).Assembly.Location;
-        if (!references.Any(r => r.Display != null && r.Display.Equals(objectAssembly, StringComparison.OrdinalIgnoreCase)))
-        {
-            references.Add(MetadataReference.CreateFromFile(objectAssembly));
-        }
+        var references = FrameworkReferences;
 
         var projectInfo = ProjectInfo.Create(projectId, VersionStamp.Default, projectName, projectName, LanguageNames.CSharp)
             .WithMetadataReferences(references)
@@ -154,39 +134,7 @@ public static class TestSolutionBuilder
         var workspace = new AdhocWorkspace();
         var upstreamProjectId = ProjectId.CreateNewId();
         var downstreamProjectId = ProjectId.CreateNewId();
-
-        var references = new List<MetadataReference>();
-        var coreDir = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
-
-        string[] candidateNames = {
-            "System.Runtime.dll",
-            "mscorlib.dll",
-            "System.Collections.dll",
-            "System.Linq.dll",
-            "System.Console.dll",
-            "System.Private.CoreLib.dll",
-            "netstandard.dll",
-            "System.Threading.dll",
-            "System.Threading.Tasks.dll",
-            "System.Net.Http.dll",
-            "System.Collections.Concurrent.dll",
-            "System.Text.RegularExpressions.dll",
-        };
-
-        foreach (var name in candidateNames)
-        {
-            var path = Path.Combine(coreDir, name);
-            if (File.Exists(path))
-            {
-                references.Add(MetadataReference.CreateFromFile(path));
-            }
-        }
-
-        var objectAssembly = typeof(object).Assembly.Location;
-        if (!references.Any(r => r.Display != null && r.Display.Equals(objectAssembly, StringComparison.OrdinalIgnoreCase)))
-        {
-            references.Add(MetadataReference.CreateFromFile(objectAssembly));
-        }
+        var references = FrameworkReferences;
 
         var upstreamProjectPath = Path.Combine(Path.GetTempPath(), "TestProj", $"{upstreamProjectName}.csproj");
         var upstreamProjectInfo = ProjectInfo.Create(upstreamProjectId, VersionStamp.Default, upstreamProjectName, upstreamProjectName, LanguageNames.CSharp)
