@@ -697,6 +697,7 @@ public static class CopyAndObsoleteCallerRewrite
         List<INamedTypeSymbol>? used = null;
         List<INamedTypeSymbol> Used() => used ??= CollectUsedTypes(model, root, exclusionStarts, cancellationToken);
 
+        // TODO moved mode (oldTypesGone) qualifies on "global using of old" and "old using must stay", where adding a using of the new namespace beside the kept old one is safe (old types gone, conflicts checked below); live ChangeNamespace dry run over RoslynSentinel.Git qualified 98+ references this way. Also check globalUsingPath scoping: an Engines.Basic file cited Common's obj GlobalUsings.g.cs.
         string? WhyQualify()
         {
             if (globalUsingPath is not null)

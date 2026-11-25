@@ -696,6 +696,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `implementer` (D1: 1 file).
 
 ### Step 35 - LIVE: reload wait, 60-file timing, `ChangeNamespace` dry run
+- Partial 2026-11-25 (server 3b1c0d6f): (c) CLEAN - `GitEngine.cs` dry run validated, 23 files / 98 references; folder `RoslynSentinel.Git/` dry run validated, 144 files. Triaged defect: in moved mode `WhyQualify` qualifies (global using of the old namespace; old using must stay) where an added using is safe, and cites another project's `GlobalUsings.g.cs` (TODO in `CopyAndObsoleteCallerRewrite.cs`, INBOX 2026-11-25 03:45). (b) NOT RUN: the client still holds the pre-Step-13 `MoveFile` schema (`sourcePath`/`destinationPath`) after the restart; needs a `/mcp` reconnect (live-window step). (a) waits on Step 14.
 - Files: none (a dispatcher run after commit and a server restart; results recorded in this plan's Risks).
 - Depends on: Steps 13, 14, 26, 32 (all committed, server restarted; `McpServerStatus` `lastLaunch.servedSha` shows the commit)
 - Effect: text-neutral (measurement; dry runs only, nothing is written to the repo)
