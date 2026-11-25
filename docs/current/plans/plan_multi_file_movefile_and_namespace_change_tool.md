@@ -1,6 +1,6 @@
 # Plan: multi-file MoveFile (a `moves` list, one compile gate, optional csproj edges) and a `ChangeNamespace` tool
 
-**Status:** IN PROGRESS 2026-11-25. Steps 1-13, 15-17, 19, 21, 22, 24, 25 done (9c8c5663..fd379c8f), Step 29 skipped (probe green); `ToolHintRatchetTests` red on the `ChangeNamespace` hint literal until Step 32. Batched run, owner away; R12/R15/R16/R17 deferred to the tracker (Steps 14, 20, 26 wait on them). Nothing built; implements [proposal_multi_file_movefile_and_namespace_change_tool.md](../proposals/proposal_multi_file_movefile_and_namespace_change_tool.md) (ACCEPTED 2026-11-25). Revised 2026-11-25 with the owner's decisions D12-D16 and an independent review (P5-P16). Commit trailer for every slice: `Plan: plan_multi_file_movefile_and_namespace_change_tool` (the last slice adds `Closes:`).
+**Status:** IN PROGRESS 2026-11-25. Steps 1-13, 15-17, 19, 21, 22, 24, 25, 28, 30-33 done (9c8c5663..d2ee0705), Step 29 skipped (probe green). Batched run, owner away; R12/R15/R16/R17 deferred to the tracker (Steps 14, 20, 26 wait on them). Nothing built; implements [proposal_multi_file_movefile_and_namespace_change_tool.md](../proposals/proposal_multi_file_movefile_and_namespace_change_tool.md) (ACCEPTED 2026-11-25). Revised 2026-11-25 with the owner's decisions D12-D16 and an independent review (P5-P16). Commit trailer for every slice: `Plan: plan_multi_file_movefile_and_namespace_change_tool` (the last slice adds `Closes:`).
 
 ## Problem
 
@@ -612,6 +612,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `test-writer`.
 
 ### Step 28 - Generalise the shared core ("moved, not copied" mode, sets, overlap refusal)
+- Done: 1dbda9c4, a023b55f (moved-not-copied is a private bool, not a new `CallerRewriteMode` value)
 - Files: `RoslynSentinel.Engines.Basic/CopyAndObsoleteCallerRewrite.cs` (620 lines); `RoslynSentinel.Engines.Basic/CopyAndObsoleteEdits.cs` (437 lines); `RoslynSentinel.Engines.Basic/CopyAndObsoleteCallerRewriteResult.cs` (the one defaulted
   property, P8); `RoslynSentinel.Tools.Basic/MoveFileCopyAndObsolete.cs` (`WithDiskBomsAsync` generalisation).
 - Depends on: Step 5
@@ -636,6 +637,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `implementer` (D1), conditional.
 
 ### Step 30 - `ChangeNamespaceEngine` body
+- Done: cbd6b9bf, 532fc143
 - Files: `RoslynSentinel.Engines.Basic/ChangeNamespaceEngine.cs`.
 - Depends on: Step 28
 - Effect: text-neutral (no tool yet)
@@ -648,6 +650,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `implementer-senior` (a new engine composing five behaviours over a shared core).
 
 ### Step 31 - Core and engine tests for `ChangeNamespace`
+- Done: 47dfa097, afc46dc9 (T31.17 lives in `Tests.Tools.Basic/ChangeNamespaceCoreTests.cs`: `WithDiskBomsAsync` is internal to Tools.Basic)
 - Files: new `RoslynSentinel.Tests.Basic/ChangeNamespaceCoreTests.cs`; new `RoslynSentinel.Tests.Basic/ChangeNamespaceEngineTests.cs`.
 - Depends on: Step 30
 - Effect: text-neutral
@@ -657,6 +660,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `test-writer`.
 
 ### Step 32 - `ChangeNamespace` tool method, toolset catalog, text and policy rows (behaviour-changing)
+- Done: d9cc08b1, 3b1c0d6f; regeneration d94d5349, d2ee0705 (budget unchanged at 49500); hint ratchet green
 - Files: `RoslynSentinel.Tools.Basic/CoreRefactoringTools.cs` (610 lines; the method beside `MoveAllTypesToFilesTool` at `:416`); `RoslynSentinel.Common/ToolsetCatalog.cs` (`moveExtract` at `:43`, `Summaries` entry about `:77`);
   `RoslynSentinel.Tools.Basic/ToolsetControlTools.cs` (the moveExtract text, `:26-27`); `RoslynSentinel.Common/ErrorPolicyIntentTable.cs` (new `["ChangeNamespace"]` row beside `MoveFile` at `:120`);
   `RoslynSentinel.Tests.Server/ClaudeLeanSchemaBudgetTests.cs` (D15, only if the measurement shows growth: `ChangeNamespace` is in no startup surface, so the claude-lean total may not move).
@@ -671,6 +675,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Lane: `implementer-senior` (4-5 files across two projects and a registry-adjacent text surface).
 
 ### Step 33 - Surface and tool tests for `ChangeNamespace`
+- Done: a1c6d116 (`ToolEffectList` left unchanged: its 55-tool header is frozen by `ToolEffectListTests`)
 - Files: `RoslynSentinel.Tests.Server/ClaudeLeanModeTests.cs` (`ClaudeAdvancedBaseline` `:56`; `Claude_Mode_StillExposesItsPreExistingToolSet` `:113`; template `QualifyCrefs_IsRegisteredInModeMap_AndOnDemandOnlyInClaudeLean` `:258`);
   `RoslynSentinel.Tests.ErrorVariants/ToolEffectList.cs` (`WriteNames`: add `ChangeNamespace`; check whether `MoveFile` appears further down and whether its parameter shape is pinned); new `RoslynSentinel.Tests.Tools.Basic/ChangeNamespaceToolTests.cs`.
 - Depends on: Step 32
