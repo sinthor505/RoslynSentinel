@@ -154,6 +154,13 @@ public static class ToolErrorCode
     public const string PreconditionNotMet = "PreconditionNotMet";
 
     /// <summary>
+    /// A startup setting (a flag or an environment variable) is invalid, or a flag is unknown, so the server
+    /// refuses the call. The typed problem list is in the error's structured detail. Nothing was read or changed.
+    /// Maps to the same status as <see cref="PreconditionNotMet"/>.
+    /// </summary>
+    public const string ConfigurationInvalid = "ConfigurationInvalid";
+
+    /// <summary>
     /// The write-path guardrail refused a change to an existing C# file because it would alter that
     /// file's line-ending style (CRLF to LF, or a single style to mixed). Nothing was written. This is
     /// the fingerprint of a whole-file re-serialize/normalize rather than a minimal edit; the message

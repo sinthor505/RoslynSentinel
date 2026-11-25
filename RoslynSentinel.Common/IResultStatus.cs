@@ -58,7 +58,7 @@ public static class ResultStatusExtensions
         ToolErrorCode.NotFound or ToolErrorCode.NoMatches => ResultStatus.NotFound,
         ToolErrorCode.Ambiguous => ResultStatus.Ambiguous,
         ToolErrorCode.InvalidArgument => ResultStatus.InvalidInput,
-        ToolErrorCode.TargetIneligible or ToolErrorCode.PreconditionNotMet => ResultStatus.NotApplicable,
+        ToolErrorCode.TargetIneligible or ToolErrorCode.PreconditionNotMet or ToolErrorCode.ConfigurationInvalid => ResultStatus.NotApplicable,
         ToolErrorCode.FeatureDisabled => ResultStatus.FeatureDisabled,
         ToolErrorCode.Cancelled => ResultStatus.Cancelled,
         ToolErrorCode.TimedOut or ToolErrorCode.SolutionLoadTimeout => ResultStatus.TimedOut,
