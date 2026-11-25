@@ -2106,7 +2106,8 @@ public class GitImpl : IGitOperations
     /// <summary>Outcome of loading one file's unstaged diff: Diff is set on success; otherwise ErrorKind, Error and
     /// ErrorDetail describe the classified failure. Shared by operation=hunks and the hunk stage.</summary>
     private sealed record FileDiffLoad(
-        string Path, GitFileDiff? Diff, string? ErrorKind = null, string? Error = null, string? ErrorDetail = null);
+        string Path, GitFileDiff? Diff, string? ErrorKind = null, string? Error = null, string? ErrorDetail = null,
+        IReadOnlyList<GitHint>? Hints = null);
 
     // Runs the zero-context unstaged diff of one already-classified tracked path through the byte-exact runner,
     // parses it and applies the kind refusals. Success carries the parsed diff; every failure is classified.
@@ -2381,13 +2382,15 @@ public class GitImpl : IGitOperations
                $"for the current hunks and select again, or stage the whole file with {ToolCallHint.Call("Git", ("operation", "stage"), ("paths", path))}. Nothing was staged.";
     }
 
-    private static GitStageHunksResult StageHunksFailure(string path, string kind, string error, string detail) => new()
+    private static GitStageHunksResult StageHunksFailure(string path, string kind, string error, string detail,
+        IReadOnlyList<GitHint>? hints = null) => new()
     {
         Path = path,
         IsError = true,
         ErrorKind = kind,
         Error = error,
-        ErrorDetail = detail
+            ErrorDetail = detail,
+            Hints = hints
     };
 
     // Runs after git apply succeeded: re-reads the unstaged diff to count what is left, and copies the repository
@@ -2455,10 +2458,11 @@ public class GitImpl : IGitOperations
 
             var load = await LoadFileDiffAsync(gitRoot, paths, cancellationToken);
             if (load.Diff is null)
-                return StageHunksFailure(load.Path, load.ErrorKind ?? GitErrorCodes.Fallback, load.Error ?? "", load.ErrorDetail ?? "");
+                return StageHunksFailure(load.Path, load.ErrorKind ?? GitErrorCodes.Fallback, load.Error ?? "", load.ErrorDetail ?? "", load.Hints);
 
             var rejection = SelectHunks(load.Diff, load.Path, hunkIds, hunkFingerprint, lineRange, out var selection);
             if (rejection is { } refused)
+                // TODO carry refused.Hints once SelectHunks returns hints (plan_isolate_git_area_into_own_project Step 5c)
                 return StageHunksFailure(load.Path, refused.Kind, refused.Error, refused.Detail);
 
             // Outside the repo, so the workspace file watcher never sees it. Latin-1 keeps every byte of the
@@ -3155,14 +3159,24 @@ public class GitImpl : IGitOperations
         }
     }
 
-    private static GitHunksResult HunksFailure(string path, string kind, string error, string detail) => new()
+    private static GitHunksResult HunksFailure(string path, string kind, string error, string detail,
+        IReadOnlyList<GitHint>? hints = null) => new()
     {
         Path = path,
         IsError = true,
         ErrorKind = kind,
         Error = error,
-        ErrorDetail = detail
+            ErrorDetail = detail,
+            Hints = hints
     };
+
+    /// <summary>Keeps only the hints whose slot lives in Error. The CommitAsync copy of a stage failure drops ErrorDetail
+    /// today, so an ErrorDetail-slot hint must not travel there (it would add a Detail that is null now).</summary>
+    private static IReadOnlyList<GitHint>? HintsForErrorOnlyCopy(IReadOnlyList<GitHint>? hints)
+    {
+        var kept = hints?.Where(h => GitHintText.SlotOf(h.Key) is GitHintSlot.Inline or GitHintSlot.ErrorReplace).ToList();
+        return kept is { Count: > 0 } ? kept : null;
+    }
 
     /// <summary>
     /// Lists the unstaged hunks of exactly one tracked text file (zero-context diff), each with a 1-based id, line
@@ -3175,7 +3189,7 @@ public class GitImpl : IGitOperations
         {
             var load = await LoadFileDiffAsync(gitRoot, paths, cancellationToken);
             if (load.Diff is null)
-                return HunksFailure(load.Path, load.ErrorKind ?? GitErrorCodes.Fallback, load.Error ?? "", load.ErrorDetail ?? "");
+                return HunksFailure(load.Path, load.ErrorKind ?? GitErrorCodes.Fallback, load.Error ?? "", load.ErrorDetail ?? "", load.Hints);
 
             return BuildHunksResult(load.Path, load.Diff, count);
         }
@@ -3748,7 +3762,7 @@ public class GitImpl : IGitOperations
                 // For scope=all or scope=tracked, pre-stage as requested
                 var stageResult = await StageAsync(gitRoot, explicitScope, paths, cancellationToken);
                 if (stageResult.IsError)
-                    return new GitCommitResult { IsError = true, Error = stageResult.Error };
+                    return new GitCommitResult { IsError = true, Error = stageResult.Error, Hints = HintsForErrorOnlyCopy(stageResult.Hints) };
             }
 
             // Default on (git config roslynsentinel.inProcessCommit=false turns it off): a plain new commit made in process through the compare-and-swap primitive, with no git process.
