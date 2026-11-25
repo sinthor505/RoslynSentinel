@@ -21,15 +21,18 @@ public enum AgentOperatingMode
 /// The mode must not change mid-session, so auto latches on the first tool call and is never re-evaluated.
 /// Static, so tests must reset it with <see cref="Configure"/>.
 /// </summary>
+[StartupSettingGroup("Agent operating mode", PostConfigure = "ResetLatch")]
 public static class AgentOperatingModeOptions
 {
+    public static readonly StartupSetting<AgentOperatingMode> ConfiguredSetting = StartupSetting.Enum<AgentOperatingMode>("--operating-mode", "ROSLYNSENTINEL_OPERATING_MODE", AgentOperatingMode.Auto, "Agent operating mode: auto, single-agent or multi-agent.", SettingScope.Server);
+
     private const int Unresolved = 0;
     private const int LatchedSingleAgent = 1;
     private const int LatchedMultiAgent = 2;
 
     private static int _latched;
 
-    public static AgentOperatingMode Configured { get; private set; } = AgentOperatingMode.Auto;
+    public static AgentOperatingMode Configured => ConfiguredSetting.Value;
 
     /// <summary>The configured mode when it is not Auto; otherwise the latched mode, or Auto when not latched yet.</summary>
     public static AgentOperatingMode Effective
@@ -87,49 +90,18 @@ public static class AgentOperatingModeOptions
     /// <summary>Call once at process startup; also resets the latch, which is how tests reset.</summary>
     public static void Configure(string[] args)
     {
-        Configured = ParseMode(GetArgValue(args, "--operating-mode")
-            ?? Environment.GetEnvironmentVariable("ROSLYNSENTINEL_OPERATING_MODE"));
-        Volatile.Write(ref _latched, Unresolved);
+        StartupSettings.ConfigureGroup(typeof(AgentOperatingModeOptions), args);
     }
 
-    /// <summary>"single-agent" or "multi-agent" (case-insensitive, whitespace-trimmed) map to the matching mode; "auto", null, empty or anything else maps to Auto and never throws.</summary>
+    /// <summary>"single-agent" or "multi-agent" (case-insensitive, whitespace-trimmed) map to the matching mode; "auto", null, empty or anything else maps to Auto and never throws (the registry reports an unrecognised value as invalid).</summary>
     public static AgentOperatingMode ParseMode(string? raw)
     {
-        var trimmed = raw?.Trim();
-        if (string.Equals(trimmed, "single-agent", StringComparison.OrdinalIgnoreCase))
-        {
-            return AgentOperatingMode.SingleAgent;
-        }
-
-        if (string.Equals(trimmed, "multi-agent", StringComparison.OrdinalIgnoreCase))
-        {
-            return AgentOperatingMode.MultiAgent;
-        }
-
-        return AgentOperatingMode.Auto;
+        return ConfiguredSetting.Read(StartupArgs.Empty, _ => raw).Value;
     }
 
-    /// <summary>
-    /// Reads a command-line flag's value, accepting "--flag=value", "--flag value", and a bare
-    /// "--flag" (returned as "true"; a following token starting with "--" is not consumed as a value).
-    /// </summary>
-    private static string? GetArgValue(string[] args, string flag)
+    private static IReadOnlyList<ConfigurationProblem> ResetLatch()
     {
-        var inlinePrefix = flag + "=";
-        var inline = args.FirstOrDefault(a => a.StartsWith(inlinePrefix, StringComparison.Ordinal));
-        if (inline is not null)
-        {
-            return inline[inlinePrefix.Length..];
-        }
-
-        var index = Array.FindIndex(args, a => a.Equals(flag, StringComparison.Ordinal));
-        if (index < 0)
-        {
-            return null;
-        }
-
-        return index + 1 < args.Length && !args[index + 1].StartsWith("--", StringComparison.Ordinal)
-            ? args[index + 1]
-            : "true";
+        Volatile.Write(ref _latched, Unresolved);
+        return Array.Empty<ConfigurationProblem>();
     }
 }
