@@ -23,7 +23,7 @@ public class ToolsetControlTools
     [Produces(DataTag.ResultOnly)]
     [Description("Switches an on-demand toolset on or off (tools/list_changed refreshes your tool list). " +
         "declarations = Declaration, ParameterEdit, ModifyEnum, SyncTypeAndFilename, TypedMember. " +
-        "moveExtract = MoveType, MoveAllTypesToFiles, Extract*, Inline*, Introduce*, WrapRange, InvertAssignments, ConvertAnonymousToNamed, SyncInterface, SummaryComment, DeleteUnusedSymbol, PreviewRenameImpact, ApplyDiff, ApplyUnifiedDiff, NamedArguments, QualifyCrefs. " +
+        "moveExtract = MoveType, MoveAllTypesToFiles, ChangeNamespace, Extract*, Inline*, Introduce*, WrapRange, InvertAssignments, ConvertAnonymousToNamed, SyncInterface, SummaryComment, DeleteUnusedSymbol, PreviewRenameImpact, ApplyDiff, ApplyUnifiedDiff, NamedArguments, QualifyCrefs. " +
         "projectAdmin = CreateProject, SplitProjectByFolder, ListSolutionItems, ListWorkspaceSolutions, ListProjectFrameworkTargets, Features, ProjectDoc, GetWorkspaceHealth, GetOperationDetail, RetryFailedChanges, GetTypeInfo, QuerySymbolRelationships, GetBestInsertionPoint. " +
         "testCategories = TagTestCategories (dry run by default). " +
         "modelEval = SubAgent (Advanced only). " +

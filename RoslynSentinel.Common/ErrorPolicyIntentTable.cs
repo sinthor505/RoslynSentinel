@@ -48,6 +48,7 @@ public static class ErrorPolicyIntentTable
         ["Build"] = Fixed(L),
         ["BulkComment"] = Fixed(E),
         ["ChangeAccessibility"] = Fixed(E),
+        ["ChangeNamespace"] = Fixed(E),
         ["ChangeSignature"] = Fixed(E),
         ["ClearAsyncMigrationCandidateFlags"] = Fixed(E),
         ["ConstructorParameter"] = Dispatch("operation", E, lookup: "view", edit: "add,remove"),

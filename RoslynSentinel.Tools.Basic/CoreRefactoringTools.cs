@@ -476,6 +476,112 @@ public class CoreRefactoringTools
         }
     }
 
+    [McpServerTool(Name = "ChangeNamespace")]
+    [Produces(DataTag.ResultOnly)]
+    [Description("Changes the namespace of a file's types (a folder: every .cs under it, subfolders included, no globs): moves the namespace declaration and rewrites every reference to the types, in one build check, undoable via UndoChange. One target namespace per call: pass newNamespace, or matchFolder true for the namespace the folder path gives. A partial type needs all its parts in the set.")]
+    // CONDITIONAL-PARAM-REVIEW-REQUIRED: exactly one of newNamespace and matchFolder=true must be supplied (newNamespace names one namespace for every file; matchFolder derives it from the folder path). Enforced at runtime, not by the schema.
+    public async Task<SentinelCallToolResult<AppliedChangeSummary>> ChangeNamespaceTool([Description(ToolParams.Reason)] ToolCallReason reason, [Description("A .cs file, or a folder: every .cs file under it is changed. No globs.")][Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Description("The namespace to give every file. Exactly one of newNamespace and matchFolder.")] string? newNamespace = null, [Description("true = each file gets the namespace its folder path gives (project root namespace plus folders); every file must expect the same one. Exactly one of newNamespace and matchFolder.")] bool matchFolder = false, [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false, CancellationToken cancellationToken = default)
+    {
+        static SentinelCallToolResult<AppliedChangeSummary> Failed(ResultError error) => new() { IsError = true, ErrorData = error };
+        try
+        {
+            if (string.IsNullOrWhiteSpace(filePath))
+            {
+                return Failed(new ResultError(ToolErrorCode.InvalidArgument, $"ChangeNamespace: {nameof(filePath)} is empty. Options: pass a .cs file path, or a folder path to change every .cs file under it. Nothing was changed."));
+            }
+
+            var hasNamespace = !string.IsNullOrWhiteSpace(newNamespace);
+            if (hasNamespace == matchFolder)
+            {
+                var given = hasNamespace ? $"both {nameof(newNamespace)} and {nameof(matchFolder)} were given" : $"neither {nameof(newNamespace)} nor {nameof(matchFolder)} was given";
+                return Failed(new ResultError(ToolErrorCode.InvalidArgument, $"ChangeNamespace: {given}, and exactly one names the target namespace. Options: pass {nameof(newNamespace)} for one namespace for every file, or {nameof(matchFolder)} true for the namespace each file's folder path gives. Nothing was changed."));
+            }
+
+            var committed = default(Microsoft.CodeAnalysis.Solution);
+            try
+            {
+                committed = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+            }
+            catch (SolutionNotLoadedException)
+            {
+                return Failed(new ResultError(ToolErrorCode.SolutionNotLoaded, "ChangeNamespace: no solution is loaded, so the files could not be resolved and nothing was changed."));
+            }
+
+            var plan = await ChangeNamespaceEngine.PlanAsync(_workspaceManager.ResolveFromWire(filePath), newNamespace, matchFolder, committed, cancellationToken);
+            if (plan.Refusal is { } refusal)
+            {
+                return Failed(refusal);
+            }
+
+            var solutionRoot = _workspaceManager.GetSolutionRoot();
+            var facts = plan.Facts.Select(fact => new Finding("ChangeNamespace", fact, FindingSeverity.Info)).ToList();
+            if (plan.Files.Count == 0)
+            {
+                return new SentinelCallToolResult<AppliedChangeSummary>
+                {
+                    IsError = false,
+                    SuccessData = AppliedChangeSummary.From(lineChanges: null, findings: facts, affectedFiles: [], description: "No file changed: every file already declares the target namespace, and no other file referenced its types.", dryRun: dryRun),
+                    Findings = facts
+                };
+            }
+
+            var proposed = new DocumentChangeSet();
+            foreach (var file in plan.Files)
+            {
+                proposed[file.FilePath] = file.NewText;
+            }
+
+            // The rewrite splices into each workspace document's text, which carries no BOM: put back the BOM of each file on disk, because the write below is verbatim.
+            var affectedFiles = plan.Files.Select(file => file.FilePath).ToList();
+            var changes = await MoveFileCopyAndObsolete.WithDiskBomsAsync(proposed, affectedFiles, cancellationToken);
+            var apply = await ValidateAndApplyHelper.ValidateAndApplyAsync(
+                _validationEngine, _workspaceManager, _logger, changes, "change_namespace",
+                dryRun: dryRun,
+                cancellationToken: cancellationToken,
+                verbatim: true,
+                describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable),
+                describeEditImpact: EditImpactGate.Describer(_workspaceManager, changes, _activeToolSurface));
+            if (apply.Error is { } error)
+            {
+                var failure = error.ErrorCode == ToolErrorCode.ValidationFailed
+                    ? error with
+                    {
+                        Message = $"ChangeNamespace: changing the namespace of '{filePath}' would break the build; nothing was written. {error.Message}"
+                    }
+                    : error;
+                return Failed(failure);
+            }
+
+            var description = DescribeNamespaceChange(plan, newNamespace, matchFolder, apply.DryRun, solutionRoot);
+            return new SentinelCallToolResult<AppliedChangeSummary>
+            {
+                IsError = false,
+                SuccessData = AppliedChangeSummary.From(apply, affectedFiles, description),
+                Findings = (apply.Findings ?? []).Concat(facts).ToList()
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ChangeNamespace failed for {FilePath}", filePath);
+            return Failed(ToolErrorMapper.ToResultError(ex, _workspaceManager, "ChangeNamespace"));
+        }
+    }
+
+    // Facts only: how many files and references the change touched, and the old-namespace using directives the move left unresolved with how each was handled.
+    private static string DescribeNamespaceChange(CallerRewriteResult plan, string? newNamespace, bool matchFolder, bool dryRun, string? solutionRoot)
+    {
+        const int maxListed = 20;
+        var target = matchFolder ? "the namespace the folder path gives" : $"'{newNamespace!.Trim()}'";
+        var text = $"{(dryRun ? "Would change" : "Changed")} the namespace to {target}: {plan.Files.Count} file(s) rewritten, {plan.Files.Sum(file => file.ReferencesRewritten)} reference(s) updated.";
+        if (plan.DanglingUsings is { Count: > 0 } dangling)
+        {
+            var listed = dangling.Take(maxListed).Select(item => $"{EditEffectNames.DisplayPath(item.FilePath, solutionRoot)} 'using {item.Namespace};' ({(item.Resolution == DanglingUsingResolution.Removed ? "removed" : "global using left as written")})");
+            text += $" Using directives of the old namespace that bound to nothing after the move: {string.Join("; ", listed)}{(dangling.Count > maxListed ? $" and {dangling.Count - maxListed} more" : string.Empty)}.";
+        }
+
+        return text;
+    }
+
     [McpServerTool(Name = "MoveMember")]
     [Produces(DataTag.ResultOnly)]
     [Description("Moves methods/properties/fields from one class to another as a single atomic change, rewriting call sites.")]
