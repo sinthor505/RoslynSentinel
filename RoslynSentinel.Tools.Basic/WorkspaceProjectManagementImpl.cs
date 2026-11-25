@@ -813,7 +813,7 @@ public class WorkspaceProjectManagementImpl
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.SolutionLoadTimeout, "LoadSolution timed out: " + SolutionNotLoadedMessage.LoadWaitTimedOut(timeout))
+                    ErrorData = new ResultError(ToolErrorCode.SolutionLoadTimeout, "LoadSolution timed out: " + SolutionNotLoadedMessage.LoadWaitTimedOutFor(_workspaceManager, timeout))
                 };
             }
             var wasAlreadyLoaded = IsAlreadyLoadedPath(solutionPath, out var currentPath);

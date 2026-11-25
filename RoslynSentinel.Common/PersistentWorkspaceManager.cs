@@ -22,7 +22,7 @@ namespace RoslynSentinel.Common;
 /// <c>RoslynSentinel.Tests.TestSolutionFixture</c>, which stands up a disposable on-disk copy of
 /// the Samples/ContosoOrders scenario and loads it through this class.
 /// </summary>
-public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IUnrecoverableBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver, IScopedOperationLedger, IWorkspaceReader, IWorkspaceReloadFailureProvider, IEditAttributionLedgerProvider, IEditEffectIndexProvider, IObservedContentLedger, IEdgeGateLeaseSource
+public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IUnrecoverableBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver, IScopedOperationLedger, IWorkspaceReader, IWorkspaceReloadFailureProvider, IEditAttributionLedgerProvider, IEditEffectIndexProvider, IObservedContentLedger, IEdgeGateLeaseSource, IBackgroundReloadSource
 {
     private readonly ILogger<IWorkspaceManager> _logger;
     private readonly ActiveToolSurface? _activeToolSurface;
@@ -178,6 +178,9 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     // Post-write background reloads currently tracked as loads (a subset of _loadsInProgress); lets the load-wait timeout text
     // say that the wait was for such a reload. Interlocked; read lock-free.
     private int _backgroundReloadsInProgress;
+
+    /// <inheritdoc/>
+    public bool BackgroundReloadInProgress => Volatile.Read(ref _backgroundReloadsInProgress) > 0;
     // Sticky record of the last failed load/reload, cleared by the next successful full load or reload.
     private WorkspaceReloadFailure? _reloadFailure;
     // Changed .cs files the per-file fold could not read, so CurrentSolution still holds their old text. Non-empty means the
@@ -2104,10 +2107,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             if (await WaitForLoadAsync(SolutionLoadWait.DefaultTimeout, cancellationToken) == SolutionLoadStatus.Loading)
             {
                 // D18: when the load being waited on includes a post-write background reload, the text names it.
-                // TODO LoadSolution (WorkspaceProjectManagementImpl) and SubAgentModelRun.AwaitSolutionLoadAsync time out with the plain LoadWaitTimedOut text: they only see ISolutionProvider, which does not expose that a background reload is the load in progress.
-                throw new SolutionLoadTimeoutException(Volatile.Read(ref _backgroundReloadsInProgress) > 0
-                    ? SolutionNotLoadedMessage.LoadWaitTimedOutAfterReload(SolutionLoadWait.DefaultTimeout)
-                    : SolutionNotLoadedMessage.LoadWaitTimedOut(SolutionLoadWait.DefaultTimeout));
+                throw new SolutionLoadTimeoutException(SolutionNotLoadedMessage.LoadWaitTimedOutFor(this, SolutionLoadWait.DefaultTimeout));
             }
         }
 

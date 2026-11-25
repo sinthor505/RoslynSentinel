@@ -157,6 +157,40 @@ public class SolutionNotLoadedMessageTests
         Assert.That(message, Does.Contain("call did not run"));
     }
 
+    private sealed class ReloadSourceStub(bool inProgress) : IBackgroundReloadSource
+    {
+        public bool BackgroundReloadInProgress { get; } = inProgress;
+    }
+
+    [Test]
+    public void LoadWaitTimedOutFor_PlainObjectOrWorkspaceManagerFake_ReturnsThePlainText()
+    {
+        var waited = TimeSpan.FromSeconds(30);
+        using var fake = new FakeWorkspaceManager(WorkspaceAccess.ReadWrite);
+
+        Assert.That(SolutionNotLoadedMessage.LoadWaitTimedOutFor(new object(), waited), Is.EqualTo(SolutionNotLoadedMessage.LoadWaitTimedOut(waited)));
+        Assert.That(SolutionNotLoadedMessage.LoadWaitTimedOutFor(fake, waited), Is.EqualTo(SolutionNotLoadedMessage.LoadWaitTimedOut(waited)));
+        Assert.That(SolutionNotLoadedMessage.LoadWaitTimedOutFor(null, waited), Is.EqualTo(SolutionNotLoadedMessage.LoadWaitTimedOut(waited)));
+    }
+
+    [Test]
+    public void LoadWaitTimedOutFor_ReloadInProgress_NamesTheBackgroundReloadAndThatRetryWorks()
+    {
+        var message = SolutionNotLoadedMessage.LoadWaitTimedOutFor(new ReloadSourceStub(true), TimeSpan.FromSeconds(30));
+
+        Assert.That(message, Is.EqualTo(SolutionNotLoadedMessage.LoadWaitTimedOutAfterReload(TimeSpan.FromSeconds(30))));
+        Assert.That(message, Does.Contain("background reload"));
+        Assert.That(message, Does.Contain("Retrying this call works"));
+    }
+
+    [Test]
+    public void LoadWaitTimedOutFor_NoReloadInProgress_ReturnsThePlainText()
+    {
+        var waited = TimeSpan.FromSeconds(30);
+
+        Assert.That(SolutionNotLoadedMessage.LoadWaitTimedOutFor(new ReloadSourceStub(false), waited), Is.EqualTo(SolutionNotLoadedMessage.LoadWaitTimedOut(waited)));
+    }
+
     [Test]
     public void LoadCancelledAfterTimeout_NamesTimeoutSecondsAndAValue()
     {

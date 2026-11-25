@@ -124,6 +124,17 @@ public static class SolutionNotLoadedMessage
         return $"The solution is still loading after waiting {seconds} s, so this call did not run. The load in progress is a background reload after a project-file write (the write itself succeeded), and it is continuing. Retrying this call works once the reload finishes: retry in a few seconds, or call McpServerStatus and wait until solutionLoadStatus is Loaded.";
     }
 
+    /// <summary>
+    /// Picks <see cref="LoadWaitTimedOutAfterReload"/> when <paramref name="provider"/> reports a background reload in progress,
+    /// else <see cref="LoadWaitTimedOut"/>. Takes <c>object?</c> and tests for <see cref="IBackgroundReloadSource"/> (an <c>is</c>
+    /// check) on purpose: the narrow interface keeps <see cref="IWorkspaceManager"/>, <see cref="ISolutionProvider"/> and every
+    /// fake unchanged, so a provider that does not implement it gets the plain text.
+    /// </summary>
+    public static string LoadWaitTimedOutFor(object? provider, TimeSpan waited)
+        => provider is IBackgroundReloadSource { BackgroundReloadInProgress: true }
+            ? LoadWaitTimedOutAfterReload(waited)
+            : LoadWaitTimedOut(waited);
+
     /// <summary>The message for a load that was cancelled due to timeout.</summary>
     public static string LoadCancelledAfterTimeout(TimeSpan limit)
     {

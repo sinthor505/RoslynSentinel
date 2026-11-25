@@ -179,7 +179,7 @@ public static class SubAgentModelRun
 
         var status = await workspaceManager.WaitForLoadAsync(SolutionLoadWait.DefaultTimeout, cancellationToken);
         return status == SolutionLoadStatus.Loading
-            ? new ResultError(ToolErrorCode.SolutionLoadTimeout, SolutionNotLoadedMessage.LoadWaitTimedOut(SolutionLoadWait.DefaultTimeout))
+            ? new ResultError(ToolErrorCode.SolutionLoadTimeout, SolutionNotLoadedMessage.LoadWaitTimedOutFor(workspaceManager, SolutionLoadWait.DefaultTimeout))
             : null;
     }
 
