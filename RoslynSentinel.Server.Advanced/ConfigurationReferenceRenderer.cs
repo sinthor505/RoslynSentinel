@@ -17,6 +17,7 @@ public static class ConfigurationReferenceRenderer
         var sb = new StringBuilder();
         sb.Append(MarkdownHeader).Append(Nl).Append(Nl);
         sb.Append("# Configuration reference").Append(Nl).Append(Nl);
+        // hint-ok: reference documentation text, not a tool-call hint
         sb.Append("A new setting is declared as a `StartupSetting.*` field in a `[StartupSettingGroup]` class. ")
             .Append("The tables list declared defaults, never effective values; for the effective values call McpServerStatus with `settings`.")
             .Append(Nl).Append(Nl);
