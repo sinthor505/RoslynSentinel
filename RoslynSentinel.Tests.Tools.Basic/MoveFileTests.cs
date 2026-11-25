@@ -33,6 +33,9 @@ public sealed class MoveFileTests
 
     private static WholeFileWriteTools BuildTools(IWorkspaceManager manager) => BuildTools(manager, Battery.Basic.TestTools.WorkspaceTools(manager));
 
+    private static Task<SentinelCallToolResult<AppliedChangeSummary>> MoveAsync(WholeFileWriteTools tools, string source, string destination, MoveFileNamespaceHandling handling) =>
+        tools.MoveFileTool(reason: "test message", source, destination, handling);
+
     private static string PathIn(TestSolutionFixture fixture, params string[] segments) =>
         Path.Combine(new[] { fixture.SolutionDirectory }.Concat(segments).ToArray());
 
@@ -62,7 +65,7 @@ public sealed class MoveFileTests
         var source = PathIn(fixture, CoreFolder, "Movable.cs");
         var destination = PathIn(fixture, CoreFolder, "Sub", "Movable.cs");
 
-        var result = await tools.MoveFileTool(reason: "test message", source, destination, MoveFileNamespaceHandling.keep);
+        var result = await MoveAsync(tools, source, destination, MoveFileNamespaceHandling.keep);
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         Assert.That(File.Exists(source), Is.False, "The source is gone.");
@@ -85,7 +88,7 @@ public sealed class MoveFileTests
         var tools = BuildTools(manager);
         await fixture.AddFileToSolution(manager, Path.Combine(CoreFolder, "Renamed.cs"), "namespace ContosoOrders.Core;\r\n\r\npublic class Renamed\r\n{\r\n}\r\n");
 
-        var result = await tools.MoveFileTool(reason: "test message", PathIn(fixture, CoreFolder, "Renamed.cs"), PathIn(fixture, CoreFolder, "RenamedAgain.cs"), MoveFileNamespaceHandling.keep);
+        var result = await MoveAsync(tools, PathIn(fixture, CoreFolder, "Renamed.cs"), PathIn(fixture, CoreFolder, "RenamedAgain.cs"), MoveFileNamespaceHandling.keep);
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         Assert.That(result.SuccessData!.Description, Does.Not.Contain("was kept"));
@@ -104,7 +107,7 @@ public sealed class MoveFileTests
         var source = PathIn(fixture, CoreFolder, "CrossMover.cs");
         var destination = PathIn(fixture, TestsFolder, "CrossMover.cs");
 
-        var result = await tools.MoveFileTool(reason: "test message", source, destination, MoveFileNamespaceHandling.keep);
+        var result = await MoveAsync(tools, source, destination, MoveFileNamespaceHandling.keep);
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         Assert.That(File.Exists(source), Is.False);
@@ -125,7 +128,7 @@ public sealed class MoveFileTests
         var source = PathIn(fixture, "docs", "Note.md");
         var destination = PathIn(fixture, "docs", "archive", "Note.md");
 
-        var result = await tools.MoveFileTool(reason: "test message", source, destination, MoveFileNamespaceHandling.keep);
+        var result = await MoveAsync(tools, source, destination, MoveFileNamespaceHandling.keep);
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         Assert.That(File.Exists(source), Is.False);
@@ -145,7 +148,7 @@ public sealed class MoveFileTests
         var destination = Path.Combine(fixture.SolutionDirectory, relativeDestination);
         var originalBytes = File.ReadAllBytes(source);
 
-        var result = await tools.MoveFileTool(reason: "test message", source, destination, MoveFileNamespaceHandling.keep);
+        var result = await MoveAsync(tools, source, destination, MoveFileNamespaceHandling.keep);
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         Assert.That(File.Exists(source), Is.False, "The source is gone.");
@@ -184,7 +187,7 @@ public sealed class MoveFileTests
         var tools = BuildTools(manager);
         await fixture.AddFileToSolution(manager, Path.Combine(CoreFolder, "BlobFrom.cs"), "namespace ContosoOrders.Core;\r\n\r\npublic class Payload\r\n{\r\n}\r\n");
 
-        var result = await tools.MoveFileTool(reason: "test message", PathIn(fixture, CoreFolder, "BlobFrom.cs"), PathIn(fixture, CoreFolder, "Moved", "BlobTo.cs"), MoveFileNamespaceHandling.keep);
+        var result = await MoveAsync(tools, PathIn(fixture, CoreFolder, "BlobFrom.cs"), PathIn(fixture, CoreFolder, "Moved", "BlobTo.cs"), MoveFileNamespaceHandling.keep);
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         var changeId = result.SuccessData!.ChangeId;
@@ -208,7 +211,7 @@ public sealed class MoveFileTests
         await fixture.AddFileToSolution(manager, Path.Combine(CoreFolder, "UndoFrom.cs"), text);
         var source = PathIn(fixture, CoreFolder, "UndoFrom.cs");
         var destination = PathIn(fixture, CoreFolder, "UndoTo.cs");
-        var moved = await tools.MoveFileTool(reason: "test message", source, destination, MoveFileNamespaceHandling.keep);
+        var moved = await MoveAsync(tools, source, destination, MoveFileNamespaceHandling.keep);
         Assert.That(moved.IsError, Is.False, moved.ErrorData?.Message);
 
         var undone = await workspaceTools.UndoChangeTool(reason: "test message", moved.SuccessData!.ChangeId!);
@@ -232,7 +235,7 @@ public sealed class MoveFileTests
         var source = PathIn(fixture, CoreFolder, "StoredFrom.cs");
         var destination = PathIn(fixture, CoreFolder, "Moved", "StoredTo.cs");
 
-        var moved = await tools.MoveFileTool(reason: "test message", source, destination, MoveFileNamespaceHandling.keep);
+        var moved = await MoveAsync(tools, source, destination, MoveFileNamespaceHandling.keep);
 
         Assert.That(moved.IsError, Is.False, moved.ErrorData?.Message);
         var changeId = moved.SuccessData!.ChangeId!;
