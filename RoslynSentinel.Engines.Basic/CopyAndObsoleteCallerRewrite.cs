@@ -366,13 +366,31 @@ public static class CopyAndObsoleteCallerRewrite
             return holds;
         }
 
-        var documents = rewrittenSolution.Projects.SelectMany(project => project.Documents)
-            .Where(document => document.FilePath is { Length: > 0 })
-            .GroupBy(document => document.FilePath!, PathComparison.Comparer)
-            .OrderBy(group => group.Key, PathComparison.Comparer);
+        // Group the copies of each file by path (first-seen spelling is the key), then visit the files in path order.
+        var copiesByPath = new Dictionary<string, List<Document>>(PathComparison.Comparer);
+        foreach (var project in rewrittenSolution.Projects)
+        {
+            foreach (var document in project.Documents)
+            {
+                if (document.FilePath is not { Length: > 0 } path)
+                {
+                    continue;
+                }
+
+                if (!copiesByPath.TryGetValue(path, out var sameFile))
+                {
+                    sameFile = new List<Document>();
+                    copiesByPath[path] = sameFile;
+                }
+
+                sameFile.Add(document);
+            }
+        }
+
+        var documents = copiesByPath.OrderBy(group => group.Key, PathComparison.Comparer);
         foreach (var group in documents)
         {
-            var copies = group.ToList();
+            var copies = group.Value;
             var text = (await copies[0].GetTextAsync(cancellationToken)).ToString();
             if (!probe.IsMatch(text) || await copies[0].GetSyntaxRootAsync(cancellationToken) is not CompilationUnitSyntax root)
             {
