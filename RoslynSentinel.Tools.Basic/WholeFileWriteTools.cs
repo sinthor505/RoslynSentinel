@@ -424,6 +424,16 @@ public class WholeFileWriteTools
                     };
                 }
 
+                if (gateFacts.Where(f => f.Kind is MoveFactKind.MissingProjectReference or MoveFactKind.MissingInternalsVisibleTo or MoveFactKind.EdgeWouldCloseCycle or MoveFactKind.MissingPackageReference).ToList() is { Count: > 0 } edgeFacts)
+                {
+                    // A missing edge usually breaks the compile, so the refusal carries the edge and the parameter that adds it.
+                    refusal = refusal with
+                    {
+                        Message = $"{refusal.Message}{string.Concat(edgeFacts.Select(f => $" Note: {f.Detail}"))}",
+                        Findings = (refusal.Findings ?? []).Concat(LiftMoveFacts(edgeFacts)).ToList()
+                    };
+                }
+
                 return new SentinelCallToolResult<AppliedChangeSummary> { IsError = true, ErrorData = refusal };
             }
 

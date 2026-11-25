@@ -204,7 +204,6 @@ public sealed class MoveFileProjectEdgeTests
         await WaitForReloadAsync(manager);
     }
 
-    // TODO PRODUCT-DEFECT: MoveFileTool lifts gateFacts (MissingProjectReference etc.) only on the success path, so this compile refusal drops the toggle-off fact; this row is red until it is surfaced
     // Heavy fixture: same real-manager scenario as T27.8 with the toggle off. The edge is absent, so the compile gate refuses the move (the moved file's Core type no longer
     // resolves in Extras) and the fact is carried by the refusal; csproj and files stay as they were. The fact is asserted in whichever of the two outcomes surfaces it.
     [Test]
