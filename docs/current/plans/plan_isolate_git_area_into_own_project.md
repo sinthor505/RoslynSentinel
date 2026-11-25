@@ -1,6 +1,6 @@
 # Plan: Move the Git area into its own production project (RoslynSentinel.Git) and its own test project (RoslynSentinel.Tests.Git)
 
-**Status:** APPROVED 2026-11-24. Area 1 (Git) of the proposal, run Batched with the owner away; decisions D-a to D-f settled (Decision), selection rule owned by the nightly plan.
+**Status:** IN PROGRESS 2026-11-24. Steps 1a-4 done (7aa47fc6..c08a0b4f, dcc429dd); batched run, owner away; decisions D-a to D-f in Decision.
 
 ## Problem
 
@@ -211,6 +211,8 @@ Dated entries; later entries do not override earlier ones unless they say so.
   is a measurement, not a hold.
 
 ### Step 1a - Contract skeleton, Common types (single lane)
+
+- Done: 7aa47fc6
 - Files: `RoslynSentinel.Common/Git/GitHintTypes.cs` (new), `RoslynSentinel.Common/Git/GitRootFailure.cs` (new)
 - Depends on: none. Effect: text-neutral (new types, nothing uses them).
 - Change: one `CreateFile` each, definitions only:
@@ -234,6 +236,8 @@ Dated entries; later entries do not override earlier ones unless they say so.
 - Done when: `Build` 0 errors. Lane: `implementer` (2 files).
 
 ### Step 1b - Contract skeleton, Tools.Basic stubs and `Hints`
+
+- Done: a72cc4b2
 - Files: `RoslynSentinel.Tools.Basic/GitHintText.cs` (new), `RoslynSentinel.Tools.Basic/GitHintApplyingOperations.cs` (new),
   `RoslynSentinel.Tools.Basic/GitImpl.cs` (`GitResult`, line 11)
 - Depends on: 1a. Effect: text-neutral.
@@ -251,6 +255,8 @@ Dated entries; later entries do not override earlier ones unless they say so.
   finds exactly the four stubs. Lane: `implementer` (3 files).
 
 ### Step 2 - Characterization pins for the hint text (golden full-sentence, tool-level, before any extraction)
+
+- Done: 8794397e, 8e163046, bbc2dedb, 353d55f2, 72fbb84f, 87d88842, 56d5bc9b, 9e136919, dcc429dd
 Runs against the current source; independent of Steps 1a-1b (pairs with them). The pins call the tool classes (`GitTools`, `GitRemoteTools`,
 built as in `GitToolsSmokeTests`), not `GitImpl`, because after Step 3 the text is applied at the tool boundary and a pin on the engine
 would fail for a legitimate reason. Each pin asserts the full `ErrorData.Message`, `ErrorData.Detail` (the rendered `ErrorDetail`) and,
@@ -278,6 +284,8 @@ by a literal in a unit test of `GitHintText.Render`, taken from the original sou
   bullet that would exceed 15 scenarios.
 
 ### Step 3 - Implement `Render`, `SlotOf`, `Apply`, `RenderRootFailure` and wire the decorator
+
+- Done: 26b6ca66
 - Files: `GitHintText.cs`, `GitTools.cs` (`:21`), `GitRemoteTools.cs` (`:24`)
 - Depends on: Step 1b. Effect: text-neutral (no engine path sets a key yet, so `Apply` changes nothing).
 - Change:
@@ -299,6 +307,8 @@ by a literal in a unit test of `GitHintText.Render`, taken from the original sou
   `test-writer` slice).
 
 ### Step 4 - Pass-through sinks carry `Hints`
+
+- Done: c08a0b4f
 A hint set on one result is lost when a method copies `Error`/`ErrorDetail` into another result without it, which would silently change
 text once sites move. The sinks found by reading: `AppendInProgressAsync` (`GitImpl.cs:2614-2625`), `StageHunksAsync` (`:2436-2475`,
 the copies near `:2450` and `:2454`), `HunksAsync` (`:3170`) and `CommitAsync` (`:3743`, copies `stageResult.Error`).
