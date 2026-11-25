@@ -40,13 +40,13 @@ public class SolutionManagementEngineTests
     }
 
     [Test]
-    public async Task SplitProjectByFolder_NullSolutionPath_ThrowsMissingSolutionPath()
+    public async Task SplitProjectByFolder_IsNotImplemented_RefusesBeforeCreatingTheTarget()
     {
-        // SplitProject internally calls CreateProjectAsync first, which propagates the null-path error
-        var ex = await Assert.ThrowsAsync<ToolPreconditionException>(async () =>
+        // The move is a declared stub: once the source project resolves it throws NotImplemented, before CreateProjectAsync runs
+        // (so the missing solution path of this fixture is never reached).
+        var ex = await Assert.ThrowsAsync<ToolNotImplementedException>(async () =>
             await Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).SplitProjectByFolderAsync("Source", "Services", "Source.Services"));
 
-        Assert.That(ex!.Message, Does.Contain("Solution path not found"),
-            "SplitProject should propagate the missing solution path from CreateProject.");
+        Assert.That(ex!.Message, Does.Contain("Nothing was created or moved"));
     }
 }

@@ -1863,7 +1863,8 @@ public class SolutionStructureEngine
         var fileCount = sourceProject.Documents.Count(d => d.Folders.Contains(folderName));
         throw new ToolNotImplementedException(
             $"SplitProjectByFolder is not implemented: it cannot move files between projects yet. Nothing was created or moved " +
-            $"({fileCount} file(s) under {sourceProjectName}/{folderName}). Options: create '{targetProjectName}' with CreateProject " +
-            "(or a hand-written .csproj), then move each file with MoveFile.");
+            $"({fileCount} file(s) under {sourceProjectName}/{folderName}). " +
+            ToolCallHint.Next("CreateProject", $"to create '{targetProjectName}' (or write its .csproj by hand),") + " " +
+            ToolCallHint.Next("MoveFile", "to move each file into it."));
     }
 }

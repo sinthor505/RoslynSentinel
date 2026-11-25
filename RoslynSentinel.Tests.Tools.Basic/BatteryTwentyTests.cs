@@ -1368,8 +1368,8 @@ public class Order
         var result = await _workspaceTools.SplitProjectByFolderTool(reason: "test message", "TestProj", "NonExistentFolder", "NewProject");
 
         // The tool is a declared stub: it refuses before creating the target project instead of reporting a simulated move.
-        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotImplemented));
-        Assert.That(result.ErrorData!.Message, Does.Contain("SplitProjectByFolder is not implemented").And.Contain("Nothing was created or moved"));
+        Assert.That(result.IsError, Is.True);
+        RoslynSentinel.Tests.Support.ErrorAssert.Is(result.ErrorData, ToolErrorCode.NotImplemented, "is not implemented");
         Assert.That(result.ErrorData, Is.Not.Null);
     }
 }
