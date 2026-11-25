@@ -37,7 +37,7 @@ internal static class GitStatusRenameHints
     /// Tier 1 then tier 2 findings for <paramref name="status"/>, ordered by source path within each tier. <paramref name="movePairs"/> is null to
     /// skip tier 1 (a status of another repository). Paths in the status are repo-root-relative with '/'; <paramref name="gitRoot"/> is that root.
     /// </summary>
-    internal static IReadOnlyList<Finding> Findings(string gitRoot, GitStatusResult status, IReadOnlyList<(string Source, string Destination, string ChangeId)>? movePairs, IGitReader reader)
+    internal static IReadOnlyList<Finding> Findings(string gitRoot, GitStatusResult status, IReadOnlyList<MovePair>? movePairs, IGitReader reader)
     {
         try
         {
@@ -72,13 +72,13 @@ internal static class GitStatusRenameHints
     internal static IReadOnlyList<Finding> MoveRecordFindings(
         IReadOnlyList<string> deleted,
         IReadOnlyList<string> untracked,
-        IReadOnlyList<(string Source, string Destination, string ChangeId)> movePairs,
+        IReadOnlyList<MovePair> movePairs,
         ISet<string> claimedDeleted,
         ISet<string> claimedUntracked)
     {
         var deletedLookup = deleted.ToDictionary(p => p, p => p, StringComparer.OrdinalIgnoreCase);
         var untrackedLookup = untracked.ToDictionary(p => p, p => p, StringComparer.OrdinalIgnoreCase);
-        var matched = new List<(string Source, string Destination, string ChangeId)>();
+        var matched = new List<MovePair>();
         foreach (var (source, destination, changeId) in movePairs)
         {
             if (!deletedLookup.TryGetValue(source, out var deletedPath)
@@ -91,7 +91,7 @@ internal static class GitStatusRenameHints
 
             claimedDeleted.Add(deletedPath);
             claimedUntracked.Add(untrackedPath);
-            matched.Add((deletedPath, untrackedPath, changeId));
+            matched.Add(new MovePair(deletedPath, untrackedPath, changeId));
         }
 
         return [.. matched
@@ -164,9 +164,9 @@ internal static class GitStatusRenameHints
     /// The (source, destination, change id) of every <c>move_file</c> blob under <paramref name="solutionRoot"/> that is not undone, newest first,
     /// as repo-relative paths with '/' (relative to <paramref name="gitRoot"/>). A path outside the repository is dropped. A chain of moves (A to B, then B to C) also yields the joined pair A to C, appended after the pairs it joins. Never throws.
     /// </summary>
-    internal static IReadOnlyList<(string Source, string Destination, string ChangeId)> ReadMovePairs(string? solutionRoot, string gitRoot)
+    internal static IReadOnlyList<MovePair> ReadMovePairs(string? solutionRoot, string gitRoot)
     {
-        var pairs = new List<(string Source, string Destination, string ChangeId)>();
+        var pairs = new List<MovePair>();
         try
         {
             if (string.IsNullOrWhiteSpace(solutionRoot))
@@ -180,7 +180,7 @@ internal static class GitStatusRenameHints
                 return pairs;
             }
 
-            var blobs = Directory.EnumerateFiles(dir, "move_file_*.json")
+            var blobs = Directory.EnumerateFiles(dir, MoveFileOperation.BlobSearchPattern)
                 .Select(path => (BlobPath: path, Written: NotFoundEvidence.TimestampOf(path)))
                 .Where(blob => blob.Written is not null)
                 .OrderByDescending(blob => blob.Written)
@@ -193,10 +193,7 @@ internal static class GitStatusRenameHints
                     continue;
                 }
 
-                if (ReadMovePair(blob.BlobPath, solutionRoot, gitRoot) is { } pair)
-                {
-                    pairs.Add(pair);
-                }
+                pairs.AddRange(ReadMovePairsFromBlob(blob.BlobPath, solutionRoot, gitRoot));
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
@@ -210,9 +207,9 @@ internal static class GitStatusRenameHints
     // Adds the joined pair of every chain head: a pair whose source is not the destination of another pair, followed through
     // Destination -> Source links (visited-set cycle guard) to the last destination. Only chains of 2+ links add a pair; a joined
     // pair that is a self-move or duplicates an existing pair is skipped. The original pairs are kept in order, joined pairs after them.
-    private static List<(string Source, string Destination, string ChangeId)> JoinChains(IReadOnlyList<(string Source, string Destination, string ChangeId)> pairs)
+    private static List<MovePair> JoinChains(IReadOnlyList<MovePair> pairs)
     {
-        var result = new List<(string Source, string Destination, string ChangeId)>(pairs);
+        var result = new List<MovePair>(pairs);
         for (var head = 0; head < pairs.Count; head++)
         {
             var source = pairs[head].Source;
@@ -270,79 +267,108 @@ internal static class GitStatusRenameHints
                 continue;
             }
 
-            result.Add((source, destination, pairs[last].ChangeId));
+            result.Add(new MovePair(source, destination, pairs[last].ChangeId));
         }
 
         return result;
     }
 
-    // One blob: toolName move_file, exactly one created item (the destination) and one item without an after-source that was not created (the deleted source).
-    private static (string Source, string Destination, string ChangeId)? ReadMovePair(string blobPath, string solutionRoot, string gitRoot)
+    // One blob of MoveFileOperation.Name. Each created item (a destination) pairs to the deleted item (not created, no after-text) that its afterSourceFromFilePath names.
+    // Deleted items that share one BeforeSource are ambiguous (OperationBlobWriter pairs by identical text with FirstOrDefault): their pairs are not returned,
+    // and the tier-2 identical-content hint covers them. Unique pairs of the same blob are all returned.
+    private static List<MovePair> ReadMovePairsFromBlob(string blobPath, string solutionRoot, string gitRoot)
     {
+        var pairs = new List<MovePair>();
         try
         {
             if (new FileInfo(blobPath).Length > MaxBlobBytes)
             {
-                return null;
+                return pairs;
             }
 
             using var document = JsonDocument.Parse(File.ReadAllBytes(blobPath));
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object
                 || !TryGet(root, "toolName", out var toolName) || toolName.ValueKind != JsonValueKind.String
-                || !string.Equals(toolName.GetString(), "move_file", StringComparison.Ordinal)
+                || !string.Equals(toolName.GetString(), MoveFileOperation.Name, StringComparison.Ordinal)
                 || !TryGet(root, "changeId", out var changeId) || changeId.ValueKind != JsonValueKind.String
                 || !TryGet(root, "items", out var items) || items.ValueKind != JsonValueKind.Array)
             {
-                return null;
+                return pairs;
             }
 
-            string? source = null;
-            string? destination = null;
+            var id = changeId.GetString();
+            if (string.IsNullOrEmpty(id))
+            {
+                return pairs;
+            }
+
+            var created = new List<(string FilePath, string? AfterSourceFromFilePath)>();
+            var deleted = new List<(string FilePath, string? BeforeSource)>();
             foreach (var item in items.EnumerateArray())
             {
                 if (item.ValueKind != JsonValueKind.Object
-                    || !TryGet(item, "filePath", out var filePath) || filePath.ValueKind != JsonValueKind.String)
+                    || !TryGet(item, "filePath", out var filePath) || filePath.ValueKind != JsonValueKind.String
+                    || filePath.GetString() is not { } path)
                 {
-                    return null;
+                    return pairs;
                 }
 
-                var created = TryGet(item, "created", out var createdValue) && createdValue.ValueKind == JsonValueKind.True;
+                var isCreated = TryGet(item, "created", out var createdValue) && createdValue.ValueKind == JsonValueKind.True;
                 var hasAfter = TryGet(item, "afterSource", out var after) && after.ValueKind == JsonValueKind.String;
-                if (created)
+                if (isCreated)
                 {
-                    if (destination is not null)
-                    {
-                        return null;
-                    }
-
-                    destination = filePath.GetString();
+                    var fromPath = TryGet(item, "afterSourceFromFilePath", out var fromValue) && fromValue.ValueKind == JsonValueKind.String ? fromValue.GetString() : null;
+                    created.Add((path, fromPath));
                 }
                 else if (!hasAfter)
                 {
-                    if (source is not null)
-                    {
-                        return null;
-                    }
-
-                    source = filePath.GetString();
-                }
-                else
-                {
-                    return null;
+                    var before = TryGet(item, "beforeSource", out var beforeValue) && beforeValue.ValueKind == JsonValueKind.String ? beforeValue.GetString() : null;
+                    deleted.Add((path, before));
                 }
             }
 
-            var relativeSource = RepoRelative(gitRoot, solutionRoot, source);
-            var relativeDestination = RepoRelative(gitRoot, solutionRoot, destination);
-            return relativeSource is null || relativeDestination is null || changeId.GetString() is not { Length: > 0 } id
-                ? null
-                : (relativeSource, relativeDestination, id);
+            var identicalBefore = deleted
+                .Where(d => d.BeforeSource is not null)
+                .GroupBy(d => d.BeforeSource, StringComparer.Ordinal)
+                .Where(group => group.Count() > 1)
+                .Select(group => group.Key)
+                .ToHashSet(StringComparer.Ordinal);
+            foreach (var destination in created)
+            {
+                if (destination.AfterSourceFromFilePath is null)
+                {
+                    continue;
+                }
+
+                var matches = deleted
+                    .Where(d => string.Equals(d.FilePath, destination.AfterSourceFromFilePath, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                if (matches.Count != 1)
+                {
+                    continue;
+                }
+
+                var source = matches[0];
+                if (source.BeforeSource is { } sourceText && identicalBefore.Contains(sourceText))
+                {
+                    continue;
+                }
+
+                var relativeSource = RepoRelative(gitRoot, solutionRoot, source.FilePath);
+                var relativeDestination = RepoRelative(gitRoot, solutionRoot, destination.FilePath);
+                if (relativeSource is not null && relativeDestination is not null)
+                {
+                    pairs.Add(new MovePair(relativeSource, relativeDestination, id));
+                }
+            }
+
+            return pairs;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or ArgumentException or NotSupportedException)
         {
             // A blob mid-write by another window, or malformed: skipped alone.
-            return null;
+            return new List<MovePair>();
         }
     }
 
@@ -411,3 +437,5 @@ internal static class GitStatusRenameHints
             .Distinct(StringComparer.Ordinal)
             .OrderBy(p => p, StringComparer.Ordinal)];
 }
+/// <summary>One rename a <c>move_file</c> operation blob records: the repo-relative source and destination, and the blob's change id.</summary>
+internal sealed record MovePair(string Source, string Destination, string ChangeId);
