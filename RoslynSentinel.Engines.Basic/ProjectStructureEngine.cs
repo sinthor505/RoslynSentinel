@@ -1859,12 +1859,13 @@ public class SolutionStructureEngine
 
         // 2. The move itself is not implemented. The former body created the target project and reported "Moved N files"
         // without moving any file, a false success; it now fails before creating anything.
+        // Option for later (owner decision D10): keep this stub, and consider turning it into a thin wrapper that composes CreateProject + MoveFile (folder pair in 'moves') + ChangeNamespace.
         // TODO implement SplitProjectByFolderAsync: create the target project, move the folder's documents with references, IVT and package references
         var fileCount = sourceProject.Documents.Count(d => d.Folders.Contains(folderName));
         throw new ToolNotImplementedException(
             $"SplitProjectByFolder is not implemented: it cannot move files between projects yet. Nothing was created or moved " +
             $"({fileCount} file(s) under {sourceProjectName}/{folderName}). " +
             ToolCallHint.Next("CreateProject", $"to create '{targetProjectName}' (or write its .csproj by hand),") + " " +
-            ToolCallHint.Next("MoveFile", "to move each file into it."));
+            ToolCallHint.Next("MoveFile", "to move the folder's files into it in one call (a folder pair in 'moves')."));
     }
 }
