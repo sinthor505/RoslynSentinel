@@ -24,8 +24,21 @@ public static class Program
 {
     public static async Task<int> Main(string[] args)
     {
-        LlmOptions.Configure(args);
-        ErrorPolicyOptions.Configure(args);
+        var report = StartupSettings.ConfigureAll(args, typeof(Program).Assembly, SettingScope.PlanStepRunner | SettingScope.AgentLoop);
+
+        // UnknownFlag entries are server pass-through flags (forwarded to the child server near the
+        // child-server launch below), which the child server itself reports.
+        var problems = report.Problems.Where(p => p.Kind != ConfigurationProblemKind.UnknownFlag).ToList();
+        foreach (var problem in problems)
+        {
+            Console.Error.WriteLine(StartupSettings.DescribeProblems([problem]));
+        }
+
+        if (problems.Count > 0)
+        {
+            return 2;
+        }
+
         if (string.IsNullOrEmpty(LlmOptions.Model))
         {
             Console.Error.WriteLine(
