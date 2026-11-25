@@ -16,9 +16,13 @@ CLAUDE.md applies throughout.
 - Resolve the doc from the name or path (`plans/plan_<slug>.md`, `proposals/proposal_<slug>.md`;
   `Glob` on `docs/current/**/*<name>*.md`; built-in tools are fine for Markdown). Several matches:
   ask which.
-- **Proposal with no steps:** dispatch `design-doc-scribe` to draft `plans/plan_<slug>.md` from
+- **Proposal with no steps:** if it has open design questions, suggest the `plan-design` skill
+  first (a fresh chat). Otherwise dispatch `design-doc-scribe` to draft `plans/plan_<slug>.md` from
   `templates/plan.md`, linking the proposal, and to follow `.claude/skills/plan-writer/SKILL.md`.
   Show the owner the step list before reviewing.
+- **Plan with a `Readiness (plan-design)` Decision entry:** it is already settled. The review below
+  shrinks to staleness: commits since the recorded hash that touch the plan's files, anchors and
+  counts still valid, overlapping work. Nothing stale: skip phase 2 except the presence question.
 - Dispatch `explore-tier2` (`model: sonnet` for a plan over ~6 steps or crossing projects) to review
   the plan against the current source. Per step, at most 6 lines:
   - status: done already (`Git` log for `Plan: <id>` trailers, and the code), stale anchors, or not started;
@@ -30,6 +34,7 @@ CLAUDE.md applies throughout.
     pairs, text-neutral vs behaviour-changing; propose the two-lane slice map and the text-neutral-first order,
     pairing each separate test step with the following independent slice (`dispatch-implementer`, "Pipeline");
   - new code: a contract-skeleton first step and a closing stub sweep (`plan-writer` skill, section 2);
+  - design rules: `docs/current/references/reference_design_review_checklist.md` (items 1-12), citing the step that fails;
   - open questions, each with options and a recommendation.
   Also: another plan or session that needs a baseline before this plan's behaviour changes (an A/B eval)?
   Agree the hold point up front. Also: is another session working on it (Status IN PROGRESS by someone else, recent `Plan:` commits,

@@ -46,8 +46,12 @@ Do not read the code yourself beyond a small verification read.
 
 ## 4. Settle
 
-Ask with `AskUserQuestion`. **One item per question**: never bundle several items into one
-question or one multi-select. An item with several independent decisions gets one question per
+Ask with `AskUserQuestion`. The dialog is narrow and drops newlines and formatting, so anything
+beyond a simple choice (architecture, behaviour, wire shape) is first written in the chat, one
+heading per question: problem, evidence, each option with an example and its implications, a
+recommendation; the dialog then asks with short labels pointing back ("Q4: option B"). Say when a
+question affects later ones or depends on an earlier one. **One item per question**: never bundle
+several items into one question or one multi-select. An item with several independent decisions gets one question per
 decision, each repeating the item context. Up to 4 questions per call, grouped by item rather than
 packed with unrelated ones.
 

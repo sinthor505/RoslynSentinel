@@ -24,6 +24,13 @@ phased plan: `docs/current/proposals/proposal_dto_ownership_role_lineage.md`. En
   (`docs/current/blockers/blocking_error_search_references_by_name_excludes_types.md`). Pass the declaring
   file's `filePath` to list a type's usages.
 
+## 1a. No tuples or anonymous types across boundaries
+
+They cannot be searched for, renamed or refactored as one type. A tuple or anonymous type used as a
+return, parameter, field or DTO property is forbidden unless unavoidable and approved by the owner
+(record the approval in the plan's Decision log or the brief); use a named type (reuse first, then
+section 2). A local deconstruction or a LINQ projection that stays inside one method is fine.
+
 ## 2. A new DTO needs a justification
 
 Report it in the brief, the agent report, the commit message, and the `reason` of the tool call that
