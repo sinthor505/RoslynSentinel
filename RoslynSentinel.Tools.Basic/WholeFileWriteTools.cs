@@ -344,7 +344,6 @@ public class WholeFileWriteTools
                 {
                     var supported = $"MoveFile: namespaceHandling '{namespaceHandling}' is not supported yet; only 'keep' is supported in this version, apart from 'copyAndObsolete'. Nothing was moved.";
                     var option = _activeToolSurface is null || _activeToolSurface.IsCallable("ChangeNamespace")
-                        // TODO ToolHintRatchetTests.Scan_HintCallLiterals_AreValid fails here ("Unknown tool 'ChangeNamespace'") until plan_multi_file_movefile_and_namespace_change_tool Step 32 adds the tool; expected red until then
                         ? ToolCallHint.Next("ChangeNamespace", "changes the namespace of files, after a move with namespaceHandling keep.")
                         : $"ChangeNamespace (changes the namespace of files, after a move with namespaceHandling keep) is in the moveExtract toolset: {ToolCallHint.Call("McpToolsetControl", ("toolSet", "moveExtract"), ("enabled", "true"))} enables it.";
                     return MoveFileError(ToolErrorCode.NotImplemented, $"{supported} {option}");
