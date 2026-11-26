@@ -237,7 +237,7 @@ Shipped toolset JSON files are documented in [toolsets/](toolsets/).
 
 | Setting | Flag | Env | Type | Default | Scope | Kind | Description |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| ToolResultFormatOptions.Format |  | `ROSLYNSENTINEL_MODELEVAL_TOOL_RESULT_FORMAT` | ToolResultFormat | `json` | AgentLoop | Live | Format of tool results shown to the model in the agent loop: json (the wire text), plain (key: value text) or xml (raw tags); no escaping inside values in plain and xml. |
+| ToolResultFormatOptions.Format |  | `ROSLYNSENTINEL_MODELEVAL_TOOL_RESULT_FORMAT` | ToolResultFormat | `plain` | AgentLoop | Live | Format of tool results shown to the model in the agent loop: json (the wire text), plain (key: value text) or xml (raw tags); no escaping inside values in plain and xml. |
 
 ## Test harness
 

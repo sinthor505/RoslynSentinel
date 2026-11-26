@@ -376,7 +376,8 @@ public sealed class ResultOverrideTests
         Assert.That(rewrittenTurn.ToolCalls, Has.Count.EqualTo(turn.ToolCalls.Count));
         Assert.That(rewrittenTurn.ToolCalls[1], Is.SameAs(turn.ToolCalls[1]));
 
-        var changedByVariant = new[] { nameof(AgentToolCallRecord.ResultJson), nameof(AgentToolCallRecord.TrailingText) };
+        // ModelFacingChars measures the text sent for the recorded result, so a rewritten call does not carry it.
+        var changedByVariant = new[] { nameof(AgentToolCallRecord.ResultJson), nameof(AgentToolCallRecord.TrailingText), nameof(AgentToolCallRecord.ModelFacingChars) };
         foreach (var property in typeof(AgentToolCallRecord).GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
             var original = property.GetValue(originalCall);
@@ -441,6 +442,7 @@ public sealed class ResultOverrideTests
         ToolCallId = "call-" + Guid.NewGuid().ToString("N")[..8],
         TrailingText = "recorded trailing",
         Meta = new System.Text.Json.Nodes.JsonObject { ["recorded"] = "meta" },
+        ModelFacingChars = 123,
     };
 
     private static AgentTranscriptTurn MakeTurn(int turnNumber, params AgentToolCallRecord[] calls) => new()

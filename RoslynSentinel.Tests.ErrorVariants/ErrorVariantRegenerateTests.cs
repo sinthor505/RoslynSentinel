@@ -73,8 +73,11 @@ public class ErrorVariantRegenerateTests
             Assert.That(row.StopReason, Is.EqualTo("TurnCap"));
             Assert.That(handler.Requests, Has.Count.EqualTo(2), "turn cap E + 1 = 2: both turns generated live, no seed");
             Assert.That(turn1ToolMessage, Does.Contain(VariantOnlyText), "the model read the variant text");
-            Assert.That(turn1ToolMessage, Does.Contain(ResultOverride.ApplyToCall(errorCall, variant, null).ResultJson));
-            Assert.That(turn1ToolMessage, Does.Not.Contain(errorCall.ResultJson), "not the recorded bytes");
+            // The replay runner uses the default tool-result format, so the model sees the rendering of the result, not the raw JSON.
+            var modelFormat = RoslynSentinel.Common.AgentLoop.ToolResultFormatOptions.FromEnvironment();
+            var renderer = RoslynSentinel.Common.AgentLoop.ToolResultRenderers.For(modelFormat);
+            Assert.That(turn1ToolMessage, Does.Contain(renderer.Render(ResultOverride.ApplyToCall(errorCall, variant, null).ResultJson)));
+            Assert.That(turn1ToolMessage, Does.Not.Contain(renderer.Render(errorCall.ResultJson)), "not the recorded bytes");
             Assert.That(csvLines, Has.Length.EqualTo(2));
             Assert.That(VariantSampleRow.Parse(csvLines[1]), Is.EqualTo(row));
             Assert.That(sample.Turns, Has.Count.EqualTo(2), "both turns are the run's own, none seeded");

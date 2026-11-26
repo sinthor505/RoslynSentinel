@@ -138,7 +138,9 @@ public class ToolResultTrailingBlockRunnerTests
             turnCap: 5,
             wallClockCap: TimeSpan.FromMinutes(2),
             logger: new NullLogger<ModelAgentRunner>(),
-            loopAssist: LoopAssistOptions.Off);
+            loopAssist: LoopAssistOptions.Off,
+            // These tests are about trailing blocks, not format: json keeps the first block byte-identical to ResultJson.
+            toolResultFormat: ToolResultFormat.Json);
     }
 
     private static AgentTranscriptTurn SeedTurn(

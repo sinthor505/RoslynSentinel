@@ -402,7 +402,9 @@ public class RunnerToolHostTests
             turnCap: turnCap,
             wallClockCap: wallClockCap ?? TimeSpan.FromMinutes(2),
             logger: new NullLogger<ModelAgentRunner>(),
-            loopAssist: LoopAssistOptions.Off);
+            loopAssist: LoopAssistOptions.Off,
+            // These tests are about the tool host (blocks, meta, filter), not format: json keeps the first block byte-identical to ResultJson.
+            toolResultFormat: ToolResultFormat.Json);
     }
 
     /// <summary>In-memory tool host: lists one tool and returns a fixed raw result, recording the last call it saw.</summary>

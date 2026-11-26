@@ -91,7 +91,7 @@ public class ToolResultFormatRunnerTests
     }
 
     [Test]
-    public async Task Default_ToolOutputIsResultJsonExactly()
+    public async Task Default_ToolOutputIsPlainRendering()
     {
         var model = new ScriptedHandler(
             BuildFunctionCallSse("FormatOneBlock", "{}"),
@@ -116,8 +116,9 @@ public class ToolResultFormatRunnerTests
         Assert.Multiple(() =>
         {
             Assert.That(model.Requests, Has.Count.EqualTo(2));
-            Assert.That(ToolOutput(model.Requests[1]), Is.EqualTo(RawJson), "with no format set the tool output is ResultJson exactly");
-            Assert.That(result.Transcript.ToolResultFormat, Is.EqualTo("json"));
+            Assert.That(ToolResultRenderers.For(ToolResultFormat.Plain).Render(RawJson), Is.Not.EqualTo(RawJson), "the plain renderer changes the text, so the test would notice a pass-through");
+            Assert.That(ToolOutput(model.Requests[1]), Is.EqualTo(ToolResultRenderers.For(ToolResultFormat.Plain).Render(RawJson)), "with no format set the tool output is the plain rendering");
+            Assert.That(result.Transcript.ToolResultFormat, Is.EqualTo("plain"));
         });
     }
 

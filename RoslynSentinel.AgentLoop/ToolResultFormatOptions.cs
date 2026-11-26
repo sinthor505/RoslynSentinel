@@ -2,7 +2,7 @@ namespace RoslynSentinel.Common.AgentLoop;
 
 /// <summary>
 /// Selects the <see cref="ToolResultFormat"/> the agent loop shows tool results in. Default
-/// <see cref="ToolResultFormat.Json"/> (the wire text, unchanged).
+/// <see cref="ToolResultFormat.Plain"/> (key: value text, no escaping); <c>json</c> selects the wire text unchanged.
 /// </summary>
 [StartupSettingGroup("Tool result format (ModelEval)")]
 public static class ToolResultFormatOptions
@@ -13,8 +13,8 @@ public static class ToolResultFormatOptions
     public static readonly StartupSetting<ToolResultFormat> FormatSetting = StartupSetting.Custom<ToolResultFormat>(
         null,
         FormatVariable,
-        ToolResultFormat.Json,
-        "json",
+        ToolResultFormat.Plain,
+        "plain",
         (string raw, out ToolResultFormat value) =>
         {
             var trimmed = raw.Trim();

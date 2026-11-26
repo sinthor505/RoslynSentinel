@@ -310,5 +310,6 @@ public static class ResultOverride
         ToolCallId = call.ToolCallId,
         TrailingText = trailingText,
         Meta = call.Meta,
+        // ModelFacingChars is left null: it measures the text sent for the recorded result, not the rewritten one.
     };
 }

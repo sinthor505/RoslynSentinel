@@ -4,7 +4,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 
 /// <summary>
 /// <see cref="ToolResultFormatOptions.FromEnvironment"/> reads <c>ROSLYNSENTINEL_MODELEVAL_TOOL_RESULT_FORMAT</c>
-/// (json, plain or xml, case-insensitive; default json) and fails fast on anything else. The environment reader is
+/// (json, plain or xml, case-insensitive; default plain) and fails fast on anything else. The environment reader is
 /// injected, so no process environment is touched.
 /// </summary>
 [TestFixture]
@@ -15,16 +15,16 @@ public class ToolResultFormatOptionsTests
     private static Func<string, string?> Env(string? value) => name => name == Variable ? value : null;
 
     [Test]
-    public void Unset_IsJson()
+    public void Unset_IsPlain()
     {
-        Assert.That(ToolResultFormatOptions.FromEnvironment(Env(null)), Is.EqualTo(ToolResultFormat.Json));
+        Assert.That(ToolResultFormatOptions.FromEnvironment(Env(null)), Is.EqualTo(ToolResultFormat.Plain));
     }
 
     [TestCase("")]
     [TestCase("   ")]
     public void BlankValue_IsTreatedAsUnset(string value)
     {
-        Assert.That(ToolResultFormatOptions.FromEnvironment(Env(value)), Is.EqualTo(ToolResultFormat.Json));
+        Assert.That(ToolResultFormatOptions.FromEnvironment(Env(value)), Is.EqualTo(ToolResultFormat.Plain));
     }
 
     [TestCase("json", ToolResultFormat.Json)]
@@ -49,12 +49,12 @@ public class ToolResultFormatOptionsTests
     }
 
     [Test]
-    public void Descriptor_IsLiveAgentLoopSettingWithJsonDefault()
+    public void Descriptor_IsLiveAgentLoopSettingWithPlainDefault()
     {
         Assert.That(ToolResultFormatOptions.FormatSetting.EnvName, Is.EqualTo(Variable));
         Assert.That(ToolResultFormatOptions.FormatSetting.Scope, Is.EqualTo(SettingScope.AgentLoop));
         Assert.That(ToolResultFormatOptions.FormatSetting.Kind, Is.EqualTo(SettingKind.Live));
-        Assert.That(ToolResultFormatOptions.FormatSetting.DefaultValue, Is.EqualTo(ToolResultFormat.Json));
+        Assert.That(ToolResultFormatOptions.FormatSetting.DefaultValue, Is.EqualTo(ToolResultFormat.Plain));
     }
 
     [Test]
