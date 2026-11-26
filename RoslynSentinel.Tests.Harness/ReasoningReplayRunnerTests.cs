@@ -38,12 +38,15 @@ public class ReasoningReplayRunnerTests
     private string _runDirectory = null!;
     private ReplayScriptedHandler _handler = null!;
     private string? _savedReplayWindow;
+    private string? _savedReplayForm;
 
     [SetUp]
     public async Task SetUp()
     {
         _savedReplayWindow = Environment.GetEnvironmentVariable(LmStudioAgentClient.ReasoningWindowVariable);
         Environment.SetEnvironmentVariable(LmStudioAgentClient.ReasoningWindowVariable, null);
+        _savedReplayForm = Environment.GetEnvironmentVariable(ReasoningReplayPolicy.FormVariable);
+        Environment.SetEnvironmentVariable(ReasoningReplayPolicy.FormVariable, null);
 
         _environment = await ModelEvalFakeModelEnvironment.CreateAsync(
             TestContext.CurrentContext.CancellationToken, runDirectoryPrefix: "rs-reasoning-replay-");
@@ -64,6 +67,7 @@ public class ReasoningReplayRunnerTests
         finally
         {
             Environment.SetEnvironmentVariable(LmStudioAgentClient.ReasoningWindowVariable, _savedReplayWindow);
+            Environment.SetEnvironmentVariable(ReasoningReplayPolicy.FormVariable, _savedReplayForm);
         }
     }
 
@@ -153,10 +157,57 @@ public class ReasoningReplayRunnerTests
         });
     }
 
+    [TestCase(null, ReasoningReplayForm.Items)]
+    [TestCase("content", ReasoningReplayForm.Content)]
+    public async Task Transcript_StampsReasoningReplayForm(string? variable, ReasoningReplayForm expected)
+    {
+        Environment.SetEnvironmentVariable(ReasoningReplayPolicy.FormVariable, variable);
+        var runner = NewRunner(contextLength: 10000, new[] { 1000 }, []);
+
+        var result = await runner.RunAsync("system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken);
+
+        Assert.That(result.Transcript.ReasoningReplayForm, Is.EqualTo(expected));
+    }
+
+    [Test]
+    public async Task ContentForm_RequestBodiesCarryReasoningAsAssistantText()
+    {
+        // Content form: no reasoning input item; each turn's reasoning rides as assistant message text instead.
+        Environment.SetEnvironmentVariable(ReasoningReplayPolicy.FormVariable, "content");
+        var runner = NewRunner(contextLength: 10000, new[] { 1000 }, ToolTurns(3));
+
+        await runner.RunAsync("system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken);
+
+        var bodies = _handler.RequestBodies;
+        Assert.That(bodies, Has.Count.GreaterThanOrEqualTo(2));
+
+        using var document = JsonDocument.Parse(bodies[^1]);
+        var input = document.RootElement.GetProperty("input").EnumerateArray().ToList();
+        var assistantContents = input
+            .Where(item => item.TryGetProperty("role", out var role) && role.GetString() == "assistant")
+            .Select(item => item.GetProperty("content").GetRawText())
+            .ToList();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                input.Where(item => item.TryGetProperty("type", out var type) && type.GetString() == "reasoning").ToList(),
+                Is.Empty,
+                "content form sends no reasoning input item");
+            for (var k = 1; k <= 3; k++)
+            {
+                Assert.That(
+                    assistantContents.Any(content => content.Contains(Marker(k), StringComparison.Ordinal)),
+                    Is.True,
+                    $"turn {k} reasoning should appear in an assistant message item's content");
+            }
+        });
+    }
+
     [Test]
     public void Transcript_WithoutReasoningReplayFields_Deserializes()
     {
-        var transcript = JsonSerializer.Deserialize<AgentTranscript>("{\"RunId\":\"r1\"}");
+        var transcript = JsonSerializer.Deserialize<AgentTranscript>("{\"RunId\":\"r1\",\"Summary\":{}}");
 
         Assert.That(transcript, Is.Not.Null);
         Assert.Multiple(() =>
@@ -165,7 +216,27 @@ public class ReasoningReplayRunnerTests
             Assert.That(transcript.ContextLength, Is.Null);
             Assert.That(transcript.ReasoningReplayMode, Is.Null);
             Assert.That(transcript.ReasoningDropTurns, Is.Null);
+            Assert.That(transcript.ReasoningReplayForm, Is.Null);
+            Assert.That(transcript.Summary, Is.Not.Null);
+            Assert.That(transcript.Summary!.LeakedThinkTagTurnCount, Is.EqualTo(0));
         });
+    }
+
+    [Test]
+    public void Serialize_WritesReasoningReplayFormName()
+    {
+        var transcript = new AgentTranscript { ReasoningReplayForm = ReasoningReplayForm.Content };
+
+        var json = JsonSerializer.Serialize(transcript, ModelAgentRunner.TranscriptFileOptions);
+
+        using var document = JsonDocument.Parse(json);
+        Assert.That(document.RootElement.GetProperty("ReasoningReplayForm").GetString(), Is.EqualTo("Content"));
+        var parsed = JsonSerializer.Deserialize<AgentTranscript>(json, ModelAgentRunner.TranscriptFileOptions);
+        Assert.That(parsed?.ReasoningReplayForm, Is.EqualTo(ReasoningReplayForm.Content));
+
+        var nullJson = JsonSerializer.Serialize(new AgentTranscript { ReasoningReplayForm = null }, ModelAgentRunner.TranscriptFileOptions);
+        var nullParsed = JsonSerializer.Deserialize<AgentTranscript>(nullJson, ModelAgentRunner.TranscriptFileOptions);
+        Assert.That(nullParsed?.ReasoningReplayForm, Is.Null);
     }
 
     private static string Marker(int turn) => $"PLAN-MARKER-{turn:D2}-END";
