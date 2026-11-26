@@ -80,6 +80,9 @@ public class SolutionLoadStatusTests
         Assert.That(workspaceManager.SolutionLoadStatus, Is.EqualTo(SolutionLoadStatus.Loaded), "a wait timeout must not cancel the load");
     }
 
+    // Full-run flake: failed once in the full suite at 8f66a0a0 ("a mid-load path must resolve once the load finishes"),
+    // passed alone. TODO find the race - hypothesis: under full-suite load either the load outlasts ResolveFromWire's wait,
+    // or ResolveFromWire runs before LoadSolutionAsync marks the status Loading and so does not wait at all.
     [Test]
     public async Task ResolveFromWire_MidLoad_WaitsAndResolves()
     {
