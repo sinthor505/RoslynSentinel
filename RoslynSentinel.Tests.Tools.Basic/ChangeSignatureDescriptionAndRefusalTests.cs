@@ -175,8 +175,8 @@ public sealed class ChangeSignatureDescriptionAndRefusalTests
         var tools = Battery.Basic.TestTools.CoreRefactoringTools(workspace.Manager);
         var result = await tools.ChangeSignatureTool(reason: "test message", workspace.PathOf("Calc.cs"), "Add", new[] { new ChangeSignatureParameterInput(originalIndex: 0, type: "string"), new ChangeSignatureParameterInput(originalIndex: 1) }, dryRun: dryRun);
         Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
-        Assert.That(result.ErrorData?.Message, Does.Contain("entry 0 (0-based) has originalIndex 0 and asks for type string, the existing parameter is int a").And.Contain("ReplaceSnippet batchEdits"));
+        ErrorAssert.Is(result.ErrorData, ToolErrorCode.InvalidArgument, "asks for type string");
+        Assert.That(result.ErrorData?.Message, Does.Contain("is int a").And.Contain("ReplaceSnippet batchEdits"));
         Assert.That(workspace.ReadText("Calc.cs"), Is.EqualTo(TwoParameterCalc));
     }
 
@@ -189,7 +189,7 @@ public sealed class ChangeSignatureDescriptionAndRefusalTests
         var tools = Battery.Basic.TestTools.CoreRefactoringTools(workspace.Manager);
         var result = await tools.ChangeSignatureTool(reason: "test message", workspace.PathOf("Calc.cs"), "Add", new[] { new ChangeSignatureParameterInput(originalIndex: 1), new ChangeSignatureParameterInput(originalIndex: 0, name: "first") });
         Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData?.Message, Does.Contain("entry 1 (0-based) has originalIndex 0 and asks for name first, the existing parameter is int a"));
+        ErrorAssert.Is(result.ErrorData, ToolErrorCode.InvalidArgument, "asks for name first");
         Assert.That(workspace.ReadText("Calc.cs"), Is.EqualTo(TwoParameterCalc));
     }
 

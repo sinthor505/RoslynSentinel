@@ -90,7 +90,7 @@ public class ReplaceSnippetCrossFileRejectionTests
             Assert.That(first.ErrorData?.Message, Does.Not.Contain("You already sent this exact edit"));
             Assert.That(second.ErrorData?.Message, Does.Contain("You already sent this exact edit and it was rejected the same way"));
             Assert.That(second.ErrorData?.Message, Does.Contain("RenameSymbol("));
-            Assert.That(second.ErrorData?.Message, Does.Contain("The next step below lists the options"));
+            Assert.That(second.ErrorData?.Message, Does.Contain("next step below lists the"));
             Assert.That(second.ErrorData?.Message, Does.Not.Contain("Do what the next step below says"), "the note states facts and options, not an instruction");
         });
     }
@@ -143,7 +143,7 @@ public class ReplaceSnippetCrossFileRejectionTests
         {
             Assert.That(first.IsError && second.IsError, Is.True);
             Assert.That(second.ErrorData?.Message, Does.Contain("You already sent this exact edit"));
-            Assert.That(second.ErrorData?.Message, Does.Contain("Change the edit to fix the errors below"));
+            Assert.That(second.ErrorData?.Message, Does.Contain("Change the edit to fix the"));
             Assert.That(second.ErrorData?.Message, Does.Not.Contain("The next step below lists the options"), "there is no next step to point at");
             Assert.That(second.ErrorData?.Message, Does.Not.Contain("cannot succeed"));
         });

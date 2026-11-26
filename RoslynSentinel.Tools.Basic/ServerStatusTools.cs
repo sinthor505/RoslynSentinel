@@ -55,9 +55,9 @@ public class ServerStatusTools
         "Tools are gated per mode: before concluding a tool does not exist, call with toolListing=inactive." +
         " solutionLoadStatus = NotLoaded | Loading | Loaded | Failed; tool calls wait up to 30 s for a Loading solution." +
         " workspaceStale = a workspace reload failed and the loaded solution may not match disk (see reloadFailure; recover with LoadSolution forceReload: true); lastLoadFailure = text of the last failed load." +
-        " lastLaunch = the launcher's last build of source HEAD (buildFailed = it fell back to the older servedSha; firstErrors and hint say why)." +
+        " lastLaunch = the launcher's last build of HEAD (buildFailed = fell back to the older servedSha; firstErrors and hint say why)." +
         " operatingMode/operatingModeSource = SingleAgent or MultiAgent and why; callerAgentId = agent id of this call (null if none)." +
-        " eolMode = line-ending policy for writes (--eol / ROSLYNSENTINEL_EOL): auto keeps each file's existing endings (else .editorconfig), crlf or lf forces that ending." +
+        " eolMode = line-ending policy for writes (--eol / ROSLYNSENTINEL_EOL): auto keeps each file's endings (else .editorconfig), crlf or lf forces one." +
         " clientProtocolVersion = this session's negotiated MCP version; toolListChangedRaised = tool-list changes applied (not proof of delivery); toolListSubscriptionRequests = tool-list subscriptions (2026-07-28 clients)." +
         " toolSurface.surfaceVersion counts changes to the live tool surface (surfaceTrigger and schemaPatches say why).")]
     public SentinelCallToolResult<McpServerStatusResult> McpServerStatusTool(

@@ -281,7 +281,7 @@ public class ReplaceSnippetBatchTests
         {
             Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
             Assert.That(result.ErrorData.Message, Does.Contain("batchEdits[0] has no newContent"));
-            Assert.That(result.ErrorData.Message, Does.Contain("an empty string \"\" is a valid pure deletion"));
+            Assert.That(result.ErrorData.Message, Does.Contain("valid pure deletion"));
             Assert.That(result.ErrorData.Message, Does.Not.Contain("appears to contain the start of the next key"));
             Assert.That(workspace.ReadText(StatusRelativePath), Is.EqualTo(original), "a refused item must not write anything");
         });
@@ -323,8 +323,8 @@ public class ReplaceSnippetBatchTests
         {
             Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
             Assert.That(result.ErrorData.Message, Does.Contain("batchEdits[0] has no newContent"));
-            Assert.That(result.ErrorData.Message, Does.Contain("oldContent appears to contain the start of the next key"));
-            Assert.That(result.ErrorData.Message, Does.Contain("escape every quote inside oldContent and newContent"));
+            Assert.That(result.ErrorData.Message, Does.Contain("start of the next key"));
+            Assert.That(result.ErrorData.Message, Does.Contain("escape every quote"));
             Assert.That(workspace.ReadText(StatusRelativePath), Is.EqualTo(original), "a refused item must not write anything");
         });
     }

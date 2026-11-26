@@ -265,7 +265,7 @@ public class CoreRefactoringTools
             }
 
             var asks = typeDiffers && nameDiffers ? $"type {entry.type} / name {entry.name}" : typeDiffers ? $"type {entry.type}" : $"name {entry.name}";
-            return new ResultError(ToolErrorCode.InvalidArgument, $"ChangeSignature keeps an existing parameter's type and name; entry {i} (0-based) has originalIndex {index} and asks for {asks}, the existing parameter is {current.Type} {current.Name}. Options: edit the declaration and its uses with one ReplaceSnippet batchEdits call (one item per declaration or use), or Member replace.");
+            return new ResultError(ToolErrorCode.InvalidArgument, $"ChangeSignature keeps an existing parameter's type and name; entry {i} (0-based) has originalIndex {index} and asks for {asks}, the existing parameter is {current.Type} {current.Name}. Options: edit the declaration and its uses in one ReplaceSnippet batchEdits call (one item per declaration or use); Member replace edits a single declaration.");
         }
 
         var isIdentity = entries.Count == existing.Count && entries.Select((entry, position) => entry.originalIndex == position).All(same => same);

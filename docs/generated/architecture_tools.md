@@ -123,7 +123,7 @@
 | WorkspaceTools | ListWorkspaceSolutions | Claude, claude-lean (on demand), Workspace | - | Lists .sln/.slnx files under a directory, for use with LoadSolution. |
 | WorkspaceTools | LoadSolution | Claude, claude-lean, Workspace | - | Loads a .NET solution into memory; required before any tool that needs a loaded solution. |
 | WorkspaceTools | ReadFile | Claude, claude-lean, Workspace | Allowed | Returns a file's raw text verbatim, or a 1-based line-range slice via startLine/endLine. |
-| WorkspaceTools | ReplaceRange | Claude, claude-lean, Workspace | - | Replaces or deletes the block of whole lines from firstLineText through lastLineText (each is one line, or several... |
+| WorkspaceTools | ReplaceRange | Claude, claude-lean, Workspace | - | Replaces or deletes the block of whole lines from firstLineText through lastLineText. |
 | WorkspaceTools | ReplaceSnippet | Claude, claude-lean, Workspace | - | Replaces one text block with another in a file, for small localized edits. |
 | WorkspaceTools | RetryFailedChanges | Claude, claude-lean (on demand), Workspace | - | Retries failed file writes using server-cached content. |
 | WorkspaceTools | RunTest | Claude, claude-lean, Workspace | - | Runs `dotnet test` on the solution or one project. |
