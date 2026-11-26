@@ -1,6 +1,6 @@
 # Plan: Per-result inline budget classes for the large-result offload
 
-**Status:** DRAFT 2026-11-26. plan-design phase 8: 0 of 29 questions open; readiness review 4 folded in, review 5 next.
+**Status:** APPROVED 2026-11-26. Body-only configurable inline budget with 25% tolerance and a Whole class for tagged tools and error-only failures; 25 steps, run with /implement-plan.
 
 ## Problem
 
@@ -233,6 +233,13 @@ Grounding (explore-tier2, 2026-11-26, HEAD 000b3b49):
   `EvalToolSurfaceParityTests` added to Steps 9 and 19; anchors refreshed (`WorkspaceFileEditImpl.cs:844`, `:1037`;
   `ReadFilePagingLoopTests.cs:54-55`); doc line 163 added to Step 20; Step 14 sizes its fixtures from the budget; the
   flag property is `StartupSetting.Flag`. It found no logic gaps in Steps 5 or 7.
+- 2026-11-26 Readiness review 5 (explore-tier2 sonnet, fresh, at `4c485150`): no blockers; 5 should-fix, all folded
+  in: the ReadFile loop re-pin is three steps (16a makes the asserts report observed offsets, 16b observes, 16c
+  pins); Step 17 builds a claude-lean-sized surface, populates `StartupSettings.LastReport` and asserts the fixture
+  is over the default threshold; the 11b cut test puts its bulk in `StructuredDetail`; Step 14 sizes the
+  `GetLargeResultTests` fixture from the budget; Step 19 also runs Tests.Basic and Tests.Asyncify.
+- 2026-11-26 Readiness (plan-design): independent review clean at `4c485150` (review 5: no blockers; its 5
+  should-fix findings are folded into this revision).
 
 ## Execution rules
 
@@ -276,7 +283,7 @@ moved. Asserts use the shared constants and accessors, never literals; text is n
 | `ToolResultMarshallerOnModeTests.PagedAboveTolerance` | Q16 | existing | just over -> `largeResult` present; response length at most `OffloadThresholdChars(Default)` | 11b |
 | `ToolResultMarshallerOnModeTests.WholeMethodInline` | Q4, Q14 | existing | attributed stub method, body between the two thresholds -> no `largeResult` | 11b |
 | `ToolResultMarshallerOnModeTests.ErrorOnlyFailureInline` | Q24 | existing | error-only result between the thresholds -> no `largeResult` | 11b |
-| `ToolResultMarshallerOnModeTests.ErrorOnlyAboveWholeIsCutButKeepsMessage` | Q2, Q3(2) | existing | error-only result above `OffloadThresholdChars(Whole)` -> `largeResult` present, `errorData.message` present | 11b |
+| `ToolResultMarshallerOnModeTests.ErrorOnlyAboveWholeIsCutButKeepsMessage` | Q2, Q3(2) | existing | error-only result above `OffloadThresholdChars(Whole)` with the bulk in `ResultError.StructuredDetail` (a cuttable list) and a short message -> `largeResult` present, `errorData.message` present (a huge message alone is pinned by `ResultPager` and never takes the cut path) | 11b |
 | `ToolResultMarshallerOnModeTests.HonoursConfiguredDefault` | Q9 | existing, made `[NonParallelizable]` | configured `2 x StockBudgetChars`: a body between the stock and the configured threshold -> no `largeResult` | 11b |
 | `ToolResultMarshallerOnModeTests.MarshalSetsSignalThreshold` | Q10 | existing | inside `InlineBudgetSignal.Open()`, `ThresholdChars` equals the class threshold after `MarshalAsync`, for a `Default`, a `Whole` and an error-only result | 11b |
 | `ToolResultMarshallerPassthroughTests.PassthroughSetsWholeThreshold` | Q10, implementer default | existing | mode `passthrough`, attributed stub method -> `ThresholdChars == OffloadThresholdChars(Whole)` | 11b |
@@ -301,7 +308,7 @@ moved. Asserts use the shared constants and accessors, never literals; text is n
 ## Steps
 
 Lanes: after Step 3, lane A runs Steps 4 -> 5 -> 7 -> 8 (server path), lane B runs Step 6, then the test steps as
-their prerequisites land (10 after 3; 13 after 5; 11a, 12 after 7; 11b after 11a; 14, 15, 16a after 6 and 7; 17 after 8).
+their prerequisites land (10 after 3; 13 after 5; 11a, 12 after 7; 11b after 11a; 14, 15, 16a after 6 and 7; 16b, 16c in order after 16a; 17 after 8).
 Steps 1, 2, 9 and 21 are independent. Step 18 (cleanup) follows 9-17; then 19 (verification) and 20 (docs). Step
 22 is a follow-up that does not block closing. At most two implementing agents at once; the dispatcher serializes
 their builds.
@@ -564,7 +571,9 @@ their builds.
 - Effect: tests only.
 - Change: `PageBudget = 15360 - 2560` (`:27` in the first two) becomes a `static readonly`
   `LargeResultHelper.DefaultBudgetChars - LargeResultHelper.PageSafetyMarginChars`; `GetLargeResultTests.cs:195`
-  bounds the whole response by `LargeResultHelper.DefaultBudgetChars`. The `pages > 2` fixtures in
+  bounds the whole response by `LargeResultHelper.DefaultBudgetChars`, and that test's fixture (from `:185`, sizes
+  hand-tuned against 15360 - 2560) is sized from `DefaultBudgetChars` instead of literals, asserting on the structured
+  paging fields (`returned`, `nextOffset`, `hasMoreData`). The `pages > 2` fixtures in
   `SequenceLargeResultPagingTests` (200 records of about 180 chars, about 36K; 700 lines of about 53 chars, about 37K)
   are sized from the budget instead of a literal: record or line count = `3 * LargeResultHelper.DefaultBudgetChars / <per-item chars> + 10%`
   (at stock about 280 records and 950 lines), so they produce at least 3 pages at any configured default. Add the Step 14 rows; the two fixtures that set the option
@@ -583,22 +592,34 @@ their builds.
 - Done when: dispatcher runs the three fixtures, all pass.
 - Lane: test-writer. Effort: S. Pairs with: Step 14.
 
-### Step 16a - Observe the new ReadFile page offsets (dispatcher)
-- Files: none
+### Step 16a - ReadFile paging loop: new page budget, diagnosable asserts
+- Files: `RoslynSentinel.Tests.Tools.Basic/ReadFilePagingLoopTests.cs`
 - Depends on: Steps 6, 7 (the first page is cut by the marshaller, later pages by `GetLargeResult`)
+- Effect: tests only.
+- Change: `PageBudget` (`:29`) as in Step 14. Today the in-loop page-size assert and the needle assert fail before
+  the observed offsets are reported; wrap the per-page asserts and the final offsets comparison in `Assert.Multiple`
+  so a failure reports the observed page offsets and needle page offset. Leave `PinnedPageOffsets` and
+  `PinnedNeedlePageOffset` (`:54-55`) unchanged.
+- Done when: `Build` 0 errors. Expected state: red only on the pinned-offset and needle-offset asserts, with the
+  observed values in the failure output.
+- Lane: test-writer. Effort: S.
+
+### Step 16b - Observe the new ReadFile page offsets (dispatcher)
+- Files: none
+- Depends on: Step 16a
 - Effect: none.
 - Change: run `ReadFilePagingLoopTests` (Tests.Tools.Basic); record from its failure output the observed page offsets
-  and the needle page offset for the 300-method fixture.
-- Done when: the observed offsets are written into the Step 16b brief.
+  and the needle page offset for the 300-method fixture. Any other red assert is a new failure: stop and report it.
+- Done when: the observed offsets are written into the Step 16c brief.
 - Lane: dispatcher. Effort: S.
 
-### Step 16b - Re-pin the ReadFile page offsets
+### Step 16c - Re-pin the ReadFile page offsets
 - Files: `RoslynSentinel.Tests.Tools.Basic/ReadFilePagingLoopTests.cs`
-- Depends on: Step 16a
+- Depends on: Step 16b
 - Effect: tests only.
-- Change: `PageBudget` (`:29`) as in Step 14. Replace `PinnedPageOffsets` and `PinnedNeedlePageOffset` (`:54-55`) with
-  the values from Step 16a; the comment says the first page is cut by the marshaller at the default budget and later
-  pages fill `DefaultBudgetChars - PageSafetyMarginChars`, observed from this in-process run.
+- Change: replace `PinnedPageOffsets` and `PinnedNeedlePageOffset` (`:54-55`) with the values from Step 16b; the
+  comment says the first page is cut by the marshaller at the default budget and later pages fill
+  `DefaultBudgetChars - PageSafetyMarginChars`, observed from this in-process run.
   `LargeResultPagingAgentTests.BuildTierRatesSource` (Tests.ModelEval) needs nothing while the fixture is unchanged.
 - Done when: dispatcher runs `ReadFilePagingLoopTests`, all pass.
 - Lane: test-writer. Effort: S.
@@ -611,7 +632,13 @@ their builds.
   `Battery.Basic.TestEngines.PersistentWorkspaceManager` and an `ActiveToolSurface(...)`), but build the surface from
   every tool class in `ToolClassRegistry` (`BasicToolClassTypes` plus `AdvancedToolClassTypes`,
   `RoslynSentinel.Server.Advanced/ToolClassRegistry.cs`), so `toolListing: all` covers all declared tools as in
-  production. Call with `toolListing: all` and `settings: all` and serialize the whole returned envelope with
+  production, with a claude-lean-sized active set (the mode the live measurement used). `settings: all` reads the static
+  `StartupSettings.LastReport` (in `BuildConfiguration`): populate it in SetUp the way production does
+  (`StartupSettings.Discover`, `Program.cs:16`, then the configure-all call used by the host, `ServerHttp.cs:32`) and
+  restore it in TearDown; the fixture is `[NonParallelizable]`. Add a sanity assert that the serialized length is over
+  `OffloadThresholdChars(Default)`, so the test cannot pass vacuously on a near-empty listing (pattern: the fixture
+  sanity check at `ToolResultMarshallerOnModeTests.cs:263`). Call with `toolListing: all` and `settings: all` and
+  serialize the whole returned envelope with
   `SentinelToolFactory.WireSerializerOptions` (the production wire options; the default encoder would inflate `'`,
   `<`, `>`, `&` and `+`). Construction precedent inside Tests.Server: `LoopLatchTests.cs:359` already builds
   `ServerStatusTools` with an `ActiveToolSurface`. Outcome classes: **fits** (at most `OffloadThresholdChars(Whole)`; the live
@@ -636,7 +663,9 @@ their builds.
 - Depends on: Step 18
 - Effect: none.
 - Change: `scripts/build.ps1 -Flavor Solution` 0 errors; compare warnings with `docs/known-build-warnings.*.txt`.
-  `RunTest`, one at a time, 0 failures: Tests.Server (all), Tests.Tools.Basic (all), Tests.Harness (all, includes
+  `RunTest`, one at a time, 0 failures: Tests.Server (all), Tests.Tools.Basic (all), Tests.Basic (all; the
+  source-scanning ratchets `TestPlacementRatchetTests` and `MessageTextRatchetTests`), Tests.Asyncify (all;
+  `MigrationScanResultTests`), Tests.Harness (all, includes
   `SubAgentOffloadedResultTests` and the golden fixtures), Tests.ModelEval filtered to `EvalToolSurfaceParityTests`,
   `ConfigurationReferenceFreshnessTests`, `EnvVarDeclarationGuardTests` and `KnownArgSetsTests`.
 - Done when: all of the above hold.
