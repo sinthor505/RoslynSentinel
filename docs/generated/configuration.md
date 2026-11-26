@@ -233,6 +233,12 @@ Shipped toolset JSON files are documented in [toolsets/](toolsets/).
 | ThinkingOptions.Mode |  | `ROSLYNSENTINEL_MODELEVAL_THINKING` | ThinkingMode | `Off` | AgentLoop | Live | Thinking mode for model-eval requests: off, triggered or always. |
 | ThinkingOptions.Triggers |  | `ROSLYNSENTINEL_MODELEVAL_THINKING_TRIGGERS` | ThinkingTriggers | `error` | AgentLoop | Live | Comma list of the conditions that request thinking in triggered mode. |
 
+## Tool result format (ModelEval)
+
+| Setting | Flag | Env | Type | Default | Scope | Kind | Description |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| ToolResultFormatOptions.Format |  | `ROSLYNSENTINEL_MODELEVAL_TOOL_RESULT_FORMAT` | ToolResultFormat | `json` | AgentLoop | Live | Format of tool results shown to the model in the agent loop: json (the wire text), plain (key: value text) or xml (raw tags); no escaping inside values in plain and xml. |
+
 ## Test harness
 
 | Setting | Flag | Env | Type | Default | Scope | Kind | Description |
