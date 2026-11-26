@@ -1,6 +1,6 @@
 # Idea: Logic-simpler variants of the ImplementationScenarios that keep their slip-prone content
 
-**Status:** NOT DESIGNED 2026-11-26. The cap-35 batches showed that three of the four scenarios fail on task logic, which hides the slip and typo signal the eval is meant to measure.
+**Status:** APPROVED 2026-11-26. Plan: [plans/plan_slip_focused_scenario_variants.md](../plans/plan_slip_focused_scenario_variants.md)
 
 ## What happened
 
