@@ -623,7 +623,7 @@ namespace RoslynSentinel.Common.SnippetMatching
                 }
 
                 var newContentNote = label == "oldContent"
-                    ? " - and write newContent the same way, or the escapes will be written into the code"
+                    ? " newContent is written to the file as sent, so escapes in it end up in the code."
                     : string.Empty;
                 // TODO The model reads this text and the file JSON-encoded, so "plain quotes (\")" arrives as (\") and the file's line as .\"; - the example shows the escaped form as the plain one (thinking smoke 192447 T8-T13: reasoning "has \"; instead of \";", oldContent kept .\"; on the line); name the characters instead of showing them, or give the corrected line in a form that survives JSON encoding
                 var what = (sawQuote, sawBackslash) switch
@@ -632,8 +632,7 @@ namespace RoslynSentinel.Common.SnippetMatching
                     (true, false) => "backslash-escaped quotes (\\\") where the file has plain quotes (\")",
                     _ => "doubled backslashes (\\\\) where the file has single backslashes (\\)",
                 };
-                return $"Your {label} contains {what}: {changedCount} line(s), first at line {firstChangedLine}. " +
-                       $"Send the text exactly as the file shows it, with plain quotes{newContentNote}.";
+                return $"Your {label} contains {what}: {changedCount} line(s), first at line {firstChangedLine} of {label}. With those escapes removed, {label} matches the file.{newContentNote}";
             }
 
             return null;
@@ -701,10 +700,9 @@ namespace RoslynSentinel.Common.SnippetMatching
             }
 
             var newContentNote = label == "oldContent"
-                ? " - and write newContent the same way, or the escapes will be written into the code"
+                ? " newContent is written to the file as sent, so escapes in it end up in the code."
                 : string.Empty;
-            return $"Your {label} contains literal escape sequences such as \\n (backslash then n) copied from JSON-escaped text: " +
-                   $"found {string.Join(", ", found)}. Send real newlines, tabs and plain quotes exactly as the file shows them{newContentNote}.";
+            return $"Your {label} contains literal escape sequences such as \\n (backslash then n) copied from JSON-escaped text: found {string.Join(", ", found)}. The file has real newlines, tabs and plain quotes in their place.{newContentNote}";
         }
 
         private static string? DescribeToolMarkup(SnippetMatchResult result, string snippet, string label)

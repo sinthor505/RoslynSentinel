@@ -621,8 +621,9 @@ public class SnippetErrorFormatterTests
         var ex = Build(source, snippet, result);
 
         Assert.That(ex, Is.InstanceOf<ToolNotFoundException>());
-        Assert.That(ex.Message, Does.StartWith("Your oldContent contains backslash-escaped quotes (\\\") where the file has plain quotes (\"): 3 line(s), first at line 5. "));
-        Assert.That(ex.Message, Does.Contain("write newContent the same way, or the escapes will be written into the code."));
+        Assert.That(ex.Message, Does.StartWith("Your oldContent contains backslash-escaped quotes (\\\") where the file has plain quotes (\"): 3 line(s), first at line 5 of oldContent. "));
+        Assert.That(ex.Message, Does.Contain("newContent is written to the file as sent, so escapes in it end up in the code."));
+        Assert.That(ex.Message, Does.Not.Contain("Send "));
         Assert.That(ex.Message, Does.Contain("oldContent was not found"), "the usual message still follows the diagnosis");
         Assert.That(ex.Message, Does.Not.Contain("First difference at line"), "the diagnosis already names the lines");
     }
@@ -671,7 +672,7 @@ public class SnippetErrorFormatterTests
 
         var ex = Build(source, snippet, result);
 
-        Assert.That(ex.Message, Does.StartWith("Your oldContent contains backslash-escaped quotes (\\\") and doubled backslashes (\\\\) where the file has plain quotes (\") and single backslashes (\\): 1 line(s), first at line 2. "));
+        Assert.That(ex.Message, Does.StartWith("Your oldContent contains backslash-escaped quotes (\\\") and doubled backslashes (\\\\) where the file has plain quotes (\") and single backslashes (\\): 1 line(s), first at line 2 of oldContent. "));
     }
 
     [Test]
