@@ -8,6 +8,8 @@
     are always skipped) and groups them by arm. The arm key is the four values the job recorded in its `env` block:
     ROSLYNSENTINEL_MODELEVAL_THINKING, _THINKING_TRIGGERS, _THINKING_EFFORT and _REASONING_BUDGET, shown as
     THINKING/TRIGGERS/EFFORT/BUDGET with `-` for an unset value; a job with none of the four set is the `baseline` arm.
+    When the job also sets ROSLYNSENTINEL_REASONING_REPLAY_FORM, the arm gets a trailing `/<form>` (a job with only
+    that variable set is `baseline/content`); a job without it keeps the arm key unchanged.
     With -GroupByTest the rows are split by the job's test name as well.
 
     A run is a directory under a job's runFolders that holds a transcript.json. Every run directory is read (one
@@ -25,7 +27,9 @@
     Columns: runs; pass (outcome=Pass) and passRate; passedAfterCap (PassedAfterCap, reported beside the pass count, not in
     it); outcomes, stopReasons and outcomeClasses as compact name:count lists; medianWall; medianTurns; thinkTurns/run
     (mean thinking turns per run); medianDeltas (median reasoning deltas per thinking turn); overBudget (total);
-    hostCapTurns (total); maxErrStreak (largest over the arm's runs).
+    hostCapTurns (total); maxErrStreak (largest over the arm's runs); form (the distinct run forms, sorted and
+    comma-joined, from the transcript's ReasoningReplayForm, `items` when absent); leakTurns (total turns whose Content
+    holds a literal `</think>`, from the transcript Summary when it has LeakedThinkTagTurnCount) and leakTurns/run.
 
 .PARAMETER Machine
     Queue machine key (folder under %LOCALAPPDATA%\RoslynSentinel\evalqueue). Default 85.
@@ -109,10 +113,13 @@ function Read-Run([string]$transcriptPath) {
     }
 
     $turns = $null; $thinkTurns = 0; $deltas = @(); $overBudget = 0; $hostCap = 0; $maxStreak = 0
+    $form = $null; $leakTurns = 0; $leakFallback = 0
     try {
         $t = Get-Content -LiteralPath $transcriptPath -Raw | ConvertFrom-Json
         $turnList = @($t.Turns | Where-Object { $null -ne $_ })
         $turns = $turnList.Count
+        $form = if ([string]::IsNullOrWhiteSpace([string]$t.ReasoningReplayForm)) { 'items' } else { ([string]$t.ReasoningReplayForm).ToLowerInvariant() }
+        $hasLeakSummary = $null -ne $t.Summary -and $null -ne $t.Summary.PSObject.Properties['LeakedThinkTagTurnCount']
         $streakTool = $null; $streak = 0
         foreach ($turn in $turnList) {
             $th = $turn.Thinking
@@ -125,6 +132,7 @@ function Read-Run([string]$transcriptPath) {
             if ($reasoning) {
                 foreach ($marker in $HostCapMarkers) { if ($reasoning.Contains($marker)) { $hostCap++; break } }
             }
+            if ([string]$turn.ModelMessage.Content -match '(?i)</think>') { $leakFallback++ }
             foreach ($call in @($turn.ToolCalls | Where-Object { $null -ne $_ })) {
                 if ([string]$call.IsError -eq 'True') {
                     if ($call.ToolName -eq $streakTool) { $streak++ } else { $streakTool = $call.ToolName; $streak = 1 }
@@ -133,13 +141,15 @@ function Read-Run([string]$transcriptPath) {
                 else { $streakTool = $null; $streak = 0 }
             }
         }
+        # Transcripts from before LeakedThinkTagTurnCount existed fall back to the per-turn count above.
+        $leakTurns = if ($hasLeakSummary) { [int]$t.Summary.LeakedThinkTagTurnCount } else { $leakFallback }
     }
     catch { Write-Warning "Skipped unreadable transcript $transcriptPath ($($_.Exception.GetType().Name))."; return $null }
 
     return [pscustomobject]@{
         runDir = $dir; outcome = $outcome; stopReason = $stop; outcomeClass = $class; wallSeconds = $wall
         turns = $turns; thinkingTurns = $thinkTurns; reasoningDeltas = $deltas; overBudgetTurns = $overBudget
-        hostCapTurns = $hostCap; maxErrStreak = $maxStreak
+        hostCapTurns = $hostCap; maxErrStreak = $maxStreak; form = $form; leakTurns = $leakTurns
     }
 }
 
@@ -154,6 +164,8 @@ foreach ($file in Get-ChildItem -LiteralPath $jobsDir -Filter '*.json' -File) {
         (Get-EnvValue $job.env 'ROSLYNSENTINEL_MODELEVAL_THINKING_EFFORT'),
         (Get-EnvValue $job.env 'ROSLYNSENTINEL_MODELEVAL_REASONING_BUDGET'))
     $arm = if (@($parts | Where-Object { $_ -ne '-' }).Count -eq 0) { 'baseline' } else { $parts -join '/' }
+    $formEnv = Get-EnvValue $job.env 'ROSLYNSENTINEL_REASONING_REPLAY_FORM'
+    if ($formEnv -ne '-') { $arm = "$arm/$formEnv" }
 
     foreach ($folder in @($job.runFolders)) {
         if (-not $folder -or -not (Test-Path -LiteralPath $folder)) { continue }
@@ -168,7 +180,7 @@ foreach ($file in Get-ChildItem -LiteralPath $jobsDir -Filter '*.json' -File) {
 if ($rows.Count -eq 0) { Write-Host "No runs found for purpose '$PurposePattern' under $jobsDir (no run folder with a transcript.json)."; return }
 if ($CsvPath) {
     $rows | Select-Object jobId, test, arm, outcome, stopReason, outcomeClass, wallSeconds, turns, thinkingTurns,
-        @{ n = 'reasoningDeltas'; e = { $_.reasoningDeltas -join ';' } }, overBudgetTurns, hostCapTurns, maxErrStreak, runDir |
+        @{ n = 'reasoningDeltas'; e = { $_.reasoningDeltas -join ';' } }, overBudgetTurns, hostCapTurns, maxErrStreak, form, leakTurns, runDir |
         Export-Csv -LiteralPath $CsvPath -NoTypeInformation
     Write-Host "Per-run rows: $CsvPath"
 }
@@ -198,6 +210,9 @@ $table = $rows | Group-Object $groupKeys | Sort-Object Name | ForEach-Object {
     $row.overBudget = ($g | Measure-Object overBudgetTurns -Sum).Sum
     $row.hostCapTurns = ($g | Measure-Object hostCapTurns -Sum).Sum
     $row.maxErrStreak = ($g | Measure-Object maxErrStreak -Maximum).Maximum
+    $row.form = (@($g | ForEach-Object { $_.form } | Where-Object { $_ } | Sort-Object -Unique) -join ',')
+    $row.leakTurns = ($g | Measure-Object leakTurns -Sum).Sum
+    $row.'leakTurns/run' = [math]::Round($row.leakTurns / $n, 2)
     [pscustomobject]$row
 }
 # -Property * lifts the 10-column default of Format-Table; the wide width keeps the compact lists on one line.
