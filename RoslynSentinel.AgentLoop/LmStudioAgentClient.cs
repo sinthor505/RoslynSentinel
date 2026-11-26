@@ -825,6 +825,9 @@ public sealed class LmStudioAgentClient
     internal static int EffectiveReasoningWindow =>
         ReasoningReplayPolicy.WindowSetting.Value ?? ReasoningReplayTurns;
 
+    /// <summary>Separator joining replayed reasoning and message text in the Content replay form. The only definition of the join; tests assert against it.</summary>
+    internal const string ReasoningContentSeparator = "\n\n";
+
     private static List<object> BuildInputItems(IReadOnlyList<AgentChatMessage> messages, ReasoningReplayPolicy? replayPolicy)
     {
         // A null policy keeps the legacy block window (EffectiveReasoningWindow) below.
@@ -841,16 +844,16 @@ public sealed class LmStudioAgentClient
                 }
             }
 
-            return messages.SelectMany((m, i) => ToInputItems(m, replayReasoning: !turnOfMessage.TryGetValue(i, out var k) || replayPolicy.ReplaysReasoning(k, assistantCount))).ToList();
+            return messages.SelectMany((m, i) => ToInputItems(m, replayReasoning: !turnOfMessage.TryGetValue(i, out var k) || replayPolicy.ReplaysReasoning(k, assistantCount), form: replayPolicy.Form)).ToList();
         }
 
         var assistantIndexes = messages.Select((m, i) => (m, i)).Where(x => x.m.Role == "assistant" && !x.m.IsLoopAssistNote).Select(x => x.i).ToList();
         var dropped = ReasoningDroppedTurns(assistantIndexes.Count, EffectiveReasoningWindow);
         var firstReplayed = dropped > 0 ? assistantIndexes[dropped] : 0;
-        return messages.SelectMany((m, i) => ToInputItems(m, replayReasoning: i >= firstReplayed)).ToList();
+        return messages.SelectMany((m, i) => ToInputItems(m, replayReasoning: i >= firstReplayed, form: replayPolicy?.Form ?? ReasoningReplayForm.Items)).ToList();
     }
 
-    private static List<object> ToInputItems(AgentChatMessage message, bool replayReasoning)
+    private static List<object> ToInputItems(AgentChatMessage message, bool replayReasoning, ReasoningReplayForm form)
     {
         if (message.Role == "tool")
         {
@@ -871,19 +874,40 @@ public sealed class LmStudioAgentClient
             // model then sees only "I called X, got Y", never the plan behind it, and loses track of
             // multi-step work. Probe on LM Studio 2026-11-10: with a reasoning input item the model
             // recalled a codeword from it; without, it invented one.
+            // Plan plan_triggered_thinking_reasoning_as_content: the Qwen3.5 template renders every assistant
+            // turn after the last user query as <think>reasoning</think> plus content, and it re-splits Content
+            // that holds a close tag into a think block, which triggers the leak. So the Content and Drop forms
+            // add no ReasoningItem and strip think tags from the text (Q4/Q12). The Items form is unchanged.
             var items = new List<object>();
-            if (replayReasoning && !string.IsNullOrEmpty(message.ReasoningContent))
+            var text = message.Content ?? "";
+            if (form == ReasoningReplayForm.Items)
             {
-                items.Add(new ReasoningItem
+                if (replayReasoning && !string.IsNullOrEmpty(message.ReasoningContent))
                 {
-                    Id = "rs_" + Guid.NewGuid().ToString("N"),
-                    Content = [new ReasoningTextPart { Text = message.ReasoningContent }],
-                });
+                    items.Add(new ReasoningItem
+                    {
+                        Id = "rs_" + Guid.NewGuid().ToString("N"),
+                        Content = [new ReasoningTextPart { Text = message.ReasoningContent }],
+                    });
+                }
+            }
+            else
+            {
+                if (form == ReasoningReplayForm.Content)
+                {
+                    var reasoning = replayReasoning ? (message.ReasoningContent ?? "").Trim() : "";
+                    var content = message.Content ?? "";
+                    text = reasoning.Length > 0 && content.Length > 0
+                        ? reasoning + ReasoningContentSeparator + content
+                        : reasoning.Length > 0 ? reasoning : content;
+                }
+
+                text = ThinkTagText.RemoveTags(text);
             }
 
-            if (!string.IsNullOrEmpty(message.Content) || (message.ToolCalls.Count == 0 && !message.CollapsedToolCalls))
+            if (!string.IsNullOrEmpty(text) || (message.ToolCalls.Count == 0 && !message.CollapsedToolCalls))
             {
-                items.Add(new InputMessageItem { Role = message.Role, Content = message.Content ?? "" });
+                items.Add(new InputMessageItem { Role = message.Role, Content = text });
             }
 
             items.AddRange(message.ToolCalls.Select(tc => (object)new FunctionCallItem
