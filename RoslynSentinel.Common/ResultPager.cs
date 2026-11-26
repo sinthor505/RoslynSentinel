@@ -47,6 +47,7 @@ public static class ResultPager
     public const string UnitLines = "lines";
 
     private const string SuccessKey = "successData";
+    // TODO use LargeResultHelper.ErrorDataKey
     private const string ErrorKey = "errorData";
 
     private static readonly ConcurrentDictionary<(Type Type, JsonNamingPolicy? Policy), string?> RecordsPathCache = new();

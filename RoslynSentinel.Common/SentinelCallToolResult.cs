@@ -255,6 +255,9 @@ public interface IFindingsEnvelope
     /// <summary>The error code, or null when there is none.</summary>
     string? Code { get; }
 
+    /// <summary>True when success data is present (a failure may still carry it, e.g. Build).</summary>
+    bool HasSuccessData { get; }
+
     /// <summary>A copy of this result, of the same runtime type, with <paramref name="extra"/> appended to its findings.</summary>
     object WithAddedFindings(IReadOnlyList<Finding> extra);
 }
@@ -337,6 +340,10 @@ public record SentinelCallToolResult<TSuccess, TError> : IOperationResult, IFind
     {
         get; init;
     }
+
+    /// <summary><see cref="IFindingsEnvelope.HasSuccessData"/>: true when <see cref="SuccessData"/> is present. Not serialized.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool HasSuccessData => SuccessData is not null;
 
     /// <summary>
     /// Server-side declaration of which lists of <see cref="SuccessData"/> form the pageable record sequence when the

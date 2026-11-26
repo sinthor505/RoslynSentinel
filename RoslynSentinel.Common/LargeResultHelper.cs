@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -25,6 +27,91 @@ public static class LargeResultHelper
     /// tool-call echo adds up to about 2.3 KB, stamps a few hundred characters). A measured guess, see the plan's Risks.
     /// </summary>
     public const int EchoReserveChars = 2560;
+
+    /// <summary>Tolerance factor: a body is offloaded only when its size exceeds its budget by this multiple.</summary>
+    public const double ToleranceFactor = 1.25;
+
+    /// <summary>Floor in characters of the <see cref="InlineBudgetClass.Whole"/> budget class.</summary>
+    public const int WholeFloorChars = 32768;
+
+    /// <summary>Multiplier applied to <see cref="DefaultBudgetChars"/> for the <see cref="InlineBudgetClass.Whole"/> class.</summary>
+    public const int WholeMultiplier = 2;
+
+    /// <summary>Characters reserved beneath an offload threshold for page framing.</summary>
+    public const int PageSafetyMarginChars = 64;
+
+    /// <summary>JSON key of the error flag in a tool result body.</summary>
+    public const string IsErrorKey = "isError";
+
+    /// <summary>JSON key of the success payload in a tool result body.</summary>
+    public const string SuccessDataKey = "successData";
+
+    /// <summary>JSON key of the error payload in a tool result body.</summary>
+    public const string ErrorDataKey = "errorData";
+
+    /// <summary>The default inline budget in characters, from <see cref="InlineBudgetOptions.BudgetChars"/>.</summary>
+    public static int DefaultBudgetChars => InlineBudgetOptions.BudgetChars;
+
+    private static readonly ConcurrentDictionary<MethodInfo, InlineBudgetClass> BudgetClassCache = new();
+
+    /// <summary>
+    /// Inline budget in characters for a budget class: <c>Default</c> is <see cref="DefaultBudgetChars"/>; <c>Whole</c>
+    /// is <see cref="WholeMultiplier"/> times that, never below <see cref="WholeFloorChars"/>, clamped to int.MaxValue.
+    /// </summary>
+    public static int BudgetChars(InlineBudgetClass budgetClass)
+    {
+        if (budgetClass == InlineBudgetClass.Whole)
+        {
+            long whole = Math.Max((long)WholeFloorChars, (long)WholeMultiplier * DefaultBudgetChars);
+            return (int)Math.Min(int.MaxValue, whole);
+        }
+
+        return DefaultBudgetChars;
+    }
+
+    /// <summary>The offload threshold in characters for a budget class: <see cref="BudgetChars"/> times <see cref="ToleranceFactor"/>, clamped to int.MaxValue.</summary>
+    public static int OffloadThresholdChars(InlineBudgetClass budgetClass) =>
+        (int)Math.Min(int.MaxValue, BudgetChars(budgetClass) * ToleranceFactor);
+
+    /// <summary>
+    /// The budget class for a tool method: <c>Whole</c> when <paramref name="errorOnly"/> is set, otherwise the method's
+    /// <see cref="InlineBudgetAttribute"/> class (cached per method), otherwise <c>Default</c>. A null method is <c>Default</c>.
+    /// </summary>
+    public static InlineBudgetClass ClassFor(MethodInfo? method, bool errorOnly)
+    {
+        if (errorOnly)
+        {
+            return InlineBudgetClass.Whole;
+        }
+
+        if (method is null)
+        {
+            return InlineBudgetClass.Default;
+        }
+
+        return BudgetClassCache.GetOrAdd(
+            method,
+            static m => m.GetCustomAttribute<InlineBudgetAttribute>()?.BudgetClass ?? InlineBudgetClass.Default);
+    }
+
+    /// <summary>
+    /// True only for a JSON object whose <see cref="IsErrorKey"/> is JSON <c>true</c> and whose <see cref="SuccessDataKey"/>
+    /// is absent or JSON null. Anything else, including a non-object, is false.
+    /// </summary>
+    public static bool IsErrorOnlyBody(JsonNode? root)
+    {
+        if (root is not JsonObject obj)
+        {
+            return false;
+        }
+
+        if (obj[IsErrorKey] is not JsonValue flag || !flag.TryGetValue(out bool isError) || !isError)
+        {
+            return false;
+        }
+
+        return obj[SuccessDataKey] is null;
+    }
 
     /// <summary>
     /// Counts the items in a tool result's <c>successData</c> for the offload envelope's
