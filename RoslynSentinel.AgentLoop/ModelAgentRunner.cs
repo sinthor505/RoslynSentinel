@@ -362,6 +362,7 @@ public sealed class ModelAgentRunner
         transcript.Settings = RunSettings.Build(LlmOptions.Temperature, LlmOptions.TopP, LlmOptions.HostSampler, _llm.ReportedSampler, loadSettings, acceptedUnverifiedSampler: LlmOptions.AcceptUnverifiedSampler);
         var settingsReported = _llm.ReportedSampler is not null;
         transcript.ReasoningReplayMode = replayPolicy.Mode;
+        transcript.ReasoningReplayForm = replayPolicy.Form;
         transcript.Thinking = _thinking;
         transcript.ToolResultFormat = _toolResultFormat.ToString().ToLowerInvariant();
         if (_thinking.Mode != ThinkingMode.Off && !_thinking.IsKnownEffort)
@@ -430,7 +431,7 @@ public sealed class ModelAgentRunner
             AgentChatMessage modelMessage;
             try
             {
-                // TODO Triggered mode: a non-thinking turn after a thinking turn often writes its reasoning into Content ending in a literal </think> (24 turns in 3 of 4 triggered smoke runs at 8e02735a, none in always/baseline); mixing thinking on/off within one conversation may need the reasoning field on every turn (effort none) or replayed reasoning dropped
+                // TODO Triggered mode: the reasoning replay form (ROSLYNSENTINEL_REASONING_REPLAY_FORM) stops the </think> leak when set to content; flip the triggered default after the live comparison (plan_triggered_thinking_reasoning_as_content Step 9)
                 modelMessage = await _llm.CompleteAsync(replayMessages, toolDefinitions, _maxTokensPerTurn, callCts.Token, replayPolicy, turnThinking.Requested ? _thinking : null);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && callCts.IsCancellationRequested)

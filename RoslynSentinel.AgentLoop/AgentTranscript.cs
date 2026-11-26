@@ -166,6 +166,15 @@ public sealed class AgentTranscript
         get; set;
     }
 
+    /// <summary>
+    /// Reasoning replay form the earlier reasoning was replayed in (Items, Content or Drop). Null when the transcript predates this field, which replayed as items; omitted from the JSON when null.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ReasoningReplayForm? ReasoningReplayForm
+    {
+        get; set;
+    }
+
     /// <summary>Thinking settings the run used; null when the transcript predates this field; omitted from the JSON.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ThinkingOptions? Thinking
@@ -227,9 +236,13 @@ public sealed class AgentTranscript
         get; set;
     }
 
+    private static readonly string ThinkTagOpen = System.Text.RegularExpressions.Regex.Escape(ThinkTagText.OpenTag);
+
+    private static readonly string ThinkTagClose = System.Text.RegularExpressions.Regex.Escape(ThinkTagText.CloseTag);
+
     // Models that emit reasoning inline wrap it in think tags; an unclosed or bare tag is not an answer either.
     private static readonly System.Text.RegularExpressions.Regex ThinkTags = new(
-        @"<think>[\s\S]*?</think>|</?think>",
+        ThinkTagOpen + @"[\s\S]*?" + ThinkTagClose + "|" + ThinkTagOpen + "|" + ThinkTagClose,
         System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     private static string WithoutThinkTags(string? text) =>
@@ -458,6 +471,12 @@ public sealed class RunTotals
         get; init;
     }
 
+    /// <summary>Number of turns whose model reply still holds a literal close think tag, a reasoning leak into the answer.</summary>
+    public int LeakedThinkTagTurnCount
+    {
+        get; init;
+    }
+
     /// <summary>Mean output tokens per turn, null when no turn reported it.</summary>
     public double? AverageOutputTokensPerTurn
     {
@@ -546,6 +565,7 @@ public sealed class RunTotals
             // Not mirrored in scripts/Backfill-TranscriptSummary.ps1: old transcripts have no thinking, so the backfill leaves these at 0.
             ThinkingTurnCount = turns.Count(turn => turn.Thinking?.Requested == true),
             OverBudgetTurnCount = turns.Count(turn => turn.Thinking?.OverBudget == true),
+            LeakedThinkTagTurnCount = turns.Count(turn => ThinkTagText.HasCloseTag(turn.ModelMessage.Content)),
         };
 
         // Sum of the non-null values, or null when every value is null.
