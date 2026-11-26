@@ -242,7 +242,7 @@ public class ReplaceRangeTests
 
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
-        Assert.That(result.ErrorData.Message, Does.Contain("firstLineText matches 2 blocks of 2 lines").And.Contain("lines 13-14, 18-19"),
+        Assert.That(result.ErrorData.Message, Does.Contain("firstLineText matches 2 blocks").And.Contain("lines 13-14, 18-19"),
             "both blocks are listed by their line spans");
         Assert.That(workspace.ReadText(TargetRelativePath), Is.EqualTo(before), "a refused range must not write");
     }
@@ -257,7 +257,7 @@ public class ReplaceRangeTests
 
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
-        Assert.That(result.ErrorData.Message, Does.Contain("firstLineText matches 0 blocks of 2 consecutive lines")
+        Assert.That(result.ErrorData.Message, Does.Contain("firstLineText matches 0 blocks")
             .And.Contain("starts at line 6").And.Contain("agrees for 1 of 2 lines")
             .And.Contain("'public int Wrong() => 1;'").And.Contain("'public int Old1() => 10;'"));
         Assert.That(workspace.ReadText(TargetRelativePath), Is.EqualTo(before), "a refused range must not write");
@@ -268,12 +268,68 @@ public class ReplaceRangeTests
     {
         using var workspace = CreateWorkspace();
 
-        var result = await RangeAsync(workspace, "// BEGIN-OLD", "}", "");
+        // firstLineText is ambiguous too, so lastLineText is not resolved against it and its own candidates are listed.
+        var result = await RangeAsync(workspace, "Run();", "}", "");
 
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
         Assert.That(result.ErrorData.Message, Does.Contain("lastLineText matches 3 lines").And.Contain("lines 15, 20, 23")
             .And.Contain("15: }").And.Contain("23: }"), "each candidate carries its line number and text");
+    }
+
+    [Test]
+    public async Task ReplaceRange_LastAnchorMatchingSeveralLines_ResolvesToTheFirstMatchAtOrAfterTheFirstAnchorAsync()
+    {
+        using var workspace = CreateWorkspace();
+
+        // '}' is on lines 15, 20 and 23; the first at or after line 12 (public void A()) is line 15.
+        var result = await RangeAsync(workspace, "public void A()", "}", "    public void A() { }");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(Normalize(workspace.ReadText(TargetRelativePath)), Is.EqualTo(ExpectedTarget(12, 15, "    public void A() { }")));
+        Assert.That(result.SuccessData!.ReplacementResult!.Summary, Does.Contain("lines 12-15 (4 line(s))"));
+    }
+
+    [Test]
+    public async Task ReplaceRange_NestedMethodAndClassClosingBraces_EndTheRangeAtTheMethodsBraceAsync()
+    {
+        const string relativePath = "ContosoOrders.Core/Nested.cs";
+        var lines = new[]
+        {
+            "namespace ContosoOrders.Core;",
+            "",
+            "public class Nested",
+            "{",
+            "    public int Value()",
+            "    {",
+            "        return 1;",
+            "    }",
+            "}",
+        };
+        using var workspace = InMemoryWorkspace.Create((relativePath, Join(lines)));
+
+        // The method's '}' (line 8) and the class's '}' (line 9) both match; the first at or after the method line wins.
+        var result = await RangeAsync(workspace, "public int Value()", "}", "    public int Value() => 2;", relativePath);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(Normalize(workspace.ReadText(relativePath)),
+            Is.EqualTo(Join(lines.Take(4).Concat(["    public int Value() => 2;"]).Concat(lines.Skip(8)))));
+        Assert.That(result.SuccessData!.ReplacementResult!.Summary, Does.Contain("lines 5-8 (4 line(s))"));
+    }
+
+    [Test]
+    public async Task ReplaceRange_LastAnchorMatchingOnlyBeforeTheFirstAnchor_IsRefusedAndWritesNothingAsync()
+    {
+        using var workspace = CreateWorkspace();
+        var before = workspace.ReadText(TargetRelativePath);
+
+        // 'Run();' is on lines 14 and 19, both above 'private void Run() { }' (line 22).
+        var result = await RangeAsync(workspace, "private void Run() { }", "Run();", "");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData.Message, Does.Contain("lastLineText matches 2 places").And.Contain("lines 14, 19").And.Contain("none starts at or after line 22"));
+        Assert.That(workspace.ReadText(TargetRelativePath), Is.EqualTo(before), "a refused range must not write");
     }
 
     [Test]

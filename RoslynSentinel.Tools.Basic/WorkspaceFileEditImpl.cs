@@ -2009,8 +2009,9 @@ public class WorkspaceFileEditImpl
     /// Replaces (or, with an empty <paramref name="newContent"/>, deletes) the whole lines from the line (or contiguous block of
     /// lines) matching <paramref name="firstLineText"/> through the line (or block) matching <paramref name="lastLineText"/>, inclusive
     /// (proposal_replace_range_tool.md). An anchor is one or more lines compared line by line with leading/trailing whitespace
-    /// ignored; the range starts at the first anchor's first line and ends at the last anchor's last line. An anchor that matches
-    /// no line/block or several is refused with the count and every matching line number; nothing is written. The write goes through <see cref="ApplyEditTailAsync"/> (compile gate,
+    /// ignored; the range starts at the first anchor's first line and ends at the last anchor's last line. firstLineText must match
+    /// exactly one line/block; a lastLineText that matches several resolves to the first match starting at or after the end of the first anchor.
+    /// An anchor that matches nothing (or firstLineText several times) is refused with the count and every matching line number; nothing is written. The write goes through <see cref="ApplyEditTailAsync"/> (compile gate,
     /// stale-read refusal, undo).
     /// </summary>
     public async Task<SentinelCallToolResult<ReplaceSnippetResult>> ReplaceRange(
@@ -2080,10 +2081,29 @@ public class WorkspaceFileEditImpl
                 return Refuse(ToolErrorCode.InvalidArgument, "ReplaceRange: " + leakedMarkup);
             }
 
-            // Each anchor must match exactly one line/block in the whole file (owner rule); lastLineText is not searched only below the first match.
-            // TODO a single-line lastLineText such as '}' still matches many lines (6 of 17 rejected calls in the ThreadOptionalParameter eval); consider resolving it to the nearest hit at or below the first anchor (owner rule today: unique in the whole file), and a stray backslash before a quote in an anchor (model JSON double-escape) matches nothing
+            // firstLineText must match exactly one line/block in the whole file (owner rule). A lastLineText that matches several places resolves to the
+            // first match that starts at or after the line where the first anchor ends; one that matches once is used as is (a match above the first anchor is refused below).
+            // Known remaining limit (owner note): widening does not always help - runs of '}' lines at the end of nested blocks, and several similar blocks whose first
+            // and last lines look alike, can resolve to a line the caller did not mean; ReplaceSnippet (whole-block match) is the usual route there.
             var firstHits = FindAnchorBlocks(oldText, firstAnchorLines);
             var lastHits = FindAnchorBlocks(oldText, lastAnchorLines);
+            string? lastResolvedNote = null;
+            if (firstHits.Count == 1 && lastHits.Count > 1)
+            {
+                var firstEnd = firstHits[0].End;
+                var lastCandidates = lastHits;
+                var lastSpans = string.Join(", ", lastCandidates.Select(hit => lastAnchorLines.Length > 1 ? $"{hit.Start + 1}-{hit.End + 1}" : $"{hit.Start + 1}"));
+                var firstAfterFirst = lastCandidates.FindIndex(hit => hit.Start >= firstEnd);
+                if (firstAfterFirst < 0)
+                {
+                    return Refuse(ToolErrorCode.InvalidArgument,
+                        $"ReplaceRange: lastLineText matches {lastCandidates.Count} places of '{DisplayPath(filePathResolved)}' (lines {lastSpans}); none starts at or after line {firstEnd + 1}, where firstLineText ends. Nothing was written.");
+                }
+
+                lastHits = [lastCandidates[firstAfterFirst]];
+                lastResolvedNote = $"lastLineText matched {lastCandidates.Count} places (lines {lastSpans}); the first starting at or after line {firstEnd + 1} (line {lastHits[0].Start + 1}) was used.";
+            }
+
             var anchorProblems = new List<(string Code, string Message)>();
             if (DescribeAnchorMatchCount("firstLineText", firstAnchorLines, firstHits, oldText, DisplayPath(filePathResolved)) is { } firstProblem)
             {
@@ -2099,7 +2119,7 @@ public class WorkspaceFileEditImpl
             {
                 return Refuse(anchorProblems[0].Code,
                     "ReplaceRange: " + string.Join(" ", anchorProblems.Select(problem => problem.Message))
-                    + " Each anchor must match exactly one line or one contiguous block of lines (leading/trailing whitespace of each line ignored). Nothing was written.");
+                    + " An anchor matches one line or one contiguous block of lines (leading/trailing whitespace of each line ignored). Nothing was written.");
             }
 
             // The range starts at the first anchor's first line and ends at the last anchor's last line.
@@ -2173,7 +2193,7 @@ public class WorkspaceFileEditImpl
             return await ApplyEditTailAsync(
                 "ReplaceRange", "replace_range", (string)targetPath, rangeChanges, editedSpans,
                 StandardCompileRejectionHeadline("ReplaceRange", "the anchors still match the file as it is now; fix newContent and send it again. "),
-                [rangeNote, indentNote], validateOnApply: true, returnDiff: false,
+                [rangeNote, lastResolvedNote, indentNote], validateOnApply: true, returnDiff: false,
                 enableNearMissCorrection: false, enableRenameLift: false, editMemory: null, cancellationToken);
         }
         catch (Exception ex)

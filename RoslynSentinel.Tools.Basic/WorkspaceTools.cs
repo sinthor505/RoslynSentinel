@@ -171,12 +171,12 @@ public class WorkspaceTools
     // ReplaceSnippet takes small exact text; ReplaceRange takes only the first and last line of a block, so no transcription of the block is needed.
     [McpServerTool(Name = "ReplaceRange")]
     [Produces(DataTag.ChangeId)]
-    [Description("Replaces or deletes the block of whole lines from firstLineText through lastLineText (each must match exactly one line, or one contiguous block of lines when it has several). You send only the first and last line(s), not the whole block; use ReplaceSnippet for small exact text. Compile-checked before writing.")]
+    [Description("Replaces or deletes the block of whole lines from firstLineText through lastLineText (each is one line, or several that match one contiguous block). firstLineText must match exactly one place in the file; a lastLineText that matches several places resolves to the first one at or after the end of firstLineText's match. You send only the first and last line(s), not the whole block; use ReplaceSnippet for small exact text. Compile-checked before writing.")]
     public Task<SentinelCallToolResult<ReplaceSnippetResult>> ReplaceRangeTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)][Description("File to edit.")] string filePath,
         [Description("The block's first line, verbatim (whitespace at each line's ends is ignored). Several lines are allowed when they match one contiguous block of the file; the range starts at that block's first line.")] string firstLineText,
-        [Description("The block's last line, same rule; the range ends at the last line of the block it matches.")] string lastLineText,
+        [Description("The block's last line, same rule; the range ends at the last line of the block it matches. If it matches several places, the first at or after the end of firstLineText's match is used.")] string lastLineText,
         [Description("Lines that replace the block; empty string deletes it.")] string newContent,
         CancellationToken cancellationToken = default)
         => _fileEdit.ReplaceRange(reason, filePath, firstLineText, lastLineText, newContent, cancellationToken);
