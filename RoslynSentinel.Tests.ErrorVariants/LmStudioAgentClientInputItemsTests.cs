@@ -106,8 +106,6 @@ public class LmStudioAgentClientInputItemsTests
         var window = LmStudioAgentClient.ReasoningReplayTurns;
         var turns = PlanTurns(2 * window + 3);
 
-        // Reasoning items get a fresh random id per request; the chat template LM Studio renders (and caches) omits it.
-        static string WithoutId(JsonElement e) => System.Text.RegularExpressions.Regex.Replace(e.GetRawText(), "\"id\":\"rs_[0-9a-f]+\"", "\"id\":\"rs_\"");
         var earlier = Serialize(turns[..^1]).Select(WithoutId).ToList();
         var later = Serialize(turns).Select(WithoutId).ToList();
 
@@ -140,9 +138,121 @@ public class LmStudioAgentClientInputItemsTests
         Assert.That(ex!.Message, Does.Contain(LmStudioAgentClient.ReasoningWindowVariable));
     }
 
+    // Reasoning items get a fresh random id per request; the chat template LM Studio renders (and caches) omits it.
+    private static string WithoutId(JsonElement e) => System.Text.RegularExpressions.Regex.Replace(e.GetRawText(), "\"id\":\"rs_[0-9a-f]+\"", "\"id\":\"rs_\"");
+
+    private static AgentChatMessage[] ReplyTurns(int count) => Enumerable.Range(1, count)
+        .Select(i => new AgentChatMessage
+        {
+            Role = "assistant",
+            Content = $"text {i}",
+            ReasoningContent = $"plan {i}",
+            ToolCalls = [new AgentToolCall { Id = $"call_{i}", Name = "ReadFile", ArgumentsJson = "{}" }],
+        })
+        .ToArray();
+
+    [Test]
+    public void ContentForm_ReasoningOnlyTurn_SendsReasoningAsMessageBeforeFunctionCall()
+    {
+        var policy = new ReasoningReplayPolicy(4096, 0) { Form = ReasoningReplayForm.Content };
+        var items = Serialize(policy, new AgentChatMessage
+        {
+            Role = "assistant",
+            ReasoningContent = "plan: step 7 next",
+            ToolCalls = [new AgentToolCall { Id = "call_1", Name = "ReadFile", ArgumentsJson = "{}" }],
+        });
+
+        Assert.That(items.Select(Type), Is.EqualTo(new[] { "message", "function_call" }));
+        Assert.That(items[0].GetProperty("role").GetString(), Is.EqualTo("assistant"));
+        Assert.That(items[0].GetProperty("content").GetString(), Is.EqualTo("plan: step 7 next"));
+    }
+
+    [Test]
+    public void ContentForm_ReasoningAndText_JoinsWithBlankLine()
+    {
+        var policy = new ReasoningReplayPolicy(4096, 0) { Form = ReasoningReplayForm.Content };
+        var items = Serialize(policy, new AgentChatMessage
+        {
+            Role = "assistant",
+            Content = "Reading the file first.",
+            ReasoningContent = "plan: step 7 next",
+            ToolCalls = [new AgentToolCall { Id = "call_1", Name = "ReadFile", ArgumentsJson = "{}" }],
+        });
+
+        Assert.That(items.Select(Type), Is.EqualTo(new[] { "message", "function_call" }));
+        Assert.That(
+            items[0].GetProperty("content").GetString(),
+            Is.EqualTo("plan: step 7 next" + LmStudioAgentClient.ReasoningContentSeparator + "Reading the file first."));
+    }
+
+    [Test]
+    public void ContentForm_LeakedCloseTagInContent_IsRemoved()
+    {
+        var policy = new ReasoningReplayPolicy(4096, 0) { Form = ReasoningReplayForm.Content };
+        var items = Serialize(policy, new AgentChatMessage
+        {
+            Role = "assistant",
+            Content = "Reading the file first." + ThinkTagText.CloseTag + " Then editing.",
+        });
+
+        var content = items[0].GetProperty("content").GetString();
+        Assert.That(ThinkTagText.HasCloseTag(content), Is.False);
+        Assert.That(content, Is.EqualTo("Reading the file first. Then editing."));
+    }
+
+    [Test]
+    public void ContentForm_PolicyDroppedTurn_SendsTextOnly()
+    {
+        var policy = new ReasoningReplayPolicy(4096, 2) { Form = ReasoningReplayForm.Content };
+        var turns = ReplyTurns(6);
+
+        Assert.That(LmStudioAgentClient.ReasoningDroppedTurns(turns.Length, 2), Is.GreaterThan(0), "precondition: the first turn must be dropped");
+        var messages = Serialize(policy, turns).Where(e => Type(e) == "message").ToList();
+
+        Assert.That(messages[0].GetProperty("content").GetString(), Is.EqualTo("text 1"));
+        Assert.That(
+            messages[^1].GetProperty("content").GetString(),
+            Is.EqualTo("plan 6" + LmStudioAgentClient.ReasoningContentSeparator + "text 6"));
+    }
+
+    [Test]
+    public void DropForm_NeverSendsReasoning_AndRemovesLeakedTags()
+    {
+        var policy = new ReasoningReplayPolicy(4096, 0) { Form = ReasoningReplayForm.Drop };
+        var items = Serialize(policy, new AgentChatMessage
+        {
+            Role = "assistant",
+            ReasoningContent = "secret plan",
+            Content = "Here is the answer." + ThinkTagText.CloseTag,
+        });
+
+        Assert.That(items.Select(Type), Is.EqualTo(new[] { "message" }));
+        Assert.That(items.Any(e => e.GetRawText().Contains("secret plan")), Is.False);
+        var content = items[0].GetProperty("content").GetString();
+        Assert.That(ThinkTagText.HasCloseTag(content), Is.False);
+        Assert.That(content, Is.EqualTo("Here is the answer."));
+    }
+
+    [Test]
+    public void ItemsForm_IsIdenticalToPolicyWithoutForm()
+    {
+        var turns = PlanTurns(3);
+        var items = Serialize(new ReasoningReplayPolicy(4096, 0) { Form = ReasoningReplayForm.Items }, turns);
+        var defaults = Serialize(new ReasoningReplayPolicy(4096, 0), turns);
+
+        Assert.That(items.Select(WithoutId).ToList(), Is.EqualTo(defaults.Select(WithoutId).ToList()));
+        Assert.That(items.Select(Type), Does.Contain("reasoning"));
+    }
+
     // InputMessageItem carries no "type" property on the wire; report it as "message".
     private static string Type(JsonElement item) =>
         item.TryGetProperty("type", out var t) ? t.GetString()! : "message";
+
+    private static List<JsonElement> Serialize(ReasoningReplayPolicy policy, params AgentChatMessage[] messages)
+    {
+        using var doc = JsonDocument.Parse(LmStudioAgentClient.SerializeInputItems(messages, policy));
+        return doc.RootElement.EnumerateArray().Select(e => e.Clone()).ToList();
+    }
 
     private static List<JsonElement> Serialize(params AgentChatMessage[] messages)
     {
