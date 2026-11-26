@@ -255,6 +255,7 @@ public class CoreRefactoringTools
             var specs = new List<SignatureParameterSpec>();
             foreach (var p in parameters)
             {
+                // TODO type/name on a kept {originalIndex} entry are dropped silently, and an identity list returns isError false, no_changes, "Old signature removed: every caller was migrated" (run 193123-562 T11); refuse it and say ChangeSignature cannot retype or rename a parameter (also in the description). A doc-comment cref to the method also blocks the call as "not a simple invocation" (192009-439 T4)
                 if (p.originalIndex is int idx)
                 {
                     specs.Add(new ExistingParameterSpec(idx));

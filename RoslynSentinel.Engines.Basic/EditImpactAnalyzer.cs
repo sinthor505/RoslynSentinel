@@ -713,6 +713,7 @@ public static class EditImpactAnalyzer
 
             case SymbolChangeKind.SignatureChanged:
                 {
+                    // TODO names ChangeSignature/MethodSignature for a parameter retype, which neither can do, and when the broken use is a sibling overload in the edited file (WidenToReadOnlyDictionary cap-35 113 runs 192009-439 T3-4, 192345-882 T8-34): name the bound callee and offer edit-it-first or one batch with both declarations
                     var lead = $"This edit changes the signature of {name} and {files} file(s) still use the old one: ";
                     var tools = new[] { "ChangeSignature", "MethodSignature" }.Where(isToolActive).ToList();
                     return tools.Count > 0 ? lead + $"use {string.Join(" or ", tools)} instead, which update the callers." : lead + batch;

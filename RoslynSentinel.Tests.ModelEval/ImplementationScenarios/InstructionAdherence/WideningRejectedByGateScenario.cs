@@ -190,6 +190,7 @@ ChangeWriterTests.cs: CS0144
 """;
 
     // Expression-bodied property, not a static readonly field: a field would initialise before the contract placement is read (see P1 plan).
+    // TODO IfFails "write nothing" reads as "do not write the Report" (cap-35 run 20261126-191240-880 T35: "the task says 'write nothing' if the condition fails. So I should not report anything", then edited out-of-scope files); 4/4 runs saw the block and still edited outside Files - say "edit no file ... then give the Report" (same IfFails text in WidenToReadOnlyDictionaryScenario)
     private static string StepPrompt => EvalContractOptions.Render(new ScenarioTask(
         Goal: "In ContosoOrders.Core/Evals/WideningRejectedByGate the parameter `changes` of `Apply` is only ever read. Retype it from `Dictionary<FilePath, string>` to `IReadOnlyDictionary<FilePath, string>` so implementations cannot mutate the caller's map.",
         Files: "ContosoOrders.Core/Evals/WideningRejectedByGate/IChangeWriter.cs, ContosoOrders.Core/Evals/WideningRejectedByGate/ChangeWriter.cs and ContosoOrders.Tests/Evals/WideningRejectedByGate/FakeChangeWriter.cs. No other file.",
