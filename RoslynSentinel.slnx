@@ -7,11 +7,11 @@
   <Folder Name="/Solution Items/">
     <File Path=".editorconfig" />
   </Folder>
-  <Project Path="RoslynSentinel.Common/RoslynSentinel.Common.csproj" Id="fbd51816-ef10-4c4c-a0fa-7792a6fe7db7" />
-  <Project Path="RoslynSentinel.Git/RoslynSentinel.Git.csproj" />
   <Project Path="RoslynSentinel.AgentLoop/RoslynSentinel.AgentLoop.csproj" />
+  <Project Path="RoslynSentinel.Common/RoslynSentinel.Common.csproj" Id="fbd51816-ef10-4c4c-a0fa-7792a6fe7db7" />
   <Project Path="RoslynSentinel.Engines.Advanced/RoslynSentinel.Engines.Advanced.csproj" />
   <Project Path="RoslynSentinel.Engines.Basic/RoslynSentinel.Engines.Basic.csproj" />
+  <Project Path="RoslynSentinel.Git/RoslynSentinel.Git.csproj" />
   <Project Path="RoslynSentinel.Server.Advanced/RoslynSentinel.Server.Advanced.csproj" Id="c76d7d9f-da14-4474-a0ef-fa7e59bb0986" />
   <Project Path="RoslynSentinel.Tests.Advanced/RoslynSentinel.Tests.Advanced.csproj" Id="30334fc9-1993-4d32-9115-e72b5f26e864" />
   <Project Path="RoslynSentinel.Tests.Asyncify/RoslynSentinel.Tests.Asyncify.csproj" Id="1a7f4726-11b3-476a-9d7a-13b2f14af9f2" />
@@ -22,21 +22,11 @@
   <Project Path="RoslynSentinel.Tests.Git/RoslynSentinel.Tests.Git.csproj" />
   <Project Path="RoslynSentinel.Tests.Harness/RoslynSentinel.Tests.Harness.csproj" />
   <Project Path="RoslynSentinel.Tests.ModelEval/RoslynSentinel.Tests.ModelEval.csproj" />
-  <Project Path="RoslynSentinel.Tests.Server/RoslynSentinel.Tests.Server.csproj" Id="c72a8f98-61bc-493f-9bd9-7ab06fe1ff20">
-    <BuildType Solution="DebugVisualStudio|*" Project="Debug" />
-  </Project>
-  <Project Path="RoslynSentinel.Tests.Support.Advanced/RoslynSentinel.Tests.Support.Advanced.csproj">
-    <BuildType Solution="DebugVisualStudio|*" Project="Debug" />
-  </Project>
-  <Project Path="RoslynSentinel.Tests.Support.Basic/RoslynSentinel.Tests.Support.Basic.csproj">
-    <BuildType Solution="DebugVisualStudio|*" Project="Debug" />
-  </Project>
-  <Project Path="RoslynSentinel.Tests.Tools.Advanced/RoslynSentinel.Tests.Tools.Advanced.csproj" Id="ed3f9a42-a43e-4b99-ac8e-6f3bfedf95de">
-    <BuildType Solution="DebugVisualStudio|*" Project="Debug" />
-  </Project>
-  <Project Path="RoslynSentinel.Tests.Tools.Basic/RoslynSentinel.Tests.Tools.Basic.csproj" Id="e7916837-b4e5-4649-9e47-9c9fd690e231">
-    <BuildType Solution="DebugVisualStudio|*" Project="Debug" />
-  </Project>
+  <Project Path="RoslynSentinel.Tests.Server/RoslynSentinel.Tests.Server.csproj" Id="c72a8f98-61bc-493f-9bd9-7ab06fe1ff20" />
+  <Project Path="RoslynSentinel.Tests.Support.Advanced/RoslynSentinel.Tests.Support.Advanced.csproj" />
+  <Project Path="RoslynSentinel.Tests.Support.Basic/RoslynSentinel.Tests.Support.Basic.csproj" />
+  <Project Path="RoslynSentinel.Tests.Tools.Advanced/RoslynSentinel.Tests.Tools.Advanced.csproj" Id="ed3f9a42-a43e-4b99-ac8e-6f3bfedf95de" />
+  <Project Path="RoslynSentinel.Tests.Tools.Basic/RoslynSentinel.Tests.Tools.Basic.csproj" Id="e7916837-b4e5-4649-9e47-9c9fd690e231" />
   <Project Path="RoslynSentinel.Tests/RoslynSentinel.Tests.csproj" />
   <Project Path="RoslynSentinel.Tools.Advanced/RoslynSentinel.Tools.Advanced.csproj" Id="41b58d4b-cc7b-48db-98ee-ee3b3f703b70" />
   <Project Path="RoslynSentinel.Tools.Basic/RoslynSentinel.Tools.Basic.csproj" Id="812627e6-7ea8-49dc-89e4-b7ea1f6b7570" />
