@@ -2359,7 +2359,13 @@ public class WorkspaceFileEditImpl
             }
             if (edit.NewContent == null)
             {
-                perEditErrors.Add($"batchEdits[{i}] ({edit.FilePath}): newContent is required (pass an empty string for a pure deletion).");
+                var missingNewContent = $"batchEdits[{i}] has no newContent (newContent is required; an empty string \"\" is a valid pure deletion).";
+                if (edit.OldContent.Contains("\"newContent\":") || edit.OldContent.Contains("\\\"newContent\\\":")
+                    || edit.OldContent.EndsWith("\", ") || edit.OldContent.EndsWith("\\\", "))
+                {
+                    missingNewContent += " oldContent appears to contain the start of the next key; a quote in the text may have ended the string early. Option: escape every quote inside oldContent and newContent.";
+                }
+                perEditErrors.Add(missingNewContent);
                 continue;
             }
             var exceeded = DescribeExceededSnippetSizeBounds(edit.OldContent, edit.NewContent);
@@ -2444,7 +2450,7 @@ public class WorkspaceFileEditImpl
             var resolved = new List<(int index, SnippetMatch match, string? oldContent, string newContent)>();
             foreach (var (edit, index) in fileGroup)
             {
-                var leakedMarkup = DescribeLeakedNewContentMarkup(edit.NewContent, () => originalString);
+                var leakedMarkup = DescribeLeakedNewContentMarkup(edit.NewContent!, () => originalString);
                 if (leakedMarkup is not null)
                 {
                     perEditErrors.Add($"batchEdits[{index}] ({filePathResolved}): {leakedMarkup}");
@@ -2459,7 +2465,7 @@ public class WorkspaceFileEditImpl
                         withinMember: edit.WithinMember, matchLine: edit.MatchLine);
                     if (selectorNote is not null)
                         selectorNotes.Add($"batchEdits[{index}]: {selectorNote}");
-                    resolved.Add((index, match, edit.OldContent, edit.NewContent));
+                    resolved.Add((index, match, edit.OldContent, edit.NewContent!));
                 }
                 catch (ToolException toolEx)
                 {

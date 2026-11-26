@@ -570,8 +570,7 @@ public class SnippetEdit
     public string OldContent { get; set; } = "";
     /// <summary>Replacement text, re-indented to the file. May be empty (pure deletion) or longer than OldContent (net insertion).</summary>
     [BatchItemField("Replacement text, re-indented to the file. May be empty (pure deletion) or longer than OldContent (net insertion).", Required = true)]
-    // TODO an absent newContent key binds to "" so the null guard in WorkspaceFileEditImpl.ReplaceSnippetBatch never fires; the item is a silent deletion or a bare NotFound (run 192009-439 T5, T12-21: the model's escaped quote swallowed the newContent key into oldContent, 10 identical rejections that never named the missing key)
-    public string NewContent { get; set; } = "";
+    public string? NewContent { get; set; }
     /// <summary>Optional line immediately before OldContent, for disambiguation.</summary>
     public string? LineBefore
     {

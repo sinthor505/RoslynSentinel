@@ -262,6 +262,74 @@ public class ReplaceSnippetBatchTests
     }
 
     [Test]
+    public async Task ReplaceSnippet_BatchItemWithoutNewContent_RefusedWithoutWritingAsync()
+    {
+        using var workspace = CreateWorkspace();
+        var tools = BuildTools(workspace.Manager);
+
+        var targetFile = workspace.PathOf(StatusRelativePath);
+        var original = workspace.ReadText(StatusRelativePath);
+        var anchor = FirstLine(original);
+
+        var result = await tools.ReplaceSnippetTool(
+            reason: "test batch item with newContent key absent",
+            ProposedChangeAction.apply,
+            batchEdits: [new SnippetEdit { FilePath = targetFile, OldContent = anchor }]);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+            Assert.That(result.ErrorData.Message, Does.Contain("batchEdits[0] has no newContent"));
+            Assert.That(result.ErrorData.Message, Does.Contain("an empty string \"\" is a valid pure deletion"));
+            Assert.That(result.ErrorData.Message, Does.Not.Contain("appears to contain the start of the next key"));
+            Assert.That(workspace.ReadText(StatusRelativePath), Is.EqualTo(original), "a refused item must not write anything");
+        });
+    }
+
+    [Test]
+    public async Task ReplaceSnippet_BatchExplicitEmptyNewContent_AppliesPureDeletionAsync()
+    {
+        using var workspace = CreateWorkspace();
+        var tools = BuildTools(workspace.Manager);
+
+        var targetFile = workspace.PathOf(StatusRelativePath);
+
+        var result = await tools.ReplaceSnippetTool(
+            reason: "test batch item with explicit empty newContent",
+            ProposedChangeAction.apply,
+            batchEdits: [new SnippetEdit { FilePath = targetFile, OldContent = "Pending,", NewContent = "" }]);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(workspace.ReadText(StatusRelativePath), Does.Not.Contain("Pending,"));
+    }
+
+    [Test]
+    public async Task ReplaceSnippet_BatchItemWithoutNewContentHoldingNextKey_NamesSwallowedKeyAsync()
+    {
+        using var workspace = CreateWorkspace();
+        var tools = BuildTools(workspace.Manager);
+
+        var targetFile = workspace.PathOf(StatusRelativePath);
+        var original = workspace.ReadText(StatusRelativePath);
+
+        var result = await tools.ReplaceSnippetTool(
+            reason: "test batch item whose oldContent swallowed the newContent key",
+            ProposedChangeAction.apply,
+            batchEdits: [new SnippetEdit { FilePath = targetFile, OldContent = "Pending, \"newContent\": \"Shipped," }]);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+            Assert.That(result.ErrorData.Message, Does.Contain("batchEdits[0] has no newContent"));
+            Assert.That(result.ErrorData.Message, Does.Contain("oldContent appears to contain the start of the next key"));
+            Assert.That(result.ErrorData.Message, Does.Contain("escape every quote inside oldContent and newContent"));
+            Assert.That(workspace.ReadText(StatusRelativePath), Is.EqualTo(original), "a refused item must not write anything");
+        });
+    }
+
+    [Test]
     public async Task ReplaceSnippet_TopLevelOldNewWithoutAnyFilePathBesideBatch_ErrorNamesItemIndexAsync()
     {
         using var workspace = CreateWorkspace();
