@@ -301,6 +301,27 @@ Decision log:
   (purpose `toolresultformat-smoke-edac977e`); 46 jobs queued with purpose
   `toolresultformat-ab-edac977e`. Table: `scripts/Get-ToolResultFormatArmTable.ps1 -PurposePattern
   'toolresultformat-*-edac977e*'` (per machine 112 and 113).
+- Done (2026-11-26): 48 of 48 runs ended (34 tests failed, 14 passed; no Crashed or Refused jobs, none
+  resubmitted). Pooled over both hosts (n=16 per format, n=8 per cell):
+  | Format | Pass (off / trig) | Escape-copy lines (calls) | Arg failures | Size vs JSON (sum of model-facing chars / sum of `ResultJson` chars) |
+  | --- | --- | --- | --- | --- |
+  | json | 5/16 (3/8 / 2/8) | 31 (12) | 60 | 1.000 |
+  | plain | 5/16 (3/8 / 2/8) | 0 (0) | 59 | 1.014 |
+  | xml | 5/16 (3/8 / 2/8) | 0 (0) | 38 | 1.201 |
+  - Per cell, json escape-copy lines: 112 off 1 / trig 6; 113 off 18 / trig 6.
+  - PassedAfterCap (not counted as Pass): json-trig 1, plain-trig 1, xml-off 1, all on 113.
+  - Outcome classes: NotConverged dominates every arm (TurnCapExceeded); CheckFailed 1 each in json-trig,
+    xml-off and xml-trig; OutOfScopeEdit 1 each in json-off and xml-off; StreamTruncated 1 in xml-trig.
+- Verdict against the Decision Q6 thresholds:
+  - Informative: the json arm has 31 escape-copy lines, at least the 5 required.
+  - plain: KEEP (escape-copies down 100%, Pass +0 pp, arg failures not up).
+  - xml: KEEP (same pass and escape result; arg failures 38 vs 60).
+  - Tie-break (both keep): plain wins on size (1.01x JSON vs 1.20x). Characters stand in for tokens
+    here; no `/tokenize` count was made.
+  - Recommendation for Step 7 (owner review): default `plain`.
+  - Directional only: Pass is identical across formats at n=16. The xml arg-failure gap (38 vs 59-60)
+    was not traced and may be noise.
+
 - Effort: L (wall clock)
 
 ### Step 7 - Default flip (only on a keep result, after owner review)
