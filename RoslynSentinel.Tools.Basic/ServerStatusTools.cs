@@ -377,10 +377,7 @@ public sealed record McpServerStatusStoppedByScript(bool WasFound, string? Detai
 public sealed record McpServerStatusIdleRestart(bool Enabled, int Minutes, DateTime LastActivityUtc, int InFlightCount, string? LastUnmetGuard, DateTime? LastCheckedUtc);
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
-/// Named shape mirroring <see cref="ServerStatusTools.McpServerStatusTool"/>'s anonymous return
-/// object, used only as <c>OutputSchemaType</c> so the tool can advertise a real MCP
-/// <c>outputSchema</c>/<c>StructuredContent</c> shape (2026-07-28 protocol) without changing the
-/// method's actual return type.
+/// Success payload of <see cref="ServerStatusTools.McpServerStatusTool"/>.
 /// </summary>
 public sealed record McpServerStatusResult(
     int ServerPid,

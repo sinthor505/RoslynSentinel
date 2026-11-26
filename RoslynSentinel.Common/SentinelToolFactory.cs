@@ -225,6 +225,8 @@ public static class SentinelToolFactory
 
             newOptions.UseStructuredContent = toolAttr.UseStructuredContent;
 
+            // Kept for parity with the SDK's DeriveOptions; no tool sets OutputSchemaType (structured content was
+            // trialled and dropped, see docs/current/proposals/closed/proposal_structuredcontent_rollout.md).
             if (toolAttr.OutputSchemaType is Type outputSchemaType)
             {
                 newOptions.OutputSchema ??= AIJsonUtilities.CreateJsonSchema(outputSchemaType,
