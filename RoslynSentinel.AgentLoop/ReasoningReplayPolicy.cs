@@ -49,6 +49,12 @@ public sealed class ReasoningReplayPolicy
     internal const string WindowVariable = "ROSLYNSENTINEL_REASONING_WINDOW";
 
     /// <summary>
+    /// Overrides how earlier reasoning is replayed (<see cref="ReasoningReplayForm"/>): items, content or drop.
+    /// Unset or empty keeps the default.
+    /// </summary>
+    internal const string FormVariable = "ROSLYNSENTINEL_REASONING_REPLAY_FORM";
+
+    /// <summary>
     /// Parses the <see cref="WindowVariable"/> text: null when unset or empty, the value for a non-negative integer.
     /// </summary>
     internal static int? ParseWindowOverride(string? text)
@@ -86,6 +92,24 @@ public sealed class ReasoningReplayPolicy
         "Context fraction at which pressure mode drops reasoning turns; unset keeps the default.",
         SettingScope.AgentLoop,
         SettingKind.Live);
+
+    /// <summary>The replay form override (<see cref="FormVariable"/>), re-read on every access; Items when unset or empty.</summary>
+    public static readonly StartupSetting<ReasoningReplayForm> FormSetting = StartupSetting.Enum<ReasoningReplayForm>(null, FormVariable, ReasoningReplayForm.Items, "How earlier turns' reasoning is replayed: items (reasoning input items), content (plain assistant text) or drop (not replayed).", SettingScope.AgentLoop, SettingKind.Live);
+
+    /// <summary>
+    /// Parses the <see cref="FormVariable"/> text: the default <see cref="ReasoningReplayForm.Items"/> when unset or empty,
+    /// otherwise the named form.
+    /// </summary>
+    internal static ReasoningReplayForm ParseFormOverride(string? text)
+    {
+        var read = FormSetting.Read(StartupArgs.Empty, _ => text);
+        if (read.Problem is not null)
+        {
+            throw new FormatException(StartupSettings.DescribeProblems([read.Problem]));
+        }
+
+        return read.Value;
+    }
 
     /// <summary>
     /// How many of the oldest assistant turns lose their reasoning when <paramref name="assistantTurns"/> turns are replayed,
@@ -144,7 +168,10 @@ public sealed class ReasoningReplayPolicy
         return new ReasoningReplayPolicy(
             contextLength,
             ParseWindowOverride(StartupSettings.EnvironmentReader(WindowVariable)),
-            ParsePressureFractionOverride(StartupSettings.EnvironmentReader(PressureFractionVariable)) ?? PressureFraction);
+            ParsePressureFractionOverride(StartupSettings.EnvironmentReader(PressureFractionVariable)) ?? PressureFraction)
+        {
+            Form = ParseFormOverride(StartupSettings.EnvironmentReader(FormVariable)),
+        };
     }
 
     /// <summary>
@@ -176,6 +203,9 @@ public sealed class ReasoningReplayPolicy
 
     /// <summary>Mode text recorded in the transcript, for example "pressure:0.7,pinned:3", "all" or "window:10".</summary>
     public string Mode { get; } = "";
+
+    /// <summary>How earlier turns' reasoning is replayed on the next request (<see cref="FormVariable"/>); items by default.</summary>
+    public ReasoningReplayForm Form { get; init; } = ReasoningReplayForm.Items;
 
     /// <summary>
     /// Observes the projected prompt size for the next request and drops turns when pressure mode requires it.
