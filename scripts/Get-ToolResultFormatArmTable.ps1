@@ -245,7 +245,7 @@ else {
             foreach ($transcript in Get-ChildItem -LiteralPath $folder -Recurse -Filter transcript.json -File -ErrorAction SilentlyContinue) {
                 $run = Read-Run $transcript.FullName $jobFormat $jobThinking
                 if ($null -eq $run) { continue }
-                $run | Add-Member -NotePropertyMembers @{ jobId = $job.id; test = $job.test } -PassThru | ForEach-Object { $rows.Add($_) }
+                $run | Add-Member -NotePropertyMembers @{ jobId = $job.id; test = $job.test; testPassed = $job.passed } -PassThru | ForEach-Object { $rows.Add($_) }
             }
         }
     }
@@ -258,7 +258,9 @@ if ($Detail) { return @($rows | ForEach-Object { $_.escapeRows }) }
 $table = $rows | Group-Object arm | Sort-Object Name | ForEach-Object {
     $g = @($_.Group)
     $n = $g.Count
-    $pass = @($g | Where-Object { $_.outcome -eq 'Pass' }).Count
+    # Pass = the test verdict when a job recorded one: step outcome=Pass is not success in every
+    # scenario (WideningRejectedByGate expects outcomeClass CorrectBlocked). -Path runs fall back to outcome.
+    $pass = @($g | Where-Object { if ($_.PSObject.Properties['testPassed'] -and $null -ne $_.testPassed) { [bool]$_.testPassed } else { $_.outcome -eq 'Pass' } }).Count
     $others = @($g | Where-Object { $_.outcome -ne 'Pass' } | ForEach-Object { if ($_.outcome) { $_.outcome } else { 'none' } })
     $medMfc = Get-Median ($g | ForEach-Object { $_.modelFacingChars })
     $medWall = Get-Median ($g | ForEach-Object { $_.wallSeconds })

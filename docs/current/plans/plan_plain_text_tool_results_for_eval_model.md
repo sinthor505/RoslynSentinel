@@ -306,15 +306,28 @@ Decision log:
   | Format | Pass (off / trig) | Escape-copy lines (calls) | Arg failures | Size vs JSON (sum of model-facing chars / sum of `ResultJson` chars) |
   | --- | --- | --- | --- | --- |
   | json | 5/16 (3/8 / 2/8) | 31 (12) | 60 | 1.000 |
-  | plain | 5/16 (3/8 / 2/8) | 0 (0) | 59 | 1.014 |
+  | plain | 4/16 (2/8 / 2/8) | 0 (0) | 59 | 1.014 |
   | xml | 5/16 (3/8 / 2/8) | 0 (0) | 38 | 1.201 |
+  - Correction (2026-11-26): the first table said plain 5/16. The arm table counted step
+    `outcome=Pass`, but WideningRejectedByGate succeeds only with outcomeClass `CorrectBlocked`, so
+    one plain run counted wrongly. The script now uses the job's test verdict; Pass = test passed.
+  - Per scenario (json / plain / xml, of 4): SweepConstructionSites 0/0/0; WideningRejectedByGate
+    0/0/0; ThreadOptionalParameter 2/3/3; WidenToReadOnlyDictionary 3/1/2. 11 of 16
+    (scenario, thinking, host) cells have the same result in all three formats.
+  - All 31 json escape-copy lines are in ThreadOptionalParameter, the only scenario that edits
+    quoted string literals. Every json run of it had escape copies: 2 passed after recovering, 1 hit
+    the turn cap and then passed (PassedAfterCap), 1 failed (18 lines). WidenToReadOnlyDictionary has
+    no escape copies in any arm; its 3/1/2 spread is untraced.
+  - Reading: format can only move the one scenario where copies carry quotes, and there text is +1
+    of 4. The pooled Pass rate is insensitive at this size.
   - Per cell, json escape-copy lines: 112 off 1 / trig 6; 113 off 18 / trig 6.
   - PassedAfterCap (not counted as Pass): json-trig 1, plain-trig 1, xml-off 1, all on 113.
   - Outcome classes: NotConverged dominates every arm (TurnCapExceeded); CheckFailed 1 each in json-trig,
     xml-off and xml-trig; OutOfScopeEdit 1 each in json-off and xml-off; StreamTruncated 1 in xml-trig.
 - Verdict against the Decision Q6 thresholds:
   - Informative: the json arm has 31 escape-copy lines, at least the 5 required.
-  - plain: KEEP (escape-copies down 100%, Pass +0 pp, arg failures not up).
+  - plain: KEEP (escape-copies down 100%, Pass -6 pp (4 vs 5 of 16, inside the 10 pp bound), arg
+    failures not up).
   - xml: KEEP (same pass and escape result; arg failures 38 vs 60).
   - Tie-break (both keep): plain wins on size (1.01x JSON vs 1.20x). Characters stand in for tokens
     here; no `/tokenize` count was made.
