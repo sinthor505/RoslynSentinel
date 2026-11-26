@@ -39,6 +39,12 @@ Shipped toolset JSON files are documented in [toolsets/](toolsets/).
 | FullSuiteStalenessOptions.MaxAgeDays | `--full-suite-max-age-days` | `ROSLYNSENTINEL_FULL_SUITE_MAX_AGE_DAYS` | double | `2` | Server | Startup | Full-suite staleness: maximum age of the last full run, in days. |
 | FullSuiteStalenessOptions.MaxFastRuns | `--full-suite-max-fast-runs` | `ROSLYNSENTINEL_FULL_SUITE_MAX_FAST_RUNS` | int | `40` | Server | Startup | Full-suite staleness: maximum number of fast runs since the last full run. |
 
+## Inline budget
+
+| Setting | Flag | Env | Type | Default | Scope | Kind | Description |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| InlineBudgetOptions.BudgetChars | `--inline-budget-chars` | `ROSLYNSENTINEL_INLINE_BUDGET_CHARS` | int | `15360` | Server | Startup | Chars a tool result body may fill inline before it is paged; echo and stamps are extra. |
+
 ## Instance identity
 
 | Setting | Flag | Env | Type | Default | Scope | Kind | Description |
