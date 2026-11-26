@@ -1,6 +1,6 @@
 # Plan: Per-result inline budget classes for the large-result offload
 
-**Status:** APPROVED 2026-11-26. Body-only configurable inline budget with 25% tolerance and a Whole class for tagged tools and error-only failures; 25 steps, run with /implement-plan.
+**Status:** IN PROGRESS 2026-11-26. Steps 1-4, 10, 21 done (efb0ca55, 061dd50d, 3ec48be7, dcf158b2, 78f5751e, 3add9ba4).
 
 ## Problem
 
@@ -333,6 +333,7 @@ their builds.
 - Done when: `Build` 0 errors; dispatcher runs `LargeResultOffloadFilterTests` and `ToolTelemetryFilterOrderTests`
   (Tests.Server), all pass; the host file is under 1300 lines.
 - Lane: implementer. Effort: S.
+- Done: efb0ca55 (ModifyModifier is gated in claude-lean; one-token ReplaceSnippet edits instead)
 
 ### Step 2 - Budget class, attribute and setting (new code)
 - Files: `RoslynSentinel.Common/InlineBudgetClass.cs` (new), `RoslynSentinel.Common/InlineBudgetAttribute.cs` (new),
@@ -360,6 +361,7 @@ their builds.
 - Done when: `Build` 0 errors; dispatcher runs `ConfigurationReferenceFreshnessTests`, `EnvVarDeclarationGuardTests`
   and `KnownArgSetsTests` (Tests.ModelEval, by class filter) and `ServerSettingsDiscoveryTests` (Tests.Server), all pass.
 - Lane: implementer (code); dispatcher (regeneration). Effort: S.
+- Done: 061dd50d
 
 ### Step 3 - Budget resolver and typed error-only flag (new code)
 - Files: `RoslynSentinel.Common/LargeResultHelper.cs`, `RoslynSentinel.Common/SentinelCallToolResult.cs`
@@ -385,6 +387,7 @@ their builds.
     implement it on `SentinelCallToolResult<TSuccess, TError>` as `[JsonIgnore] public bool HasSuccessData => SuccessData is not null;`.
 - Done when: `Build` 0 errors.
 - Lane: implementer. Effort: S.
+- Done: 3ec48be7
 
 ### Step 4 - Per-call signal and pointer DTO (new code)
 - Files: `RoslynSentinel.Common/InlineBudgetSignal.cs` (new), `RoslynSentinel.Common/OffloadPointerResult.cs` (new)
@@ -404,6 +407,7 @@ their builds.
     `SentinelToolFactory.WireSerializerOptions` (camelCase, nulls omitted, relaxed encoder).
 - Done when: `Build` 0 errors.
 - Lane: implementer. Effort: S.
+- Done: dcf158b2
 
 ### Step 5 - Offload filter: handler, threshold, typed pointer (behaviour-changing)
 - Files: `RoslynSentinel.Server.Advanced/LargeResultOffloadFilter.cs` (from Step 1),
@@ -520,6 +524,7 @@ their builds.
   `[NonParallelizable]`.
 - Done when: dispatcher runs `LargeResultHelperBudgetTests`, all pass.
 - Lane: test-writer. Effort: S. Pairs with: Step 4.
+- Done: 78f5751e
 
 ### Step 11a - Marshaller tests: move pinned budgets
 - Files: `RoslynSentinel.Tests.Server/ToolResultMarshallerOnModeTests.cs`
@@ -702,6 +707,8 @@ their builds.
   first line lists the parameters used.
 - Done when: the script runs over the current results and reports 2,906 or fewer offloads.
 - Lane: main session (non-C#). Effort: S.
+- Done: 3add9ba4 (2,569 offloads after de-duplication; pre-change threshold check: 25 error-only failures at or
+  under 40,960, 116 non-detached offloads at or under 19,200).
 
 ### Step 22 - Re-scan after the next eval batches (follow-up; does not block closing)
 - Files: `docs/current/TODO.md` (one line at closing)
