@@ -140,6 +140,8 @@ function Read-Run([string]$transcriptPath, [string]$jobFormat, [string]$jobThink
 
     $format = if ($t.ToolResultFormat) { [string]$t.ToolResultFormat } elseif ($jobFormat -ne '-') { $jobFormat } else { 'json' }
     $thinking = if ($t.Thinking -and $t.Thinking.Mode) { [string]$t.Thinking.Mode } elseif ($jobThinking -ne '-') { $jobThinking } else { 'off' }
+    # Header enum names ("Off") and env values ("off") must land in one arm.
+    $format = $format.ToLowerInvariant(); $thinking = $thinking.ToLowerInvariant()
 
     $cache = @{}
     $mfc = New-Object System.Collections.Generic.List[int]

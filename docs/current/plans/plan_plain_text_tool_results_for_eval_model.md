@@ -294,6 +294,13 @@ Decision log:
   pooled over thinking and per thinking level.
 - Done when: 48 runs finished (resubmit crashed jobs once), the arm table and the verdict are in this
   plan under the step.
+- Progress (2026-11-26): Steps 1-5 at edac977e. Live pre-check: plain-off (112) and xml-off (113) on
+  WidenToReadOnlyDictionary ran clean (transcript header `ToolResultFormat` set, `ModelFacingChars`
+  differs from `ResultJson` length; xml run passed). The queue deduplicated those two cells (same
+  commit, args and env), so they serve as round 2 of plain-off / xml-off WidenToReadOnlyDictionary
+  (purpose `toolresultformat-smoke-edac977e`); 46 jobs queued with purpose
+  `toolresultformat-ab-edac977e`. Table: `scripts/Get-ToolResultFormatArmTable.ps1 -PurposePattern
+  'toolresultformat-*-edac977e*'` (per machine 112 and 113).
 - Effort: L (wall clock)
 
 ### Step 7 - Default flip (only on a keep result, after owner review)
