@@ -264,9 +264,15 @@ Decision log:
   lines and calls (Q11 rule), argument parse failures (Q20), median `ModelFacingChars`, median wall.
   `-Detail` emits per-call escape-copy rows. Validate the counter on the smoke run named in Q11
   (expect 10 lines over turns 8-13).
-- Done when: the script runs on the `thinking-smoke-8e02735a` jobs and reports 10 escape-copy lines
+- Done when: the script runs on the `thinking-smoke-8e02735a` jobs and reports 11 escape-copy lines
   for run 20261125-192735-136.
 - Effort: S
+- Done (2026-11-26): counter refined during validation (session decision): unique lines per call,
+  matched against the union of the latest read of every file read so far (turn 13's `CreateFile` of
+  `ErrorHint.cs.new` copies the `ErrorHint.cs` read). Smoke run: 11 lines (turns 8-12: 1+1+1+6+1,
+  turn 13: 1). Arg-failure codes `InvalidArgument`, `ValidationFailed`. `thinking-smoke-8e02735a`
+  (all `json`, n=2 per cell): escape-copy lines 112 Always 18 / Off 0 / Triggered 4; 113 Always 14 /
+  Off 0 / Triggered 11, so thinking turns carry the escape copies in the multi-turn runs too.
 
 ### Step 6 - LIVE A/B batch
 - Files: none (output under the scratch root).

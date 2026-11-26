@@ -236,6 +236,7 @@ foreach ($turn in $transcript.Turns) {
     $messages.Add($assistantMsg)
 
     for ($i = 0; $i -lt $toolCalls.Count; $i++) {
+        # TODO replays ResultJson; a run with ROSLYNSENTINEL_MODELEVAL_TOOL_RESULT_FORMAT=plain|xml showed the model rendered text instead (plan_plain_text_tool_results_for_eval_model Q12)
         $resultJson = $toolCalls[$i].ResultJson
         [void]$humanReadable.AppendLine("[tool_result] $resultJson")
         $toolContent = $(if ($resultJson) { $resultJson } else { '' })
