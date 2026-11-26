@@ -1,6 +1,6 @@
 # Plan: Per-result inline budget classes for the large-result offload
 
-**Status:** DRAFT 2026-11-26. plan-design phase 8: 0 of 29 questions open; readiness review 3 folded in, review 4 next.
+**Status:** DRAFT 2026-11-26. plan-design phase 8: 0 of 29 questions open; readiness review 4 folded in, review 5 next.
 
 ## Problem
 
@@ -93,7 +93,7 @@ Grounding (explore-tier2, 2026-11-26, HEAD 000b3b49):
   are covered by the failure rule; McpServerStatus (22.8-25K) is the one tool over the default plus tolerance;
   the per-call hint has no user (checklist item 7). Q7 is dropped with it.
 - 2026-11-26 Q9: **one configurable default, read everywhere the budget is used.** Startup setting (flag
-  `--inline-budget-chars`, env `ROSLYNSENTINEL_INLINE_BUDGET_CHARS`, default 15360, minimum 1024) behind one
+  `--inline-budget-chars`, env `ROSLYNSENTINEL_INLINE_BUDGET_CHARS`, default 15360, minimum 1024, raised to 8192 by Q25) behind one
   accessor that replaces the constant in the marshaller, the offload filter, both `GetLargeResult` page builders
   (`WorkspaceReadNavigationImpl.cs:1896`, `:2035`), ReadFile's no-solution gate and status message
   (`WorkspaceFileEditImpl.cs:843`, `:1036`) and the `AsyncifyTools.cs:228` warning. Why (owner): strong models
@@ -182,9 +182,12 @@ Grounding (explore-tier2, 2026-11-26, HEAD 000b3b49):
 - 2026-11-26 Q27: **named DTO for the offload pointer.** `OffloadPointer` (new, `Common`) replaces the anonymous
   stub with the same wire names; `ErrorData` reuses `ResultError` (`SentinelCallToolResult.cs:474`; code plus the
   capped message, `Detail` and `StructuredDetail` null); `ErrorMessageTotalChars` is an `int?` on the pointer. Serialized
-  with `McpJsonUtilities.DefaultOptions`, the options every marshalled result uses, so `ResultError` comes out as
+  with `SentinelToolFactory.WireSerializerOptions` (`SentinelToolFactory.cs:73`: the SDK's tool-result options with a
+  relaxed encoder, the options every marshalled result is written with), so `ResultError` comes out as
   `errorCode`/`message` exactly as in a normal `errorData` (it has no `[JsonPropertyName]`, and `Compact` has no
-  naming policy). NEW-DTO justification: no existing type carries the pointer fields (`LargeResultInfo` is the
+  naming policy) and quotes reach the model literally (`McpJsonUtilities.DefaultOptions` would write `'`,
+  pinned by `SentinelToolFactoryParityTests.cs:158-159`; corrected by readiness review 4). The pointer is renamed
+  `OffloadPointerResult` (implementer defaults, review 3). NEW-DTO justification: no existing type carries the pointer fields (`LargeResultInfo` is the
   marshaller's `largeResult` block with different fields); closes the pointer entry of
   `findings/finding_anonymous_and_untyped_return_shapes.md`.
 - 2026-11-26 Q28 (owner OK): **no end-to-end echo test for Q13.** The marshaller and the filter never read the echo
@@ -223,6 +226,13 @@ Grounding (explore-tier2, 2026-11-26, HEAD 000b3b49):
   body suffix); `InlineBudgetAttribute` and `InlineBudgetSignal` are created with `DTO-EXEMPT:` in the call's
   `reason` (an attribute and a per-call signal, not data carriers). No contract-skeleton step: Steps 3-4 add small
   new members with no callers, which compile on their own (plan-writer section 2 deviation, noted).
+
+- 2026-11-26 Readiness review 4 (explore-tier2 sonnet, fresh, at `c87fb4be`): 2 blockers, 7 should-fix; all
+  folded in. Pointer serializer corrected to `SentinelToolFactory.WireSerializerOptions` (Q27 entry, Steps 4, 5, 13,
+  17); Steps 14, 15 and 16a now depend on Step 7 as well (their first pages come from the marshaller);
+  `EvalToolSurfaceParityTests` added to Steps 9 and 19; anchors refreshed (`WorkspaceFileEditImpl.cs:844`, `:1037`;
+  `ReadFilePagingLoopTests.cs:54-55`); doc line 163 added to Step 20; Step 14 sizes its fixtures from the budget; the
+  flag property is `StartupSetting.Flag`. It found no logic gaps in Steps 5 or 7.
 
 ## Execution rules
 
@@ -279,19 +289,19 @@ moved. Asserts use the shared constants and accessors, never literals; text is n
 | `LargeResultOffloadFilterHandlerTests.OverThresholdAfterMarshallerIsOffloadedWithCap` | Q29, Q23 | same | `next` sets the `Whole` threshold and returns an error-only body above it whose message is longer than `DefaultBudgetChars` -> pointer with `ErrorData.Message.Length == DefaultBudgetChars` and `ErrorMessageTotalChars` = the original length | 13 |
 | `LargeResultOffloadFilterHandlerTests.HonoursConfiguredDefault` | Q9 | same, `[NonParallelizable]` | configured `2 x StockBudgetChars`: body between the stock and the configured threshold -> unchanged | 13 |
 | `LargeResultOffloadFilterHandlerTests.FailurePointerKeepsErrorCodeAndMessage` | Q3(2), Q27 | same | error-only body above the `Whole` threshold with a short message -> deserialized `ErrorData.ErrorCode` and `.Message` equal the body's | 13 |
-| `LargeResultOffloadFilterHandlerTests.PointerWireNames` | Q27 | same | a success body that has every field: top-level keys are exactly `solutionRoot`, `offloaded`, `resultId`, `sizeBytes`, `sizeChars`, `itemCount`, `isError`, `statusMessage`, `listSummary`, `message`; a failure adds `errorData` (and `errorMessageTotalChars` when cut); no key has a JSON null value | 13 |
+| `LargeResultOffloadFilterHandlerTests.PointerWireNames` | Q27 | same | a success body that has every field: top-level keys are exactly `solutionRoot`, `offloaded`, `resultId`, `sizeBytes`, `sizeChars`, `itemCount`, `isError`, `statusMessage`, `listSummary`, `message`; a failure adds `errorData` (and `errorMessageTotalChars` when cut); no key has a JSON null value; with a `statusMessage` containing `'` and `<`, the pointer text contains no `\u00` | 13 |
 | `SequenceLargeResultPagingTests.PageFillsConfiguredDefault` | Q9 | existing, made `[NonParallelizable]` | configured `2 x StockBudgetChars` -> first page longer than `StockBudgetChars`, at most the configured value | 14 |
 | `EnvelopeLargeResultPagingTests.PageFillsConfiguredDefault` | Q9 | same | same, for `PageEnvelope` | 14 |
 | `ReadFileTests.NoSolutionGateFollowsConfiguredDefault` | Q9 | existing (`ReadFileTests.cs`, beside the no-solution tests near `:334-460`), made `[NonParallelizable]` if not already | a file between the stock and the configured threshold is read whole | 15 |
 | `McpServerStatusWireSizeTests.ListingAndSettingsFitWholeThreshold` | Q3(5), Q4 | new, Tests.Server | serialized envelope length at most `OffloadThresholdChars(Whole)` (live measurement 34,194; outcome classes in Step 17) | 17 |
 | `McpServerStatusWireSizeTests.ToolIsTaggedWhole` | Q4 | same | the attribute on `McpServerStatusTool` is `Whole` | 17 |
 | `ConfigurationReferenceFreshnessTests`, `EnvVarDeclarationGuardTests`, `KnownArgSetsTests` (Tests.ModelEval, by filter); `ServerSettingsDiscoveryTests` (Tests.Server) | Q9 | existing | pass after regeneration | 2, 19 |
-| `ToolSurfaceGoldenUpdateModeTests` and the fixtures that call `ToolSurfaceGolden` (Tests.Harness; `Search(mode: references)` for `ToolSurfaceGolden`) | Step 9 wire text | existing | pass after regeneration | 9, 19 |
+| `ToolSurfaceGoldenUpdateModeTests` and the fixtures that call `ToolSurfaceGolden` (Tests.Harness; `Search(mode: references)` for `ToolSurfaceGolden`), `EvalToolSurfaceParityTests` (Tests.ModelEval) | Step 9 wire text | existing | pass after regeneration | 9, 19 |
 
 ## Steps
 
 Lanes: after Step 3, lane A runs Steps 4 -> 5 -> 7 -> 8 (server path), lane B runs Step 6, then the test steps as
-their prerequisites land (10 after 3; 13 after 5; 11a, 12 after 7; 11b after 11a; 14, 15, 16a after 6; 17 after 8).
+their prerequisites land (10 after 3; 13 after 5; 11a, 12 after 7; 11b after 11a; 14, 15, 16a after 6 and 7; 17 after 8).
 Steps 1, 2, 9 and 21 are independent. Step 18 (cleanup) follows 9-17; then 19 (verification) and 20 (docs). Step
 22 is a follow-up that does not block closing. At most two implementing agents at once; the dispatcher serializes
 their builds.
@@ -381,7 +391,7 @@ their builds.
     `public sealed record OffloadPointerResult` with `string? SolutionRoot`, `bool Offloaded`, `string? ResultId`,
     `int SizeBytes`, `int SizeChars`, `int? ItemCount`, `bool? IsError`, `string? StatusMessage`, `JsonNode? ListSummary`,
     `string Message`, `ResultError? ErrorData`, `int? ErrorMessageTotalChars`. Doc: serialized with
-    `McpJsonUtilities.DefaultOptions` (camelCase, nulls omitted).
+    `SentinelToolFactory.WireSerializerOptions` (camelCase, nulls omitted, relaxed encoder).
 - Done when: `Build` 0 errors.
 - Lane: implementer. Effort: S.
 
@@ -398,7 +408,8 @@ their builds.
     `AddLargeResultOffloadFilter` registers a lambda that resolves the tool name (`context.Params?.Name`), the logger
     and a lazy solution-root accessor (`PersistentWorkspaceManager.GetSolutionRoot`) from `context.Server.Services` as
     today and calls it. The statics `ResultMarshallerOptions.Mode` and `SentinelToolFactory.IsHooked` stay read
-    inside (they only choose the miss-log wording). Pattern: `ErrorPolicyFilter.InvokeAsync` (`ErrorPolicyFilter.cs:91`).
+    inside (they only choose the miss-log wording). `logger` may be null (tests pass null): use `logger?.` for every
+    log call. Pattern: `ErrorPolicyFilter.InvokeAsync` (`ErrorPolicyFilter.cs:91`).
   - Inside, reordered (today the size check, formerly `:686`, runs before the store and the `isError` parse, formerly
     `:737-748`, after it):
     1. Open `InlineBudgetSignal` beside `OversizeUnitSignal.Open()` (formerly `:662`), around `next`.
@@ -410,7 +421,7 @@ their builds.
     5. Store and stub as today, reusing the parsed root (parse it here if step 4 did not) for `isError`, `listSummary`,
        `totalRecords`, `statusMessage`. The existing "Result marshaller miss" log (formerly `:696-709`) keeps firing for
        a hooked tool in mode `on`, now naming the threshold. The stub is an `OffloadPointerResult` serialized with
-       `McpJsonUtilities.DefaultOptions` (replacing the anonymous object and `SharedJsonOptions.Compact`, formerly
+       `SentinelToolFactory.WireSerializerOptions` (replacing the anonymous object and `SharedJsonOptions.Compact`, formerly
        `:799-813`); its `Message` names the threshold used. For an error-only body set
        `ErrorData = new ResultError(errorCode, message)` from the body's `errorData` (`ErrorDataKey`), the message cut to
        its first `LargeResultHelper.DefaultBudgetChars` chars, and `ErrorMessageTotalChars` = the original length when
@@ -432,9 +443,9 @@ their builds.
   - `PageSequence` (`:1896`) and `PageEnvelope` (`:2035`): drop the locals `safetyMarginChars` (`:1891`, `:1984`);
     the budget becomes `LargeResultHelper.DefaultBudgetChars - LargeResultHelper.PageSafetyMarginChars`. Update the
     comments at `:1884-1885` and `:1979` that mention the echo reserve.
-  - `ReadFileWithoutSolutionAsync` (`:843`): compare against `LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default)`.
-    `ReadFile` (`:1036`): `const int thresholdBytes = LargeResultHelper.InlineBudgetChars` becomes a non-const local
-    `var thresholdBytes = LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default);` (compared at `:1058`).
+  - `ReadFileWithoutSolutionAsync` (`:844` at `c87fb4be`): compare against `LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default)`.
+    `ReadFile` (`:1037`): `const int thresholdBytes = LargeResultHelper.InlineBudgetChars` becomes a non-const local
+    `var thresholdBytes = LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default);` (compared about `:1059`).
     (Both compare UTF-8 bytes with a char threshold; pre-existing, not changed.)
   - `ScanAsyncMigrationCandidatesTool` (`AsyncifyTools.cs:228`): `LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default)`.
 - Done when: `scripts/build.ps1 -Flavor Solution` 0 errors.
@@ -473,7 +484,8 @@ their builds.
 
 ### Step 9 - Git tool description and tool-surface goldens (behaviour-changing, wire text)
 - Files: `RoslynSentinel.Tools.Basic/GitTools.cs` (verify the project with `Search(mode: class, query: "GitTools")`), then
-  the `ToolSurfaceGolden/_catalog.json` files (regenerated)
+  the `ToolSurfaceGolden` folders in Tests.Harness and Tests.ModelEval and `docs/generated/architecture_tools.md`
+  (regenerated from HEAD; last regenerated by a peer at `c87fb4be`)
 - Depends on: none
 - Effect: behaviour-changing (tool description text).
 - Change: in the `maxBytes` description at `GitTools.cs:69`, replace "Output over about 15K characters is paged via
@@ -483,7 +495,8 @@ their builds.
   roslynsentinel-dc confirmed (2026-11-26) it has no pending golden work; check `Git(status)` first and stop only if a
   golden diff is not ours.
 - Done when: `Build` 0 errors; dispatcher runs `ToolSurfaceGoldenUpdateModeTests` and the fixtures that reference
-  `ToolSurfaceGolden` (Tests.Harness), all pass.
+  `ToolSurfaceGolden` (Tests.Harness) and `EvalToolSurfaceParityTests` (Tests.ModelEval, `:101`, `:115`), all pass;
+  `ClaudeLeanSchemaBudgetTests` (Tests.Server) passes.
 - Lane: implementer (description); dispatcher (goldens). Effort: S.
 
 ### Step 10 - Resolver and setting tests
@@ -492,7 +505,8 @@ their builds.
 - Effect: tests only.
 - Change: the Step 10 rows of the Tests table. Set the option with
   `InlineBudgetOptions.Configure([$"{InlineBudgetOptions.BudgetCharsSetting.Flag}={value}"])` and `Configure([])` in
-  TearDown (pattern: `ToolCallEchoFilterTests.cs:104`, `:116`; verify the flag property name on `StartupSetting<T>`);
+  TearDown (pattern: `ToolCallEchoFilterTests.cs:104`, `:116`; the flag property is `StartupSetting.Flag`,
+  `Configuration/StartupSetting.cs:108`);
   `[NonParallelizable]`.
 - Done when: dispatcher runs `LargeResultHelperBudgetTests`, all pass.
 - Lane: test-writer. Effort: S. Pairs with: Step 4.
@@ -536,20 +550,24 @@ their builds.
   `LargeResultOffloadFilter.InvokeAsync("SomeTool", () => tempRoot, null, () => ValueTask.FromResult(input), CancellationToken.None)`
   as `ErrorPolicyFilterTests.cs:95` does for its filter; `tempRoot` is a temp directory created in SetUp and deleted in
   TearDown (the handler writes the envelope under it). In the existing host fixture move the 3 `InlineBudgetChars`
-  sites to `OffloadThresholdChars(Default)` and reword the `OffloadThresholdBytes` comments (`:29`, `:46`, `:283`).
-- Done when: dispatcher runs both fixtures, all pass.
+  sites (`:181`, `:227`, `:251`) to `OffloadThresholdChars(Default)` and reword the `OffloadThresholdBytes` comments
+  (`:29`, `:46`, `:283`). Existing parsers of the pointer that must stay green (run them, change nothing unless red):
+  `ToolCallEchoFilterTests.cs:227`, `:245`, `:261` (asserts no `\u00` in the pointer text), `WirePathRelativizeFilterTests.cs:224`,
+  `:297`, and the harness reader `SubAgentEvalResult.cs:186` (covered by `SubAgentOffloadedResultTests`).
+- Done when: dispatcher runs both fixtures plus `ToolCallEchoFilterTests` and `WirePathRelativizeFilterTests`, all pass.
 - Lane: test-writer. Effort: M.
 
 ### Step 14 - Paging tests
 - Files: `RoslynSentinel.Tests.Tools.Basic/SequenceLargeResultPagingTests.cs`,
   `RoslynSentinel.Tests.Tools.Basic/EnvelopeLargeResultPagingTests.cs`, `RoslynSentinel.Tests.Tools.Basic/GetLargeResultTests.cs`
-- Depends on: Step 6
+- Depends on: Steps 6, 7
 - Effect: tests only.
 - Change: `PageBudget = 15360 - 2560` (`:27` in the first two) becomes a `static readonly`
   `LargeResultHelper.DefaultBudgetChars - LargeResultHelper.PageSafetyMarginChars`; `GetLargeResultTests.cs:195`
   bounds the whole response by `LargeResultHelper.DefaultBudgetChars`. The `pages > 2` fixtures in
-  `SequenceLargeResultPagingTests` (200 records of about 180 chars; 700 lines of about 53 chars) are enlarged so they
-  still produce at least 3 pages at the new page size. Add the Step 14 rows; the two fixtures that set the option
+  `SequenceLargeResultPagingTests` (200 records of about 180 chars, about 36K; 700 lines of about 53 chars, about 37K)
+  are sized from the budget instead of a literal: record or line count = `3 * LargeResultHelper.DefaultBudgetChars / <per-item chars> + 10%`
+  (at stock about 280 records and 950 lines), so they produce at least 3 pages at any configured default. Add the Step 14 rows; the two fixtures that set the option
   become `[NonParallelizable]`.
 - Done when: dispatcher runs the three fixtures, all pass.
 - Lane: test-writer. Effort: S. Pairs with: Step 15.
@@ -557,7 +575,7 @@ their builds.
 ### Step 15 - ReadFile and method-source tests
 - Files: `RoslynSentinel.Tests.Tools.Basic/ReadFileTests.cs`, `RoslynSentinel.Tests.Tools.Basic/ReadFileRecordsObservedTests.cs`,
   `RoslynSentinel.Tests.Tools.Basic/GetMethodSourceTests.cs`
-- Depends on: Step 6
+- Depends on: Steps 6, 7
 - Effect: tests only.
 - Change: add `NoSolutionGateFollowsConfiguredDefault` to `ReadFileTests` beside the no-solution tests (near
   `:334-460`); move the one `InlineBudgetChars` reference in each of the other two files (`GetMethodSourceTests.cs:254`)
@@ -567,7 +585,7 @@ their builds.
 
 ### Step 16a - Observe the new ReadFile page offsets (dispatcher)
 - Files: none
-- Depends on: Step 6
+- Depends on: Steps 6, 7 (the first page is cut by the marshaller, later pages by `GetLargeResult`)
 - Effect: none.
 - Change: run `ReadFilePagingLoopTests` (Tests.Tools.Basic); record from its failure output the observed page offsets
   and the needle page offset for the 300-method fixture.
@@ -578,7 +596,7 @@ their builds.
 - Files: `RoslynSentinel.Tests.Tools.Basic/ReadFilePagingLoopTests.cs`
 - Depends on: Step 16a
 - Effect: tests only.
-- Change: `PageBudget` (`:29`) as in Step 14. Replace `PinnedPageOffsets` and `PinnedNeedlePageOffset` (`:52-53`) with
+- Change: `PageBudget` (`:29`) as in Step 14. Replace `PinnedPageOffsets` and `PinnedNeedlePageOffset` (`:54-55`) with
   the values from Step 16a; the comment says the first page is cut by the marshaller at the default budget and later
   pages fill `DefaultBudgetChars - PageSafetyMarginChars`, observed from this in-process run.
   `LargeResultPagingAgentTests.BuildTierRatesSource` (Tests.ModelEval) needs nothing while the fixture is unchanged.
@@ -594,7 +612,9 @@ their builds.
   every tool class in `ToolClassRegistry` (`BasicToolClassTypes` plus `AdvancedToolClassTypes`,
   `RoslynSentinel.Server.Advanced/ToolClassRegistry.cs`), so `toolListing: all` covers all declared tools as in
   production. Call with `toolListing: all` and `settings: all` and serialize the whole returned envelope with
-  `McpJsonUtilities.DefaultOptions`. Outcome classes: **fits** (at most `OffloadThresholdChars(Whole)`; the live
+  `SentinelToolFactory.WireSerializerOptions` (the production wire options; the default encoder would inflate `'`,
+  `<`, `>`, `&` and `+`). Construction precedent inside Tests.Server: `LoopLatchTests.cs:359` already builds
+  `ServerStatusTools` with an `ActiveToolSurface`. Outcome classes: **fits** (at most `OffloadThresholdChars(Whole)`; the live
   measurement was 34,194); **over** (test red: the dispatcher adds an INBOX line with the measured size and raises it
   with the owner; the fix belongs to `proposal_mcpserverstatus_single_view_parameter.md`, not this plan).
 - Done when: dispatcher runs `McpServerStatusWireSizeTests`, outcome **fits**.
@@ -617,7 +637,7 @@ their builds.
 - Effect: none.
 - Change: `scripts/build.ps1 -Flavor Solution` 0 errors; compare warnings with `docs/known-build-warnings.*.txt`.
   `RunTest`, one at a time, 0 failures: Tests.Server (all), Tests.Tools.Basic (all), Tests.Harness (all, includes
-  `SubAgentOffloadedResultTests` and the golden fixtures), Tests.ModelEval filtered to
+  `SubAgentOffloadedResultTests` and the golden fixtures), Tests.ModelEval filtered to `EvalToolSurfaceParityTests`,
   `ConfigurationReferenceFreshnessTests`, `EnvVarDeclarationGuardTests` and `KnownArgSetsTests`.
 - Done when: all of the above hold.
 - Lane: dispatcher (plain calls). Effort: S.
@@ -629,12 +649,14 @@ their builds.
 - Depends on: Step 19
 - Effect: docs only.
 - Change: pipeline reference: the budget section (body-only budget, classes, error-only rule, tolerance, setting,
-  `InlineBudgetSignal`; every echo-reserve mention, including lines 51, 154, 203 and the prose near 227), the hints
+  `InlineBudgetSignal`; every echo-reserve and old-constant mention, including lines 51, 154, 163, 203 and the prose
+  near 227), the hints
   table gains `[InlineBudget]`, filter item 10 (threshold resolution, the "Result marshaller miss" second store,
   `OffloadPointerResult`, file `LargeResultOffloadFilter.cs`), the filter count (16 fixed filters plus optional
   `NearMissRecord` and `ErrorPolicy`; `LoopLatch` is fifth), and the Q22 limit. Proposal: a dated note that its reserve
   part is superseded (Q13). Finding: a dated note that the offload pointer is now `OffloadPointerResult`.
-- Done when: no echo-reserve wording left in the pipeline reference; links resolve.
+- Done when: `Grep` for `InlineBudgetChars|EchoReserveChars|echo reserve` in the pipeline reference returns nothing;
+  links resolve.
 - Lane: main session (non-C# docs). Effort: S.
 
 ### Step 21 - Promote the scan script
@@ -679,3 +701,6 @@ their builds.
 
 - Peer sessions may have the touched files dirty: check `ListAgents` and `Git(status)` before each slice.
 - A raw `CallToolResult` with `IsError` and no top-level JSON `isError` falls to the `Default` threshold (accepted).
+- `ClaudeLeanSchemaBudgetTests` has about 69 chars of headroom under 50,000 after `c87fb4be` (peer report,
+  2026-11-26). This plan adds no tool or parameter description text; Step 9 shortens one. Any wording added to a
+  description while implementing will trip that test.
