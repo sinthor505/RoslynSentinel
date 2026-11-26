@@ -195,6 +195,88 @@ public class ReplaceRangeTests
     }
 
     [Test]
+    public async Task ReplaceRange_MultiLineFirstAnchorMatchingOneBlock_StartsTheRangeAtTheBlocksFirstLineAsync()
+    {
+        using var workspace = CreateWorkspace();
+
+        var result = await RangeAsync(workspace, "// BEGIN-OLD\n    public int Old1() => 10;", "// END-OLD", "    public int New1() => 100;");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(Normalize(workspace.ReadText(TargetRelativePath)), Is.EqualTo(ExpectedTarget(6, 9, "    public int New1() => 100;")));
+        Assert.That(result.SuccessData!.ReplacementResult!.Summary, Does.Contain("lines 6-9 (4 line(s))"));
+    }
+
+    [Test]
+    public async Task ReplaceRange_MultiLineLastAnchorMatchingOneBlock_EndsTheRangeAtTheBlocksLastLineAsync()
+    {
+        using var workspace = CreateWorkspace();
+
+        // CRLF and dropped indentation in the anchor still match the file's lines.
+        var result = await RangeAsync(workspace, "// BEGIN-OLD", "public int Old2() => 20;\r\n// END-OLD", "    public int New1() => 100;");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(Normalize(workspace.ReadText(TargetRelativePath)), Is.EqualTo(ExpectedTarget(6, 9, "    public int New1() => 100;")));
+        Assert.That(result.SuccessData!.ReplacementResult!.Summary, Does.Contain("lines 6-9 (4 line(s))"));
+    }
+
+    [Test]
+    public async Task ReplaceRange_SameMultiLineBlockAsBothAnchors_ReplacesExactlyThatBlockAsync()
+    {
+        using var workspace = CreateWorkspace();
+        const string block = "// BEGIN-OLD\n    public int Old1() => 10;";
+
+        var result = await RangeAsync(workspace, block, block, "    public int New1() => 100;");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(Normalize(workspace.ReadText(TargetRelativePath)), Is.EqualTo(ExpectedTarget(6, 7, "    public int New1() => 100;")));
+        Assert.That(result.SuccessData!.ReplacementResult!.Summary, Does.Contain("lines 6-7 (2 line(s))"));
+    }
+
+    [Test]
+    public async Task ReplaceRange_MultiLineAnchorMatchingTwoBlocks_IsRefusedListingBothBlocksAndWritesNothingAsync()
+    {
+        using var workspace = CreateWorkspace();
+        var before = workspace.ReadText(TargetRelativePath);
+
+        var result = await RangeAsync(workspace, "{\n        Run();", "// END-OLD", "");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        Assert.That(result.ErrorData.Message, Does.Contain("firstLineText matches 2 blocks of 2 lines").And.Contain("lines 13-14, 18-19"),
+            "both blocks are listed by their line spans");
+        Assert.That(workspace.ReadText(TargetRelativePath), Is.EqualTo(before), "a refused range must not write");
+    }
+
+    [Test]
+    public async Task ReplaceRange_MultiLineAnchorMatchingNoBlock_IsRefusedNamingTheClosestBlockAndTheFirstDifferingLineAsync()
+    {
+        using var workspace = CreateWorkspace();
+        var before = workspace.ReadText(TargetRelativePath);
+
+        var result = await RangeAsync(workspace, "// BEGIN-OLD\npublic int Wrong() => 1;", "// END-OLD", "");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(result.ErrorData.Message, Does.Contain("firstLineText matches 0 blocks of 2 consecutive lines")
+            .And.Contain("starts at line 6").And.Contain("agrees for 1 of 2 lines")
+            .And.Contain("'public int Wrong() => 1;'").And.Contain("'public int Old1() => 10;'"));
+        Assert.That(workspace.ReadText(TargetRelativePath), Is.EqualTo(before), "a refused range must not write");
+    }
+
+    [Test]
+    public async Task ReplaceRange_AmbiguousSingleLineAnchor_ListsEveryCandidateLineWithItsTextAsync()
+    {
+        using var workspace = CreateWorkspace();
+
+        var result = await RangeAsync(workspace, "// BEGIN-OLD", "}", "");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        Assert.That(result.ErrorData.Message, Does.Contain("lastLineText matches 3 lines").And.Contain("lines 15, 20, 23")
+            .And.Contain("15: }").And.Contain("23: }"), "each candidate carries its line number and text");
+    }
+
+    [Test]
     public async Task ReplaceRange_LastAnchorAboveFirst_IsRefusedWithBothLineNumbersAndWritesNothingAsync()
     {
         using var workspace = CreateWorkspace();

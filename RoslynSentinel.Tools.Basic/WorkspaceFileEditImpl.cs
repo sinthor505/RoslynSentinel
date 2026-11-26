@@ -2002,11 +2002,15 @@ public class WorkspaceFileEditImpl
     // Zero-match anchor hints list at most this many nearby lines that contain the anchor text.
     private const int MaxAnchorNearLines = 5;
 
+    // An ambiguous-anchor refusal lists at most this many candidate matches (line number and text).
+    private const int MaxAnchorCandidates = 10;
+
     /// <summary>
-    /// Replaces (or, with an empty <paramref name="newContent"/>, deletes) the whole lines from the single line matching
-    /// <paramref name="firstLineText"/> through the single line matching <paramref name="lastLineText"/>, inclusive
-    /// (proposal_replace_range_tool.md). An anchor that matches no line or several lines is refused with the count and every
-    /// matching line number; nothing is written. The write goes through <see cref="ApplyEditTailAsync"/> (compile gate,
+    /// Replaces (or, with an empty <paramref name="newContent"/>, deletes) the whole lines from the line (or contiguous block of
+    /// lines) matching <paramref name="firstLineText"/> through the line (or block) matching <paramref name="lastLineText"/>, inclusive
+    /// (proposal_replace_range_tool.md). An anchor is one or more lines compared line by line with leading/trailing whitespace
+    /// ignored; the range starts at the first anchor's first line and ends at the last anchor's last line. An anchor that matches
+    /// no line/block or several is refused with the count and every matching line number; nothing is written. The write goes through <see cref="ApplyEditTailAsync"/> (compile gate,
     /// stale-read refusal, undo).
     /// </summary>
     public async Task<SentinelCallToolResult<ReplaceSnippetResult>> ReplaceRange(
@@ -2042,14 +2046,10 @@ public class WorkspaceFileEditImpl
                 return Refuse(ToolErrorCode.InvalidArgument, "ReplaceRange: 'newContent' is required (pass an empty string to delete the range).");
             }
 
-            // Anchor comparison ignores leading/trailing whitespace (so a model that drops indentation still matches) and the line ending.
-            var firstAnchor = firstLineText.Trim();
-            var lastAnchor = lastLineText.Trim();
-            if (firstAnchor.AsSpan().IndexOfAny('\r', '\n') >= 0 || lastAnchor.AsSpan().IndexOfAny('\r', '\n') >= 0)
-            {
-                return Refuse(ToolErrorCode.InvalidArgument,
-                    "ReplaceRange: 'firstLineText' and 'lastLineText' must each be one line of text; one of them contains a line break.");
-            }
+            // Anchor comparison ignores leading/trailing whitespace of each line (so a model that drops indentation still matches) and the line ending.
+            // An anchor may be several lines: it matches a contiguous block of file lines.
+            var firstAnchorLines = SplitAnchorLines(firstLineText);
+            var lastAnchorLines = SplitAnchorLines(lastLineText);
 
             FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
             // Same front matter as ReplaceSnippet: only a blank path is 'could not be resolved'; a misspelt path falls through to the lookup's near-match text.
@@ -2080,16 +2080,17 @@ public class WorkspaceFileEditImpl
                 return Refuse(ToolErrorCode.InvalidArgument, "ReplaceRange: " + leakedMarkup);
             }
 
-            // Each anchor must match exactly one line in the whole file (owner rule); lastLineText is not searched only below the first match.
-            var firstHits = FindLinesEqualToAnchor(oldText, firstAnchor);
-            var lastHits = FindLinesEqualToAnchor(oldText, lastAnchor);
+            // Each anchor must match exactly one line/block in the whole file (owner rule); lastLineText is not searched only below the first match.
+            // TODO a single-line lastLineText such as '}' still matches many lines (6 of 17 rejected calls in the ThreadOptionalParameter eval); consider resolving it to the nearest hit at or below the first anchor (owner rule today: unique in the whole file), and a stray backslash before a quote in an anchor (model JSON double-escape) matches nothing
+            var firstHits = FindAnchorBlocks(oldText, firstAnchorLines);
+            var lastHits = FindAnchorBlocks(oldText, lastAnchorLines);
             var anchorProblems = new List<(string Code, string Message)>();
-            if (DescribeAnchorMatchCount("firstLineText", firstAnchor, firstHits, oldText, DisplayPath(filePathResolved)) is { } firstProblem)
+            if (DescribeAnchorMatchCount("firstLineText", firstAnchorLines, firstHits, oldText, DisplayPath(filePathResolved)) is { } firstProblem)
             {
                 anchorProblems.Add(firstProblem);
             }
 
-            if (DescribeAnchorMatchCount("lastLineText", lastAnchor, lastHits, oldText, DisplayPath(filePathResolved)) is { } lastProblem)
+            if (DescribeAnchorMatchCount("lastLineText", lastAnchorLines, lastHits, oldText, DisplayPath(filePathResolved)) is { } lastProblem)
             {
                 anchorProblems.Add(lastProblem);
             }
@@ -2098,11 +2099,12 @@ public class WorkspaceFileEditImpl
             {
                 return Refuse(anchorProblems[0].Code,
                     "ReplaceRange: " + string.Join(" ", anchorProblems.Select(problem => problem.Message))
-                    + " Each anchor must match exactly one line (leading/trailing whitespace ignored). Nothing was written.");
+                    + " Each anchor must match exactly one line or one contiguous block of lines (leading/trailing whitespace of each line ignored). Nothing was written.");
             }
 
-            var firstLine = firstHits[0];
-            var lastLine = lastHits[0];
+            // The range starts at the first anchor's first line and ends at the last anchor's last line.
+            var firstLine = firstHits[0].Start;
+            var lastLine = lastHits[0].End;
             if (lastLine < firstLine)
             {
                 return Refuse(ToolErrorCode.InvalidArgument,
@@ -2188,42 +2190,104 @@ public class WorkspaceFileEditImpl
         }
     }
 
-    // 0-based indexes of the lines whose text equals the trimmed anchor once leading/trailing whitespace is ignored.
-    private static List<int> FindLinesEqualToAnchor(SourceText text, string trimmedAnchor)
+    // An anchor's lines, each trimmed of leading/trailing whitespace (a multi-line anchor matches a contiguous block of file lines).
+    private static string[] SplitAnchorLines(string anchorText) =>
+        anchorText.Trim().Split(["\r\n", "\n", "\r"], StringSplitOptions.None).Select(line => line.Trim()).ToArray();
+
+    // How many consecutive anchor lines, from the first, equal the file lines starting at 0-based line 'start' (whitespace at each line's ends ignored).
+    private static int CountMatchingAnchorLines(SourceText text, string[] anchorLines, int start)
     {
-        var hits = new List<int>();
-        foreach (var line in text.Lines)
+        var matched = 0;
+        while (matched < anchorLines.Length
+            && start + matched < text.Lines.Count
+            && string.Equals(text.ToString(text.Lines[start + matched].Span).Trim(), anchorLines[matched], StringComparison.Ordinal))
         {
-            if (string.Equals(text.ToString(line.Span).Trim(), trimmedAnchor, StringComparison.Ordinal))
+            matched++;
+        }
+
+        return matched;
+    }
+
+    // 0-based (Start, End) line pairs of every contiguous block of file lines that equals the anchor lines, line by line.
+    private static List<(int Start, int End)> FindAnchorBlocks(SourceText text, string[] anchorLines)
+    {
+        var blocks = new List<(int Start, int End)>();
+        for (var start = 0; start + anchorLines.Length <= text.Lines.Count; start++)
+        {
+            if (CountMatchingAnchorLines(text, anchorLines, start) == anchorLines.Length)
             {
-                hits.Add(line.LineNumber);
+                blocks.Add((start, start + anchorLines.Length - 1));
             }
         }
 
-        return hits;
+        return blocks;
     }
 
-    // Facts for an anchor that does not match exactly one line: the count, every matching 1-based line number, and (zero matches) nearby lines that contain the anchor text.
-    private static (string Code, string Message)? DescribeAnchorMatchCount(string parameterName, string trimmedAnchor, List<int> hits, SourceText text, string displayPath)
+    // Up to MaxAnchorNearLines lines (1-based number and text) that contain the text, case-insensitive; empty text when none.
+    private static string DescribeLinesContaining(SourceText text, string trimmedText)
+    {
+        var near = text.Lines
+            .Where(line => text.ToString(line.Span).Contains(trimmedText, StringComparison.OrdinalIgnoreCase))
+            .Take(MaxAnchorNearLines)
+            .Select(line => $"{line.LineNumber + 1}: {text.ToString(line.Span).Trim()}")
+            .ToList();
+        return near.Count == 0 ? "" : $" Lines containing that text (case-insensitive): {string.Join(" | ", near)}.";
+    }
+
+    // Facts for an anchor that does not match exactly one line/block: the count and every matching 1-based line number with its text
+    // (several matches); or, with no match, nearby lines containing the anchor (one line) or the closest partial block (several lines).
+    private static (string Code, string Message)? DescribeAnchorMatchCount(string parameterName, string[] anchorLines, List<(int Start, int End)> hits, SourceText text, string displayPath)
     {
         if (hits.Count == 1)
         {
             return null;
         }
 
+        var multiLine = anchorLines.Length > 1;
         if (hits.Count > 1)
         {
+            var spans = string.Join(", ", hits.Select(hit => multiLine ? $"{hit.Start + 1}-{hit.End + 1}" : $"{hit.Start + 1}"));
+            var candidates = string.Join(" | ", hits.Take(MaxAnchorCandidates).Select(hit => $"{hit.Start + 1}: {text.ToString(text.Lines[hit.Start].Span).Trim()}"));
+            var more = hits.Count > MaxAnchorCandidates ? $" (+{hits.Count - MaxAnchorCandidates} more)" : "";
+            var matchesText = multiLine
+                ? $"matches {hits.Count} blocks of {anchorLines.Length} lines of '{displayPath}' (lines {spans})"
+                : $"matches {hits.Count} lines of '{displayPath}' (lines {spans})";
             return (ToolErrorCode.Ambiguous,
-                $"{parameterName} matches {hits.Count} lines of '{displayPath}' (lines {string.Join(", ", hits.Select(hit => hit + 1))}).");
+                $"{parameterName} {matchesText}. Candidates (first line of each): {candidates}{more}."
+                + $" A {parameterName} that also includes the neighbouring lines matches one contiguous block, which narrows the match.");
         }
 
-        var near = text.Lines
-            .Where(line => text.ToString(line.Span).Contains(trimmedAnchor, StringComparison.OrdinalIgnoreCase))
-            .Take(MaxAnchorNearLines)
-            .Select(line => $"{line.LineNumber + 1}: {text.ToString(line.Span).Trim()}")
-            .ToList();
-        var nearText = near.Count == 0 ? "" : $" Lines containing that text (case-insensitive): {string.Join(" | ", near)}.";
-        return (ToolErrorCode.NotFound, $"{parameterName} matches 0 lines of '{displayPath}'.{nearText}");
+        if (!multiLine)
+        {
+            return (ToolErrorCode.NotFound, $"{parameterName} matches 0 lines of '{displayPath}'.{DescribeLinesContaining(text, anchorLines[0])}");
+        }
+
+        // Several lines: report the start whose block agrees with the most leading anchor lines, and the first line where it differs.
+        var best = (Start: -1, Matched: 0);
+        for (var start = 0; start < text.Lines.Count; start++)
+        {
+            var matched = CountMatchingAnchorLines(text, anchorLines, start);
+            if (matched > best.Matched)
+            {
+                best = (start, matched);
+            }
+        }
+
+        string closest;
+        if (best.Matched == 0)
+        {
+            closest = DescribeLinesContaining(text, anchorLines[0]);
+        }
+        else
+        {
+            var fileLineIndex = best.Start + best.Matched;
+            var fileSide = fileLineIndex < text.Lines.Count
+                ? $"file line {fileLineIndex + 1} is '{text.ToString(text.Lines[fileLineIndex].Span).Trim()}'"
+                : "the file ends there";
+            closest = $" The closest block starts at line {best.Start + 1} and agrees for {best.Matched} of {anchorLines.Length} lines; anchor line {best.Matched + 1} is '{anchorLines[best.Matched]}' but {fileSide}.";
+        }
+
+        return (ToolErrorCode.NotFound, $"{parameterName} matches 0 blocks of {anchorLines.Length} consecutive lines of '{displayPath}'.{closest}");
     }
 
     private async Task<SentinelCallToolResult<ReplaceSnippetResult>> ReplaceSnippetBatch(
