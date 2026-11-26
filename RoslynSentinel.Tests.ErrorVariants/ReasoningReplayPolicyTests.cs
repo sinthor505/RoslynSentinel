@@ -200,6 +200,23 @@ public class ReasoningReplayPolicyTests
         Assert.That(ex!.Message, Does.Contain(ReasoningReplayPolicy.PressureFractionVariable));
     }
 
+    [TestCase("items", ReasoningReplayForm.Items)]
+    [TestCase("Content", ReasoningReplayForm.Content)]
+    [TestCase("drop", ReasoningReplayForm.Drop)]
+    [TestCase(null, ReasoningReplayForm.Items)]
+    [TestCase("", ReasoningReplayForm.Items)]
+    public void ParseFormOverride_ReadsForm(string? text, ReasoningReplayForm expected)
+    {
+        Assert.That(ReasoningReplayPolicy.ParseFormOverride(text), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void ParseFormOverride_Invalid_ThrowsNamingTheVariable()
+    {
+        var ex = Assert.Throws<FormatException>(() => ReasoningReplayPolicy.ParseFormOverride("bogus"));
+        Assert.That(ex!.Message, Does.Contain(ReasoningReplayPolicy.FormVariable));
+    }
+
     private static AgentChatMessage[] PlanTurns(int count) => Enumerable.Range(1, count)
         .Select(i => new AgentChatMessage
         {
