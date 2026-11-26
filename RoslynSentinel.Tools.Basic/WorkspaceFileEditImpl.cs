@@ -59,8 +59,9 @@ public class WorkspaceFileEditImpl
 
     // 10-chain run 301 (host 113, 2026-11-10) sent the same two rejected edits for 12 turns while its reasoning said to use
     // RenameSymbol; the identical message gave no sign that it was repeating itself.
-    private const string RepeatedRejectionNote = "You already sent this exact edit and it was rejected the same way; sending it again cannot succeed.";
-    private const string RepeatedRejectionFollowNextStep = " Do what the next step below says instead.";
+    // LoopAssistTracker.RepeatNote (AgentLoop, which cannot see this class) matches this text; keep the two in step.
+    private const string RepeatedRejectionNote = "You already sent this exact edit and it was rejected the same way.";
+    private const string RepeatedRejectionFollowNextStep = " The next step below lists the options.";
     private const string RepeatedRejectionChangeApproach = " Change the edit to fix the errors below, or take a different approach.";
 
     private const string RejectedOriginNote = "This oldContent comes from your rejected edit's newContent. That edit was not applied, so the file still has the old text: read it again before editing.";

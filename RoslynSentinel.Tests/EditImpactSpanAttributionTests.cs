@@ -96,6 +96,55 @@ public class EditImpactSpanAttributionTests
         Assert.That(verdicts[0], Has.Property("DeclarationKind").EqualTo("parameter").And.Property("Verdict").EqualTo("breaksUses"));
     }
 
+    private const string ValidatorRelativePath = "ContosoOrders.Core/ChangeValidator.cs";
+
+    // Eval WidenToReadOnlyDictionary (Qwen3.5-9B): the one-argument overload forwards to the retyped two-argument sibling in the SAME file.
+    private const string ValidatorSource = """
+    using System.Collections.Generic;
+
+    namespace ContosoOrders.Core;
+
+    public class ChangeValidator
+    {
+        public bool Validate(Dictionary<string, int> changes)
+        {
+            return Validate(changes, 0);
+        }
+
+        public bool Validate(Dictionary<string, int> changes, int limit)
+        {
+            return changes.Count > limit;
+        }
+    }
+    """;
+
+    [Test]
+    public async Task RetypedParameter_WithTheBrokenUseInTheEditedFile_NamesTheUseAndOffersEditFirstOrOneBatch_NoSignatureTool()
+    {
+        using var workspace = InMemoryWorkspace.Create((ValidatorRelativePath, ValidatorSource));
+
+        var result = await TestTools.WorkspaceTools(workspace.Manager).ReplaceSnippetTool(
+            reason: "retype the parameter of the two-argument overload only",
+            ProposedChangeAction.apply,
+            filePath: workspace.PathOf(ValidatorRelativePath),
+            oldContent: "public bool Validate(Dictionary<string, int> changes, int limit)",
+            newContent: "public bool Validate(SortedDictionary<string, int> changes, int limit)");
+
+        Assert.That(result.IsError, Is.True, "the forwarding overload still passes a Dictionary");
+        var message = result.ErrorData?.Message ?? string.Empty;
+        var verdicts = result.ErrorData?.StructuredDetail?.OfType<EditImpactDetail>().Single().Verdicts ?? [];
+        var verdict = verdicts.Single(v => v.Kind == "signatureChanged");
+        Assert.Multiple(() =>
+        {
+            Assert.That(message, Does.Contain("Next step: This edit changes the signature of Validate"));
+            Assert.That(verdict.NextStep, Does.Contain("ChangeValidator.cs:9 (in the edited file, outside your replaced text)"));
+            Assert.That(verdict.NextStep, Does.Contain("Options: edit the declaration that contains each use first, or send one ReplaceSnippet call with batchEdits"));
+            Assert.That(verdict.NextStep, Does.Not.Contain("ChangeSignature").And.Not.Contain("MethodSignature"));
+            Assert.That(verdict.SuggestedTool, Is.Null);
+            Assert.That(workspace.ReadText(ValidatorRelativePath), Does.Contain("Validate(Dictionary<string, int> changes, int limit)"), "nothing is written");
+        });
+    }
+
     // Batch H5 R5: the method, its parameter (signature only) and an added helper with the same parameter types in one edit. The method's key changes with its name, and
     // the helper shares its parameter types, so the parameter rename was skipped as "member is gone or new" until the pairing pass matched them by unchanged body.
     [Test]

@@ -123,6 +123,19 @@ public class LoopAssistTrackerTests
     }
 
     [Test]
+    public void Observe_ServerRepeatNoteInTheFactsOnlyWording_StillCountsAsARepeat()
+    {
+        var tracker = On();
+        var note = "You already sent this exact edit and it was rejected the same way. The next step below lists the options. ";
+
+        tracker.Observe(Call("c1"), Rejection("c1", "ReplaceSnippet: not applied. Next step: use RenameSymbol."), isError: true);
+        var second = tracker.Observe(Call("c2"), Rejection("c2", "ReplaceSnippet: not applied. " + note + "Next step: use RenameSymbol."), isError: true);
+
+        Assert.That(second, Is.Not.Null);
+        Assert.That(second!.RepeatCount, Is.EqualTo(2));
+    }
+
+    [Test]
     public void Observe_SuccessfulCall_NeverCounts()
     {
         var tracker = On();

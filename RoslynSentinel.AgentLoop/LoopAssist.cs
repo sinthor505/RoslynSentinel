@@ -93,8 +93,9 @@ public sealed class LoopAssistTracker(LoopAssistOptions options)
     // The server prepends this sentence from the 2nd identical ReplaceSnippet rejection on
     // (WorkspaceFileEditImpl.RepeatedRejectionNote and its two follow-ups), so the 1st and 2nd rejection texts
     // differ by it alone. Strip it before comparing or the 2nd call would never count as a repeat of the 1st.
+    // The older wording ("; sending it again cannot succeed. Do what the next step below says instead.") stays recognised: transcripts and logs carry it.
     private static readonly Regex RepeatNote = new(
-        @"You already sent this exact (?:edit|call) and it was rejected the same way; sending it again cannot succeed\.(?: Do what the next step below says instead\.| Change the edit to fix the errors below, or take a different approach\.)?",
+        @"You already sent this exact (?:edit|call) and it was rejected the same way(?:; sending it again cannot succeed)?\.(?: Do what the next step below says instead\.| The next step below lists the options\.| Change the edit to fix the errors below, or take a different approach\.)?",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     // The no-solution text ("freshly (re)started at HH:mm:ss UTC (12s ago)") carries the server process age, which

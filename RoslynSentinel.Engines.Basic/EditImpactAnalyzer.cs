@@ -631,7 +631,7 @@ public static class EditImpactAnalyzer
             {
                 var useDiagnostics = uses.Select(u => u.Diagnostic).ToList();
                 verdicts.Add((2, new ImpactVerdict(kind, change.DeclarationKind, change.Container, change.OldName, change.NewName, location, "breaksUses",
-                    useDiagnostics.Count, useDiagnostics.Take(MaxBrokenUsesOnTheWire).ToList(), SuggestedToolFor(change, isToolActive),
+                    useDiagnostics.Count, useDiagnostics.Take(MaxBrokenUsesOnTheWire).ToList(), SuggestedToolFor(change, isToolActive, useDiagnostics),
                     NextStepOf(change, useDiagnostics, changes, isToolActive, symbolHandleOf))));
             }
             else if (!IsTypeKind(change) && !EditImpactLocalDiff.IsLocal(change) && change.Kind != SymbolChangeKind.Unapplied
@@ -652,8 +652,11 @@ public static class EditImpactAnalyzer
         return verdicts.OrderByDescending(v => v.Rank).Select(v => v.Verdict).Take(MaxVerdicts).ToList();
     }
 
-    /// <summary>The tool the next step for this entry names (the first callable one of its row in the next-step table), or null when it names none.</summary>
-    private static string? SuggestedToolFor(SymbolChange change, Func<string, bool> isToolActive)
+    /// <summary>
+    /// The tool the next step for this entry names (the first callable one of its row in the next-step table), or null when it names none.
+    /// <paramref name="uses"/> are the entry's broken uses, when known; for a signature change they decide whether ChangeSignature/MethodSignature fit.
+    /// </summary>
+    private static string? SuggestedToolFor(SymbolChange change, Func<string, bool> isToolActive, IReadOnlyList<DiagnosticInfo>? uses = null)
     {
         if (change.Kind == SymbolChangeKind.Unapplied || EditImpactLocalDiff.IsLocal(change))
         {
@@ -663,11 +666,85 @@ public static class EditImpactAnalyzer
         var tools = change.Kind switch
         {
             SymbolChangeKind.Renamed => change.NewNameTakenIn is null ? new[] { "RenameSymbol" } : Array.Empty<string>(),
-            SymbolChangeKind.SignatureChanged => ["ChangeSignature", "MethodSignature"],
+            SymbolChangeKind.SignatureChanged => SignatureToolsFit(change, uses ?? []) ? ["ChangeSignature", "MethodSignature"] : Array.Empty<string>(),
             SymbolChangeKind.AccessibilityChanged => ["ChangeAccessibility"],
             _ => Array.Empty<string>(),
         };
         return tools.FirstOrDefault(isToolActive);
+    }
+
+    /// <summary>
+    /// True when ChangeSignature/MethodSignature can carry a signature change: the parameter list gained, lost or reordered parameters (a retyped
+    /// parameter or a changed return type is not in what they do), and no broken use sits in the file that declares the changed member.
+    /// </summary>
+    private static bool SignatureToolsFit(SymbolChange change, IReadOnlyList<DiagnosticInfo> uses)
+        => ChangesParameterList(change)
+            && !uses.Any(u => string.Equals(Path.GetFileName(u.FilePath.ToString()), change.File, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// True when the parameter count differs, or the same parameter types appear in another order. Same count with different types is a retype;
+    /// no parameter list on either side (a property, field or event) is not a parameter-list change.
+    /// </summary>
+    private static bool ChangesParameterList(SymbolChange change)
+    {
+        var before = ParameterTypesOf(change.OldSignature);
+        var after = ParameterTypesOf(change.NewSignature);
+        if (before is null || after is null)
+        {
+            return false;
+        }
+
+        if (before.Count != after.Count)
+        {
+            return true;
+        }
+
+        return !before.SequenceEqual(after, StringComparer.Ordinal)
+            && before.OrderBy(t => t, StringComparer.Ordinal).SequenceEqual(after.OrderBy(t => t, StringComparer.Ordinal), StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// The parameter types, in order, of a signature rendered as <c>(A,B&lt;C,D&gt;) : R</c> (see <c>EditImpactSymbolDiff</c>); commas inside generic
+    /// arguments, tuples and arrays do not split. Null when the text has no leading parameter list.
+    /// </summary>
+    private static List<string>? ParameterTypesOf(string? signature)
+    {
+        if (signature is null || !signature.StartsWith('('))
+        {
+            return null;
+        }
+
+        var types = new List<string>();
+        int depth = 0;
+        int start = 1;
+        for (int i = 0; i < signature.Length; i++)
+        {
+            switch (signature[i])
+            {
+                case '(' or '<' or '[':
+                    depth++;
+                    break;
+                case ')' or '>' or ']':
+                    depth--;
+                    if (depth == 0)
+                    {
+                        if (i > start)
+                        {
+                            types.Add(signature[start..i]);
+                        }
+
+                        return types;
+                    }
+
+                    break;
+                case ',' when depth == 1:
+                    types.Add(signature[start..i]);
+                    start = i + 1;
+                    break;
+            }
+        }
+
+        return null;
     }
 
     private static string NextStepFor(SymbolChange change, List<DiagnosticInfo> uses, IReadOnlyList<SymbolChange> all, Func<string, bool> isToolActive, Func<SymbolChange, SymbolHandle?>? symbolHandleOf = null)
@@ -713,10 +790,28 @@ public static class EditImpactAnalyzer
 
             case SymbolChangeKind.SignatureChanged:
                 {
-                    // TODO names ChangeSignature/MethodSignature for a parameter retype, which neither can do, and when the broken use is a sibling overload in the edited file (WidenToReadOnlyDictionary cap-35 113 runs 192009-439 T3-4, 192345-882 T8-34): name the bound callee and offer edit-it-first or one batch with both declarations
                     var lead = $"This edit changes the signature of {name} and {files} file(s) still use the old one: ";
-                    var tools = new[] { "ChangeSignature", "MethodSignature" }.Where(isToolActive).ToList();
-                    return tools.Count > 0 ? lead + $"use {string.Join(" or ", tools)} instead, which update the callers." : lead + batch;
+                    if (SignatureToolsFit(change, uses))
+                    {
+                        var tools = new[] { "ChangeSignature", "MethodSignature" }.Where(isToolActive).ToList();
+                        return tools.Count > 0 ? lead + $"use {string.Join(" or ", tools)} instead, which update the callers." : lead + batch;
+                    }
+
+                    // A retyped parameter (or a changed return type) is outside what ChangeSignature and MethodSignature do, and a use inside the
+                    // edited file is not a caller they would reach as part of this edit: state where the use is and what it calls, then the options
+                    // (WidenToReadOnlyDictionary cap-35 runs: Validate(Dictionary) forwarding to the retyped sibling overload in the same file).
+                    var shown = uses
+                        .GroupBy(u => (File: Path.GetFileName(u.FilePath.ToString()), u.StartLine))
+                        .Select(g => g.Key)
+                        .Take(MaxUsesShown)
+                        .Select(u => $"{u.File}:{u.StartLine}" + (string.Equals(u.File, change.File, StringComparison.OrdinalIgnoreCase) ? " (in the edited file, outside your replaced text)" : string.Empty))
+                        .ToList();
+                    var declaredAt = change.File is null ? string.Empty : $" at {change.File}:{change.Line}";
+                    var facts = $"{name}{change.OldSignature} became {name}{change.NewSignature}{declaredAt}; the uses of {name} that still expect the old signature are at {string.Join(", ", shown)}. ";
+                    var oneCall = isToolActive("ReplaceSnippet")
+                        ? "send one ReplaceSnippet call with batchEdits that carries this declaration and the declaration containing each use, one item each (each item has its own filePath)."
+                        : "make one call that edits this declaration and the declaration containing each use.";
+                    return lead + facts + "Options: edit the declaration that contains each use first, or " + oneCall;
                 }
 
             case SymbolChangeKind.AccessibilityChanged:

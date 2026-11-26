@@ -439,6 +439,46 @@ public class EditImpactAnalyzerTests
         Assert.That(withoutTools.NextStepLine, Does.Not.Contain("ChangeSignature"));
     }
 
+    // ChangeSignature only reorders/adds/removes and MethodSignature only adds/removes/views, so a retyped parameter gets facts and options instead.
+    [Test]
+    public async Task ParameterRetyped_NamesNoSignatureTool_StatesTheUseAndOffersEditFirstOrOneBatch()
+    {
+        var edited = Calculator.Replace("bool isPreferredCustomer", "int isPreferredCustomer");
+
+        var (result, _) = await GateAndAnalyzeAsync(Texts((CalculatorFile, edited)), Active("ChangeSignature", "MethodSignature", "ReplaceSnippet"));
+
+        Assert.That(result, Is.Not.Null);
+        var verdict = result!.Verdicts!.Single(v => v.Kind == "signatureChanged");
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.NextStepLine, Does.StartWith("This edit changes the signature of CalcDisc and 1 file(s) still use the old one: "));
+            Assert.That(result.NextStepLine, Does.Contain("CalcDisc(decimal,decimal,bool"), "the old signature is stated");
+            Assert.That(result.NextStepLine, Does.Contain("CalcDisc(decimal,decimal,int"), "the new signature is stated");
+            Assert.That(result.NextStepLine, Does.Contain($"{CheckoutFile}:"), "the use is located");
+            Assert.That(result.NextStepLine, Does.Not.Contain("in the edited file"));
+            Assert.That(result.NextStepLine, Does.Contain("Options: edit the declaration that contains each use first, or send one ReplaceSnippet call with batchEdits"));
+            Assert.That(result.NextStepLine, Does.Not.Contain("ChangeSignature").And.Not.Contain("MethodSignature"));
+            Assert.That(verdict.SuggestedTool, Is.Null);
+            Assert.That(verdict.NextStep, Is.EqualTo(result.NextStepLine));
+        });
+
+        var (withoutBatch, _) = await GateAndAnalyzeAsync(Texts((CalculatorFile, edited)), Active());
+        Assert.That(withoutBatch!.NextStepLine, Does.Contain("Options: edit the declaration that contains each use first, or make one call that edits"));
+        Assert.That(withoutBatch.NextStepLine, Does.Not.Contain("ReplaceSnippet"));
+    }
+
+    [Test]
+    public async Task ParametersReordered_StillPointsAtTheSignatureTools()
+    {
+        var edited = Calculator.Replace("decimal amount, decimal rate, bool isPreferredCustomer)", "bool isPreferredCustomer, decimal amount, decimal rate)");
+
+        var (result, _) = await GateAndAnalyzeAsync(Texts((CalculatorFile, edited)), Active("ChangeSignature", "MethodSignature", "ReplaceSnippet"));
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.NextStepLine, Does.Contain("use ChangeSignature or MethodSignature instead, which update the callers."));
+        Assert.That(result.Verdicts!.Single(v => v.Kind == "signatureChanged").SuggestedTool, Is.EqualTo("ChangeSignature"));
+    }
+
     [Test]
     public async Task AccessibilityNarrowed_IsAttributedToCs0122_AndPointsAtChangeAccessibility()
     {
