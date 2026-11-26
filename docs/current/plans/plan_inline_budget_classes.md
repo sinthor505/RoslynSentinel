@@ -240,6 +240,9 @@ Grounding (explore-tier2, 2026-11-26, HEAD 000b3b49):
   `GetLargeResultTests` fixture from the budget; Step 19 also runs Tests.Basic and Tests.Asyncify.
 - 2026-11-26 Readiness (plan-design): independent review clean at `4c485150` (review 5: no blockers; its 5
   should-fix findings are folded into this revision).
+- 2026-11-26 Run (/implement-plan): staleness check clean at `8f66a0a0` (Step 6 anchors `:844`, `:1037` unchanged).
+  Mode Batched (A: 1-4; B: 5-10; C: 11a-13; D: 14-17; E: 18-19; main session 20-22); owner away, so mid-run
+  decisions are deferred to the run tracker.
 
 ## Execution rules
 
