@@ -127,7 +127,9 @@ public class ImplementationScenarioAgentTests
                 ? capMinutes
                 : 15);
         var runner = new ModelAgentRunner(
-            _environment.AgentClient, _environment.Client, repeatedFailureLimit: 10, maxTokensPerTurn: 16384, turnCap: scenario.TurnCap, wallClockCap: wallClockCap,
+            _environment.AgentClient, _environment.Client, repeatedFailureLimit: 10, maxTokensPerTurn: 16384,
+            turnCap: ScenarioDefinition.ParseTurnCapOverride(Environment.GetEnvironmentVariable(ScenarioDefinition.TurnCapVariable)) ?? scenario.TurnCap,
+            wallClockCap: wallClockCap,
             logger: _environment.Host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
         var stopwatch = Stopwatch.StartNew();
         var result = await runner.RunAsync(
