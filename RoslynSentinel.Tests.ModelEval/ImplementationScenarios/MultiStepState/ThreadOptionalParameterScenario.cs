@@ -351,6 +351,29 @@ public class ErrorHintTests
             "in ErrorHintTests you add two tests next to the existing one, copying its shape: one where `renamedAwayNames` contains the name, " +
             "one where it holds a different name (the typo text stays); your two tests fail if the parameter is ignored and if it matches any non-empty collection."));
 
+    /// <summary>The base prompt's wording of the match rule, replaced by <see cref="ExplicitOrdinalWording"/> in the ExplicitOrdinal prompt variant.</summary>
+    internal const string OrdinalPhrase = "(ordinal comparison)";
+
+    /// <summary>The ExplicitOrdinal variant's wording: says why the collection's own Contains is not enough and what to call instead.</summary>
+    internal const string ExplicitOrdinalWording = "(the collection may carry its own comparer, so compare each element with `string.Equals(element, name, StringComparison.Ordinal)` rather than the collection's `Contains`)";
+
+    internal const string ExplicitOrdinalVariantName = "ExplicitOrdinal";
+
+    // Built from the base prompt so the two cannot drift; throws when the base no longer holds the phrase.
+    private static string ExplicitOrdinalPrompt
+    {
+        get
+        {
+            var basePrompt = StepPrompt;
+            if (!basePrompt.Contains(OrdinalPhrase, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException($"ThreadOptionalParameter prompt variant {ExplicitOrdinalVariantName}: '{OrdinalPhrase}' is not in the base prompt.");
+            }
+
+            return basePrompt.Replace(OrdinalPhrase, ExplicitOrdinalWording, StringComparison.Ordinal);
+        }
+    }
+
     public static ImplementationScenario Definition
     {
         get;
@@ -381,7 +404,8 @@ public class ErrorHintTests
                 ExtraCheck: static ctx => CheckAddedTestsKillMutantsAsync(ctx),
                 CannedFinalMessage: CannedReport,
                 Variants: BuildVariants(),
-                DoneWhenTests: new[] { "ErrorHintBehaviourTests", "ErrorHintTests" }),
+                DoneWhenTests: new[] { "ErrorHintBehaviourTests", "ErrorHintTests" },
+                PromptVariants: new Dictionary<string, string> { [ExplicitOrdinalVariantName] = ExplicitOrdinalPrompt }),
         },
         PreferredHost: "113",
         PrimaryAxis: EvalAxis.MultiStepState);

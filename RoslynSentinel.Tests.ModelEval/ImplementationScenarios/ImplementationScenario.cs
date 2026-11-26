@@ -32,7 +32,9 @@ internal enum ImplementationScenarioOutcome
 /// <paramref name="ExpectedEnding"/> is how a correct run ends (DONE: or BLOCKED:); <paramref name="ExpectedRedTests"/> are test names
 /// a correct BLOCKED end state may leave failing; <paramref name="Variants"/> are the named end states of the executable outcome
 /// table; <paramref name="VariantProbe"/> returns extra variant detail or null; <paramref name="DoneWhenTests"/> are the test class
-/// names as written in the step's Done-when sentence (read by the catalog; null = exempt from rule 9).
+/// names as written in the step's Done-when sentence (read by the catalog; null = exempt from rule 9);
+/// <paramref name="PromptVariants"/> are alternative prompts by name, picked for a live run by the prompt-variant setting
+/// (<see cref="TestHarnessSettings.ModelEvalPromptVariantSetting"/>); the seed, checks and golden stay those of the step (null = none).
 /// </summary>
 internal sealed record ImplementationScenarioStep(
     string Prompt,
@@ -45,7 +47,32 @@ internal sealed record ImplementationScenarioStep(
     IReadOnlyList<string>? ExpectedRedTests = null,
     IReadOnlyList<ScenarioVariant>? Variants = null,
     Func<ImplementationScenarioCheckContext, string?>? VariantProbe = null,
-    IReadOnlyList<string>? DoneWhenTests = null);
+    IReadOnlyList<string>? DoneWhenTests = null,
+    IReadOnlyDictionary<string, string>? PromptVariants = null)
+{
+    /// <summary>
+    /// The prompt for a live run: <see cref="Prompt"/> when <paramref name="variantName"/> is null or blank, otherwise the named entry
+    /// of <see cref="PromptVariants"/>.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The name is not a variant of this step; the message names the setting, the value and the known variants.</exception>
+    public string PromptFor(string? variantName)
+    {
+        if (string.IsNullOrWhiteSpace(variantName))
+        {
+            return Prompt;
+        }
+
+        var name = variantName.Trim();
+        if (PromptVariants is not null && PromptVariants.TryGetValue(name, out var text))
+        {
+            return text;
+        }
+
+        var known = PromptVariants is null || PromptVariants.Count == 0 ? "none" : string.Join(", ", PromptVariants.Keys);
+        throw new InvalidOperationException(
+            $"{TestHarnessSettings.ModelEvalPromptVariantSetting.EnvName} is '{name}', but this step has no prompt variant with that name; known variants: {known}.");
+    }
+}
 
 /// <summary>
 /// A data-driven implementation scenario (see docs/current/plans/closed/plan_modeleval_implementation_scenarios.md).

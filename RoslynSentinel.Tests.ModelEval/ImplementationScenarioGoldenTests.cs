@@ -4,6 +4,7 @@ using System.Globalization;
 using RoslynSentinel.Tests.Battery.Basic;
 using RoslynSentinel.Tests.ModelEval.ImplementationScenarios;
 using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Graders;
+using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.MultiStepState;
 
 namespace RoslynSentinel.Tests.ModelEval;
 
@@ -202,6 +203,63 @@ public class ImplementationScenarioGoldenTests
             var name = normalized.TrimEnd('/').Split('/').Last();
             Assert.That(filesLine, Does.Contain(name), $"{scenario.Id} step {step}: the Files line does not name allowed path '{entry}'.");
         }
+    }
+
+    /// <summary>A prompt variant is a prompt, so it names every allowed path in its Files line just as the base prompt does.</summary>
+    [Test]
+    public void PromptVariants_StillNameEveryAllowedPath()
+    {
+        var checkedVariants = 0;
+        foreach (var scenario in ImplementationScenarioRegistry.All)
+        {
+            for (var step = 1; step <= scenario.Steps.Count; step++)
+            {
+                var stepDefinition = scenario.Steps[step - 1];
+                foreach (var (name, variantPrompt) in stepDefinition.PromptVariants ?? new Dictionary<string, string>())
+                {
+                    var filesLine = variantPrompt
+                        .Split('\n')
+                        .Select(line => line.Trim())
+                        .FirstOrDefault(line => line.StartsWith("Files:", StringComparison.Ordinal));
+                    Assert.That(filesLine, Is.Not.Null, $"{scenario.Id} step {step} variant {name}: the prompt has no 'Files:' line.");
+                    foreach (var entry in stepDefinition.AllowedPaths)
+                    {
+                        var allowedName = entry.Replace('\\', '/').TrimEnd('/').Split('/').Last();
+                        Assert.That(filesLine, Does.Contain(allowedName), $"{scenario.Id} step {step} variant {name}: the Files line does not name allowed path '{entry}'.");
+                    }
+
+                    checkedVariants++;
+                }
+            }
+        }
+
+        Assert.That(checkedVariants, Is.GreaterThan(0), "no scenario declares a prompt variant, so this test checked nothing");
+    }
+
+    /// <summary>ExplicitOrdinal changes the base prompt in exactly one place: the ordinal-comparison phrase. Putting the phrase back gives the base prompt.</summary>
+    [Test]
+    public void ThreadOptionalParameter_ExplicitOrdinal_DiffersFromTheBasePromptOnlyInTheOrdinalPhrase()
+    {
+        var step = ImplementationScenarioRegistry.Find("ThreadOptionalParameter").Steps[0];
+        var variant = step.PromptFor(ThreadOptionalParameterScenario.ExplicitOrdinalVariantName);
+
+        Assert.That(variant, Is.Not.EqualTo(step.Prompt));
+        Assert.That(variant, Does.Contain(ThreadOptionalParameterScenario.ExplicitOrdinalWording));
+        Assert.That(variant, Does.Not.Contain(ThreadOptionalParameterScenario.OrdinalPhrase));
+        Assert.That(variant.Replace(ThreadOptionalParameterScenario.ExplicitOrdinalWording, ThreadOptionalParameterScenario.OrdinalPhrase, StringComparison.Ordinal), Is.EqualTo(step.Prompt));
+    }
+
+    [Test]
+    public void PromptFor_BlankIsTheBasePrompt_UnknownNameThrowsNamingSettingValueAndKnownVariants()
+    {
+        var step = ImplementationScenarioRegistry.Find("ThreadOptionalParameter").Steps[0];
+
+        Assert.That(step.PromptFor(null), Is.EqualTo(step.Prompt));
+        Assert.That(step.PromptFor("  "), Is.EqualTo(step.Prompt));
+        var exception = Assert.Throws<InvalidOperationException>(() => step.PromptFor("NoSuchVariant"));
+        Assert.That(exception!.Message, Does.Contain(TestHarnessSettings.ModelEvalPromptVariantSetting.EnvName));
+        Assert.That(exception.Message, Does.Contain("NoSuchVariant"));
+        Assert.That(exception.Message, Does.Contain(ThreadOptionalParameterScenario.ExplicitOrdinalVariantName));
     }
 
     [Test]

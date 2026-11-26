@@ -97,7 +97,26 @@ public class ImplementationScenarioAgentTests
     private async Task RunStepAsync(ImplementationScenario scenario, int step)
     {
         var cancellationToken = TestContext.CurrentContext.CancellationToken;
-        var prompt = scenario.Steps[step - 1].Prompt;
+
+        // The prompt-variant setting (unset or blank = the step's own prompt) picks one of the step's PromptVariants; an unknown name fails
+        // here, before the environment is built, so a typo cannot silently run the base prompt.
+        var promptVariant = TestHarnessSettings.ModelEvalPromptVariantSetting.Read(StartupArgs.Empty, StartupSettings.EnvironmentReader).Value?.Trim();
+        if (string.IsNullOrEmpty(promptVariant))
+        {
+            promptVariant = null;
+        }
+
+        string prompt;
+        try
+        {
+            prompt = scenario.Steps[step - 1].PromptFor(promptVariant);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Assert.Fail(ex.Message);
+            return;
+        }
+
         Directory.CreateDirectory(_runDirectory);
         File.WriteAllText(Path.Combine(_runDirectory, "prompt.txt"), prompt);
         File.WriteAllText(Path.Combine(_runDirectory, "scenario.txt"), $"{scenario.Id}\r\n");
@@ -171,9 +190,11 @@ public class ImplementationScenarioAgentTests
             }
         }
 
-        // outcomeClass= and variant= are appended after the free-text detail so a parser of the leading key=value fields is unaffected.
+        // outcomeClass= and variant= are appended after the free-text detail so a parser of the leading key=value fields is unaffected;
+        // promptVariant= follows them, only when a prompt variant was used.
         var summary =
-            $"{scenario.Id} step {step}: outcome={outcome}, turns={result.TurnCount}, started={result.StartedTurnCount}, wallTime={stopwatch.Elapsed:hh\\:mm\\:ss}, wallClockCap={wallClockCap.TotalMinutes}m, stopReason={result.StopReason}. {detail} outcomeClass={verdict.Class} variant={verdict.Variant}";
+            $"{scenario.Id} step {step}: outcome={outcome}, turns={result.TurnCount}, started={result.StartedTurnCount}, wallTime={stopwatch.Elapsed:hh\\:mm\\:ss}, wallClockCap={wallClockCap.TotalMinutes}m, stopReason={result.StopReason}. {detail} outcomeClass={verdict.Class} variant={verdict.Variant}"
+            + (promptVariant is null ? string.Empty : $" promptVariant={promptVariant}");
         TestContext.Out.WriteLine(summary);
         File.WriteAllText(Path.Combine(_runDirectory, $"step-{step}.outcome.txt"), summary + "\r\n");
 
