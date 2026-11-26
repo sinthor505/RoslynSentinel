@@ -1,6 +1,6 @@
 # Render tool results as plain text for the eval model, so quoted source is not JSON-escaped
 
-**Status:** PROPOSED 2026-11-25. Evidence and options collected; design (plan-design) in a fresh session.
+**Status:** APPROVED 2026-11-26. Plan: plans/plan_plain_text_tool_results_for_eval_model.md
 
 ## Motivation
 
