@@ -418,7 +418,7 @@ public class ReadOnlyViewTests
         Goal: "In ContosoOrders.Core/Evals/WidenToReadOnlyDictionary, ChangeValidator.cs and ChangeHelper.cs only ever read their change-set parameters. " +
             "Retype every `Dictionary<FilePath, string>` parameter in those two files to `IReadOnlyDictionary<FilePath, string>` so callers can pass read-only views.",
         Files: "ChangeValidator.cs and ChangeHelper.cs in ContosoOrders.Core/Evals/WidenToReadOnlyDictionary. No other file.",
-        IfFails: "write nothing; leave every file as it was (undo any edit you wrote).",
+        IfFails: "edit no file; leave every file as it was (undo any edit you made), then reply with the Report.",
         DoneWhen: "Every `Dictionary<FilePath, string>` parameter of the two files is `IReadOnlyDictionary<FilePath, string>`; " +
             "every `<see cref>` in those two files still resolves (respell a cref that named a retyped signature); " +
             "the solution builds with 0 errors; all tests in ContosoOrders.Tests pass, including ReadOnlyViewTests.",
