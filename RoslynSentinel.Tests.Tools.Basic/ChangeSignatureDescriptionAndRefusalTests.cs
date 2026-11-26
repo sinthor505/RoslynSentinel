@@ -164,6 +164,61 @@ public sealed class ChangeSignatureDescriptionAndRefusalTests
         Assert.That(workspace.ReadText("Calc.cs"), Is.EqualTo(TwoParameterCalc));
     }
 
+    // An entry that keeps an existing parameter by originalIndex cannot also retype or rename it: the request is refused with the existing parameter named, not silently dropped.
+    [TestCase(true)]
+    [TestCase(false)]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
+    [Category("ChangeSignatureParameterInput")] // sentinel:auto-category
+    public async Task ChangeSignature_OriginalIndexWithDifferentType_IsRefusedNamingTheExistingParameterAndWritesNothing(bool dryRun)
+    {
+        using var workspace = InMemoryWorkspace.Create(("Calc.cs", TwoParameterCalc));
+        var tools = Battery.Basic.TestTools.CoreRefactoringTools(workspace.Manager);
+        var result = await tools.ChangeSignatureTool(reason: "test message", workspace.PathOf("Calc.cs"), "Add", new[] { new ChangeSignatureParameterInput(originalIndex: 0, type: "string"), new ChangeSignatureParameterInput(originalIndex: 1) }, dryRun: dryRun);
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData?.Message, Does.Contain("entry 0 (0-based) has originalIndex 0 and asks for type string, the existing parameter is int a").And.Contain("ReplaceSnippet batchEdits"));
+        Assert.That(workspace.ReadText("Calc.cs"), Is.EqualTo(TwoParameterCalc));
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
+    [Category("ChangeSignatureParameterInput")] // sentinel:auto-category
+    public async Task ChangeSignature_OriginalIndexWithDifferentName_IsRefusedAndWritesNothing()
+    {
+        using var workspace = InMemoryWorkspace.Create(("Calc.cs", TwoParameterCalc));
+        var tools = Battery.Basic.TestTools.CoreRefactoringTools(workspace.Manager);
+        var result = await tools.ChangeSignatureTool(reason: "test message", workspace.PathOf("Calc.cs"), "Add", new[] { new ChangeSignatureParameterInput(originalIndex: 1), new ChangeSignatureParameterInput(originalIndex: 0, name: "first") });
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.Message, Does.Contain("entry 1 (0-based) has originalIndex 0 and asks for name first, the existing parameter is int a"));
+        Assert.That(workspace.ReadText("Calc.cs"), Is.EqualTo(TwoParameterCalc));
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
+    [Category("ChangeSignatureParameterInput")] // sentinel:auto-category
+    public async Task ChangeSignature_OriginalIndexWithMatchingTypeAndName_StillReorders()
+    {
+        using var workspace = InMemoryWorkspace.Create(("Calc.cs", TwoParameterCalc));
+        var tools = Battery.Basic.TestTools.CoreRefactoringTools(workspace.Manager);
+        var result = await tools.ChangeSignatureTool(reason: "test message", workspace.PathOf("Calc.cs"), "Add", new[] { new ChangeSignatureParameterInput(originalIndex: 1, type: "i n t", name: "b"), new ChangeSignatureParameterInput(originalIndex: 0, type: "int", name: "a") });
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        Assert.That(workspace.ReadText("Calc.cs"), Does.Contain("Add(int b, int a)"));
+    }
+
+    // An identity list (every parameter kept in its current position, nothing added or removed) would change nothing: refused, not reported as a success.
+    [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
+    [Category("ChangeSignatureParameterInput")] // sentinel:auto-category
+    public async Task ChangeSignature_IdentityParameterList_IsRefusedAndWritesNothing()
+    {
+        using var workspace = InMemoryWorkspace.Create(("Calc.cs", TwoParameterCalc));
+        var tools = Battery.Basic.TestTools.CoreRefactoringTools(workspace.Manager);
+        var result = await tools.ChangeSignatureTool(reason: "test message", workspace.PathOf("Calc.cs"), "Add", new[] { new ChangeSignatureParameterInput(originalIndex: 0), new ChangeSignatureParameterInput(originalIndex: 1, type: "int", name: "b") });
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.Message, Does.Contain("equals the current one").And.Contain("nothing would change"));
+        Assert.That(workspace.ReadText("Calc.cs"), Is.EqualTo(TwoParameterCalc));
+    }
+
     [Test]
     [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     [Category("ChangeSignatureParameterInput")] // sentinel:auto-category

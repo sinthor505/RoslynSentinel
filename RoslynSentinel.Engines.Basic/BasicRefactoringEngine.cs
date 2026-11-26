@@ -202,10 +202,11 @@ public class BasicRefactoringEngine
     }
 
     /// <summary>
-    /// How many parameters the method or constructor ChangeSignatureAsync would edit declares today (null when the target is not found), read from the committed
-    /// solution. Call it before the change is applied; the tool uses it to say whether a change removed a parameter.
+    /// How many parameters the method or constructor ChangeSignatureAsync would edit declares today, whether it is a constructor, and each parameter's declared type text and
+    /// name in order (null when the target is not found), read from the committed solution. Call it before the change is applied; the tool uses it to say whether a change
+    /// removed a parameter and to refuse an entry that asks to retype or rename a kept parameter.
     /// </summary>
-    public async Task<(int ParameterCount, bool IsConstructor)?> GetChangeSignatureTargetShapeAsync(FilePathWrapper filePath, string methodName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<(int ParameterCount, bool IsConstructor, IReadOnlyList<(string Type, string Name)> Parameters)?> GetChangeSignatureTargetShapeAsync(FilePathWrapper filePath, string methodName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -216,7 +217,7 @@ public class BasicRefactoringEngine
         }
 
         var target = await FindChangeSignatureTargetAsync(document, root, filePath, methodName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-        return target is null ? null : (target.ParameterList.Parameters.Count, target is ConstructorDeclarationSyntax);
+        return target is null ? null : (target.ParameterList.Parameters.Count, target is ConstructorDeclarationSyntax, target.ParameterList.Parameters.Select(p => (p.Type?.ToString() ?? string.Empty, p.Identifier.Text)).ToList());
     }
 
     public async Task<ChangeSignatureResult> ChangeSignatureAsync(FilePathWrapper filePath, string methodName, IReadOnlyList<SignatureParameterSpec> parameters, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default, ChangeSignatureOldSignature oldSignature = ChangeSignatureOldSignature.auto)

@@ -209,7 +209,7 @@ public class CoreRefactoringTools
     /// an existing parameter missing from the list is a remove; kept parameters out of ascending index order is a reorder). Falls back to "Changes" when none of
     /// those is detectable, e.g. the declaration could not be read.
     /// </summary>
-    private static string DescribeSignatureChange(string methodName, IReadOnlyList<SignatureParameterSpec> specs, (int ParameterCount, bool IsConstructor)? targetShape, string fileName)
+    private static string DescribeSignatureChange(string methodName, IReadOnlyList<SignatureParameterSpec> specs, (int ParameterCount, bool IsConstructor, IReadOnlyList<(string Type, string Name)> Parameters)? targetShape, string fileName)
     {
         var keptIndexes = specs.OfType<ExistingParameterSpec>().Select(s => s.OriginalIndex).ToList();
         var verbs = new List<string>();
@@ -239,9 +239,44 @@ public class CoreRefactoringTools
         return $"{what} parameters of {target} in {fileName}.";
     }
 
+    /// <summary>
+    /// A refusal for a ChangeSignature list that the engine would accept but that does not do what it says, or null when the list is fine. Two cases: an entry with
+    /// originalIndex that also carries a type or name differing from the existing parameter at that index (ChangeSignature keeps that parameter's type and name, so the
+    /// request would be silently dropped); and a list that equals the current parameters exactly (nothing would change). A missing/empty type or name, or one equal to
+    /// the existing (type compared ignoring whitespace), is not a difference.
+    /// </summary>
+    private static ResultError? RefuseUnchangeableParameterList(IReadOnlyList<ChangeSignatureParameterInput> entries, IReadOnlyList<(string Type, string Name)> existing)
+    {
+        static string WithoutWhitespace(string text) => string.Concat(text.Where(c => !char.IsWhiteSpace(c)));
+        for (var i = 0; i < entries.Count; i++)
+        {
+            var entry = entries[i];
+            if (entry.originalIndex is not int index || index < 0 || index >= existing.Count)
+            {
+                continue;
+            }
+
+            var current = existing[index];
+            var typeDiffers = !string.IsNullOrWhiteSpace(entry.type) && WithoutWhitespace(entry.type) != WithoutWhitespace(current.Type);
+            var nameDiffers = !string.IsNullOrWhiteSpace(entry.name) && entry.name.Trim() != current.Name;
+            if (!typeDiffers && !nameDiffers)
+            {
+                continue;
+            }
+
+            var asks = typeDiffers && nameDiffers ? $"type {entry.type} / name {entry.name}" : typeDiffers ? $"type {entry.type}" : $"name {entry.name}";
+            return new ResultError(ToolErrorCode.InvalidArgument, $"ChangeSignature keeps an existing parameter's type and name; entry {i} (0-based) has originalIndex {index} and asks for {asks}, the existing parameter is {current.Type} {current.Name}. Options: edit the declaration and its uses with one ReplaceSnippet batchEdits call (one item per declaration or use), or Member replace.");
+        }
+
+        var isIdentity = entries.Count == existing.Count && entries.Select((entry, position) => entry.originalIndex == position).All(same => same);
+        return isIdentity
+            ? new ResultError(ToolErrorCode.InvalidArgument, $"The requested parameter list equals the current one ({existing.Count} parameter(s), same order, none added or removed), so nothing would change. Option: pass the changed list - reorder the originalIndex entries, omit an originalIndex to remove that parameter, or add a {{name, type, defaultValue}} entry.")
+            : null;
+    }
+
     [McpServerTool(Name = "ChangeSignature")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Reorders, adds, or removes method parameters and updates all call sites solution-wide. Refuses across an interface/implementer boundary - edit each side directly.")]
+    [Description("Reorders, adds, or removes method parameters and updates all call sites solution-wide. Refuses across an interface/implementer boundary - edit each side directly. Cannot change an existing parameter's type or name.")]
     public async Task<SentinelCallToolResult<AppliedChangeSummary>> ChangeSignatureTool([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string methodName, [Description("The desired end-state parameter list, in order. Each entry is {originalIndex: N} to keep an existing 0-based-index parameter, or {name, type, defaultValue} to insert a new one. Omit an originalIndex to remove that parameter.")][ExternalInputRequired(DataTag.Order, required: true)] ChangeSignatureParameterInput[] parameters, // autoStage removed from the schema: stage-then-apply is retired, the value is hardcoded to true below.
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           // [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
     [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false, [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false, [Description(ToolParams.ContextSnippet)] string? contextSnippet = null, [Description(ToolParams.LineBefore)] string? lineBefore = null, [Description(ToolParams.LineAfter)] string? lineAfter = null, [Description("auto (default): old signature removed if every caller migrates, else kept as an [Obsolete] wrapper and the remaining callers listed. remove: refuses if any caller cannot migrate. keepAsDeprecatedWrapper: always keep. No wrapper (refused) for virtual/override/abstract/interface members, identical parameter types.")] ChangeSignatureOldSignature oldSignature = ChangeSignatureOldSignature.auto, // RequestContext<CallToolRequestParams> requestParams = null,
@@ -255,7 +290,7 @@ public class CoreRefactoringTools
             var specs = new List<SignatureParameterSpec>();
             foreach (var p in parameters)
             {
-                // TODO type/name on a kept {originalIndex} entry are dropped silently, and an identity list returns isError false, no_changes, "Old signature removed: every caller was migrated" (run 193123-562 T11); refuse it and say ChangeSignature cannot retype or rename a parameter (also in the description). A doc-comment cref to the method also blocks the call as "not a simple invocation" (192009-439 T4)
+                // TODO A doc-comment cref to the method blocks the call as "not a simple invocation" (192009-439 T4)
                 if (p.originalIndex is int idx)
                 {
                     specs.Add(new ExistingParameterSpec(idx));
@@ -285,6 +320,16 @@ public class CoreRefactoringTools
             var changes = result.Changes;
             // Read before ValidateAndApplyAsync writes: after an apply the committed declaration already has the new parameter list.
             var targetShape = await _refactoringEngine.GetChangeSignatureTargetShapeAsync(resolvedFilePath, methodName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+            // Nothing is written yet: the engine only computed the change set, so a refusal here leaves every file as it was (dry run and apply alike).
+            if (targetShape is { } shapeForRefusal && RefuseUnchangeableParameterList(parameters, shapeForRefusal.Parameters) is { } unchangeableRefusal)
+            {
+                return new SentinelCallToolResult<AppliedChangeSummary>()
+                {
+                    IsError = true,
+                    ErrorData = unchangeableRefusal
+                };
+            }
+
             // Reflection-style construction (ActivatorUtilities.CreateInstance and friends) compiles after a constructor change and fails at runtime: a Caution per site, in every outcome mode.
             var reflectiveSites = result.ReflectiveConstructionSites ?? [];
             var reflectiveFindings = reflectiveSites.Take(25)
