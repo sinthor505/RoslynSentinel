@@ -1,6 +1,6 @@
 # Plan: replay earlier reasoning as visible assistant content in triggered thinking mode
 
-**Status:** APPROVED 2026-11-26. Reasoning replay form setting (items/content/drop) with transcript fields, a 24-run 9B comparison, and a default flip only on a keep verdict.
+**Status:** IN PROGRESS 2026-11-26. Steps 1-7 done (9267ba2b 31bf8986 074c2e48 541f8b3c 3ead6848 190b89ec d44dffb7); Step 8 (live) next.
 
 ## Problem
 
@@ -161,6 +161,7 @@ behaviour-changing and conditional.
     to regenerate `docs/generated/configuration.md` (the freshness test pins it).
 - Done when: `Build` 0 errors; `ConfigurationReferenceFreshnessTests` (Tests.ModelEval) passes after regeneration.
 - Lane: `implementer` (3 files, about 7 edits). Effort: S
+- Done: 9267ba2b
 
 ### Step 2 - Tests for Step 1
 - Files: `RoslynSentinel.Tests.ErrorVariants/ThinkTagTextTests.cs` (new),
@@ -170,6 +171,7 @@ behaviour-changing and conditional.
 - Change: tests T1-T5 of the test table.
 - Done when: `Build` 0 errors; T1-T5 pass; existing `ReasoningReplayPolicyTests` pass.
 - Lane: `test-writer`. Effort: S
+- Done: 31bf8986
 
 ### Step 3 - Replay form in the input items
 - Files: `RoslynSentinel.AgentLoop/LmStudioAgentClient.cs`
@@ -194,6 +196,7 @@ behaviour-changing and conditional.
 - Done when: `Build` 0 errors; existing `LmStudioAgentClientInputItemsTests`, `ReasoningReplayPolicyTests` and
   `LoopAssistTrackerTests` pass unmodified.
 - Lane: `implementer` (1 file, about 5 edits). Effort: S
+- Done: 074c2e48
 
 ### Step 4 - Tests for Step 3
 - Files: `RoslynSentinel.Tests.ErrorVariants/LmStudioAgentClientInputItemsTests.cs`
@@ -208,6 +211,7 @@ behaviour-changing and conditional.
   `ReasoningReplayPolicyTests.cs:72` keeps its own copy (other assembly class, out of this step).
 - Done when: `Build` 0 errors; T6-T11 pass.
 - Lane: `test-writer`. Effort: S
+- Done: 541f8b3c
 
 ### Step 5 - Transcript fields and runner stamp
 - Files: `RoslynSentinel.AgentLoop/AgentTranscript.cs`, `RoslynSentinel.AgentLoop/ModelAgentRunner.cs`
@@ -229,6 +233,7 @@ behaviour-changing and conditional.
 - Done when: `Build` 0 errors; existing `ReasoningReplayRunnerTests`, `ThinkingRunnerTests` and
   `AgentTranscriptFinalMessageTests` pass unmodified.
 - Lane: `implementer` (2 files, about 6 edits). Effort: S
+- Done: 3ead6848
 
 ### Step 6 - Tests for Step 5
 - Files: `RoslynSentinel.Tests.Harness/ReasoningReplayRunnerTests.cs`,
@@ -244,6 +249,7 @@ behaviour-changing and conditional.
   `AgentTranscriptFinalMessageTests` is private to another assembly).
 - Done when: `Build` 0 errors; T12-T15 and T18 pass.
 - Lane: `test-writer`. Effort: S
+- Done: 190b89ec
 
 ### Step 7 - Arm table columns and eval docs
 - Files: `scripts/Get-ThinkingArmTable.ps1`, `docs/current/references/reference_model_eval_procedure.md`
@@ -265,6 +271,7 @@ behaviour-changing and conditional.
   `leakTurns` 24 for the `triggered/error/-/-` arm and 0 for `baseline` and `always/-/-/-` (smoke at 8e02735a,
   INBOX 2026-11-25 13:11), with arm labels unchanged.
 - Lane: `implementer` (non-C# files, Edit tool). Effort: S
+- Done: d44dffb7
 
 ### Step 8 - LIVE comparison on the 9B
 - Files: none (eval output under the scratch root)
