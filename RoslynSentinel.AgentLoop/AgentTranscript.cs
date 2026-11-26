@@ -173,6 +173,13 @@ public sealed class AgentTranscript
         get; set;
     }
 
+    /// <summary>Tool-result format the run rendered model-facing tool output in ("json", "plain" or "xml"); null when the transcript predates this field; omitted from the JSON.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ToolResultFormat
+    {
+        get; set;
+    }
+
     /// <summary>
     /// Turn numbers whose request first dropped a block of reasoning. Null when none or the transcript predates this field; omitted from the JSON.
     /// </summary>
@@ -356,6 +363,13 @@ public sealed class AgentToolCallRecord
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public System.Text.Json.Nodes.JsonObject? Meta
+    {
+        get; init;
+    }
+
+    /// <summary>Length of the model-facing tool message text the model was sent for this call; null when the record predates this field or was seeded on resume; omitted from the JSON.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? ModelFacingChars
     {
         get; init;
     }

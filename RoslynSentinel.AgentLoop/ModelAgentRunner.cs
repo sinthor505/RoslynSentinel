@@ -117,6 +117,8 @@ public sealed class ModelAgentRunner
     private readonly ILogger<ModelAgentRunner> _logger;
     private readonly LoopAssistOptions _loopAssist;
     private readonly ThinkingOptions _thinking;
+    private readonly ToolResultFormat _toolResultFormat;
+    private readonly IToolResultRenderer _toolResultRenderer;
 
     /// <summary>
     /// Runs against a real <see cref="McpClient"/>, wrapped in a <see cref="McpClientToolHost"/>.
@@ -131,8 +133,9 @@ public sealed class ModelAgentRunner
         TimeSpan? wallClockCap = null,
         ILogger<ModelAgentRunner>? logger = null,
         LoopAssistOptions? loopAssist = null,
-        ThinkingOptions? thinking = null)
-        : this(llm, new McpClientToolHost(mcpClient), repeatedFailureLimit, maxTokensPerTurn, turnCap, wallClockCap, logger, loopAssist, thinking)
+        ThinkingOptions? thinking = null,
+        ToolResultFormat? toolResultFormat = null)
+        : this(llm, new McpClientToolHost(mcpClient), repeatedFailureLimit, maxTokensPerTurn, turnCap, wallClockCap, logger, loopAssist, thinking, toolResultFormat)
     {
     }
 
@@ -175,7 +178,8 @@ public sealed class ModelAgentRunner
         TimeSpan? wallClockCap = null,
         ILogger<ModelAgentRunner>? logger = null,
         LoopAssistOptions? loopAssist = null,
-        ThinkingOptions? thinking = null)
+        ThinkingOptions? thinking = null,
+        ToolResultFormat? toolResultFormat = null)
     {
         if (repeatedFailureLimit < 1)
         {
@@ -194,6 +198,8 @@ public sealed class ModelAgentRunner
         _logger = logger ?? NullLogger<ModelAgentRunner>.Instance;
         _loopAssist = loopAssist ?? LoopAssistOptions.FromEnvironment();
         _thinking = thinking ?? ThinkingDefault ?? ThinkingOptions.Off;
+        _toolResultFormat = toolResultFormat ?? ToolResultFormatOptions.FromEnvironment();
+        _toolResultRenderer = ToolResultRenderers.For(_toolResultFormat);
     }
 
     /// <param name="runId">
@@ -357,6 +363,7 @@ public sealed class ModelAgentRunner
         var settingsReported = _llm.ReportedSampler is not null;
         transcript.ReasoningReplayMode = replayPolicy.Mode;
         transcript.Thinking = _thinking;
+        transcript.ToolResultFormat = _toolResultFormat.ToString().ToLowerInvariant();
         if (_thinking.Mode != ThinkingMode.Off && !_thinking.IsKnownEffort)
         {
             _logger.LogWarning("{Warning}", string.Format(ThinkingOptions.CustomEffortWarningFormat, _thinking.Effort, _llm.Model));
@@ -641,6 +648,7 @@ public sealed class ModelAgentRunner
                 {
                     pendingSignals |= ThinkingTriggers.Error;
                 }
+                var modelFacingContent = ModelFacingToolContent(_toolResultRenderer, resultJson, trailingText);
                 turnRecord.ToolCalls.Add(new AgentToolCallRecord
                 {
                     ToolName = toolCall.Name,
@@ -652,6 +660,7 @@ public sealed class ModelAgentRunner
                     CompletedAt = callCompletedAt,
                     ToolCallId = toolCall.Id,
                     TrailingText = string.IsNullOrEmpty(trailingText) ? null : trailingText,
+                    ModelFacingChars = modelFacingContent.Length,
                     Meta = meta,
                 });
 
@@ -673,7 +682,7 @@ public sealed class ModelAgentRunner
                 {
                     Role = "tool",
                     ToolCallId = toolCall.Id,
-                    Content = ModelFacingToolContent(resultJson, trailingText),
+                    Content = modelFacingContent,
                 });
                 await WriteTranscriptAsync(transcript, transcriptDirectory, cancellationToken);
 
@@ -885,7 +894,7 @@ public sealed class ModelAgentRunner
             var pendingInjections = new List<AgentAssist>();
             foreach (var call in seed.ToolCalls)
             {
-                messages.Add(new AgentChatMessage { Role = "tool", ToolCallId = call.ToolCallId, Content = ModelFacingToolContent(call.ResultJson, call.TrailingText) });
+                messages.Add(new AgentChatMessage { Role = "tool", ToolCallId = call.ToolCallId, Content = ModelFacingToolContent(_toolResultRenderer, call.ResultJson, call.TrailingText) });
                 var injection = assistTracker.Observe(
                     new AgentToolCall { Id = call.ToolCallId, Name = call.ToolName, ArgumentsJson = call.ArgumentsJson },
                     call.ResultJson, call.IsError);
@@ -1074,8 +1083,11 @@ public sealed class ModelAgentRunner
     }
 
     /// <summary>The tool-result text the model sees: the first block as ResultJson, then any trailing blocks appended after a blank line.</summary>
-    private static string ModelFacingToolContent(string resultJson, string? trailingText) =>
-        string.IsNullOrEmpty(trailingText) ? resultJson : resultJson + "\n\n" + trailingText;
+    private static string ModelFacingToolContent(IToolResultRenderer renderer, string resultJson, string? trailingText)
+    {
+        var rendered = renderer.Render(resultJson);
+        return string.IsNullOrEmpty(trailingText) ? rendered : rendered + "\n\n" + trailingText;
+    }
 
     private static bool BodyReportsFailure(string resultText)
     {
