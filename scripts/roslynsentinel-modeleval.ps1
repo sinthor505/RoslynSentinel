@@ -282,7 +282,7 @@
     ImplementationScenario (optional there): id of a scenario in ImplementationScenarioRegistry; selects its ImplScenario_<Id>_Step<k> cases by test filter (no env var). Omit to run every scenario.
 
 .PARAMETER TurnCap
-    Scenario only: replaces the scenario definition's TurnCap (maximum live model turns) for this run. Default 0 = unset, the
+    Scenario and ImplementationScenario: replaces the scenario definition's TurnCap (maximum live model turns) for this run. Default 0 = unset, the
     scenario's own cap applies; a positive value sets ROSLYNSENTINEL_MODELEVAL_TURN_CAP, and the script clears the variable
     otherwise so one left in the shell cannot skew a run.
 
@@ -720,18 +720,21 @@ else {
 if ($currentTest -eq 'Scenario') {
     $env:ROSLYNSENTINEL_MODELEVAL_SCENARIO = $Scenario
     $env:ROSLYNSENTINEL_MODELEVAL_SCENARIO_SAMPLES = "$Samples"
-    # Always set or cleared (never left from the shell) so a stale cap cannot skew a run.
-    if ($TurnCap -gt 0) {
-        $env:ROSLYNSENTINEL_MODELEVAL_TURN_CAP = "$TurnCap"
-    }
-    else {
-        Remove-Item Env:\ROSLYNSENTINEL_MODELEVAL_TURN_CAP -ErrorAction SilentlyContinue
-    }
-    $capShown = if ($TurnCap -gt 0) { "$TurnCap" } else { '<scenario default>' }
-    Write-Host "    Scenario=$Scenario samples=$Samples turnCap=$capShown" -ForegroundColor Cyan
 }
 else {
-    Remove-Item Env:\ROSLYNSENTINEL_MODELEVAL_SCENARIO, Env:\ROSLYNSENTINEL_MODELEVAL_SCENARIO_SAMPLES, Env:\ROSLYNSENTINEL_MODELEVAL_TURN_CAP -ErrorAction SilentlyContinue
+    Remove-Item Env:\ROSLYNSENTINEL_MODELEVAL_SCENARIO, Env:\ROSLYNSENTINEL_MODELEVAL_SCENARIO_SAMPLES -ErrorAction SilentlyContinue
+}
+# Scenario and ImplementationScenario both read the cap. Always set or cleared (never left from the shell)
+# so a stale cap cannot skew a run.
+if ($currentTest -in 'Scenario', 'ImplementationScenario' -and $TurnCap -gt 0) {
+    $env:ROSLYNSENTINEL_MODELEVAL_TURN_CAP = "$TurnCap"
+}
+else {
+    Remove-Item Env:\ROSLYNSENTINEL_MODELEVAL_TURN_CAP -ErrorAction SilentlyContinue
+}
+if ($currentTest -in 'Scenario', 'ImplementationScenario') {
+    $capShown = if ($TurnCap -gt 0) { "$TurnCap" } else { '<scenario default>' }
+    Write-Host "    Scenario=$Scenario samples=$Samples turnCap=$capShown" -ForegroundColor Cyan
 }
 
 $csproj = Join-Path $repoRoot 'RoslynSentinel.Tests.ModelEval\RoslynSentinel.Tests.ModelEval.csproj'
