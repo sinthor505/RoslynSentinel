@@ -236,19 +236,21 @@ public class ServerStatusTools
         var report = StartupSettings.LastReport;
         var listed = settings != McpServerStatusSettingsListing.none;
 
-        IReadOnlyList<McpServerStatusSetting>? rows = null;
+        IReadOnlyList<McpServerStatusSettingGroup>? groups = null;
         if (listed)
         {
-            rows = report.Settings
+            groups = report.Settings
                 .Where(s => settings == McpServerStatusSettingsListing.all || s.Source != SettingSource.Default)
-                .Select(s => new McpServerStatusSetting(
-                    Name: s.Name,
-                    Flag: s.Flag,
-                    Env: s.EnvName,
-                    Value: s.EffectiveText,
-                    Source: s.Source,
+                .GroupBy(s => s.Scope)
+                .OrderBy(g => (int)g.Key)
+                .Select(g => new McpServerStatusSettingGroup(
                     // One entry per set flag so the wire never carries a combined flags string.
-                    Scopes: Enum.GetValues<SettingScope>().Where(f => f != SettingScope.None && s.Scope.HasFlag(f)).ToArray()))
+                    Scopes: Enum.GetValues<SettingScope>().Where(f => f != SettingScope.None && g.Key.HasFlag(f)).ToArray(),
+                    Settings: g.Select(s => new McpServerStatusSetting(
+                        Flag: s.Flag,
+                        Env: s.EnvName,
+                        Value: s.EffectiveText,
+                        Source: s.Source)).ToArray()))
                 .ToArray();
         }
 
@@ -258,7 +260,7 @@ public class ServerStatusTools
             UndeclaredEnvCount: report.UndeclaredEnv.Count,
             UndeclaredEnv: listed ? report.UndeclaredEnv : null,
             UndeclaredEnvHint: !listed && report.UndeclaredEnv.Count > 0 ? StartupSettings.UndeclaredEnvHint : null,
-            Settings: rows);
+            SettingGroups: groups);
     }
 
     private string DescribeHowToEnable(string className, string toolName, bool useSnapshot)
@@ -317,7 +319,7 @@ public enum McpServerStatusSettingsListing
 
 /// <summary>
 /// Startup configuration state from <c>StartupSettings.LastReport</c>. Problems, Halted and UndeclaredEnvCount are always
-/// present; UndeclaredEnv and Settings only when a settings listing was requested; UndeclaredEnvHint only when the
+/// present; UndeclaredEnv and SettingGroups only when a settings listing was requested; UndeclaredEnvHint only when the
 /// list is omitted and undeclared names exist.
 /// </summary>
 public sealed record McpServerStatusConfiguration(
@@ -326,16 +328,13 @@ public sealed record McpServerStatusConfiguration(
     int UndeclaredEnvCount,
     IReadOnlyList<string>? UndeclaredEnv,
     string? UndeclaredEnvHint,
-    IReadOnlyList<McpServerStatusSetting>? Settings);
+    IReadOnlyList<McpServerStatusSettingGroup>? SettingGroups);
 
-/// <summary>One startup setting row: Value is the effective text (an External setting reports "set" or "unset"), Scopes lists each applicable host.</summary>
-public sealed record McpServerStatusSetting(
-    string Name,
-    string? Flag,
-    string? Env,
-    string Value,
-    SettingSource Source,
-    IReadOnlyList<SettingScope> Scopes);
+/// <summary>One startup setting row: Value is the effective text (an External setting reports "set" or "unset").</summary>
+public sealed record McpServerStatusSetting(string? Flag, string? Env, string Value, SettingSource Source);
+
+/// <summary>Startup setting rows that share one scope set; Scopes lists each applicable host.</summary>
+public sealed record McpServerStatusSettingGroup(IReadOnlyList<SettingScope> Scopes, IReadOnlyList<McpServerStatusSetting> Settings);
 
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>A single circuit breaker's tripped state and message, as reported by McpServerStatusTool.</summary>

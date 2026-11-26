@@ -78,6 +78,9 @@ public class ServerStatusSettingsTests
         StartupSettings.EnvironmentNames = _savedNames;
     }
 
+    private static IEnumerable<McpServerStatusSetting> Rows(McpServerStatusConfiguration configuration) =>
+        configuration.SettingGroups!.SelectMany(g => g.Settings);
+
     private static McpServerStatusConfiguration StatusConfiguration(McpServerStatusSettingsListing listing)
     {
         using var manager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
@@ -96,7 +99,7 @@ public class ServerStatusSettingsTests
     {
         var configuration = StatusConfiguration(McpServerStatusSettingsListing.none);
 
-        Assert.That(configuration.Settings, Is.Null);
+        Assert.That(configuration.SettingGroups, Is.Null);
         Assert.That(configuration.UndeclaredEnv, Is.Null, "names ride only with settings != none");
         Assert.That(configuration.UndeclaredEnvCount, Is.EqualTo(1), "the count is always present");
         Assert.That(configuration.UndeclaredEnvHint, Is.EqualTo(StartupSettings.UndeclaredEnvHint));
@@ -109,20 +112,21 @@ public class ServerStatusSettingsTests
     {
         var configuration = StatusConfiguration(McpServerStatusSettingsListing.nonDefault);
 
-        var rows = configuration.Settings!.ToDictionary(r => r.Name);
+        var rows = Rows(configuration).ToDictionary(r => r.Flag ?? r.Env);
         Assert.That(rows.Keys, Is.EquivalentTo(new[]
         {
-            "StatusSettingsFixture.Count", "StatusSettingsFixture.Name", "StatusSettingsFixture.External",
+            "--test-fixture-status-count", "TESTFIXTURE_STATUS_NAME", "TESTFIXTURE_STATUS_EXTERNAL",
         }));
-        Assert.That(rows["StatusSettingsFixture.Count"].Source, Is.EqualTo(SettingSource.Flag));
-        Assert.That(rows["StatusSettingsFixture.Count"].Value, Is.EqualTo("9"));
-        Assert.That(rows["StatusSettingsFixture.Count"].Flag, Is.EqualTo("--test-fixture-status-count"));
-        Assert.That(rows["StatusSettingsFixture.Count"].Env, Is.EqualTo("TESTFIXTURE_STATUS_COUNT"));
-        Assert.That(rows["StatusSettingsFixture.Count"].Scopes, Is.EqualTo(new[] { SettingScope.Server, SettingScope.ServerStdio }),
+        Assert.That(rows["--test-fixture-status-count"].Source, Is.EqualTo(SettingSource.Flag));
+        Assert.That(rows["--test-fixture-status-count"].Value, Is.EqualTo("9"));
+        Assert.That(rows["--test-fixture-status-count"].Flag, Is.EqualTo("--test-fixture-status-count"));
+        Assert.That(rows["--test-fixture-status-count"].Env, Is.EqualTo("TESTFIXTURE_STATUS_COUNT"));
+        var countGroup = configuration.SettingGroups!.Single(g => g.Settings.Any(r => r.Flag == "--test-fixture-status-count"));
+        Assert.That(countGroup.Scopes, Is.EqualTo(new[] { SettingScope.Server, SettingScope.ServerStdio }),
             "one entry per flag of Scope, never a combined flags string");
-        Assert.That(rows["StatusSettingsFixture.Name"].Source, Is.EqualTo(SettingSource.Env));
-        Assert.That(rows["StatusSettingsFixture.Name"].Value, Is.EqualTo("alpha"));
-        Assert.That(rows["StatusSettingsFixture.External"].Source, Is.EqualTo(SettingSource.Env));
+        Assert.That(rows["TESTFIXTURE_STATUS_NAME"].Source, Is.EqualTo(SettingSource.Env));
+        Assert.That(rows["TESTFIXTURE_STATUS_NAME"].Value, Is.EqualTo("alpha"));
+        Assert.That(rows["TESTFIXTURE_STATUS_EXTERNAL"].Source, Is.EqualTo(SettingSource.Env));
 
         Assert.That(configuration.UndeclaredEnv, Is.EqualTo(new[] { UndeclaredName }));
         Assert.That(configuration.UndeclaredEnvCount, Is.EqualTo(1));
@@ -134,37 +138,58 @@ public class ServerStatusSettingsTests
     {
         var configuration = StatusConfiguration(McpServerStatusSettingsListing.all);
 
-        var rows = configuration.Settings!.ToDictionary(r => r.Name);
+        var rows = Rows(configuration).ToDictionary(r => r.Flag ?? r.Env);
         Assert.That(rows.Keys, Is.EquivalentTo(new[]
         {
-            "StatusSettingsFixture.Count", "StatusSettingsFixture.Switch",
-            "StatusSettingsFixture.Name", "StatusSettingsFixture.External",
+            "--test-fixture-status-count", "--test-fixture-status-switch",
+            "TESTFIXTURE_STATUS_NAME", "TESTFIXTURE_STATUS_EXTERNAL",
         }));
-        Assert.That(rows["StatusSettingsFixture.Switch"].Source, Is.EqualTo(SettingSource.Default));
-        Assert.That(rows["StatusSettingsFixture.Switch"].Value, Is.EqualTo("false"));
-        Assert.That(rows["StatusSettingsFixture.Switch"].Env, Is.Null, "a flag-only setting has no env name");
-        Assert.That(rows["StatusSettingsFixture.Name"].Env, Is.EqualTo(NameEnv));
+        Assert.That(rows["--test-fixture-status-switch"].Source, Is.EqualTo(SettingSource.Default));
+        Assert.That(rows["--test-fixture-status-switch"].Value, Is.EqualTo("false"));
+        Assert.That(rows["--test-fixture-status-switch"].Env, Is.Null, "a flag-only setting has no env name");
+        Assert.That(rows["TESTFIXTURE_STATUS_NAME"].Env, Is.EqualTo(NameEnv));
         Assert.That(configuration.UndeclaredEnv, Is.EqualTo(new[] { UndeclaredName }));
         Assert.That(configuration.UndeclaredEnvHint, Is.Null);
     }
 
     [Test]
+    public void SettingsAll_GroupsRowsByScope()
+    {
+        var configuration = StatusConfiguration(McpServerStatusSettingsListing.all);
+        var groups = configuration.SettingGroups!;
+
+        Assert.That(groups.All(g => g.Scopes.Count > 0), Is.True, "every group names at least one scope");
+        Assert.That(groups.Select(g => string.Join(",", g.Scopes)).Distinct().Count(), Is.EqualTo(groups.Count),
+            "no two groups share a scope set");
+
+        var countGroup = groups.Single(g => g.Settings.Any(r => r.Flag == "--test-fixture-status-count"));
+        Assert.That(countGroup.Scopes, Is.EqualTo(new[] { SettingScope.Server, SettingScope.ServerStdio }));
+
+        var serverGroup = groups.Single(g => g.Settings.Any(r => r.Flag == "--test-fixture-status-switch"));
+        Assert.That(serverGroup.Scopes, Is.EqualTo(new[] { SettingScope.Server }));
+        Assert.That(serverGroup.Settings.Select(r => r.Flag ?? r.Env), Is.EquivalentTo(new[]
+        {
+            "--test-fixture-status-switch", "TESTFIXTURE_STATUS_NAME", "TESTFIXTURE_STATUS_EXTERNAL",
+        }));
+    }
+
+    [Test]
     public void ExternalSetting_ReportsSetOrUnset_NeverTheValue()
     {
-        var whileSet = StatusConfiguration(McpServerStatusSettingsListing.all).Settings!
-            .Single(r => r.Name == "StatusSettingsFixture.External");
+        var whileSet = Rows(StatusConfiguration(McpServerStatusSettingsListing.all))
+            .Single(r => r.Env == ExternalEnv);
         Assert.That(whileSet.Value, Is.EqualTo("set"));
         Assert.That(whileSet.Value, Does.Not.Contain("secret"));
 
         // External settings re-read the environment on every access, so removing the variable flips the row without a new ConfigureAll.
         _env.Remove(ExternalEnv);
         var configuration = StatusConfiguration(McpServerStatusSettingsListing.all);
-        var whileUnset = configuration.Settings!.Single(r => r.Name == "StatusSettingsFixture.External");
+        var whileUnset = Rows(configuration).Single(r => r.Env == ExternalEnv);
         Assert.That(whileUnset.Value, Is.EqualTo("unset"));
         Assert.That(whileUnset.Source, Is.EqualTo(SettingSource.Default));
 
-        var nonDefault = StatusConfiguration(McpServerStatusSettingsListing.nonDefault).Settings!;
-        Assert.That(nonDefault.Select(r => r.Name), Does.Not.Contain("StatusSettingsFixture.External"));
+        var nonDefault = Rows(StatusConfiguration(McpServerStatusSettingsListing.nonDefault));
+        Assert.That(nonDefault.Select(r => r.Env), Does.Not.Contain(ExternalEnv));
     }
 
     [Test]
