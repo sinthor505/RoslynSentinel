@@ -337,7 +337,35 @@ Decision log:
 
 - Effort: L (wall clock)
 
+### Follow-up batches (2026-11-26, ThreadOptionalParameter only, thinking off)
+
+- Trace of the Step 6 failures: escape-copy decided 1 of 4. The other three were ReplaceRange anchor
+  rejections (fixed in 4caf0cf8, c7af5ad3), the bare `Contains` ordinal trap, and the 25-turn cap.
+  A new `ExplicitOrdinal` prompt variant (106a08cd) spells out `StringComparison.Ordinal`.
+- Batch `topordinal-106a08cd`, 24 runs, 2 per cell per host. The intended 35-turn cap did not apply:
+  the modeleval script cleared the variable for ImplementationScenario (fixed in 3e62860c). Pass:
+  base json 1/4, plain 3/4, xml 3/4; ExplicitOrdinal json 2/4, plain 4/4, xml 3/4. Escape-copy lines:
+  json 21, plain 0, xml 0.
+- Batch `topordinal-3e62860c`, the same 24 runs with `-TurnCap 35`. Pass:
+  | Prompt | json | plain | xml |
+  | --- | --- | --- | --- |
+  | base | 3/4 | 4/4 | 4/4 |
+  | ExplicitOrdinal | 3/4 (+1 PassedAfterCap) | 4/4 | 4/4 |
+  - Escape-copy lines: json 59 over 19 calls, plain 3 in 1 call (on 112; not traced), xml 0.
+  - Turns used by passing runs:
+    - json: 22-35, median about 30; 6 of its passes needed more than 25 turns.
+    - plain: 12-30, two runs at 30.
+    - xml: 9-26.
+  - Median model-facing characters per tool result: json 1,287-1,731, plain 832, xml 1,087-1,302.
+  - Median wall: json 2:28-3:58, plain about 1:40, xml about 1:36.
+  - Reading:
+    - Given enough turns, json mostly gets there; the escaping costs about 10 extra turns.
+    - The text formats solve the task 16 of 16, most within 25 turns.
+    - The ExplicitOrdinal wording makes no visible difference at this size once the turn budget is
+      ample.
+
 ### Step 7 - Default flip (only on a keep result, after owner review)
+- Done (2026-11-26): owner approved; e3995b05 (default `plain`).
 - Files: `ToolResultFormatOptions.cs` (default), `docs/generated/configuration.md` (regenerate).
 - Depends on: Step 6 verdict and owner review.
 - Effect: behaviour-changing (default model-facing format).
