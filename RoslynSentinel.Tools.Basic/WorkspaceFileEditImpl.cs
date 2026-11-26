@@ -62,7 +62,7 @@ public class WorkspaceFileEditImpl
     // LoopAssistTracker.RepeatNote (AgentLoop, which cannot see this class) matches this text; keep the two in step.
     private const string RepeatedRejectionNote = "You already sent this exact edit and it was rejected the same way.";
     private const string RepeatedRejectionFollowNextStep = " The next step below lists the options.";
-    private const string RepeatedRejectionChangeApproach = " Change the edit to fix the errors below, or take a different approach.";
+    private const string RepeatedRejectionChangeApproach = " The errors below are the same as last time. Options: a changed edit that fixes them, or another route.";
 
     private const string RejectedOriginNote = "This oldContent comes from your rejected edit's newContent. That edit was not applied, so the file still has the old text: read it again before editing.";
 
