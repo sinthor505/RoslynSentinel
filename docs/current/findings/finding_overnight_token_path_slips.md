@@ -277,6 +277,26 @@ Tools for the next investigation: agent.log `LM Studio reasoning:` / `LM Studio 
 (`lmstudio` package, `client.llm.model(key).tokenize(text)`); LM Studio trace logs print input tokens as
 `prefill token: <id> = <text>`.
 
+## Related slip class: escape-copy (2026-11-25)
+
+A second slip class with the same structure, found later; evidence and design are in
+`proposals/proposal_plain_text_tool_results_for_eval_model.md` and
+`plans/plan_plain_text_tool_results_for_eval_model.md`, not here.
+
+- **What:** JSON tool results show a C# `"` as `\"`; the Qwen3.5 template takes tool-call arguments raw, so
+  the model must translate on every copy and often keeps the `\"` (run 20261125-192447: six ReplaceSnippet
+  retries with the same stray `\"`).
+- **Measured** (Qwen3.5-9B on 113, 100 samples per cell, exact copies of the file lines): real file JSON 0,
+  plain text 100, raw-text XML tags 100, well-formed (escaped) XML 90; small synthetic file 66 / 100 / 100 /
+  100; escape-heavy file 98 / 100 / 100 / 100. The cause is the escaping, not the format, and the JSON rate
+  depends strongly on the context.
+- **Shared with the `.O` slip:** the model has to emit a token sequence that differs from the one in its
+  context, and its own wrong copy then becomes the strongest pattern (reasoning that reproduced the code
+  with `\"` leaked 41 of 47 times, reasoning that reproduced it decoded 0 of 47).
+- **Not shown:** that plain-text results lower identifier slips such as `.O`. The name is composed, not
+  copied from an escaped form, and no arm has measured it. Test: the tiel step 4 replay with plain-text
+  results against the 24/400 preset baseline, once the renderer switch exists.
+
 ## Related work
 
 A web search on 2026-11-17 (llama.cpp, LM Studio, Unsloth, Hugging Face, Reddit, Hacker News) found no
