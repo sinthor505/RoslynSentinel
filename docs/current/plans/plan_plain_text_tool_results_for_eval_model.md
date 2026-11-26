@@ -351,7 +351,10 @@ Decision log:
   | --- | --- | --- | --- |
   | base | 3/4 | 4/4 | 4/4 |
   | ExplicitOrdinal | 3/4 (+1 PassedAfterCap) | 4/4 | 4/4 |
-  - Escape-copy lines: json 59 over 19 calls, plain 3 in 1 call (on 112; not traced), xml 0.
+  - Escape-copy lines: json 59 over 19 calls, plain 3 in 1 call, xml 0. The plain call (run
+    20261126-175323-040 T12, ReplaceSnippet) had no backslash-quote source in anything the model saw
+    before it, so it was a self-made double-escape, not a leak. The refusal named it and T13 succeeded.
+    That refusal's wording became facts and options in c0e56e79.
   - Turns used by passing runs:
     - json: 22-35, median about 30; 6 of its passes needed more than 25 turns.
     - plain: 12-30, two runs at 30.
@@ -363,6 +366,19 @@ Decision log:
     - The text formats solve the task 16 of 16, most within 25 turns.
     - The ExplicitOrdinal wording makes no visible difference at this size once the turn budget is
       ample.
+- Batch `cap35plain-590eb1c2`: the other three scenarios, plain only, cap 35, 2 runs per host on 112
+  and 113, 4 runs per scenario.
+  | Scenario | plain, cap 35 | plain, cap 25 (Step 6) | Outcomes at cap 35 |
+  | --- | --- | --- | --- |
+  | SweepConstructionSites | 0/4 | 0/4 | 3 TurnCapExceeded, 1 CheckFailed (unconverted site not named); all would be CheckFailed |
+  | WideningRejectedByGate | 0/4 | 0/4 | 3 TurnCapExceeded, 1 OutOfScopeEdit; all edit ChangeJournal.cs or its test, outside the allowed paths |
+  | WidenToReadOnlyDictionary | 2/4 | 1/4 | 2 passes on 112 at 30 and 32 turns; on 113, 2 fails with 2 of 6 check tests failing (1 RepeatedToolFailure at T21, 1 TurnCapExceeded) |
+  - Escape-copy lines 0. Argument failures 65 over 12 runs. Median model-facing characters per
+    tool result: 824 on 112, 1,051 on 113.
+  - Reading: the extra 10 turns do not rescue SweepConstructionSites or WideningRejectedByGate. Both
+    fail on substance: an unreported site, and an edit outside scope where the scenario expects the
+    gate to block it (CorrectBlocked). Neither is a format question, so they need their own failure
+    analysis. Both WidenToReadOnlyDictionary passes needed more than 25 turns. Not traced yet.
 
 ### Step 7 - Default flip (only on a keep result, after owner review)
 - Done (2026-11-26): owner approved; e3995b05 (default `plain`).
