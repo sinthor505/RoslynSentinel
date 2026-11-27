@@ -51,8 +51,10 @@
 
 | Scenario | Fixture | Variants | Tests named in Done-when | Source |
 | --- | --- | --- | --- | --- |
+| ConcurrentCollectionsSlip | ContosoOrders.Core/Evals/ConcurrentCollectionsSlip | none | none (exempt, rule 9) | RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Transcription/ConcurrentCollectionsSlipScenario.cs |
 | DocCommentsSlip | ContosoOrders.Core/Evals/DocCommentsSlip | none | none (exempt, rule 9) | RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Transcription/DocCommentsSlipScenario.cs |
 | EscapeLiteralsSlip | ContosoOrders.Core/Evals/EscapeLiteralsSlip | none | none (exempt, rule 9) | RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Transcription/EscapeLiteralsSlipScenario.cs |
+| LongGenericsFullLineSlip | ContosoOrders.Core/Evals/LongGenericsFullLineSlip | none | none (exempt, rule 9) | RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Transcription/LongGenericsFullLineSlipScenario.cs |
 | LongGenericsSlip | ContosoOrders.Core/Evals/LongGenericsSlip | none | none (exempt, rule 9) | RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Transcription/LongGenericsSlipScenario.cs |
 | NearDuplicateIdentifiersSlip | ContosoOrders.Core/Evals/NearDuplicateIdentifiersSlip | none | none (exempt, rule 9) | RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Transcription/NearDuplicateIdentifiersSlipScenario.cs |
 | SweepNamedSitesSlip | ContosoOrders.Core/Evals/SweepConstructionSites | none | ConstructionSiteTests, SweepTests | RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Transcription/SweepNamedSitesSlipScenario.cs |
