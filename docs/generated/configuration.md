@@ -227,7 +227,7 @@ Shipped toolset JSON files are documented in [toolsets/](toolsets/).
 
 | Setting | Flag | Env | Type | Default | Scope | Kind | Description |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| ReasoningReplayPolicy.Form |  | `ROSLYNSENTINEL_REASONING_REPLAY_FORM` | ReasoningReplayForm | `Items` | AgentLoop | Live | How earlier turns' reasoning is replayed: items (reasoning input items), content (plain assistant text) or drop (not replayed). |
+| ReasoningReplayPolicy.Form |  | `ROSLYNSENTINEL_REASONING_REPLAY_FORM` | ReasoningReplayForm | `Items` | AgentLoop | Live | How earlier turns' reasoning is replayed: items (reasoning input items), content (plain assistant text) or drop (not replayed); unset: drop in triggered thinking mode, else items. |
 | ReasoningReplayPolicy.PressureFraction |  | `ROSLYNSENTINEL_REASONING_PRESSURE` | double? | `0.7` | AgentLoop | Live | Context fraction at which pressure mode drops reasoning turns; unset keeps the default. |
 | ReasoningReplayPolicy.Window |  | `ROSLYNSENTINEL_REASONING_WINDOW` | int? | `(none)` | AgentLoop | Live | Replay window in turns for block mode (0 = replay all reasoning); unset keeps the default. |
 

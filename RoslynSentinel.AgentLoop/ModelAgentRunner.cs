@@ -355,7 +355,7 @@ public sealed class ModelAgentRunner
         // once and cached (-1 if LM Studio couldn't report one, e.g. an older server) so a slow/down
         // context-length lookup never adds latency to every turn.
         var contextLength = await _llm.GetContextLengthAsync(cancellationToken);
-        var replayPolicy = ReasoningReplayPolicy.FromEnvironment(contextLength);
+        var replayPolicy = ReasoningReplayPolicy.FromEnvironment(contextLength, _thinking.Mode == ThinkingMode.Triggered ? ReasoningReplayForm.Drop : ReasoningReplayForm.Items);
         transcript.ContextLength = contextLength > 0 ? contextLength : null;
         // Settings is first written from what is sent/declared/loaded and rebuilt once with the host-echoed values after the first model reply.
         var loadSettings = await _llm.GetLoadSettingsAsync(cancellationToken);
@@ -431,7 +431,6 @@ public sealed class ModelAgentRunner
             AgentChatMessage modelMessage;
             try
             {
-                // TODO Triggered mode: the reasoning replay form (ROSLYNSENTINEL_REASONING_REPLAY_FORM) stops the </think> leak when set to content; flip the triggered default after the live comparison (plan_triggered_thinking_reasoning_as_content Step 9)
                 modelMessage = await _llm.CompleteAsync(replayMessages, toolDefinitions, _maxTokensPerTurn, callCts.Token, replayPolicy, turnThinking.Requested ? _thinking : null);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && callCts.IsCancellationRequested)

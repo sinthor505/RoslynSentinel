@@ -94,7 +94,7 @@ public sealed class ReasoningReplayPolicy
         SettingKind.Live);
 
     /// <summary>The replay form override (<see cref="FormVariable"/>), re-read on every access; Items when unset or empty.</summary>
-    public static readonly StartupSetting<ReasoningReplayForm> FormSetting = StartupSetting.Enum<ReasoningReplayForm>(null, FormVariable, ReasoningReplayForm.Items, "How earlier turns' reasoning is replayed: items (reasoning input items), content (plain assistant text) or drop (not replayed).", SettingScope.AgentLoop, SettingKind.Live);
+    public static readonly StartupSetting<ReasoningReplayForm> FormSetting = StartupSetting.Enum<ReasoningReplayForm>(null, FormVariable, ReasoningReplayForm.Items, "How earlier turns' reasoning is replayed: items (reasoning input items), content (plain assistant text) or drop (not replayed); unset: drop in triggered thinking mode, else items.", SettingScope.AgentLoop, SettingKind.Live);
 
     /// <summary>
     /// Parses the <see cref="FormVariable"/> text: the default <see cref="ReasoningReplayForm.Items"/> when unset or empty,
@@ -162,15 +162,19 @@ public sealed class ReasoningReplayPolicy
     /// Builds the policy from the environment: a block window override selects block mode, otherwise pressure mode.
     /// </summary>
     /// <param name="contextLength">Loaded context length of the model, in tokens.</param>
+    /// <param name="unsetDefault">The form used when the variable is unset or empty; an explicit value always wins.</param>
     /// <returns>The policy for this run.</returns>
-    public static ReasoningReplayPolicy FromEnvironment(int contextLength)
+    public static ReasoningReplayPolicy FromEnvironment(int contextLength, ReasoningReplayForm unsetDefault = ReasoningReplayForm.Items)
     {
+        var form = FormSetting.Read(StartupArgs.Empty, StartupSettings.EnvironmentReader).Source == SettingSource.Default
+            ? unsetDefault
+            : ParseFormOverride(StartupSettings.EnvironmentReader(FormVariable));
         return new ReasoningReplayPolicy(
             contextLength,
             ParseWindowOverride(StartupSettings.EnvironmentReader(WindowVariable)),
             ParsePressureFractionOverride(StartupSettings.EnvironmentReader(PressureFractionVariable)) ?? PressureFraction)
         {
-            Form = ParseFormOverride(StartupSettings.EnvironmentReader(FormVariable)),
+            Form = form,
         };
     }
 

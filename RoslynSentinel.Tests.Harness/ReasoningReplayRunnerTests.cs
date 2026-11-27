@@ -169,6 +169,33 @@ public class ReasoningReplayRunnerTests
         Assert.That(result.Transcript.ReasoningReplayForm, Is.EqualTo(expected));
     }
 
+    [TestCase(ThinkingMode.Triggered, ReasoningReplayForm.Drop)]
+    [TestCase(ThinkingMode.Off, ReasoningReplayForm.Items)]
+    public async Task Triggered_FormUnset_UsesFlippedForm(ThinkingMode mode, ReasoningReplayForm expected)
+    {
+        Environment.SetEnvironmentVariable(ReasoningReplayPolicy.FormVariable, null);
+        var thinking = mode == ThinkingMode.Triggered
+            ? new ThinkingOptions(ThinkingMode.Triggered, ThinkingTriggers.Error, ThinkingOptions.DefaultEffort, null)
+            : new ThinkingOptions(ThinkingMode.Off, ThinkingTriggers.None, ThinkingOptions.DefaultEffort, null);
+        var runner = NewRunner(contextLength: 10000, new[] { 1000 }, [], thinking);
+
+        var result = await runner.RunAsync("system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken);
+
+        Assert.That(result.Transcript.ReasoningReplayForm, Is.EqualTo(expected));
+    }
+
+    [Test]
+    public async Task ExplicitForm_WinsOverTriggeredDefault()
+    {
+        Environment.SetEnvironmentVariable(ReasoningReplayPolicy.FormVariable, "items");
+        var thinking = new ThinkingOptions(ThinkingMode.Triggered, ThinkingTriggers.Error, ThinkingOptions.DefaultEffort, null);
+        var runner = NewRunner(contextLength: 10000, new[] { 1000 }, [], thinking);
+
+        var result = await runner.RunAsync("system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken);
+
+        Assert.That(result.Transcript.ReasoningReplayForm, Is.EqualTo(ReasoningReplayForm.Items));
+    }
+
     [Test]
     public async Task ContentForm_RequestBodiesCarryReasoningAsAssistantText()
     {
@@ -247,7 +274,7 @@ public class ReasoningReplayRunnerTests
     private static List<ScriptedTurn> ToolTurns(int count) =>
         Enumerable.Range(1, count).Select(k => new ScriptedTurn(Marker(k), null, CallTool: true)).ToList();
 
-    private ModelAgentRunner NewRunner(int? contextLength, int[] totalTokens, IReadOnlyList<ScriptedTurn> script)
+    private ModelAgentRunner NewRunner(int? contextLength, int[] totalTokens, IReadOnlyList<ScriptedTurn> script, ThinkingOptions? thinking = null)
     {
         LlmOptions.Configure(["--llm-model", ModelId]);
         _handler = new ReplayScriptedHandler(contextLength, totalTokens, script);
@@ -265,7 +292,8 @@ public class ReasoningReplayRunnerTests
             turnCap: 24,
             wallClockCap: TimeSpan.FromMinutes(2),
             logger: new NullLogger<ModelAgentRunner>(),
-            loopAssist: LoopAssistOptions.Off);
+            loopAssist: LoopAssistOptions.Off,
+            thinking: thinking);
     }
 
     /// <summary>One scripted model turn: reasoning text, message content, and whether it makes the <see cref="ToolName"/> call.</summary>
