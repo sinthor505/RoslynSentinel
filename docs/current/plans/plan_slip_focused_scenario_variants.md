@@ -152,6 +152,21 @@ Entries marked "superseded" are kept for the record; the later entry wins.
   (explore-tier2, sonnet). Rounds 1-3 findings were applied as recorded above; round 4 confirmed all
   of them with no new blocking issue.
 
+- 2026-11-26 (E1 result, Step 15): 12 runs at 355535a2 (`slipgate-355535a2*`, Qwen3.5-9B, plain,
+  cap 35, 2 runs per sibling per host on 112 and 113). All three siblings kept (threshold: Pass +
+  FailWithSlips >= 3, FailNoSlips <= 1).
+
+  | Sibling | Pass | FailWithSlips | FailNoSlips | Writes (per run) | SlippedWrites | GateRefusals |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | WidenAcrossFilesSlip | 4 | 0 | 0 | 10 (4, 2, 2, 2) | 0 | 6 |
+  | WidenDictionaryLeafFirstSlip | 3 | 1 | 0 | 52 (10, 4, 27, 11) | 17 | 3 |
+  | SweepNamedSitesSlip | 4 | 0 | 0 | 34 (4, 13, 4, 13) | 0 | 0 |
+
+  Failed run: WidenDictionaryLeafFirstSlip on 113, TurnCapExceeded after 15 near-window NotFound
+  refusals and 2 malformed-argument writes (a slip loop, not logic). `UnparsedNotFound` 0 in every run.
+  The queue attaches a resubmit with the same commit, test and arguments to the existing job whatever
+  the `-Purpose`; repeated runs need `-Force`.
+
 ### Grounding facts (2026-11-26)
 - The traps are wider than the idea says:
   - WideningRejectedByGate also breaks `ChangeWriterTests.cs` (outside Files): target-typed `new() {...}`
