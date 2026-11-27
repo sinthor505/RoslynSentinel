@@ -40,6 +40,7 @@ internal static class ScenarioClassifier
                 return EvalOutcomeClass.FalseBlocked;
             }
 
+            // TODO passing runs classed SilentIncomplete under the default legacy contract: its prompt never asks for DONE:, so token is None (finding_outcome_class_silentincomplete_on_passing_runs_legacy_contract)
             return token == FinalOutcome.Done && grade == ImplementationScenarioOutcome.Pass
                 ? EvalOutcomeClass.CorrectDone
                 : EvalOutcomeClass.SilentIncomplete;
