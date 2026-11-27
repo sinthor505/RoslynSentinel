@@ -1,6 +1,6 @@
 # Plan: model-eval run review pipeline (digest script, grader agent, rollup, agent refresh)
 
-**Status:** IN PROGRESS 2026-11-26. Steps 1-5 and 8 done (397f75fe, d7db5750, 9bfd22b8, f6ffbcea, f7a9185e, f1b92c96, 8277ad10, 64e3bc19, 81787301, 56916a0e).
+**Status:** IN PROGRESS 2026-11-26. Steps 1-8 done (397f75fe .. b6b80ec2); 9a-9d next, then Step 10 in a fresh chat.
 
 ## Problem
 
@@ -662,6 +662,7 @@ NUnit test and the arm-table tests. Those run the script as a child `pwsh -File`
   - Tests: `Keys`, `VerdictDiscovery`, `UseBatchRoot`.
 - Done when: `Get-RunDigest -RunPath` on a temp copy of the fixture writes a `digest.json` whose
   `header.armKey` is 12 hex characters. The dispatcher runs the tests.
+- Done: 2059899d, b6b80ec2 (Boundary moved into armKey per Q19)
 - Lane: implementer. Effort: S.
 
 ### Step 6b - Digest: turns, guidance, reactions, flags, `digest.md`
@@ -708,6 +709,7 @@ NUnit test and the arm-table tests. Those run the script as a child `pwsh -File`
   - Tests: `GuidanceFiveSources`, `Reactions`, `Flags`, `ThinkLeak`.
 - Done when: the fixture's digest has the flag `{ turn: 2, reason: ErrorTurn }`. The dispatcher runs
   the tests.
+- Done: 5a1d6a2f
 - Lane: implementer-senior (too dense for a Haiku slice). Effort: M.
 
 ### Step 6c - Batch mode and sample selection
@@ -729,6 +731,7 @@ NUnit test and the arm-table tests. Those run the script as a child `pwsh -File`
   - Tests: `BatchSelection`, `MultiRoot`.
 - Done when: `Get-RunDigest -BatchRoot` over two temp roots prints a folder that contains
   `selection.json`. The dispatcher runs the tests.
+- Done: 66754928
 - Lane: implementer. Effort: S.
 
 ### Step 7a - Rollup: validation, distributions, `review.md`
@@ -752,6 +755,7 @@ NUnit test and the arm-table tests. Those run the script as a child `pwsh -File`
   - Tests: `SchemaInvalid`, `Distributions`, `SamplerWarning`, `RenderMarkdown`.
 - Done when: `Get-ReviewRollup -ReviewDir` on a temp folder with one valid review (a copy of
   `review-example.json`) writes `rollup.json`. The dispatcher runs the tests.
+- Done: 8de160a0
 - Lane: implementer. Effort: S.
 
 ### Step 7b - Rollup: arm guard and pass agreement
@@ -771,6 +775,7 @@ NUnit test and the arm-table tests. Those run the script as a child `pwsh -File`
   - Tests: `KeyGuard`, `PassAgreement`.
 - Done when: `Compare-EvalReviewPair` on two identical temp review files writes `exactMatchRatio` 1.
   The dispatcher runs the tests.
+- Done: 978e744f (VaryRequired ignores -Force); 481c989e sampler-names TODO
 - Lane: implementer. Effort: S.
 
 ### Step 8 - Shared discovery: several machines, commit filter; arm table per-scenario groups
