@@ -1,8 +1,7 @@
 # Design: model-eval run review pipeline (digest, behaviour grading, root cause)
 
-**Status:** DESIGNED 2026-11-25. Not built. plan-design is in progress, and every open point is
-settled in [plan_modeleval_run_review_pipeline.md](../plans/plan_modeleval_run_review_pipeline.md)
-(DRAFT, Decision log Q1-Q16). Where the two disagree, the plan wins.
+**Status:** APPROVED 2026-11-26. Plan: plans/plan_modeleval_run_review_pipeline.md (APPROVED; where the
+two disagree, the plan wins).
 
 ## Problem
 
@@ -80,18 +79,18 @@ The owner also decided the following; the plan's Decision log is authoritative:
 
 ### Stage 1: `Get-RunDigest.ps1`
 
-Inputs: `-RunPath` (a run folder, a `sample-NN\` folder or a `transcript.json`), optional `-ResultsCsv`
-/ `-OutcomeFile` / `-Trx` to join the harness verdict, `-OutDir` (default: beside the transcript, which is
-already under the scratch root). Outputs `digest.json` and a short `digest.md`. Old transcripts without
-`Summary`/`Settings` get a warning naming `Backfill-TranscriptSummary.ps1`.
+Inputs: `-RunPath` (a `sample-NN\` folder, a run folder holding one `transcript.json`, or a
+`transcript.json`) or `-BatchRoot <folder[]>` (plan Q18/Q24). The harness verdict files are found from
+the folder layout (plan Q21). Outputs `digest.json` and a short `digest.md` beside the transcript. Old
+transcripts without `Summary` get a `NoSummary` code; `Backfill-TranscriptSummary.ps1` fills it in.
 
 **Header (comparability and verdict):** `RunId`, path, test name or `ScenarioId`, `CommitHash`,
 `WorkingTreeDirty`, `ModelKey`, sampler values with `Verified`/`Source`, `ContractHash`/`ContractPlacement`,
 `ErrorPolicyMode`/`ErrorPolicyHash`, `Thinking` mode and triggers, `ReasoningReplayMode`, tool-surface size
 plus a hash of the tool names, `StopReason` as a name (the transcript stores the number), `Summary`
 totals, and the joined harness verdict (`passed`, `failureClass`, `finalStateVerdict`, `outcomeClass` from
-`step-*.outcome.txt`, or the `.trx` outcome). It also gives a `ComparabilityKey`, defined in plan
-Q12: a hash of test or `ScenarioId`, the sorted tool names, contract, error policy, thinking,
+`step-*.outcome.txt`). It also gives an `ArmKey` and a `ComparabilityKey`, defined in plan Q12, Q19
+and Q26: a hash of test or `ScenarioId`, the sorted tool names, contract, error policy, thinking,
 replay mode and model, plus date-boundary segments from `vocabulary.json`.
 
 **One row per turn:**
@@ -109,8 +108,9 @@ replay mode and model, plus date-boundary segments from `vocabulary.json`.
 
 **Flags:** the digest lists the turns the grader must read in full. These are: every error turn and the
 turn after it; every assist or latch turn and the turn after it; identical resends; the turns that start
-and end the longest same-tool error streak; reasoning over a length threshold or containing retry
-phrases; the final two turns; and the final `DONE:`/`BLOCKED:` claim.
+and end the longest same-tool error streak; reasoning over a length threshold (no retry-phrase
+match, plan Q22); a `</think>` leak; and the final two turns, which hold the final `DONE:`/`BLOCKED:`
+claim. The reason names come from `vocabulary.json` (`flagReasons`).
 
 Error buckets come from `vocabulary.json`, keyed by the raw `errorCode`. `ToolErrorClass`
 (`AgentToolErrorAssertions.cs:6`) is too coarse to reuse: it puts FileNotFound, Ambiguous and
@@ -160,8 +160,9 @@ the grader records it under `gradingDefects`. It does not re-grade the outcome.
 }
 ```
 
-`review.md` is the same content as one short screen of text. Paths and turn numbers are cited so a
-reader can jump straight to the source.
+The grader writes only `review.json`, valid against `scripts/eval-review/review.schema.json`
+(plan Q17). `Get-ReviewRollup.ps1` renders `review.md` from it as one short screen of text (plan Q23).
+Paths and turn numbers are cited so a reader can jump straight to the source.
 
 **Agent definition.** Model `sonnet`. Tools: Read, Grep, Glob, PowerShell, Write (for scratch output
 only), plus ReadFile, GetMethodSource and Search, as CLAUDE.md requires when `Read` is listed.
@@ -186,13 +187,15 @@ follow-up probes below, since each one costs inference time on a shared host:
    gives.
 2. **Read the outcome.** Run the outcome summary that matches the run type: `Get-ScenarioSummary.ps1`,
    the `.trx` scripts, or the arm tables (`Get-ThinkingArmTable.ps1`, `Get-EditArmTable.ps1`).
-3. **Digest.** Run `Get-RunDigest.ps1` on every run.
-4. **Select samples.** Take every failed sample plus N passes per arm (default 3, fixed seed) and list
-   which samples were skipped.
+3. **Digest and select.** Run `Get-RunDigest.ps1 -BatchRoot <folders>`. It digests every run and
+   writes `selection.json` (every failed sample plus 3 seeded passes per arm, skipped runs listed) into
+   a new review folder.
+4. (folded into step 3; plan Q18)
 5. **Grade.** Dispatch `eval-run-grader`: one instance per arm, at most two running at once.
 6. **Roll up.** Run `Get-ReviewRollup.ps1`. It gives per-arm and per-scenario score distributions,
-   counts by attribution, findings worth tracing, and grading defects. It refuses to merge rows whose
-   `ComparabilityKey` differs unless `-Force` is passed, and then it names the keys that differ.
+   counts by attribution, findings worth tracing, and grading defects. With more than one arm,
+   `-Vary <field[]>` names the A/B variable; any other key field that differs between arms of one
+   scenario makes it exit 1 with `MixedComparabilityKey` unless `-Force` is passed (plan Q25).
 7. **Trace.** Dispatch `failure-root-cause-analyst` for the findings the owner picks.
 8. **Write up.** If the result should be kept, write `docs/current/evals/eval_<slug>.md` using the
    finding template.
@@ -252,7 +255,7 @@ follow-up probes below, since each one costs inference time on a shared host:
 The open items are settled in the plan's Decision log: hint shapes (Q5), PlanStepRunner/SubAgent scope
 (Q7), calibration (Q6/Q13) and sampling (Q4). Still standing:
 - **`</think>` leak.** In triggered thinking mode, a non-thinking turn after a thinking turn can write its
-  reasoning into `Content`, ending in a literal `</think>` (open TODO at `ModelAgentRunner.cs:426`). The
+  reasoning into `Content`, ending in a literal `</think>` (open TODO at `ModelAgentRunner.cs:434`). The
   digest flags it. The grader should attribute it to `HarnessAssist`/`BackendReport`, not score it as
   model reasoning, until that TODO is fixed.
 - **Server telemetry** (`guidanceFollowed`/`guidanceIgnored` in `McpServerStatus.toolTelemetry`) is not
