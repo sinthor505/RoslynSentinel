@@ -4,6 +4,9 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
+using RoslynSentinel.Common;
+using RoslynSentinel.Tests.ModelEval.ImplementationScenarios;
+using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Graders;
 using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.ErrorRecovery;
 using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.InstructionAdherence;
 using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Transcription;
@@ -147,4 +150,75 @@ public class TranscriptionScenarioTests
         node.Ancestors().OfType<TypeDeclarationSyntax>().First().Identifier.Text;
 
     private static string Format<T>(IEnumerable<T> items) => "[" + string.Join(", ", items) + "]";
+
+    private static IEnumerable<string> SlipFamilyIds()
+    {
+        return ImplementationScenarioRegistry.All
+            .Where(scenario => scenario.Steps.Count > 0 && scenario.Steps[0].Sites is not null)
+            .Select(scenario => scenario.Id);
+    }
+
+    private static (ImplementationScenario Scenario, SlipSiteSet Sites) ResolveSlipFamily(string familyId)
+    {
+        var scenario = ImplementationScenarioRegistry.All.Single(candidate => candidate.Id == familyId);
+        var sites = scenario.Steps[0].Sites ?? throw new InvalidOperationException($"Scenario {familyId} has no slip sites on step 0.");
+        return (scenario, sites);
+    }
+
+    [Test]
+    [TestCaseSource(nameof(SlipFamilyIds))]
+    public void SlipFamily_PassesValidation(string familyId)
+    {
+        var (_, sites) = ResolveSlipFamily(familyId);
+        Assert.That(SlipFamilyBuilder.Validate(sites), Is.Empty);
+    }
+
+    [Test]
+    [TestCaseSource(nameof(SlipFamilyIds))]
+    public void SlipFamily_GoldenAllCorrect_SeedAllUnchanged(string familyId)
+    {
+        var (scenario, sites) = ResolveSlipFamily(familyId);
+
+        var golden = SiteGrader.Grade(scenario.Steps[0].GoldenFiles[sites.FilePath], sites);
+        Assert.That(golden.Select(grade => grade.Outcome), Is.All.EqualTo(SiteOutcome.Correct));
+
+        var seed = SiteGrader.Grade(scenario.SeedFiles[sites.FilePath], sites);
+        Assert.That(seed.Where(grade => grade.Role == SiteRole.Changed).Select(grade => grade.Outcome), Is.All.EqualTo(SiteOutcome.Unchanged));
+        Assert.That(seed.Where(grade => grade.Role != SiteRole.Changed).Select(grade => grade.Outcome), Is.All.EqualTo(SiteOutcome.Correct));
+    }
+
+    [Test]
+    [TestCaseSource(nameof(SlipFamilyIds))]
+    public void SlipFamily_FitsContextBudget(string familyId)
+    {
+        var (scenario, _) = ResolveSlipFamily(familyId);
+        Assert.That(scenario.ContextCharacters(), Is.LessThanOrEqualTo(ImplementationScenario.ContextBudgetCharacters));
+    }
+
+    [Test]
+    public void SlipFamily_EveryPlanScenarioHasSites()
+    {
+        var planScenarios = ImplementationScenarioRegistry.All
+            .Where(scenario => scenario.Source.Contains("plan_slip_first_scenarios", StringComparison.Ordinal))
+            .ToList();
+        Assert.That(planScenarios, Is.Not.Empty);
+        Assert.That(planScenarios.Where(scenario => scenario.Steps.Count == 0 || scenario.Steps[0].Sites is null).Select(scenario => scenario.Id), Is.Empty);
+    }
+
+    [Test]
+    public void SiteVocabulary_MatchesEnums()
+    {
+        var repoRoot = RepoRootLocator.TryFind(AppContext.BaseDirectory)
+            ?? throw new InvalidOperationException("Could not find RoslynSentinel.slnx - unable to locate repo root");
+        var json = File.ReadAllText(Path.Combine(repoRoot, "scripts", "eval-review", "vocabulary.json"));
+        using var document = System.Text.Json.JsonDocument.Parse(json);
+        var root = document.RootElement;
+        Assert.That(ReadVocabularyNames(root, "siteRoles"), Is.EqualTo(Enum.GetNames<SiteRole>()));
+        Assert.That(ReadVocabularyNames(root, "siteOutcomes"), Is.EqualTo(Enum.GetNames<SiteOutcome>()));
+    }
+
+    private static string[] ReadVocabularyNames(System.Text.Json.JsonElement root, string property)
+    {
+        return root.GetProperty(property).EnumerateArray().Select(element => element.GetString() ?? string.Empty).ToArray();
+    }
 }
