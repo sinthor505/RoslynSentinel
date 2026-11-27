@@ -72,14 +72,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ArgumentErrorCodes = @('InvalidArgument', 'ValidationFailed')
-$BackslashQuote = '\"'
-
-function Get-EnvValue($jobEnv, [string]$name) {
-    if ($null -eq $jobEnv) { return '-' }
-    $p = $jobEnv.PSObject.Properties[$name]
-    if ($null -eq $p -or [string]::IsNullOrWhiteSpace([string]$p.Value)) { return '-' }
-    return [string]$p.Value
-}
+. (Join-Path $PSScriptRoot 'roslynsentinel-transcriptmetrics.ps1')
 
 function Get-Median($values) {
     $v = @($values | Where-Object { $null -ne $_ } | Sort-Object)
@@ -93,33 +86,6 @@ function Format-Counts($values) {
     $v = @($values | Where-Object { $_ })
     if ($v.Count -eq 0) { return '-' }
     return (($v | Group-Object | Sort-Object @{ Expression = 'Count'; Descending = $true }, Name | ForEach-Object { "$($_.Name):$($_.Count)" }) -join ' ')
-}
-
-function Get-OutcomeToken([string]$text, [string]$pattern) {
-    $m = [regex]::Match($text, $pattern)
-    if ($m.Success) { return $m.Groups[1].Value }
-    return $null
-}
-
-function Get-PathKey([string]$p) { return ($p -replace '\\', '/').ToLowerInvariant() }
-
-function Get-LineSet([string]$text) {
-    $set = New-Object 'System.Collections.Generic.HashSet[string]'
-    foreach ($l in ($text -split "`n")) { [void]$set.Add($l.Trim()) }
-    return , $set
-}
-
-# One entry per edit/create target: the filePath and the string arguments written by that call (or batch item).
-function Get-WriteTargets($callArgs) {
-    $fields = @('oldContent', 'newContent', 'content')
-    $out = New-Object System.Collections.Generic.List[object]
-    $top = [string]$callArgs.filePath
-    $out.Add([pscustomobject]@{ filePath = $top; texts = @(foreach ($f in $fields) { if ($callArgs.$f -is [string]) { $callArgs.$f } }) })
-    foreach ($item in @($callArgs.batchEdits | Where-Object { $null -ne $_ })) {
-        $fp = if ($item.filePath) { [string]$item.filePath } else { $top }
-        $out.Add([pscustomobject]@{ filePath = $fp; texts = @(foreach ($f in $fields) { if ($item.$f -is [string]) { $item.$f } }) })
-    }
-    return , $out.ToArray()
 }
 
 function Read-Run([string]$transcriptPath, [string]$jobFormat, [string]$jobThinking) {
@@ -143,7 +109,7 @@ function Read-Run([string]$transcriptPath, [string]$jobFormat, [string]$jobThink
     # Header enum names ("Off") and env values ("off") must land in one arm.
     $format = $format.ToLowerInvariant(); $thinking = $thinking.ToLowerInvariant()
 
-    $cache = @{}
+    $tracker = New-EscapeCopyTracker
     $mfc = New-Object System.Collections.Generic.List[int]
     $escRows = New-Object System.Collections.Generic.List[object]
     $escCalls = 0; $argFail = 0; $turnCount = 0
@@ -170,41 +136,15 @@ function Read-Run([string]$transcriptPath, [string]$jobFormat, [string]$jobThink
             $targets = @()
             if ($callArgs -and -not $isRead) { $targets = Get-WriteTargets $callArgs }
 
-            # Unique counted lines of this call; matched against the union of every latest read in the run.
-            $callLines = New-Object 'System.Collections.Generic.HashSet[string]'
-            $callRows = New-Object System.Collections.Generic.List[object]
-            if ($targets.Count -gt 0 -and $cache.Count -gt 0) {
-                $union = New-Object 'System.Collections.Generic.HashSet[string]'
-                foreach ($set in $cache.Values) { $union.UnionWith([string[]]@($set)) }
-                foreach ($tg in $targets) {
-                    foreach ($text in $tg.texts) {
-                        foreach ($l in ($text -split "`n")) {
-                            $trim = $l.Trim()
-                            if (-not $trim.Contains($BackslashQuote) -or $callLines.Contains($trim)) { continue }
-                            $fixed = $trim.Replace($BackslashQuote, '"').Trim()
-                            if ($union.Contains($fixed) -and -not $union.Contains($trim)) {
-                                [void]$callLines.Add($trim)
-                                $callRows.Add([pscustomobject]@{ run = $dir; turn = $turn.TurnNumber; tool = $tool; filePath = $tg.filePath; line = $trim })
-                            }
-                        }
-                    }
-                }
-            }
-            if ($callRows.Count -gt 0) { $escCalls++; $escRows.AddRange($callRows) }
+            $escRowsOfCall = @(Measure-EscapeCopyCall -Tracker $tracker -Run $dir -Turn $turn.TurnNumber -ToolName $tool -Targets $targets -IsError $isError)
+            if ($escRowsOfCall.Count -gt 0) { $escCalls++; $escRows.AddRange($escRowsOfCall) }
 
-            if (-not $isError) {
-                if ($isRead) {
-                    $fp = if ($callArgs) { [string]$callArgs.filePath } else { '' }
-                    if ($fp) {
-                        $src = $null
-                        if ($c.ResultJson) { try { $src = [string](($c.ResultJson | ConvertFrom-Json).successData.source) } catch { } }
-                        if ($src) { $cache[(Get-PathKey $fp)] = Get-LineSet $src } else { $cache.Remove((Get-PathKey $fp)) }
-                    }
-                }
-                else {
-                    foreach ($tg in $targets) { if ($tg.filePath) { $cache.Remove((Get-PathKey $tg.filePath)) } }
-                }
+            $updateTargets = $targets
+            if ($isRead) {
+                $updateTargets = @()
+                if ($callArgs) { $updateTargets = Get-WriteTargets $callArgs }
             }
+            Update-EscapeCopyTracker -Tracker $tracker -Targets $updateTargets -IsRead $isRead -IsError $isError -ResultJson $c.ResultJson
         }
     }
 
@@ -217,38 +157,10 @@ function Read-Run([string]$transcriptPath, [string]$jobFormat, [string]$jobThink
 
 $rows = New-Object System.Collections.Generic.List[object]
 
-if ($Path) {
-    foreach ($p in $Path) {
-        foreach ($transcript in Get-ChildItem -LiteralPath $p -Recurse -Filter transcript.json -File -ErrorAction SilentlyContinue) {
-            $run = Read-Run $transcript.FullName '-' '-'
-            if ($run) { $rows.Add($run) }
-        }
-    }
-}
-else {
-    if ($JobFolder) { $jobsDir = $JobFolder }
-    else {
-        if (-not $QueueRoot) { $QueueRoot = if ($env:ROSLYNSENTINEL_EVALQUEUE_ROOT) { $env:ROSLYNSENTINEL_EVALQUEUE_ROOT } else { Join-Path $env:LOCALAPPDATA 'RoslynSentinel\evalqueue' } }
-        $jobsDir = Join-Path (Join-Path $QueueRoot $Machine) 'jobs'
-    }
-    if (-not (Test-Path -LiteralPath $jobsDir)) { throw "No jobs folder at $jobsDir." }
-
-    foreach ($file in Get-ChildItem -LiteralPath $jobsDir -Filter '*.json' -File) {
-        try { $job = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json }
-        catch { Write-Warning "Skipped malformed job file $($file.Name)."; continue }
-        if ([string]$job.purpose -notlike $PurposePattern -or $job.state -eq 'Cancelled') { continue }
-        $jobFormat = Get-EnvValue $job.env 'ROSLYNSENTINEL_MODELEVAL_TOOL_RESULT_FORMAT'
-        $jobThinking = Get-EnvValue $job.env 'ROSLYNSENTINEL_MODELEVAL_THINKING'
-
-        foreach ($folder in @($job.runFolders)) {
-            if (-not $folder -or -not (Test-Path -LiteralPath $folder)) { continue }
-            foreach ($transcript in Get-ChildItem -LiteralPath $folder -Recurse -Filter transcript.json -File -ErrorAction SilentlyContinue) {
-                $run = Read-Run $transcript.FullName $jobFormat $jobThinking
-                if ($null -eq $run) { continue }
-                $run | Add-Member -NotePropertyMembers @{ jobId = $job.id; test = $job.test; testPassed = $job.passed } -PassThru | ForEach-Object { $rows.Add($_) }
-            }
-        }
-    }
+foreach ($tr in @(Get-EvalTranscripts -Machine $Machine -PurposePattern $PurposePattern -JobFolder $JobFolder -Path $Path -QueueRoot $QueueRoot)) {
+    $run = Read-Run $tr.TranscriptPath $tr.EnvFormat $tr.EnvThinking
+    if ($null -eq $run) { continue }
+    $run | Add-Member -NotePropertyMembers @{ jobId = $tr.JobId; test = $tr.Test; testPassed = $tr.Passed } -PassThru | ForEach-Object { $rows.Add($_) }
 }
 
 if ($rows.Count -eq 0) { Write-Host "No runs found (no transcript.json under the chosen source)."; return }
