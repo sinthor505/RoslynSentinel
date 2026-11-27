@@ -14,20 +14,6 @@ public static class LargeResultHelper
     // change; none found outside this file.
     internal static readonly JsonSerializerOptions JsonOptions = SharedJsonOptions.Default;
 
-    /// <summary>
-    /// The inline size budget in characters of the final wire text: the length the generic offload filter
-    /// (<c>AddLargeResultOffloadFilter</c>) compares a response's text against, which is this constant
-    /// read as a character count. Introduced by plan_wire_result_marshaller.md Step 4 as the one named chars constant;
-    /// It is the only size constant. Who measures what: docs/current/references/reference_tool_response_pipeline.md.
-    /// </summary>
-    public const int InlineBudgetChars = 15 * 1024;
-
-    /// <summary>
-    /// Characters kept free beneath <see cref="InlineBudgetChars"/> for what later filters add to a response (the
-    /// tool-call echo adds up to about 2.3 KB, stamps a few hundred characters). A measured guess, see the plan's Risks.
-    /// </summary>
-    public const int EchoReserveChars = 2560;
-
     /// <summary>Tolerance factor: a body is offloaded only when its size exceeds its budget by this multiple.</summary>
     public const double ToleranceFactor = 1.25;
 

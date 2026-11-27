@@ -138,7 +138,7 @@ public class WorkspaceBuildTestImpl
     // engine should not need to change for that - so the decision to drop them is made here, at the
     // tool boundary, where response size is what matters. On a clean run they only restate the
     // summary: for a solution-wide RunTestTool they were ~17 KB of dotnet output (40 lines x 10 projects)
-    // and alone pushed the response over LargeResultHelper.OffloadThresholdBytes, forcing the
+    // and alone pushed the response over the inline offload threshold, forcing the
     // caller to page a saved file just to read the totals.
     private static TestRunResult WithoutTailsWhenClean(TestRunResult run)
     {
