@@ -24,12 +24,12 @@ namespace RoslynSentinel.Common;
 /// </para>
 /// <para>
 /// <b>On</b> (plan_wire_result_marshaller.md Step 4): when that text is longer than
-/// <see cref="LargeResultHelper.InlineBudgetChars"/> minus <see cref="LargeResultHelper.EchoReserveChars"/>, it is parsed, fitted
+/// the offload threshold of its budget class (<see cref="LargeResultHelper.OffloadThresholdChars"/>), it is parsed, fitted
 /// with <see cref="ResultPager"/>, the FULL text is stored as an <see cref="ResultWrapperType.Envelope"/> file, and the fitted
 /// envelope is returned with a <c>largeResult</c> pointer (<c>resultType: "Envelope"</c>, <c>resultId</c>, <c>omitted[]</c>, the
 /// fetch hint). If the store fails the fitted envelope is returned with <c>largeResult.omitted</c> and a
-/// <c>warningDetails</c> note but no <c>resultId</c>. The pointer itself is not part of the budget (the reserve absorbs it
-/// together with the echo and stamps). A result whose JSON root is not an object, or that the pager cannot cut, is returned
+/// <c>warningDetails</c> note but no <c>resultId</c>. There is no echo reserve: the pointer, echo and stamps are added on top and never counted, a cut body fills its class budget, and the tolerance (threshold = budget x ToleranceFactor, 25%)
+/// covers the pointer. A result whose JSON root is not an object, or that the pager cannot cut, is returned
 /// as the full text for the offload filter to handle.
 /// </para>
 /// <para>
@@ -95,13 +95,15 @@ public sealed class ToolResultMarshaller : IToolResultMarshaller
         result = WithNotFoundNotes(result);
         try
         {
+            var budgetClass = LargeResultHelper.ClassFor(method, errorOnly: result is IFindingsEnvelope { IsError: true, HasSuccessData: false });
+            var threshold = LargeResultHelper.OffloadThresholdChars(budgetClass);
+            var budget = LargeResultHelper.BudgetChars(budgetClass);
+            InlineBudgetSignal.SetThreshold(threshold);
             object? passthrough = Passthrough(result, serializerOptions);
             if (_mode() != ResultMarshallerMode.On || ReferenceEquals(passthrough, result) || passthrough is not string text)
             {
                 return passthrough;
             }
-
-            const int budget = LargeResultHelper.InlineBudgetChars - LargeResultHelper.EchoReserveChars;
 
             // Detached payloads (SentinelCallToolResult.Detach / ToolCallContext.Detach) are stored whatever the size, so they are
             // resolved before the budget check. Only mode On gets here; off and passthrough never serialize them (JsonIgnore), so
@@ -109,10 +111,10 @@ public sealed class ToolResultMarshaller : IToolResultMarshaller
             if (CollectDetached(result) is { Count: > 0 } detached
                 && await DetachAsync(toolName, text, detached, serializerOptions, cancellationToken).ConfigureAwait(false) is { } detachment)
             {
-                return await FinishDetachedAsync(toolName, result, detachment, serializerOptions, budget, cancellationToken).ConfigureAwait(false);
+                return await FinishDetachedAsync(toolName, result, detachment, serializerOptions, budget, threshold, cancellationToken).ConfigureAwait(false);
             }
 
-            if (text.Length <= budget)
+            if (text.Length <= threshold)
             {
                 return text;
             }
@@ -127,7 +129,7 @@ public sealed class ToolResultMarshaller : IToolResultMarshaller
                     "Tool {ToolName} returned a stored-sequence page of {Chars} chars, over the {Budget} budget (one unit is larger than a page); returned unchanged, not re-paged or re-stored.",
                     toolName,
                     text.Length,
-                    budget);
+                    LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default));
                 OversizeUnitSignal.Raise();
                 return text;
             }
@@ -551,11 +553,12 @@ public sealed class ToolResultMarshaller : IToolResultMarshaller
         (JsonObject Remainder, JsonNode PointerNode, string Message, bool Stored) detachment,
         JsonSerializerOptions options,
         int budget,
+        int thresholdChars,
         CancellationToken cancellationToken)
     {
         JsonObject remainder = detachment.Remainder;
         string remainderText = remainder.ToJsonString(options);
-        if (remainderText.Length <= budget)
+        if (remainderText.Length <= thresholdChars)
         {
             if (!detachment.Stored)
             {
