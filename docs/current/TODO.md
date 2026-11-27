@@ -8,7 +8,6 @@ In-flight slices.
 
 - [IN-PROGRESS] Shorten the verification loop (2026-11-21) - fast and full runs done; left: Step 13 gate (from 2026-11-29) and E-row sharding - [plan](plans/plan_shorten_verification_loop.md)
 - [IN-PROGRESS] Roadmap: layering fix and project splits (2026-11-27) - master plan ordering the Common splits, the "engines report facts, tool layer writes text" fix, test selection and the Build/RunTest move (on-hold draft: plans/plan_isolate_build_test_area_into_own_project.md); DRAFT, phase order awaits owner review; Git namespace rename done, Phase 2 running; effort L - [plan](plans/plan_roadmap_layering_and_project_splits.md)
-- [IN-PROGRESS] Create RoslynSentinel.Engines.Core and move snippet matching into it (2026-11-27) - roadmap Phase 2: 17 files out of Common into a new shared engine project, namespace `RoslynSentinel.Engines.Core.SnippetMatching`, three DTO records stay in Common; APPROVED, dispatched to an orchestrator 2026-11-27; effort M - [plan](plans/plan_move_snippet_matching_into_engines_core.md)
 
 ## P2 Next
 

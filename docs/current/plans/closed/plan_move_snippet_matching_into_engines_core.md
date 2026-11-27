@@ -1,14 +1,14 @@
 # Plan: Create RoslynSentinel.Engines.Core and move snippet matching into it
 
-**Status:** IN PROGRESS 2026-11-27. Steps 1 to 4 done (373ff903, e968ccd4, 4545a2af, 87931adb); Step 5 revised after its first dry run was refused
+**Status:** IMPLEMENTED 2026-11-27. Steps 1 to 7 at 373ff903, e968ccd4, 4545a2af, 87931adb, 1e509d72 (5a), d04798a6 (5b), 64088182 (6), 6c573134 (7); full run 6c573134-20261127-022016-39260 (suite full, 1,519 s): 12,633 tests, 12,585 passed, 48 skipped, 0 failures, test count equal to the baseline cc147f9e-20261127-004211-40584 (12,633, 0 failures). Filtered runs per step: 942 tests each; the only failure, ArchitectureDocFreshness at d04798a6 and 64088182, was the expected stale generated docs, fixed by the Step 7 regeneration. Tool gaps recorded in INBOX (MoveFile gate adds only direct edges; MoveMember refuses a record as source type). CLAUDE.md is 15,073 bytes after Step 7; the hygiene script reports 0 findings.
 (Decision, last entry); Steps 5 to 8 left.
 
 ## Problem
 
-Phase 2 of [plan_roadmap_layering_and_project_splits.md](plan_roadmap_layering_and_project_splits.md): the first mechanical split of engine-like logic
+Phase 2 of [plan_roadmap_layering_and_project_splits.md](../plan_roadmap_layering_and_project_splits.md): the first mechanical split of engine-like logic
 out of `RoslynSentinel.Common`. Owner decision Q42 (2026-11-27): snippet matching goes into a new `RoslynSentinel.Engines.Core`, the shared engine
 project of Q40. The route and checklists are in
-[reference_splitting_functionality_out_of_common.md](../references/reference_splitting_functionality_out_of_common.md).
+[reference_splitting_functionality_out_of_common.md](../../references/reference_splitting_functionality_out_of_common.md).
 
 Grounding (2026-11-27, HEAD 39a209c2, re-checked by the readiness review at e3df18ef; "symbol" = Roslyn references, "text" = name search):
 
@@ -248,7 +248,7 @@ Single lane (every step touches the same folder). Steps 1 to 3 are in Common onl
 - Files: `CLAUDE.md` (Architecture bullets, lines 168 and 172-173), `docs/current/references/reference_architecture_map.md` (Layers table),
   `docs/current/references/reference_not_found_error_inventory.md` (line 122, the one mention that carries the folder path),
   `docs/current/references/reference_splitting_functionality_out_of_common.md`, `docs/generated/*`,
-  [plan_roadmap_layering_and_project_splits.md](plan_roadmap_layering_and_project_splits.md) (Phase 2 row: 17 files moved, not 18).
+  [plan_roadmap_layering_and_project_splits.md](../plan_roadmap_layering_and_project_splits.md) (Phase 2 row: 17 files moved, not 18).
 - Depends on: Step 6
 - Effect: text-neutral.
 - Lane: the dispatcher itself.

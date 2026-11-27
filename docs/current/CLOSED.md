@@ -8,6 +8,12 @@ Only the newest month (2026-11) is kept here. Older entries are archived unchang
 [archive/closed_2026-10.md](archive/closed_2026-10.md), [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Create RoslynSentinel.Engines.Core and move snippet matching into it - resolved (2026-11-27)
+
+Create RoslynSentinel.Engines.Core and move snippet matching into it (2026-11-27) - roadmap Phase 2: 17 files out of Common into a new shared engine project, namespace `RoslynSentinel.Engines.Core.SnippetMatching`, three DTO records stay in Common; APPROVED, dispatched to an orchestrator 2026-11-27; effort M - [plan](plans/closed/plan_move_snippet_matching_into_engines_core.md)
+
+Evidence: IMPLEMENTED 2026-11-27. Steps 1 to 7 at 373ff903, e968ccd4, 4545a2af, 87931adb, 1e509d72 (5a), d04798a6 (5b), 64088182 (6), 6c573134 (7); full run 6c573134-20261127-022016-39260 (suite full, 1,519 s): 12,633 tests, 12,585 passed, 48 skipped, 0 failures, test count equal to the baseline cc147f9e-20261127-004211-40584 (12,633, 0 failures). Filtered runs per step: 942 tests each; the only failure, ArchitectureDocFreshness at d04798a6 and 64088182, was the expected stale generated docs, fixed by the Step 7 regeneration. Tool gaps recorded in INBOX (MoveFile gate adds only direct edges; MoveMember refuses a record as source type). CLAUDE.md is 15,073 bytes after Step 7; the hygiene script reports 0 findings.
+
 ## Slip-first scenarios graded per site - resolved (2026-11-27)
 
 Slip-first scenarios graded per site (2026-11-26) - four slip-family scenarios (36 per-site-graded members each, silent slips counted) with builder, token grader, sidecar, Get-SlipCounts metrics and an E1 validity batch; run `/implement-plan` in a fresh chat; `batchEdits` A/B arm is a later plan; effort L - [plan](plans/closed/plan_slip_first_scenarios.md)
