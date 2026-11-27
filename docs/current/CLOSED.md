@@ -8,6 +8,12 @@ Only the newest month (2026-11) is kept here. Older entries are archived unchang
 [archive/closed_2026-10.md](archive/closed_2026-10.md), [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Slip-first scenarios graded per site - resolved (2026-11-27)
+
+Slip-first scenarios graded per site (2026-11-26) - four slip-family scenarios (36 per-site-graded members each, silent slips counted) with builder, token grader, sidecar, Get-SlipCounts metrics and an E1 validity batch; run `/implement-plan` in a fresh chat; `batchEdits` A/B arm is a later plan; effort L - [plan](plans/closed/plan_slip_first_scenarios.md)
+
+Evidence: plan IMPLEMENTED: 6ac92264..5e5a814c (Steps 1-14b), pre-E1 gate 84ef2cf7, E1 16 runs at 5e5a814c kept all four families with 0 grader false positives (plans/closed/plan_slip_first_scenarios.md D31-D33)
+
 ## Rename the RoslynSentinel.Git namespaces - resolved (2026-11-27)
 
 Rename the RoslynSentinel.Git namespaces (2026-11-27) - `ChangeNamespace` to `RoslynSentinel.Git` and `RoslynSentinel.Git.Worktrees`, folder `GitWorktree/` -> `Worktrees/`; dispatched to an orchestrator 2026-11-27; effort M - [plan](plans/closed/plan_rename_git_project_namespaces.md)

@@ -1,13 +1,13 @@
 # Plan: Slip-first eval scenarios graded per site, one slip family each
 
-**Status:** IN PROGRESS 2026-11-27. Steps 1-15 done (6ac92264..5e5a814c; pre-E1 gate passed at 5e5a814c); E1 (Step 16) and close-out (Step 17) left.
+**Status:** IMPLEMENTED 2026-11-27. 6ac92264..5e5a814c (Steps 1-14b), gate 84ef2cf7, E1 at 5e5a814c kept all four families (D31), E2 sized (D33); full test run at 5e5a814c 0 failures.
 
 ## Problem
 
-Source: [idea_slip_first_scenarios.md](../ideas/idea_slip_first_scenarios.md).
+Source: [idea_slip_first_scenarios.md](../../ideas/idea_slip_first_scenarios.md).
 
 The slip-focused siblings from
-[plan_slip_focused_scenario_variants.md](./closed/plan_slip_focused_scenario_variants.md) passed E1
+[plan_slip_focused_scenario_variants.md](./plan_slip_focused_scenario_variants.md) passed E1
 (11 of 12 runs) but yield 2-13 write calls per run, because the model batches edits through
 `ReplaceSnippet.batchEdits`. All 17 slipped writes came from one run, so a per-call rate mostly counts
 runs that fell into a slip loop. The slip metric (`scripts/Get-SlipCounts.ps1`) is refusal-based and
@@ -197,6 +197,52 @@ It worked when:
   APPROVED commit). Mode Batched (A: 1-2, B: 3-6, C: 10-13, D: 7/8/9a-1/9a-2/9b, E: 14a-14b; main
   session 15-17). Owner away: mid-run decisions deferred to the tracker. Qwen3.5-9B confirmed loaded
   on 112 and 113 before the run started.
+- 2026-11-27 D31 (Step 16, E1 result): 16 runs at 5e5a814c (Qwen3.5-9B-MTP-GGUF, llama-server, host-default
+  sampler `Sampler: {}`, thinking off, near-miss auto-correct off, plain results, turn cap 40). Per run
+  (host, class, Correct/Wrong/Unchanged/Missing of 30 Changed, control hits, separator hits, slipped writes,
+  stop reason):
+
+  | Family | Host | Class | C/W/U/M | Ctl | Sep | Refused slips | Stop |
+  | --- | --- | --- | --- | --- | --- | --- | --- |
+  | EscapeLiteralsSlip | 112 | CleanRun | 30/0/0/0 | 0 | 0 | 1 | ModelFinished |
+  | EscapeLiteralsSlip | 112 | SlipRun | 28/2/0/0 | 0 | 0 | 2 | ModelFinished |
+  | EscapeLiteralsSlip | 113 | CleanRun | 30/0/0/0 | 0 | 0 | 0 | ModelFinished |
+  | EscapeLiteralsSlip | 113 | CleanRun | 30/0/0/0 | 0 | 0 | 2 | ModelFinished |
+  | DocCommentsSlip | 112 | SlipRun | 29/0/1/0 | 1 | 0 | 4 | ModelFinished |
+  | DocCommentsSlip | 112 | SlipRun | 26/4/0/0 | 0 | 0 | 2 | ModelFinished |
+  | DocCommentsSlip | 113 | SlipRun | 26/4/0/0 | 0 | 0 | 1 | ModelFinished |
+  | DocCommentsSlip | 113 | SlipRun | 28/2/0/0 | 2 | 0 | 2 | ModelFinished |
+  | LongGenericsSlip | 112 | SlipRun | 23/7/0/0 | 0 | 0 | 3 | ModelFinished |
+  | LongGenericsSlip | 112 | SlipRun | 20/10/0/0 | 0 | 0 | 6 | ModelFinished |
+  | LongGenericsSlip | 113 | SlipRun | 26/4/0/0 | 0 | 0 | 0 | ModelFinished |
+  | LongGenericsSlip | 113 | ShortRun | 4/0/26/0 | 0 | 0 | 3 | NotConverged (RepeatedToolFailure) |
+  | NearDuplicateIdentifiersSlip | 112 | CleanRun | 30/0/0/0 | 0 | 0 | 1 | ModelFinished |
+  | NearDuplicateIdentifiersSlip | 112 | CleanRun | 30/0/0/0 | 0 | 0 | 1 | ModelFinished |
+  | NearDuplicateIdentifiersSlip | 113 | SlipRun | 29/1/0/0 | 0 | 0 | 1 | ModelFinished |
+  | NearDuplicateIdentifiersSlip | 113 | CleanRun | 30/0/0/0 | 0 | 0 | 1 | ModelFinished |
+
+  Pooled residual slip rate (`Get-SlipCounts.ps1 -Summary`, 112 / 113): Escape 0.03 / 0.00, Doc 0.07 / 0.10,
+  LongGenerics 0.28 / 0.12, NearDup 0.00 / 0.02; collateral Doc 0.08 / 0.17, all others 0; boundary 0
+  everywhere. Manual check (explore-tier2 sonnet) of all 38 non-Correct graded sites: 0 grader false
+  positives. Constructs: Escape - a `Member replace` retyped from the seed dropped one change (2); Doc -
+  the `&lt;`/`&gt;` summary-line edit missed or put on the wrong line (9), an extra cref edit, one site
+  never edited, three control sites edited (a neighbour's cref changed); LongGenerics - container change
+  applied at the wrong nesting level, outer wrapper dropped, extra key-type edit (21, the same four sites
+  in every run that tried them); NearDup - `Overweight` typed for `Overnight` (1). The ShortRun repeated a
+  gate-refused edit with the method name in parentheses 10 times. Verdict (D18): all four families kept
+  (each has >= 3 of 4 runs with >= 20 graded Changed sites and 0 false positives). LongGenerics' repeated
+  wrong-nesting sites look like a comprehension failure rather than a slip (one line per the eval-focus
+  rule); see Risks.
+- 2026-11-27 D32 (owner, during the run): extra runs may be queued at low priority overnight. Queued 96
+  jobs at 5e5a814c, priority 9, 12 per family per host, purpose `... extra=overnight` (the first submit
+  attached repeats 1-2 to the E1 jobs; topped up with `-Force`).
+- 2026-11-27 D33 (Step 17, E2 sizing): runs per family for a 95% run-level CI half-width of 2 points,
+  n = (1.96 x s / 0.02)^2 with s the between-run SD of E1 per-run residual rates: EscapeLiteralsSlip
+  s = 0.033, n = 11; DocCommentsSlip s = 0.064, n = 40; LongGenericsSlip s = 0.142, n = 195 (s = 0.100,
+  n = 97 without the ShortRun); NearDuplicateIdentifiersSlip s = 0.017, n = 3 (floor it at 10, four runs
+  are too few to trust a small SD). The 96 overnight runs (D32, 24 per family) cover Escape and NearDup,
+  most of Doc, and a quarter of LongGenerics; re-size from them before submitting E2. TODO.md carries
+  the E2 line.
 
 ### Design summary
 
@@ -661,6 +707,7 @@ Common to all four:
   check finds 0 false positives; rework or drop it at >= 2 ShortRuns or any false positive; 0 Wrong and
   0 refused slips over all runs: keep, marked "not slip-prone for this model".
 - Lane: modeleval-runner (log triage via model-eval-log-analyst). Effort: L
+- Done: E1 at 5e5a814c, 16 runs, all four families kept (D31); 96 overnight runs queued (D32)
 
 ### Step 17 - Close-out
 - Files: `docs/current/references/reference_model_eval_procedure.md`,
@@ -676,6 +723,7 @@ Common to all four:
   command) and, if E1 kept at least one family, the D20 note. Idea doc Status: implemented by this plan.
 - Done when: `Git(status)` shows the five docs committed with the plan trailer.
 - Lane: main session. Effort: S
+- Done: Step 17 docs and plan close in the Closes commit; E2 sizing D33
 
 ## Test table
 
@@ -760,6 +808,11 @@ Deferred (owner away, 2026-11-27): `firstLineText` is in `$EscapeScanFieldsWide`
 `$SourceTextFields`, so a ReplaceRange call carrying only `firstLineText` is classed "Other" and its
 escape copy counts as a slip only when `newContent` is present too. Recommendation: leave it (real
 ReplaceRange calls carry `newContent`).
+
+Deferred (owner away, 2026-11-27): LongGenericsSlip's four sites PriceHistory, InventoryLevels,
+AddressBook and CurrencyRates fail the same way in every run that attempted them (container change
+applied to the outer type). Recommendation: before E2, reword those four sites so the target type is
+unambiguous (logic-simpler variant), then re-run the Step 15 gate.
 
 Risks:
 - ContosoOrders build: no warnings-as-errors today (D24); Step 15's golden run catches any rendered

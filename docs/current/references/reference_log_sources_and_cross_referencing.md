@@ -84,6 +84,10 @@ reading it whole. `ModelAgentRunner` also writes a `Summary` block (run totals) 
 - `step-<k>.outcome.txt`: the harness outcome line(s); the key=value tokens (`outcome=`, `stopReason=`,
   `outcomeClass=`, `wallTime=`) are the only source of the stop reason name (the transcript's `StopReason` is
   numeric). `EvalRunReader.ps1` parses it.
+- `step-<k>.sites.json` (per-site slip families only): a JSON array of `siteName`, `role`
+  (`Changed`/`Control`/`Separator`), `outcome` (`Correct`/`Unchanged`/`Wrong`/`Missing`) and `endStateText`
+  (null when Correct). `Read-EvalSiteGrades` and `Get-EvalSiteTally` in `EvalRunReader.ps1` read it; the role and
+  outcome strings are `siteRoles`/`siteOutcomes` in `vocabulary.json`.
 - `results.csv` (RunScenario, resume and sweep tests): one row per sample, with the `transcriptPath` column
   described above.
 
@@ -166,7 +170,9 @@ All are under `scripts\`; descriptions follow each script's own header.
   at their first error, the error text is swapped for each variant, and the live model's next turn is
   classified into `variants.csv`.
 - `Get-SlipCounts.ps1`: slip counts for transcripts, one object per run or with `-Summary` one per Scenario and
-  PromptVariant; run discovery as `Get-ToolResultFormatArmTable.ps1`.
+  PromptVariant; run discovery as `Get-ToolResultFormatArmTable.ps1`. Runs with a `step-*.sites.json` sidecar
+  also get the per-site columns (`SitesChanged` ... `SeparatorHits`, `ResidualSlipRate`, `CompletionRate`) and,
+  with `-Summary`, the pooled site rates and a run-level bootstrap CI (`-BootstrapSeed`).
 - `Parse-AgentLog.ps1`: per-turn parse of `agent.log` (see `reference_parse_agent_log_script.md`).
 
 ## Server-side artifacts

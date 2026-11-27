@@ -1,6 +1,6 @@
 # Idea: Purpose-built slip scenarios graded per site, not per tool call
 
-**Status:** APPROVED 2026-11-26. Plan: [plans/plan_slip_first_scenarios.md](../plans/plan_slip_first_scenarios.md) (the `batchEdits` A/B arm is a separate later plan).
+**Status:** IMPLEMENTED 2026-11-27 by [plans/closed/plan_slip_first_scenarios.md](../plans/closed/plan_slip_first_scenarios.md) (E1 kept all four families; E2 and the `batchEdits` A/B arm are separate later work).
 
 ## What happened
 
