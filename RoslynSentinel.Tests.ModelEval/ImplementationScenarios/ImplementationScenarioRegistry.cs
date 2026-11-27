@@ -32,6 +32,10 @@ internal static class ImplementationScenarioRegistry
         WidenAcrossFilesSlipScenario.Definition,
         WidenDictionaryLeafFirstSlipScenario.Definition,
         SweepNamedSitesSlipScenario.Definition,
+        EscapeLiteralsSlipScenario.Definition,
+        DocCommentsSlipScenario.Definition,
+        LongGenericsSlipScenario.Definition,
+        NearDuplicateIdentifiersSlipScenario.Definition,
     ];
 
     /// <summary>Case-insensitive lookup; throws listing the known ids when nothing matches.</summary>

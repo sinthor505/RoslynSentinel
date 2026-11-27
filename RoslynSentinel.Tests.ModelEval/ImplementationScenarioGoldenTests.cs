@@ -319,7 +319,7 @@ public class ImplementationScenarioGoldenTests
     public void Registry_IdsUniqueAndMatchClassNames()
     {
         var all = ImplementationScenarioRegistry.All;
-        Assert.That(all, Has.Count.EqualTo(18));
+        Assert.That(all, Has.Count.EqualTo(22));
         Assert.That(all.Select(scenario => scenario.Id), Is.Unique.IgnoreCase);
 
         foreach (var scenario in all)
@@ -373,7 +373,7 @@ public class ImplementationScenarioGoldenTests
             [EvalAxis.ErrorRecovery] = ["SweepConstructionSites"],
             [EvalAxis.MultiStepState] = ["ThreadOptionalParameter"],
             [EvalAxis.ToolUse] = ["LargeBlockRewrite"],
-            [EvalAxis.Transcription] = ["WidenAcrossFilesSlip", "WidenDictionaryLeafFirstSlip", "SweepNamedSitesSlip"],
+            [EvalAxis.Transcription] = ["WidenAcrossFilesSlip", "WidenDictionaryLeafFirstSlip", "SweepNamedSitesSlip", "EscapeLiteralsSlip", "DocCommentsSlip", "LongGenericsSlip", "NearDuplicateIdentifiersSlip"],
             [EvalAxis.InstructionAdherence] =
             [
                 "WidenToReadOnlyDictionary", "WideningRejectedByGate", "ChangeSetTypeFromSpec", "RetypeSliceExactLines",
