@@ -3,7 +3,8 @@
     Shared transcript metrics for the model-eval arm scripts: run discovery (evalqueue job files or a folder scan),
     the escape-copy read cache (Q11) and the call categories Write, Read and Other (Q17).
     Read-Run (per-transcript parsing and the outcome, header and argument-failure rules) stays in the caller
-    (Get-ToolResultFormatArmTable.ps1). Get-EvalTranscripts emits one object per transcript.json and reads no transcript.
+    (Get-ToolResultFormatArmTable.ps1). Get-EvalTranscripts emits one object per transcript.json and reads no transcript;
+    it reads one or more machines' job folders (default every machine in eval-hosts.json) and can filter by -Commit.
     Dot-source this file; it runs nothing by itself.
 #>
 
@@ -54,46 +55,88 @@ function Get-WriteTargets($callArgs) {
     return , $out.ToArray()
 }
 
-# Run discovery. Default: the job files under <QueueRoot>\<Machine>\jobs (or -JobFolder); jobs whose purpose is not
-# -like -PurposePattern and jobs in state Cancelled are skipped. -Path: every transcript.json under each folder
-# (recursive), no job files; Machine, JobId, Test, Purpose, Passed, EnvFormat and EnvThinking are '-' or $null.
-# Emits one pscustomobject per transcript.json; callers wrap the call in @().
+# First non-null value of a job property, or $null when the job has none of the names (jobs written before the
+# field existed lack it).
+function Get-JobField($job, [string[]]$names) {
+    foreach ($n in $names) {
+        $p = $job.PSObject.Properties[$n]
+        if ($null -ne $p -and $null -ne $p.Value) { return $p.Value }
+    }
+    return $null
+}
+
+# Run discovery. Default: the job files under <QueueRoot>\<machine>\jobs for each -Machine (each element is split on
+# commas and trimmed, so `-File x.ps1 -Machine a,b` works); with no -Machine and no -JobFolder/-Path the machines are the
+# distinct `machine` values of -HostsFile (default eval-hosts.json beside this file). A missing machine folder is a
+# warning and is skipped; it throws only when none exist. -JobFolder is a single-folder override (rows carry the first
+# -Machine, else '-'). Jobs whose purpose is not -like -PurposePattern and jobs in state Cancelled are skipped; -Commit
+# keeps only jobs whose testedCommit (else commit) starts with it, case-insensitive. -Path: every transcript.json under
+# each folder (recursive), no job files; Machine is '-' and JobId, Test, Purpose, Passed, Commit, Dirty and Job are
+# $null (EnvFormat and EnvThinking '-'). Job rows add Commit (testedCommit else commit), Dirty (testedDirty else dirty)
+# and Job (the parsed job object). Emits one pscustomobject per transcript.json; callers wrap the call in @().
 function Get-EvalTranscripts {
     param(
-        [string]$Machine,
+        [string[]]$Machine,
         [string]$PurposePattern = '*',
         [string]$JobFolder,
         [string[]]$Path,
-        [string]$QueueRoot
+        [string]$QueueRoot,
+        [string]$Commit,
+        [string]$HostsFile
     )
 
     if ($Path) {
         foreach ($p in $Path) {
             foreach ($transcript in Get-ChildItem -LiteralPath $p -Recurse -Filter transcript.json -File -ErrorAction SilentlyContinue) {
-                [pscustomobject]@{ TranscriptPath = $transcript.FullName; RunFolder = Split-Path -Parent $transcript.FullName; Machine = '-'; JobId = $null; Test = $null; Purpose = $null; Passed = $null; EnvFormat = '-'; EnvThinking = '-' }
+                [pscustomobject]@{ TranscriptPath = $transcript.FullName; RunFolder = Split-Path -Parent $transcript.FullName; Machine = '-'; JobId = $null; Test = $null; Purpose = $null; Passed = $null; EnvFormat = '-'; EnvThinking = '-'; Commit = $null; Dirty = $null; Job = $null }
             }
         }
         return
     }
 
-    if ($JobFolder) { $jobsDir = $JobFolder }
+    $machines = @($Machine | Where-Object { $null -ne $_ } | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+
+    # Each source is one jobs folder and the machine its rows are attributed to.
+    $sources = New-Object System.Collections.Generic.List[object]
+    if ($JobFolder) {
+        $label = if ($machines.Count -gt 0) { $machines[0] } else { '-' }
+        if (-not (Test-Path -LiteralPath $JobFolder)) { throw "No jobs folder at $JobFolder." }
+        $sources.Add([pscustomobject]@{ Machine = $label; Dir = $JobFolder })
+    }
     else {
         if (-not $QueueRoot) { $QueueRoot = if ($env:ROSLYNSENTINEL_EVALQUEUE_ROOT) { $env:ROSLYNSENTINEL_EVALQUEUE_ROOT } else { Join-Path $env:LOCALAPPDATA 'RoslynSentinel\evalqueue' } }
-        $jobsDir = Join-Path (Join-Path $QueueRoot $Machine) 'jobs'
+        if ($machines.Count -eq 0) {
+            if (-not $HostsFile) { $HostsFile = Join-Path $PSScriptRoot 'eval-hosts.json' }
+            if (-not (Test-Path -LiteralPath $HostsFile)) { throw "No -Machine given and no hosts file at $HostsFile." }
+            $machines = @((Get-Content -LiteralPath $HostsFile -Raw | ConvertFrom-Json).hosts | ForEach-Object { [string]$_.machine } | Where-Object { $_ } | Select-Object -Unique)
+            if ($machines.Count -eq 0) { throw "No -Machine given and $HostsFile lists no machines." }
+        }
+        $searched = New-Object System.Collections.Generic.List[string]
+        foreach ($m in ($machines | Select-Object -Unique)) {
+            $dir = Join-Path (Join-Path $QueueRoot $m) 'jobs'
+            $searched.Add($dir)
+            if (Test-Path -LiteralPath $dir) { $sources.Add([pscustomobject]@{ Machine = $m; Dir = $dir }) }
+            else { Write-Warning "No jobs folder for machine '$m' at $dir; skipped." }
+        }
+        if ($sources.Count -eq 0) { throw "No jobs folder at $($searched -join ', ')." }
     }
-    if (-not (Test-Path -LiteralPath $jobsDir)) { throw "No jobs folder at $jobsDir." }
 
-    foreach ($file in Get-ChildItem -LiteralPath $jobsDir -Filter '*.json' -File) {
-        try { $job = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json }
-        catch { Write-Warning "Skipped malformed job file $($file.Name)."; continue }
-        if ([string]$job.purpose -notlike $PurposePattern -or $job.state -eq 'Cancelled') { continue }
-        $jobFormat = Get-EnvValue $job.env 'ROSLYNSENTINEL_MODELEVAL_TOOL_RESULT_FORMAT'
-        $jobThinking = Get-EnvValue $job.env 'ROSLYNSENTINEL_MODELEVAL_THINKING'
+    foreach ($source in $sources) {
+        foreach ($file in Get-ChildItem -LiteralPath $source.Dir -Filter '*.json' -File) {
+            try { $job = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json }
+            catch { Write-Warning "Skipped malformed job file $($file.Name)."; continue }
+            if ([string]$job.purpose -notlike $PurposePattern -or $job.state -eq 'Cancelled') { continue }
+            $jobCommit = Get-JobField $job @('testedCommit', 'commit')
+            if ($Commit -and -not ([string]$jobCommit).StartsWith($Commit, [System.StringComparison]::OrdinalIgnoreCase)) { continue }
+            $jobDirty = Get-JobField $job @('testedDirty', 'dirty')
+            $jobFormat = Get-EnvValue $job.env 'ROSLYNSENTINEL_MODELEVAL_TOOL_RESULT_FORMAT'
+            $jobThinking = Get-EnvValue $job.env 'ROSLYNSENTINEL_MODELEVAL_THINKING'
 
-        foreach ($folder in @($job.runFolders)) {
-            if (-not $folder -or -not (Test-Path -LiteralPath $folder)) { continue }
-            foreach ($transcript in Get-ChildItem -LiteralPath $folder -Recurse -Filter transcript.json -File -ErrorAction SilentlyContinue) {
-                [pscustomobject]@{ TranscriptPath = $transcript.FullName; RunFolder = Split-Path -Parent $transcript.FullName; Machine = $Machine; JobId = $job.id; Test = $job.test; Purpose = $job.purpose; Passed = $job.passed; EnvFormat = $jobFormat; EnvThinking = $jobThinking }
+            foreach ($folder in @($job.runFolders)) {
+                if (-not $folder -or -not (Test-Path -LiteralPath $folder)) { continue }
+                foreach ($transcript in Get-ChildItem -LiteralPath $folder -Recurse -Filter transcript.json -File -ErrorAction SilentlyContinue) {
+                    [pscustomobject]@{ TranscriptPath = $transcript.FullName; RunFolder = Split-Path -Parent $transcript.FullName; Machine = $source.Machine; JobId = $job.id; Test = $job.test; Purpose = $job.purpose; Passed = $job.passed; EnvFormat = $jobFormat; EnvThinking = $jobThinking; Commit = $jobCommit; Dirty = $jobDirty; Job = $job }
+                }
             }
         }
     }

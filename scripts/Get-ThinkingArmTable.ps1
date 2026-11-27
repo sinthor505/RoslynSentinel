@@ -4,13 +4,16 @@
     turns, thinking turns, reasoning deltas, over-budget turns, host-cap turns and the longest same-tool error streak.
 
 .DESCRIPTION
-    Reads the evalqueue job files of one machine, keeps the jobs whose purpose matches -PurposePattern (cancelled jobs
-    are always skipped) and groups them by arm. The arm key is the four values the job recorded in its `env` block:
+    Reads the evalqueue job files of one or more machines (default: all machines in eval-hosts.json), keeps the jobs
+    whose purpose matches -PurposePattern (cancelled jobs are always skipped) and whose commit starts with -Commit when
+    given, and groups them by arm. The arm key is the four values the job recorded in its `env` block:
     ROSLYNSENTINEL_MODELEVAL_THINKING, _THINKING_TRIGGERS, _THINKING_EFFORT and _REASONING_BUDGET, shown as
     THINKING/TRIGGERS/EFFORT/BUDGET with `-` for an unset value; a job with none of the four set is the `baseline` arm.
     When the job also sets ROSLYNSENTINEL_REASONING_REPLAY_FORM, the arm gets a trailing `/<form>` (a job with only
     that variable set is `baseline/content`); a job without it keeps the arm key unchanged.
-    With -GroupByTest the rows are split by the job's test name as well.
+    With -GroupByTest the rows are split by the job's test name as well; a run whose outcome file starts with
+    `<ScenarioId> step <n>:` (an ImplementationScenario run) is grouped by that ScenarioId instead, and the aggregate
+    table's `test` column shows the group name.
 
     A run is a directory under a job's runFolders that holds a transcript.json. Every run directory is read (one
     transcript.json parse per run) together with the step-<k>.outcome.txt beside it when there is one:
@@ -32,7 +35,15 @@
     holds a literal `</think>`, from the transcript Summary when it has LeakedThinkTagTurnCount) and leakTurns/run.
 
 .PARAMETER Machine
-    Queue machine key (folder under %LOCALAPPDATA%\RoslynSentinel\evalqueue). Default 85.
+    One or more queue machine keys (folders under %LOCALAPPDATA%\RoslynSentinel\evalqueue), as separate values or
+    comma-joined (`-Machine 112,113`). Default: every distinct machine in eval-hosts.json. A machine with no folder
+    gives a warning and is skipped.
+
+.PARAMETER Commit
+    Optional: keep only jobs whose testedCommit (else commit) starts with this value, case-insensitive.
+
+.PARAMETER HostsFile
+    Optional: the eval-hosts.json that supplies the default machines. Default scripts\eval-hosts.json.
 
 .PARAMETER PurposePattern
     -like pattern for the job purpose. Default '*' (every job that is not cancelled).
@@ -45,40 +56,32 @@
     (a job is one <id>.json file), so this points at any such folder, for example a copy holding a single job.
 
 .PARAMETER CsvPath
-    Optional: write the per-run rows here.
+    Optional: write the per-run rows here (the last column, `scenario`, is the outcome file's ScenarioId, empty when none).
+
+.PARAMETER SummaryCsvPath
+    Optional: also write the aggregate table's rows (the columns that are printed) to this CSV.
 
 .PARAMETER QueueRoot
     Optional: evalqueue root. Default $env:ROSLYNSENTINEL_EVALQUEUE_ROOT, else %LOCALAPPDATA%\RoslynSentinel\evalqueue.
 #>
 [CmdletBinding()]
 param(
-    [string]$Machine = '85',
+    [string[]]$Machine,
     [string]$PurposePattern = '*',
     [switch]$GroupByTest,
     [string]$JobFolder,
     [string]$CsvPath,
-    [string]$QueueRoot
+    [string]$SummaryCsvPath,
+    [string]$QueueRoot,
+    [string]$Commit,
+    [string]$HostsFile
 )
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'eval-review\EvalRunReader.ps1')
+# Get-EvalTranscripts (run discovery over several machines, commit filter) and Get-EnvValue ('-' for an unset value).
+. (Join-Path $PSScriptRoot 'roslynsentinel-transcriptmetrics.ps1')
 $HostCapMarkers = @('I should answer soon', 'I need to state my answer and act')
-
-# TODO read several machines' queue folders in one call, and group ImplementationScenario runs by -Scenario (from the job's evalArgs), not only by job test name
-# TODO use roslynsentinel-transcriptmetrics.ps1 for run discovery
-if ($JobFolder) { $jobsDir = $JobFolder }
-else {
-    if (-not $QueueRoot) { $QueueRoot = if ($env:ROSLYNSENTINEL_EVALQUEUE_ROOT) { $env:ROSLYNSENTINEL_EVALQUEUE_ROOT } else { Join-Path $env:LOCALAPPDATA 'RoslynSentinel\evalqueue' } }
-    $jobsDir = Join-Path (Join-Path $QueueRoot $Machine) 'jobs'
-}
-if (-not (Test-Path -LiteralPath $jobsDir)) { throw "No jobs folder at $jobsDir." }
-
-function Get-EnvValue($jobEnv, [string]$name) {
-    if ($null -eq $jobEnv) { return '-' }
-    $p = $jobEnv.PSObject.Properties[$name]
-    if ($null -eq $p -or [string]::IsNullOrWhiteSpace([string]$p.Value)) { return '-' }
-    return [string]$p.Value
-}
 
 function Get-Median($values) {
     $v = @($values | Where-Object { $null -ne $_ } | Sort-Object)
@@ -96,11 +99,11 @@ function Format-Counts($values) {
 
 function Read-Run([string]$transcriptPath) {
     $dir = Split-Path -Parent $transcriptPath
-    $outcome = $null; $stop = $null; $class = $null; $wall = $null
+    $outcome = $null; $stop = $null; $class = $null; $wall = $null; $scenario = $null
     $outFile = Get-ChildItem -LiteralPath $dir -Filter 'step-*.outcome.txt' -File -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($outFile) {
         $o = Read-EvalStepOutcome -Path $outFile.FullName
-        $outcome = $o.Outcome; $stop = $o.StopReason; $class = $o.OutcomeClass; $wall = $o.WallSeconds
+        $outcome = $o.Outcome; $stop = $o.StopReason; $class = $o.OutcomeClass; $wall = $o.WallSeconds; $scenario = $o.ScenarioId
     }
 
     $turns = $null; $thinkTurns = 0; $deltas = @(); $overBudget = 0; $hostCap = 0; $maxStreak = 0
@@ -138,17 +141,16 @@ function Read-Run([string]$transcriptPath) {
     catch { Write-Warning "Skipped unreadable transcript $transcriptPath ($($_.Exception.GetType().Name))."; return $null }
 
     return [pscustomobject]@{
-        runDir = $dir; outcome = $outcome; stopReason = $stop; outcomeClass = $class; wallSeconds = $wall
+        runDir = $dir; scenario = $scenario; outcome = $outcome; stopReason = $stop; outcomeClass = $class; wallSeconds = $wall
         turns = $turns; thinkingTurns = $thinkTurns; reasoningDeltas = $deltas; overBudgetTurns = $overBudget
         hostCapTurns = $hostCap; maxErrStreak = $maxStreak; form = $form; leakTurns = $leakTurns
     }
 }
 
 $rows = New-Object System.Collections.Generic.List[object]
-foreach ($file in Get-ChildItem -LiteralPath $jobsDir -Filter '*.json' -File) {
-    try { $job = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json }
-    catch { Write-Warning "Skipped malformed job file $($file.Name)."; continue }
-    if ([string]$job.purpose -notlike $PurposePattern -or $job.state -eq 'Cancelled') { continue }
+foreach ($tr in @(Get-EvalTranscripts -Machine $Machine -PurposePattern $PurposePattern -JobFolder $JobFolder -QueueRoot $QueueRoot -Commit $Commit -HostsFile $HostsFile)) {
+    $job = $tr.Job
+    # TODO add ToolResultFormat to the arm key
     $parts = @(
         (Get-EnvValue $job.env 'ROSLYNSENTINEL_MODELEVAL_THINKING'),
         (Get-EnvValue $job.env 'ROSLYNSENTINEL_MODELEVAL_THINKING_TRIGGERS'),
@@ -158,25 +160,28 @@ foreach ($file in Get-ChildItem -LiteralPath $jobsDir -Filter '*.json' -File) {
     $formEnv = Get-EnvValue $job.env 'ROSLYNSENTINEL_REASONING_REPLAY_FORM'
     if ($formEnv -ne '-') { $arm = "$arm/$formEnv" }
 
-    foreach ($folder in @($job.runFolders)) {
-        if (-not $folder -or -not (Test-Path -LiteralPath $folder)) { continue }
-        foreach ($transcript in Get-ChildItem -LiteralPath $folder -Recurse -Filter transcript.json -File -ErrorAction SilentlyContinue) {
-            $run = Read-Run $transcript.FullName
-            if ($null -eq $run) { continue }
-            $run | Add-Member -NotePropertyMembers @{ jobId = $job.id; test = $job.test; arm = $arm } -PassThru | ForEach-Object { $rows.Add($_) }
-        }
-    }
+    $run = Read-Run $tr.TranscriptPath
+    if ($null -eq $run) { continue }
+    # test is the job's test name (CSV); group is what -GroupByTest splits on: the outcome file's ScenarioId for an
+    # ImplementationScenario run, else the job's test name.
+    $group = if ($run.scenario) { [string]$run.scenario } else { [string]$job.test }
+    $run | Add-Member -NotePropertyMembers @{ jobId = $job.id; test = $job.test; group = $group; arm = $arm; commit = $tr.Commit; dirty = $tr.Dirty; machine = $tr.Machine } -PassThru | ForEach-Object { $rows.Add($_) }
 }
 
-if ($rows.Count -eq 0) { Write-Host "No runs found for purpose '$PurposePattern' under $jobsDir (no run folder with a transcript.json)."; return }
+if ($rows.Count -eq 0) {
+    $searchedDesc = if ($JobFolder) { $JobFolder } else { "machine(s) $(if ($Machine) { $Machine -join ',' } else { 'in eval-hosts.json' })" }
+    Write-Host "No runs found for purpose '$PurposePattern' under $searchedDesc (no run folder with a transcript.json)."
+    return
+}
 if ($CsvPath) {
+    # scenario stays the last column so the earlier columns keep their positions.
     $rows | Select-Object jobId, test, arm, outcome, stopReason, outcomeClass, wallSeconds, turns, thinkingTurns,
-        @{ n = 'reasoningDeltas'; e = { $_.reasoningDeltas -join ';' } }, overBudgetTurns, hostCapTurns, maxErrStreak, form, leakTurns, runDir |
+        @{ n = 'reasoningDeltas'; e = { $_.reasoningDeltas -join ';' } }, overBudgetTurns, hostCapTurns, maxErrStreak, form, leakTurns, runDir, scenario |
         Export-Csv -LiteralPath $CsvPath -NoTypeInformation
     Write-Host "Per-run rows: $CsvPath"
 }
 
-$groupKeys = if ($GroupByTest) { @('arm', 'test') } else { @('arm') }
+$groupKeys = if ($GroupByTest) { @('arm', 'group') } else { @('arm') }
 $table = $rows | Group-Object $groupKeys | Sort-Object Name | ForEach-Object {
     $g = @($_.Group)
     $n = $g.Count
@@ -185,7 +190,7 @@ $table = $rows | Group-Object $groupKeys | Sort-Object Name | ForEach-Object {
     $medTurns = Get-Median ($g | ForEach-Object { $_.turns })
     $medDeltas = Get-Median ($g | ForEach-Object { $_.reasoningDeltas } | ForEach-Object { $_ })
     $row = [ordered]@{ arm = $g[0].arm }
-    if ($GroupByTest) { $row.test = $g[0].test }
+    if ($GroupByTest) { $row.test = $g[0].group }
     $row.runs = $n
     $row.noOutcome = @($g | Where-Object { -not $_.outcome }).Count
     $row.pass = $pass
@@ -205,6 +210,10 @@ $table = $rows | Group-Object $groupKeys | Sort-Object Name | ForEach-Object {
     $row.leakTurns = ($g | Measure-Object leakTurns -Sum).Sum
     $row.'leakTurns/run' = [math]::Round($row.leakTurns / $n, 2)
     [pscustomobject]$row
+}
+if ($SummaryCsvPath) {
+    $table | Export-Csv -LiteralPath $SummaryCsvPath -NoTypeInformation
+    Write-Host "Summary rows: $SummaryCsvPath"
 }
 # -Property * lifts the 10-column default of Format-Table; the wide width keeps the compact lists on one line.
 $table | Format-Table -AutoSize -Property * | Out-String -Width 3000 | Write-Host
