@@ -187,9 +187,12 @@ public class SequenceLargeResultPagingTests
     [Test]
     public async Task CappedList_LastPageSaysTheToolCappedItAndNamesTheTrueTotal()
     {
-        string? status = await LastPageStatusAsync(BigTwoLists(), totalRecords: 19356);
+        const int trueTotal = 19356;
+        TwoLists source = BigTwoLists();
+        int stored = source.Alpha.Count + source.Beta.Count;
+        string? status = await LastPageStatusAsync(source, totalRecords: trueTotal);
         Assert.That(status, Does.StartWith("COMPLETE:").And.Contain("That is the end of the sequence; there is nothing more to fetch."));
-        Assert.That(status, Does.Contain("The tool capped this list at 200 of 19356 records; narrow the query to see the rest."));
+        Assert.That(status, Does.Contain($"The tool capped this list at {stored} of {trueTotal} records; narrow the query to see the rest."));
     }
 
     [Test]
@@ -527,7 +530,8 @@ public class SequenceLargeResultPagingTests
         Assert.That(wire.ToJsonString(), Does.Not.Contain("ReadFile(reason"));
 
         // The last page: still consistent (all false, no nextOffset at all).
-        var last = await PageAsync(resultId, offset: 195);
+        // The final record is the last page: its offset is the stored count minus one.
+        var last = await PageAsync(resultId, offset: RecordCount() - 1);
         JsonNode lastWire = JsonSerializer.SerializeToNode(last, Wire.GetTypeInfo(typeof(object)))!;
         Assert.That(Occurrences(lastWire, "hasMoreData").Select(n => n!.GetValue<bool>()), Is.All.False);
         Assert.That(Occurrences(lastWire, "nextOffset").Where(n => n is not null), Is.Empty);
