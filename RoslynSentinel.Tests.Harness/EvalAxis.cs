@@ -10,7 +10,9 @@ public enum EvalAxis
     InstructionAdherence,
     ErrorRecovery,
     Efficiency,
-    RealisticPlan
+    RealisticPlan,
+    /// <summary>Transcription slips (token-path slips, escape-copies) in edits whose logic is simple.</summary>
+    Transcription
 }
 
 /// <summary>Builds the NUnit category for an axis, so the category is generated from the property and cannot drift.</summary>

@@ -11,8 +11,8 @@ internal static class WidenToReadOnlyDictionaryScenario
 {
     private const string CoreFolder = "ContosoOrders.Core/Evals/WidenToReadOnlyDictionary/";
     private const string TestFolder = "ContosoOrders.Tests/Evals/WidenToReadOnlyDictionary/";
-    private const string ChangeValidatorPath = CoreFolder + "ChangeValidator.cs";
-    private const string ChangeHelperPath = CoreFolder + "ChangeHelper.cs";
+    internal const string ChangeValidatorPath = CoreFolder + "ChangeValidator.cs";
+    internal const string ChangeHelperPath = CoreFolder + "ChangeHelper.cs";
 
     private const string FilePathSource = """
 namespace ContosoOrders.Evals.WidenToReadOnlyDictionary;
@@ -414,7 +414,7 @@ public class ReadOnlyViewTests
     }
 
     // Expression-bodied property, not a static readonly field: a field would initialise before the contract placement is read (see P1 plan).
-    private static string StepPrompt => EvalContractOptions.Render(new ScenarioTask(
+    internal static ScenarioTask StepTask => new ScenarioTask(
         Goal: "In ContosoOrders.Core/Evals/WidenToReadOnlyDictionary, ChangeValidator.cs and ChangeHelper.cs only ever read their change-set parameters. " +
             "Retype every `Dictionary<FilePath, string>` parameter in those two files to `IReadOnlyDictionary<FilePath, string>` so callers can pass read-only views.",
         Files: "ChangeValidator.cs and ChangeHelper.cs in ContosoOrders.Core/Evals/WidenToReadOnlyDictionary. No other file.",
@@ -423,7 +423,9 @@ public class ReadOnlyViewTests
             "every `<see cref>` in those two files still resolves (respell a cref that named a retyped signature); " +
             "the solution builds with 0 errors; all tests in ContosoOrders.Tests pass, including ReadOnlyViewTests.",
         Conditions: "No method body in those two files writes to the map. The caller files (BatchPublisher.cs, CandidateChecker.cs, OrderImporter.cs, ReportBuilder.cs) compile with no edit.",
-        Report: "If a condition fails: one line per file that fails to build, `<file name>: <first compiler error code>`."));
+        Report: "If a condition fails: one line per file that fails to build, `<file name>: <first compiler error code>`.");
+
+    private static string StepPrompt => EvalContractOptions.Render(StepTask);
 
     /// <summary>Seed text with the change-set parameter type widened (the golden step and its doc crefs).</summary>
     private static string Widen(string source) =>

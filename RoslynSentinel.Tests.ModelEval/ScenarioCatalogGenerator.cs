@@ -5,7 +5,7 @@ using RoslynSentinel.Tests.ModelEval.ImplementationScenarios;
 namespace RoslynSentinel.Tests.ModelEval;
 
 /// <summary>
-/// Renders docs/generated/modeleval_scenarios.md: one table per <see cref="EvalAxis"/> that has a scenario, listing the 15
+/// Renders docs/generated/modeleval_scenarios.md: one table per <see cref="EvalAxis"/> that has a scenario, listing the
 /// implementation scenarios and every <see cref="ScenarioRegistry"/> definition that declares an axis (the stop family today).
 /// Output uses \n line endings and ends with a newline. DTO-EXEMPT: static helper, no data type is added.
 /// </summary>
