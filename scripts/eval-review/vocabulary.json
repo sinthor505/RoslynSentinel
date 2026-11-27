@@ -133,7 +133,7 @@
     { "name": "ReasoningReplayForm", "path": "ReasoningReplayForm", "inArmKey": true },
     { "name": "ToolResultFormat", "path": "ToolResultFormat", "inArmKey": true },
     { "name": "ModelKey", "path": "ModelKey", "inArmKey": true },
-    { "name": "Boundary", "path": "<derived>", "inArmKey": false }
+    { "name": "Boundary", "path": "<derived>", "inArmKey": true }
   ],
   "passRule": {
     "outcomes": [ "Pass" ],

@@ -117,8 +117,8 @@ try {
     $late = Invoke-DigestTree (New-DigestTree 'late' { param($o) $o.Turns[0].StartedAt = '2026-11-25T10:00:00-07:00' })
     Assert-That ($late.Digest.header.boundary -eq $vocab.boundaries[1].id) "Keys (d): 2026-11-25 gives boundary $($vocab.boundaries[1].id)"
 
-    # Boundary is not an arm key: the first and second dates differ in comparabilityKey only.
-    Assert-That (($early.Digest.header.comparabilityKey -ne $mid.Digest.header.comparabilityKey) -and ($early.Digest.header.armKey -eq $mid.Digest.header.armKey)) 'Keys (d): the 2026-11-22 and 2026-11-23 runs differ in comparabilityKey only'
+    # Boundary is in both keys (Q19: armKey is the Q12 fields minus the scenario, and Q12 includes the boundary).
+    Assert-That (($early.Digest.header.comparabilityKey -ne $mid.Digest.header.comparabilityKey) -and ($early.Digest.header.armKey -ne $mid.Digest.header.armKey)) 'Keys (d): the 2026-11-22 and 2026-11-23 runs differ in both armKey and comparabilityKey'
 
     # (e) A removed ContractHash is written as the literal <absent>.
     $noContract = Invoke-DigestTree (New-DigestTree 'nocontract' { param($o) $o.PSObject.Properties.Remove('ContractHash') })
