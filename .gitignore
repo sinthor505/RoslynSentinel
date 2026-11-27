@@ -38,6 +38,11 @@ publish/
 # The eval host table (plan_eval_host_table_and_liveness); tracked so every checkout and pinned queue run reads its own copy.
 !scripts/eval-hosts.json
 
+# Run review pipeline vocabulary, review schema and test fixtures (plan_modeleval_run_review_pipeline); read by scripts and a Tests.Harness test.
+!scripts/eval-review/
+!scripts/eval-review/**/
+!scripts/eval-review/**/*.json
+
 *.trx
 
 TestResults/
