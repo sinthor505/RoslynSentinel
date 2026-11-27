@@ -8,9 +8,15 @@ Only the newest month (2026-11) is kept here. Older entries are archived unchang
 [archive/closed_2026-10.md](archive/closed_2026-10.md), [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Rename the RoslynSentinel.Git namespaces - resolved (2026-11-27)
+
+Rename the RoslynSentinel.Git namespaces (2026-11-27) - `ChangeNamespace` to `RoslynSentinel.Git` and `RoslynSentinel.Git.Worktrees`, folder `GitWorktree/` -> `Worktrees/`; dispatched to an orchestrator 2026-11-27; effort M - [plan](plans/closed/plan_rename_git_project_namespaces.md)
+
+Evidence: IMPLEMENTED 2026-11-27. Step 2 c2b3acb9 (`ChangeNamespace` 84b068a4: 144 files, 1,866 references), Step 3 fdd7a862 (`MoveFile` 486e44a6, `ChangeNamespace` 00ef606d: 8 files, 19 references), Step 4 cc147f9e. Full run `cc147f9e-20261127-004211-40584` at cc147f9e: 12,633 tests (equal to the last full run on record), 0 failures, 48 skipped, 1,411 s.
+
 ## Git project namespace rename - resolved (2026-11-27)
 
-INBOX 2026-11-24 22:10 (the Git split's Step 19 namespace half, `// TODO rename namespace to RoslynSentinel.Git` in `GitEngine.cs` and `GitProcess.cs`) - resolved by [plan_rename_git_project_namespaces](plans/plan_rename_git_project_namespaces.md): all of `RoslynSentinel.Git/` is now `RoslynSentinel.Git`, the worktree harness is `RoslynSentinel.Git.Worktrees` in `Worktrees/` (commits c2b3acb9, fdd7a862). Evidence: `ChangeNamespace` change ids 84b068a4 (144 files, 1,866 references) and 00ef606d (8 files, 19 references); the two markers are deleted.
+INBOX 2026-11-24 22:10 (the Git split's Step 19 namespace half, `// TODO rename namespace to RoslynSentinel.Git` in `GitEngine.cs` and `GitProcess.cs`) - resolved by [plan_rename_git_project_namespaces](plans/closed/plan_rename_git_project_namespaces.md): all of `RoslynSentinel.Git/` is now `RoslynSentinel.Git`, the worktree harness is `RoslynSentinel.Git.Worktrees` in `Worktrees/` (commits c2b3acb9, fdd7a862). Evidence: `ChangeNamespace` change ids 84b068a4 (144 files, 1,866 references) and 00ef606d (8 files, 19 references); the two markers are deleted.
 
 ## Model-eval run review pipeline - resolved (2026-11-26)
 

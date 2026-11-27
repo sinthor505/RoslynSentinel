@@ -66,7 +66,7 @@ Dated entries; later entries do not override earlier ones unless they say so. Q-
 ## Steps
 
 ### Phase 0.1 - Git namespace rename
-- Doc: [plan_rename_git_project_namespaces.md](plan_rename_git_project_namespaces.md) (APPROVED, dispatched 2026-11-27, commit 6edb36dbbf5b).
+- Doc: [plan_rename_git_project_namespaces.md](closed/plan_rename_git_project_namespaces.md) (APPROVED, dispatched 2026-11-27, commit 6edb36dbbf5b).
 - Depends on: none
 - Effect: text-neutral.
 - Change: `ChangeNamespace` to `RoslynSentinel.Git` and `RoslynSentinel.Git.Worktrees`; folder `GitWorktree/` -> `Worktrees/`.

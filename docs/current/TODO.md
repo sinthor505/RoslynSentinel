@@ -7,7 +7,6 @@ Rules: (1) one entry = one line (`- [OPEN|READY|IN-PROGRESS|BLOCKED|PARKED] Titl
 In-flight slices.
 
 - [IN-PROGRESS] Shorten the verification loop (2026-11-21) - fast and full runs done; left: Step 13 gate (from 2026-11-29) and E-row sharding - [plan](plans/plan_shorten_verification_loop.md)
-- [IN-PROGRESS] Rename the RoslynSentinel.Git namespaces (2026-11-27) - `ChangeNamespace` to `RoslynSentinel.Git` and `RoslynSentinel.Git.Worktrees`, folder `GitWorktree/` -> `Worktrees/`; dispatched to an orchestrator 2026-11-27; effort M - [plan](plans/plan_rename_git_project_namespaces.md)
 - [IN-PROGRESS] Roadmap: layering fix and project splits (2026-11-27) - master plan ordering the Common splits, the "engines report facts, tool layer writes text" fix, test selection and the Build/RunTest move (on-hold draft: plans/plan_isolate_build_test_area_into_own_project.md); DRAFT, phase order awaits owner review, Phase 0 running; effort L - [plan](plans/plan_roadmap_layering_and_project_splits.md)
 
 ## P2 Next

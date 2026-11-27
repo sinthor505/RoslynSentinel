@@ -1,10 +1,10 @@
 # Plan: Rename the namespaces in RoslynSentinel.Git to RoslynSentinel.Git and RoslynSentinel.Git.Worktrees
 
-**Status:** APPROVED 2026-11-27. Owner-directed dispatch; decisions settled in the Area 2 design session; nothing built yet.
+**Status:** IMPLEMENTED 2026-11-27. Step 2 c2b3acb9 (`ChangeNamespace` 84b068a4: 144 files, 1,866 references), Step 3 fdd7a862 (`MoveFile` 486e44a6, `ChangeNamespace` 00ef606d: 8 files, 19 references), Step 4 cc147f9e. Full run `cc147f9e-20261127-004211-40584` at cc147f9e: 12,633 tests (equal to the last full run on record), 0 failures, 48 skipped, 1,411 s.
 
 ## Problem
 
-The Git split ([plan_isolate_git_area_into_own_project.md](closed/plan_isolate_git_area_into_own_project.md), IMPLEMENTED 2026-11-24) moved 60 files into
+The Git split ([plan_isolate_git_area_into_own_project.md](plan_isolate_git_area_into_own_project.md), IMPLEMENTED 2026-11-24) moved 60 files into
 `RoslynSentinel.Git/` but left their namespaces, because no namespace-change tool existed (its Step 19, namespace half). Counted 2026-11-26: 29 files
 declare `RoslynSentinel.Common`, 28 declare `RoslynSentinel.Tools.Basic` (`GitEngine`, `IGitOperations`, `GitHunkParser`, `GitErrorCodes`, the
 `Git*Result`/`*Entry` DTOs) and 3 declare `RoslynSentinel.Common.GitWorktree` (`RoslynSentinel.Git/GitWorktree/GitWorktreeManager.cs`,
@@ -17,7 +17,7 @@ declare `RoslynSentinel.Common`, 28 declare `RoslynSentinel.Tools.Basic` (`GitEn
 
 ## Decision
 
-Settled 2026-11-26 in the design session recorded in [plan_isolate_build_test_area_into_own_project.md](plan_isolate_build_test_area_into_own_project.md)
+Settled 2026-11-26 in the design session recorded in [plan_isolate_build_test_area_into_own_project.md](../plan_isolate_build_test_area_into_own_project.md)
 (its Q2, Q4, Q17, Q18, Q30); on 2026-11-27 the owner split the rename into this plan and asked for it to be dispatched.
 
 - **Targets (owner):** every file under `RoslynSentinel.Git/` gets namespace `RoslynSentinel.Git`; the worktree harness gets
