@@ -75,7 +75,7 @@ public static class ErrorPolicyFilter
         foreach (var (key, length) in longEntries)
         {
             logger.LogWarning(
-                "Error policy Inline entry {Key} is {Length} characters (over {Threshold}); Inline text is appended after the offload step, so it is outside the offload budget and shares the EchoReserveChars margin with other stamps.",
+                "Error policy Inline entry {Key} is {Length} characters (over {Threshold}); Inline text is appended after the offload step, so it is outside the body budget (echo and stamps are added on top of it).",
                 key,
                 length,
                 LongEntryThreshold);
