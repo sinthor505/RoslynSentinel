@@ -1,6 +1,6 @@
 # Plan: Two transcription-first variants of the LongGenerics slip family
 
-**Status:** APPROVED 2026-11-27. Owner approved in chat; decisions D1-D5 settled.
+**Status:** IN PROGRESS 2026-11-27. Steps 1-7 done (87f7268d, d501ea47, 5d0329bd, 7b70a640, 878d8f84, 40bbce12; gate green at 40bbce12; 24 runs queued); Step 8 waits for the runs.
 
 ## Problem
 
@@ -54,6 +54,7 @@ measure what it is for.
 ## Steps
 
 ### Step 1 - Prompt styles and type-map validation in the slip builder
+- Done: 87f7268d
 - Files: `RoslynSentinel.Tests.ModelEval/ImplementationScenarios/SlipSite.cs`,
   `RoslynSentinel.Tests.ModelEval/ImplementationScenarios/SlipFamilyBuilder.cs`
 - Depends on: none
@@ -83,6 +84,7 @@ measure what it is for.
 - Lane: implementer, Tier D1. Effort: S
 
 ### Step 2 - Builder tests for the new styles
+- Done: d501ea47
 - Files: `RoslynSentinel.Tests.ModelEval/SlipFamilyBuilderTests.cs`
 - Depends on: 1. Pairs with: Step 3.
 - Effect: text-neutral
@@ -98,6 +100,7 @@ measure what it is for.
 - Lane: test-writer. Effort: S
 
 ### Step 3 - Variant A scenario: LongGenericsFullLineSlip
+- Done: 5d0329bd
 - Files: `RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Transcription/LongGenericsSlipScenario.cs`,
   `RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Transcription/LongGenericsFullLineSlipScenario.cs` (new)
 - Depends on: 1
@@ -115,6 +118,7 @@ measure what it is for.
 - Lane: implementer, Tier D1. Effort: S
 
 ### Step 4 - Variant B scenario: ConcurrentCollectionsSlip seeds
+- Done: 7b70a640
 - Files: `RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Transcription/ConcurrentCollectionsSlipScenario.cs` (new)
 - Depends on: 1. Pairs with: Step 2 or 3 (disjoint files).
 - Effect: text-neutral (not registered until Step 5)
@@ -138,6 +142,7 @@ measure what it is for.
 - Lane: implementer-senior (authoring 36 seeds to D3's rules). Effort: M
 
 ### Step 5 - Register both ids and regenerate the catalog
+- Done: 878d8f84, 40bbce12
 - Files: `RoslynSentinel.Tests.ModelEval/ImplementationScenarios/ImplementationScenarioRegistry.cs`,
   `RoslynSentinel.Tests.ModelEval/ImplementationScenarioGoldenTests.cs`,
   `docs/generated/modeleval_scenarios.md` (generated)
@@ -156,6 +161,7 @@ measure what it is for.
 - Lane: implementer, Tier D1 (C# part); dispatcher (catalog, doc). Effort: S
 
 ### Step 6 - Gate
+- Done: gate green at 40bbce12 (10 golden cases, 64 unit/catalog tests)
 - Files: none (verification)
 - Depends on: 2, 5
 - Effect: none
@@ -170,6 +176,7 @@ measure what it is for.
 - Lane: dispatcher. Effort: S
 
 ### Step 7 - Queue the comparison runs
+- Done: 24 jobs queued, purpose slipsite-variant-40bbce12
 - Files: none
 - Depends on: 6 (and the gate commit pushed to the worktree HEAD used by the queue)
 - Effect: none
