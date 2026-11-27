@@ -1,6 +1,6 @@
 # Plan: Logic-simpler sibling scenarios that keep the slip-prone content, plus a slips-per-run metric
 
-**Status:** IN PROGRESS 2026-11-26. Steps 1-3, 12 done (d4e4b364, bdb48529, 130cbb85, 66a7d3b0).
+**Status:** IN PROGRESS 2026-11-26. Steps 1-8, 12, 13 done (d4e4b364, 130cbb85, bdb48529, 60b77a1d, 9adb6d36, 412100c1, c3980e8a, 3fbcc732, 66a7d3b0, 6143a1d3).
 
 ## Problem
 
@@ -347,6 +347,7 @@ Entries marked "superseded" are kept for the record; the later entry wins.
       original through `with`.
 - Done when: `Build` 0 errors.
 - Lane: implementer. Effort: S.
+- Done: 60b77a1d
 
 ### Step 5 - Sibling `WidenAcrossFilesSlip` (new)
 - Files: `RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Transcription/WidenAcrossFilesSlipScenario.cs` (new)
@@ -372,6 +373,7 @@ Entries marked "superseded" are kept for the record; the later entry wins.
     in Step 4). `Build()` returns `O.Definition with { Id = "WidenAcrossFilesSlip", Title = "Widen Apply's change-set parameter across three files", Axis = "Transcription: long generic types in a multi-file batch; the gate trap is removed", Source = "Sibling of WideningRejectedByGate; plans/plan_slip_focused_scenario_variants.md", SeedFiles = <seeds>, PrimaryAxis = EvalAxis.Transcription, Steps = [step1] }`.
 - Done when: `Build` 0 errors.
 - Lane: implementer. Effort: S.
+- Done: 9adb6d36
 
 ### Step 6 - Sibling `SweepNamedSitesSlip` (new)
 - Files: `RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Transcription/SweepNamedSitesSlipScenario.cs` (new)
@@ -411,6 +413,7 @@ Entries marked "superseded" are kept for the record; the later entry wins.
     in Step 4). `Build()` returns `O.Definition with { Id = "SweepNamedSitesSlip", Title = "Convert 13 named construction sites to DocumentChangeSet", Axis = "Transcription: many similar call sites; unconvertible sites and the Report check removed", Source = "Sibling of SweepConstructionSites; plans/plan_slip_focused_scenario_variants.md", SeedFiles = <seeds>, PrimaryAxis = EvalAxis.Transcription, Steps = [step1] }`.
 - Done when: `Build` 0 errors.
 - Lane: implementer. Effort: S.
+- Done: 412100c1
 
 ### Step 7 - Tests for `ScenarioTemplateEdits` (new)
 - Files: `RoslynSentinel.Tests.ModelEval/ScenarioTemplateEditsTests.cs` (new)
@@ -420,6 +423,7 @@ Entries marked "superseded" are kept for the record; the later entry wins.
   tests in `ImplementationScenarioGoldenTests.cs` (for example `PromptVariants_*`).
 - Done when: `Build` 0 errors; the dispatcher runs `ScenarioTemplateEditsTests` and all pass.
 - Lane: test-writer. Effort: S.
+- Done: c3980e8a
 
 ### Step 8 - Pin tests T3, T4 (new)
 - Files: `RoslynSentinel.Tests.ModelEval/TranscriptionScenarioTests.cs` (new)
@@ -432,6 +436,7 @@ Entries marked "superseded" are kept for the record; the later entry wins.
   test class.
 - Done when: `Build` 0 errors; the dispatcher runs `TranscriptionScenarioTests` and all pass.
 - Lane: test-writer. Effort: S.
+- Done: 3fbcc732
 
 ### Step 9 - Register the siblings and regenerate the catalog (one commit)
 - Files:
@@ -599,6 +604,7 @@ Entries marked "superseded" are kept for the record; the later entry wins.
 - Done when: `pwsh -NoProfile -File scripts\Get-SlipCounts.ps1 -Machine 113 -PurposePattern '*cap35plain-590eb1c2*'`
   runs without error (the dispatcher runs it).
 - Lane: implementer. Effort: S.
+- Done: 6143a1d3
 
 ### Step 14 - `Get-SlipCounts.Tests.ps1` (new) and the reproduction check
 - Files: `scripts/Get-SlipCounts.Tests.ps1` (new)
