@@ -66,7 +66,7 @@ public class GitTools
         int count = 20,
         [Description("log/diff/show/hunks/stage/unstage/commit: paths (CSV or JSON array). stage/commit: implies scope=listed. hunks, hunkIds, follow: exactly one path.")]
         string? paths = null,
-        [Description("diff/show: cap on returned output in UTF-8 bytes (min 1024, max 524288). Output over about 15K characters is paged via GetLargeResult regardless of maxBytes.")]
+        [Description("diff/show: cap on returned output in UTF-8 bytes (min 1024, max 524288). Large output is paged via GetLargeResult regardless of maxBytes.")]
         int maxBytes = 65536,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: message is required when operation=commit and amend=false; optional when amend=true (omit to keep HEAD's message); unused otherwise.
         [Description("commit: the message (omit with amend to keep HEAD's).")]
