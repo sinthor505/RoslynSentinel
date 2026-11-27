@@ -49,10 +49,11 @@ public class ReadFilePagingLoopTests
     private const string LastPageEnd = "end of the sequence";
     private const string InstructionMarker = "GetLargeResult(";
 
-    // PINNED from a real run on the 300-method fixture (budget 12800 chars, 64-char margin on later pages); they change only when
+    // PINNED on the 300-method fixture: the first page is cut by the marshaller at the default budget (LargeResultHelper.DefaultBudgetChars)
+    // and later pages fill DefaultBudgetChars - PageSafetyMarginChars; offsets observed from this in-process run. They change only when
     // the fixture, the page budget or the response shape changes, and then must be re-observed, not guessed.
-    private static readonly int[] PinnedPageOffsets = [0, 310, 620, 928, 1233, 1541, 1849];
-    private const int PinnedNeedlePageOffset = 928;
+    private static readonly int[] PinnedPageOffsets = [0, 375, 746, 1117, 1488, 1859];
+    private const int PinnedNeedlePageOffset = 746;
 
     // TODO share these SetUp/helpers with SequenceLargeResultPagingTests through a common base fixture instead of the copy below.
     private IWorkspaceManager _workspaceManager = null!;
