@@ -100,7 +100,7 @@ reading it whole. `ModelAgentRunner` also writes a `Summary` block (run totals) 
 
 `Get-RunDigest` writes `digest.json` beside a transcript, and in batch mode `selection.json` into a new folder
 under `<scratch>\eval-review`; `Get-ReviewRollup` writes `rollup.json` and `rollup.md` there. Their field shapes
-are in the Contracts section of `docs/current/plans/plan_modeleval_run_review_pipeline.md`. A grader writes
+are in the Contracts section of `docs/current/plans/closed/plan_modeleval_run_review_pipeline.md`. A grader writes
 `review.json` (or `review.<label>.json`) per run, shaped by `scripts/eval-review/review.schema.json`.
 
 ## Eval queue and run index

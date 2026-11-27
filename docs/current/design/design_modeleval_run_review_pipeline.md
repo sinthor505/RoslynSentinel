@@ -1,7 +1,7 @@
 # Design: model-eval run review pipeline (digest, behaviour grading, root cause)
 
-**Status:** APPROVED 2026-11-26. Plan: plans/plan_modeleval_run_review_pipeline.md (APPROVED; where the
-two disagree, the plan wins).
+**Status:** IMPLEMENTED 2026-11-26 (397f75fe .. 56ed5373; calibration Calibrated, 0.811). Plan:
+plans/closed/plan_modeleval_run_review_pipeline.md (where the two disagree, the plan wins).
 
 ## Problem
 

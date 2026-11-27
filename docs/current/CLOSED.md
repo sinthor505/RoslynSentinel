@@ -8,6 +8,12 @@ Only the newest month (2026-11) is kept here. Older entries are archived unchang
 [archive/closed_2026-10.md](archive/closed_2026-10.md), [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Model-eval run review pipeline - resolved (2026-11-26)
+
+Model-eval run review pipeline (2026-11-26) - Steps 1-10 done (e2bd43b6..56ed5373, run by peer session a43a2312); `Get-RunDigest.ps1` (digest + seeded sample selection), `eval-run-grader` Sonnet agent scoring 8 behaviour dimensions into `review.json`, `Get-ReviewRollup.ps1` with a `-Vary` A/B guard, `vocabulary.json` single source, arm-table multi-machine fold-in, analyst agent refresh, 2-pass calibration; effort L - [plan](plans/closed/plan_modeleval_run_review_pipeline.md)
+
+Evidence: plans/closed/plan_modeleval_run_review_pipeline.md; 397f75fe..56ed5373 plus the closing commit; calibration Calibrated (0.811, median 79k grader tokens); full suite 0 failures at 56ed5373
+
 ## INBOX triage, todo review 0c3e9bd9 - resolved (2026-11-26)
 
 INBOX lines closed at triage because they were already fixed, or folded into an open plan or TODO entry that carries them (the code TODO stays the source of truth where one exists).

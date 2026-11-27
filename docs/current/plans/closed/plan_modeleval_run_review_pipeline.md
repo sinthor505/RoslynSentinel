@@ -1,6 +1,6 @@
 # Plan: model-eval run review pipeline (digest script, grader agent, rollup, agent refresh)
 
-**Status:** IN PROGRESS 2026-11-26. Steps 1-9d done (397f75fe .. 889bf107); Step 10 (calibration) and Step 11 (close) remain.
+**Status:** IMPLEMENTED 2026-11-26. 397f75fe d7db5750 9bfd22b8 f6ffbcea f7a9185e f1b92c96 8277ad10 64e3bc19 81787301 56916a0e 2059899d 8de160a0 5a1d6a2f 978e744f 66754928 481c989e b6b80ec2 07a5db4e 9a829ca8 d0e1bd00 7783c39f 889bf107 56ed5373; calibration Calibrated (0.811).
 
 ## Problem
 
@@ -8,7 +8,7 @@ Model-eval runs are graded on outcome and recovery only. Nothing grades behaviou
 choice, reading tool responses, compliance with guidance, hints and errors, or reasoning. The two
 agents that read runs (`model-eval-log-analyst`, `failure-root-cause-analyst`) describe an older
 harness. Design and evidence:
-[design_modeleval_run_review_pipeline.md](../design/design_modeleval_run_review_pipeline.md).
+[design_modeleval_run_review_pipeline.md](../../design/design_modeleval_run_review_pipeline.md).
 
 ## Decision
 
@@ -253,6 +253,10 @@ harness. Design and evidence:
 - 2026-11-26 Q29 (owner): an `OffloadPointerResult` (`{offloaded, resultId, sizeBytes, sizeChars, ...}`)
   is classified as `LargeResult` with `LargeResultRef = resultId`; `resultShapes` stays at 4.
 - 2026-11-26 Run setup (owner): present during the run; Batched mode.
+- 2026-11-26 Step 10 (owner): Calibrated accepted at round 0 with no anchor revision. `ReadingResponses`
+  is the anchor to revisit first if real reviews drift (it split in 3 of 5 calibration runs). The
+  harness grading defect both graders found (Pass beside `SilentIncomplete`; SweepNamedSitesSlip's 12
+  public signature changes) goes to INBOX, not traced in this plan.
 
 ## Execution rules
 
@@ -973,6 +977,7 @@ NUnit test and the arm-table tests. Those run the script as a child `pwsh -File`
   - Mark this plan's `[READY]` line in TODO.md (added when plan-design approved it) done.
   - Check that no `TODO implement` remains in `scripts/eval-review/` or the new scripts.
 - Done when: both Status lines read IMPLEMENTED.
+- Done: closing commit (Closes trailer); full suite at 56ed5373: 0 failures across 12 projects (1,485 s).
 - Lane: main session. Effort: S.
 
 ## Out of scope
