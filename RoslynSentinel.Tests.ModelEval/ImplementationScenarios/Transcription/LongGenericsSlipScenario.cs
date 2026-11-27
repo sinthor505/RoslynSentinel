@@ -1,8 +1,23 @@
 namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Transcription;
 
 /// <summary>
-/// Slip family of one-line fields and methods whose types are deeply nested generics (at least three levels); not registered until a later step.
+/// Slip family of one-line fields and methods whose types are deeply nested generics (at least three levels); the prompt names
+/// two token changes per site ("change `Dictionary` to `SortedDictionary`; change `decimal` to `double`").
 /// </summary>
+/// <remarks>
+/// Variant guide (plans/closed/plan_longgenerics_transcription_variants.md, D7; Qwen3.5-9B, 60-turn cap, hosts 112 / 113):
+/// <code>
+/// Id                          Runs   Pass      Residual (CI)                  Collateral   E2 runs
+/// LongGenericsSlip            12/12  1/12,2/12 0.23 (0.17-0.29) / 0.19 (0.11-0.27)  0.10 / 0.07  119 / 226
+/// LongGenericsFullLineSlip     6/6   4/6,3/6   0.01 (0-0.02) / 0.01 (0-0.02)        0.17 / 0.20    3 / 3
+/// ConcurrentCollectionsSlip    6/6   5/6,2/6   0.02 (0-0.05) / 0.02 (0-0.04)        0.00 / 0.00   17 / 9
+/// </code>
+/// Strength: measures applying a described change at the right place inside a nested generic (locating the occurrence and level).
+/// Weakness: as a transcription instrument it is poor; its Wrong sites are mostly comprehension (change applied at the wrong
+/// nesting level, outer wrapper dropped, wrong type argument changed), not copy slips, and its variance makes E2 expensive.
+/// Use it for nested-generic edit comprehension; for transcription slips use <see cref="ConcurrentCollectionsSlipScenario"/>,
+/// for block-copy omissions <see cref="LongGenericsFullLineSlipScenario"/>.
+/// </remarks>
 internal static class LongGenericsSlipScenario
 {
     // Initialisation order matters: Sites must be declared before Definition. Positions 4, 10, 16, 22, 28 and 34 are untouched controls.

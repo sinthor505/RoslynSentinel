@@ -2,8 +2,19 @@ namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Transcription;
 
 /// <summary>
 /// Slip family of one-line fields and methods whose types are deeply nested generics (at least three levels), each holding two
-/// of the type-map keys Dictionary, Queue and Stack once; the prompt gives the map and the member names. Not registered until a later step.
+/// of the type-map keys Dictionary, Queue and Stack once; the prompt gives the map and the member names.
 /// </summary>
+/// <remarks>
+/// The LongGenerics family used for E2 (owner, 2026-11-27). Measured data and the sibling comparison: the variant guide on
+/// <see cref="LongGenericsSlipScenario"/>. Here: residual 0.02 / 0.02, collateral 0.00 / 0.00, completion 1.00 / 0.96,
+/// pass 5/6 and 2/6, E2 17 / 9 runs.
+/// Strength: a transcription instrument; the model rewrites each long line itself and its Wrong sites are copy slips (an outer
+/// Stack left unconverted, a nesting level dropped), with no edits outside the listed members.
+/// Weakness: a three-entry type lookup is still a small reasoning step; two changes per site only; two runs on 113 still hit
+/// the 60-turn cap.
+/// Seed rules (enforced by SlipFamilyBuilder.Validate for TypeMap): two different keys per changed site, each once; no key in
+/// a control; no SortedDictionary (a key inside a longer name) and no Concurrent name in any seed.
+/// </remarks>
 internal static class ConcurrentCollectionsSlipScenario
 {
     // Initialisation order matters: Sites must be declared before Definition. Positions 4, 10, 16, 22, 28 and 34 are untouched controls.
