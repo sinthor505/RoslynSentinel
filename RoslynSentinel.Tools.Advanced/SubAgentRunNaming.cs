@@ -1,5 +1,5 @@
 using RoslynSentinel.Common;
-using RoslynSentinel.Git;
+using RoslynSentinel.Git.Worktrees;
 
 namespace RoslynSentinel.Tools.Advanced;
 

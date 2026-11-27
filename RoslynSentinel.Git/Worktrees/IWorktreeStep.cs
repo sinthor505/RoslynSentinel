@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Git;
+namespace RoslynSentinel.Git.Worktrees;
 
 /// <summary>
 /// The minimal view of "a unit of work that gets its own worktree" that

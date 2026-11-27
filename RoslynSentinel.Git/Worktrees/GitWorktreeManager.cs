@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 
-namespace RoslynSentinel.Git;
+namespace RoslynSentinel.Git.Worktrees;
 
 /// <summary>
 /// Runs each plan step in its own git worktree, branched per <see cref="IStepBranchStrategy"/>

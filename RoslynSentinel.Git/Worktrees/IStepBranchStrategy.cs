@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Git;
+namespace RoslynSentinel.Git.Worktrees;
 
 /// <summary>
 /// Decides which git branch a step's worktree checks out, and what that branch is created from the

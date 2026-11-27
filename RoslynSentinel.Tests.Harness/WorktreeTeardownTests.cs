@@ -1,4 +1,4 @@
-using RoslynSentinel.Git;
+using RoslynSentinel.Git.Worktrees;
 using RoslynSentinel.Tools.Advanced;
 using static RoslynSentinel.Tests.Battery.Basic.GitTestRepo;
 

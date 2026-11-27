@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 
 using RoslynSentinel.Engines.Basic;
-using RoslynSentinel.Git;
+using RoslynSentinel.Git.Worktrees;
 
 namespace RoslynSentinel.Tools.Advanced;
 

@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-using RoslynSentinel.Git;
+using RoslynSentinel.Git.Worktrees;
 
 namespace RoslynSentinel.Utilities.PlanStepRunner;
 
