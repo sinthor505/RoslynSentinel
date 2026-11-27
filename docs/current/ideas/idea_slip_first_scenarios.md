@@ -1,6 +1,6 @@
 # Idea: Purpose-built slip scenarios graded per site, not per tool call
 
-**Status:** NOT DESIGNED 2026-11-26. The Transcription siblings passed E1 easily but yield too few writes to measure a slip rate.
+**Status:** APPROVED 2026-11-26. Plan: [plans/plan_slip_first_scenarios.md](../plans/plan_slip_first_scenarios.md) (the `batchEdits` A/B arm is a separate later plan).
 
 ## What happened
 
