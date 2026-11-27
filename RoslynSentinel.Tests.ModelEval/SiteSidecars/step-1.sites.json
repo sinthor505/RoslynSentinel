@@ -1,0 +1,44 @@
+[
+  {
+    "siteName": "ChangedCorrectSite",
+    "role": "Changed",
+    "outcome": "Correct",
+    "endStateText": null
+  },
+  {
+    "siteName": "ChangedUnchangedSite",
+    "role": "Changed",
+    "outcome": "Unchanged",
+    "endStateText": "public static string ChangedUnchangedSite() => \"hello big world and more\";"
+  },
+  {
+    "siteName": "ChangedWrongSite",
+    "role": "Changed",
+    "outcome": "Wrong",
+    "endStateText": "public static string ChangedWrongSite() => \"howdy big world and more\";"
+  },
+  {
+    "siteName": "ChangedMissingSite",
+    "role": "Changed",
+    "outcome": "Missing",
+    "endStateText": null
+  },
+  {
+    "siteName": "ControlWrongSite",
+    "role": "Control",
+    "outcome": "Wrong",
+    "endStateText": "public static string ControlWrongSite() => \"edited control text\";"
+  },
+  {
+    "siteName": "ControlMissingSite",
+    "role": "Control",
+    "outcome": "Missing",
+    "endStateText": null
+  },
+  {
+    "siteName": "Calc01",
+    "role": "Separator",
+    "outcome": "Wrong",
+    "endStateText": "public static int Calc01() => 2;"
+  }
+]
