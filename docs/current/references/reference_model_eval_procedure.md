@@ -511,6 +511,8 @@ A slip is a write call that trips a known tool-surface failure. The primary verd
 
 ## Comparability boundaries (commits that change what models under test see)
 
+The machine-readable list is `scripts/eval-review/vocabulary.json` (`boundaries`).
+
 - **e622f7cb (2026-11-24), claude-lean runtime toolsets.** After a model enables a toolset with `McpToolsetControl`,
   hint and error text may name that set's tools (for example the ReadFile directory hint names `ListSolutionItems`
   once `projectAdmin` is on). Affects SubAgent/SubAgentEval child servers only; in-process ModelEval and Harness hosts

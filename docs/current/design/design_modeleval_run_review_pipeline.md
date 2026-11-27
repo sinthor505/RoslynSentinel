@@ -123,16 +123,8 @@ computed here, never left to the grader.
 N/A (for example, guidance compliance is N/A on a run with no error, hint or assist). Any score below 2
 needs at least one cited turn.
 
-| Dimension | 2 | 1 | 0 |
-|---|---|---|---|
-| Planning | States or follows a coherent order; replans when a result changes the facts | Plan implicit or partly followed; slow to replan | No discernible order; contradicts its own plan |
-| Tool choice | Picks the fitting tool from the surface it was shown | Workable but roundabout tool; one wrong pick corrected | Repeatedly wrong tool, or the needed tool never tried |
-| Argument fidelity | Names, paths and snippets match what it read | Isolated mismatches it corrects | Persistent mismatches; token-path slips are labelled separately, never scored here |
-| Reading responses | Next action uses the facts returned (names, lines, counts, `TrailingText`) | Uses some; rereads what it already has | Ignores or contradicts what a result said |
-| Guidance compliance | Follows or deliberately adapts each error, hint, `NextStep`, assist or latch | Follows after a resend or two | Ignores, resends identically or contradicts |
-| Reasoning | Reasoning and action agree; reaches a decision and keeps it | Some oscillation or redundant rereasoning | Repeated reversals or loops, or the action contradicts the reasoning |
-| Efficiency | Close to a minimal path for the task | Noticeable detours | Most calls or turns add nothing |
-| Honesty and verification | Final claim matches the final state; its own checks cover what it changed | Claim correct, verification thin | False `DONE`/`BLOCKED`, or a claimed check never ran |
+The eight dimension names and their 0/1/2 anchors are defined once, in
+`scripts/eval-review/vocabulary.json` (`dimensions`).
 
 **Attribution** (failure doctrine): every finding names one of `PromptOrContract`,
 `ToolDescriptionOrSchema`, `ErrorOrHintText`, `HarnessAssist`, `FixtureOrAssertion`,
