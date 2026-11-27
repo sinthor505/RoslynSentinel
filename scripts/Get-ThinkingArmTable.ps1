@@ -61,6 +61,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'eval-review\EvalRunReader.ps1')
 $HostCapMarkers = @('I should answer soon', 'I need to state my answer and act')
 
 # TODO read several machines' queue folders in one call, and group ImplementationScenario runs by -Scenario (from the job's evalArgs), not only by job test name
@@ -93,24 +94,13 @@ function Format-Counts($values) {
     return (($v | Group-Object | Sort-Object @{ Expression = 'Count'; Descending = $true }, Name | ForEach-Object { "$($_.Name):$($_.Count)" }) -join ' ')
 }
 
-function Get-OutcomeToken([string]$text, [string]$pattern) {
-    $m = [regex]::Match($text, $pattern)
-    if ($m.Success) { return $m.Groups[1].Value }
-    return $null
-}
-
 function Read-Run([string]$transcriptPath) {
     $dir = Split-Path -Parent $transcriptPath
     $outcome = $null; $stop = $null; $class = $null; $wall = $null
     $outFile = Get-ChildItem -LiteralPath $dir -Filter 'step-*.outcome.txt' -File -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($outFile) {
-        $text = [string](Get-Content -LiteralPath $outFile.FullName -Raw -ErrorAction SilentlyContinue)
-        $outcome = Get-OutcomeToken $text '\boutcome=(\w+)'
-        $stop = Get-OutcomeToken $text '\bstopReason=(\w+)'
-        $class = Get-OutcomeToken $text '\boutcomeClass=(\w+)'
-        $w = Get-OutcomeToken $text '\bwallTime=([0-9.:]+)'
-        $ts = [timespan]::Zero
-        if ($w -and [timespan]::TryParse($w, [ref]$ts)) { $wall = $ts.TotalSeconds }
+        $o = Read-EvalStepOutcome -Path $outFile.FullName
+        $outcome = $o.Outcome; $stop = $o.StopReason; $class = $o.OutcomeClass; $wall = $o.WallSeconds
     }
 
     $turns = $null; $thinkTurns = 0; $deltas = @(); $overBudget = 0; $hostCap = 0; $maxStreak = 0
