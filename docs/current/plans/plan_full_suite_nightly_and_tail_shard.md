@@ -1,6 +1,6 @@
 # Plan: Keep OutOfProcess tests out of routine runs safely (nightly full run, debt check) and cut the full run's serial tail
 
-**Status:** DRAFT 2026-11-24. Not started; open decisions D1-D6 below.
+**Status:** DRAFT 2026-11-27 (run speed only). Safety part APPROVED 2026-11-27. Plan: plans/plan_full_suite_nightly_and_debt_check.md. plan-design phase 4 for the speed plan: 3 of 32 questions open (Q14, Q16, Q24 run in progress).
 
 ## Problem
 
@@ -52,121 +52,148 @@ plus a per-test timeline):**
 
 ## Decision
 
+plan-design log (2026-11-27):
+
+- Q15 (investigation, explore-tier2, 2026-11-27): no full run has ever been parallel. Of 334 full summaries, 326 have
+  `parallel=false` and 8 predate the key. The only recorded reason is the help comment at
+  `scripts/Invoke-WorktreeTests.ps1:80-81` (CPU contention makes build-timeout fixtures time out more often), which is an untested
+  hypothesis. `-Parallel` starts every project at once with no throttle (`:408-417`). `plan_shorten_verification_loop.md:425-427`
+  (Step 12b) allows a parallel full default only after a measured full run with equal failure sets; never done. Fast parallel vs
+  sequential at `cc990855`: 272 s vs 562 s, equal failure sets. Verdict: cross-project parallel full is untested, not known bad.
+- Q7 (owner, 2026-11-27): D7 two plans. Deferral safety (marker, nightly run, debt hook, skill wording) and run speed (shard or
+  parallel full run, measured separately); both designed in this session, safety first. Why: the speed design waits on the new
+  Tests.Git timeline and a parallel-full measurement; the safety plan need not.
+- Q6 (owner, 2026-11-27): D6 this work takes over the "E-row sharding for full runs" item of `plan_shorten_verification_loop.md`
+  (it lands in the speed plan).
+- Q1 (owner, 2026-11-27): D1 keep `[Category("OutOfProcess")]` plus `suite: fast`; no `[Explicit]`. Why: a forgotten filter then
+  runs too much rather than silently too little, and TRX totals and the marker's `totalCount` stay honest.
+- Q2 (owner, 2026-11-27): D2 a red full run counts as stale (new cause; warning stays until a green full run).
+- Q9 (owner, 2026-11-27): D9 a project that exits non-zero with 0 TRX failures makes the run incomplete: the worktree script
+  writes no marker, matching the server's `RanToCompletion` rule (`FullTestMarkerStore.cs:84`). No new field.
+- Q3 (owner, 2026-11-27): D3 both writers record `headSha`: the worktree script (tested commit) and the server (`RecordRun` passes
+  `RepoWorktrees.ReadHeadCommit(solutionRoot)`, `RoslynSentinel.Git/RepoWorktrees.cs:134`). Accepted edge: uncommitted changes in a
+  server run show as debt once committed (false positive, safe direction). No `dirtyTree` flag.
+- Q10 (owner, 2026-11-27): D10 `FullSuiteStale` gains `IReadOnlyList<FullSuiteStaleCause> Causes` (enum `NoFullRun`, `TooOld`,
+  `TooManyFastRuns`, `LastRunFailed`, beside the record in Engines.Basic); `Reason` stays, built from the causes; tests assert
+  `Causes`; one wording test against shared format constants.
+- Q11 (owner, 2026-11-27): D11 shared dot-source helper `scripts/FullTestMarker.ps1` (`Read-FullTestMarker`, `Write-FullTestMarker`),
+  an early text-neutral step that moves the worktree script onto it; the nightly script and hook use it.
+- Q25 (owner, 2026-11-27): D25 item-2 exception accepted: the marker's JSON field names are defined in C# (`FullTestMarker`) and in
+  `scripts/FullTestMarker.ps1`, each with a comment pointing to the other. Why: the format changes rarely; a guard test would add
+  out-of-process work.
+- Q12 (owner, 2026-11-27): D12 the nightly task uses an S4U principal (runs whether logged on or not, no stored password),
+  `-RunLevel Limited`. Probe 2026-11-27: throwaway task `RS-PlanDesign-S4U-Probe` running
+  `pwsh -NoProfile -File <scratch>\plan_design_full_suite\s4u-probe.ps1`, LastTaskResult 0; whoami
+  `win-6fvivbdm0rr\administrator`, USERPROFILE `C:\Users\Administrator`, dotnet 11.0.100 and git 2.56.0 on PATH, pwsh 7.5.0,
+  `https://api.nuget.org/v3/index.json` returned 200; `ROSLYNSENTINEL_SCRATCH_ROOT` unset (the default resolver applies). Task removed.
+- Q26 (owner, 2026-11-27): D26 the nightly run defers while another test run is active: it checks for `testhost` or `dotnet test`
+  processes, rechecks every 30 minutes up to 4 times, then logs a `busy` line and exits.
+- Q4 (owner, partial, 2026-11-27): D4a the nightly task runs daily at 06:00 (fewer overlapping sessions than 03:00). Notification
+  on a red night still open.
+- Q27 (owner, 2026-11-27): D27 on a red night, re-run the failing classes once, one project at a time
+  (`-Projects <p> -Filter "FullyQualifiedName~.C1.|FullyQualifiedName~.C2."`, failing classes read from the TRX). Implementer
+  default: the nightly run passes `-NoFailFast`.
+- Q28 (owner, 2026-11-27): D28 a pass on retry makes the marker green (`failedCount 0`, written by the nightly script through
+  `scripts/FullTestMarker.ps1`); the flaky classes are recorded and the SessionStart hook prints one line naming them. A failed
+  retry leaves the marker red and the hook names the classes still failing.
+- Q29 (owner, 2026-11-27): D29 the nightly run keeps today's full-run shape (projects one at a time, NUnit parallel inside each);
+  no forced single worker. Why: D27's retry settles contention flakes; a serial run would take hours.
+- Q30 (owner, 2026-11-27): D30 a headless Claude Code session that investigates a still-red night is a separate follow-up plan.
+  This plan leaves the hook-in point: the D31 result file and an optional `-OnStillRed <script>` parameter on
+  `Invoke-NightlyFullRun.ps1`, unused here. Follow-up decisions noted for that plan: edit location (worktree plus branch
+  `nightly-fix/<date>`, never `master`, never pushed), fix scope (`reference_harness_bug_autofix.md`; product bugs get a finding
+  and an INBOX line), verification, turn and time budget, tool permissions, auth under S4U and headless MCP (probes).
+- Q31 (owner, 2026-11-27): D31 the nightly run writes `<scratch>\nightly\last-nightly.json` (`date`, `sha`, `outcome`
+  ran|skip|busy, `seconds`, `failedClasses`, `flakyClasses`); `nightly.log` stays the human log; the hook reads only the JSON. Its
+  read and write functions live in `scripts/FullTestMarker.ps1` (D11).
+- Q4 (owner, 2026-11-27): D4 daily at 06:00 (D4a), S4U (D12), tests committed `master` in `c:\tmp\rs-testtrees`, skips when the
+  marker's `headSha` equals `master` and the marker is green; a red night is reported by the SessionStart hook line only.
+  Implementer defaults: `StartWhenAvailable`, 4-hour execution limit (covers D26's up to 2 h of busy waits plus the run and
+  retries), `MultipleInstances IgnoreNew`, `-DryRun` prints the decision.
+- Q5 (owner, 2026-11-27): D5 the area check is report-only, through one script `scripts/Get-FullSuiteDebt.ps1` (causes: missing,
+  red, older than 26 h, changed areas; matched areas; flaky and failing classes from D31; exit code). The SessionStart hook is a
+  thin wrapper printing its one-line form; skills and references call the script at task end. No server-side area logic.
+- Q8 (owner, 2026-11-27): D8 the roadmap's Phase 1 Done-when is reworded: a task-end check whose changes touch no watched area
+  reports no debt, the skill runs the fast suite (which skips the `OutOfProcess` fixtures, most of `Tests.Git`), and the nightly
+  run covers the rest.
+- Q13 (owner, 2026-11-27): D13 watch list: area `git` as project directories (`RoslynSentinel.Git/`, `RoslynSentinel.Tests.Git/`)
+  plus the three tool-side Git files; `build`, `runtest`, `process` as today's file globs (they become
+  `RoslynSentinel.Engines.BuildTest/` when roadmap Phase 4 creates it); no test-file list: a changed test `.cs` containing
+  `[Category("OutOfProcess")]` counts as area `outofprocess-tests`.
+- Phase 5 design review (2026-11-27): items 1, 3-7 pass; item 2 raises Q32. Server headSha (D3): `RunTest` does not read HEAD for
+  the loaded tree today (`WorkspaceBuildTestImpl.cs:524-529`); implementer default Q33: `FullTestMarkerStore.RecordRun` gains
+  `string? headSha = null`, and `WorkspaceBuildTestImpl.RunTest` passes `RepoWorktrees.ReadHeadCommit(solutionRoot)` only for a
+  full, solution-scope, unfiltered run (no repo open on fast runs). `FullSuiteStale` gains one property (dto-conventions rule 1,
+  extend); `FullSuiteStaleCause` is an enum (DTO-EXEMPT). The server already treats a non-zero exit with 0 failed tests as
+  incomplete (`WorkspaceBuildTestImpl.cs:534-535`), matching D9.
+- Q32 (owner, 2026-11-27): D32 one PowerShell definition of the category name: `scripts/FullTestMarker.ps1` exports
+  `$OutOfProcessCategory` (comment pointing to `TestSuiteFilter.OutOfProcessCategory`, `TestSuiteFilter.cs:13`); the worktree
+  script (`:147`), `build.ps1` (`:83`) and the debt script use it. The one cross-language copy is accepted as in D25.
+- Q22 (owner, 2026-11-27): D22 live acceptance is one unfiltered `-Suite full` worktree run in the closing step at the final
+  commit: the marker carries that commit's `headSha`, `Invoke-NightlyFullRun.ps1 -DryRun` prints `skip`, `Get-FullSuiteDebt.ps1`
+  reports no debt. The first real `nightly.log` line after the owner registers the task is checked opportunistically, not gated.
+- Q34 (owner, 2026-11-27): D34 a nightly `skip` rewrites the marker's `LastFullRunUtc` to now (counts and `headSha` kept); the
+  field means "last time a full run's green result was confirmed current". Every ran or skip night resets the age, so the hook's
+  26 h cause means "the nightly run missed", and the server's 2-day `TooOld` stops firing on quiet days without a server change.
+- Q35 (implementer default, 2026-11-27): D35 the D27 retry is one invocation, `-Projects <all failing> -Filter <all failing
+  classes>` (one worktree, one build; projects still run one at a time).
+- Q36 (owner, 2026-11-27): D36 the debt script checks every watch-list entry against `git ls-files` and adds cause
+  `watch-list-stale` (counts as debt) naming each entry that matches no tracked file.
+- Q37 (owner, 2026-11-27): D37 script slices go to `implementer` with one parse check as acceptance; the dispatcher runs the
+  `*.Tests.ps1` scripts. Step 8 (docs, about 8 edits in 6 files) is done by the main session, owner-approved over the CLAUDE.md cap.
+- Q38 (owner, 2026-11-27): D38 the marker's file location is duplicated in C# and PowerShell under D25, guarded: the PowerShell
+  test script reads `RoslynSentinel.Engines.Basic/FullTestMarkerStore.cs` as text and asserts that `FileName`, the
+  `.roslynsentinel` folder and the `FullTestMarker` record's parameter names (camelCased) match the helper. The same guard covers
+  D25's field names.
+- Q24 (owner OK, 2026-11-27): measured run started: `Invoke-WorktreeTests.ps1 -WorktreeRoot c:\tmp\rs-testtrees -Ref 512d7738
+  -Suite full -Parallel` (box idle: no test processes, peers idle, CPU 22 %); log
+  `<scratch>\plan_design_full_suite\q24-parallel-full.log`. Result (2026-11-27): run `512d7738-20261127-135332-45012`, 853 s
+  total (build 55 s, ratchet 13 s, tests 780 s wall), 12,633 tests, 1 failed. Per project wall: Tests.Git 780 s (serial 424 s,
+  OutOfProcess test time 4,256 s), Tools.Basic 433 s, Tests.Server 261 s, all others under 60 s. Sequential neighbours: 1,519 s
+  (`6c573134`) and 1,934 s (`5e5a814c`), so parallel alone cuts the full run by about 44-56 %; Tests.Git is still the whole
+  critical path. The one failure, `LoadSolution_ForceReloadMidLoad_WaitsThenReloads` (Tools.Basic), passed alone 35 s later
+  (RunTest, scope project, filter); recorded in INBOX.md as a contention flake candidate. Side effect: the run rewrote
+  `.roslynsentinel/full-test-marker.json` (failedCount 1, no headSha).
+- Phase 7 layout (2026-11-27): the safety plan is written as `plan_full_suite_nightly_and_debt_check.md`; this file stays as the
+  speed plan draft (it keeps the E-row item, D6).
+
+Original 2026-11-24 decisions:
+
 1. Keep `[Category("OutOfProcess")]` plus `suite: fast` as the routine-run mechanism; do not mark tests `[Explicit]` (D1).
 2. Make deferral safe: a red full run counts as stale, the marker records the commit, a nightly scheduled task runs the full
    suite when HEAD moved or the last run was red, and a SessionStart hook reports full-suite debt (stale, red, or OutOfProcess
    areas changed since the marker's commit). Plan- and batch-end skills then require a full run only when that check reports
-   debt (Steps 1-6).
+   debt (moved to `plan_full_suite_nightly_and_debt_check.md`, D7).
 3. Shorten the full run itself: run each project's class-level `[NonParallelizable]` fixtures in a second, concurrent
    `dotnet test` process (the "E-row sharding" left open by `plan_shorten_verification_loop.md` Step 12b), and let the Git
    parity fixtures that own a repo per test run their tests in parallel (Steps 7-9). Estimate, unmeasured: Tools.Basic wall
    from about 918 s to about 450 s, full run from about 19-23 to about 10-12 minutes.
+
+## Current design (plan-design 2026-11-27)
+
+- Safety part (marker, nightly run, debt check, wording; old Steps 1-6): moved to
+  [plan_full_suite_nightly_and_debt_check.md](./plan_full_suite_nightly_and_debt_check.md) (D7) and removed from this file.
+- This file is the run-speed plan draft (old Steps 7-10, D6). Still open: Q14 scope, Q16 filter probe, Q24 parallel full run
+  (running). Steps 7-10 below predate the 2026-11-27 grounding (critical path now `Tests.Git`) and will be redesigned.
 
 ## Execution rules
 
 - One `Build`/`RunTest`/`dotnet test` at a time in the main tree (CLAUDE.md). Implementer acceptance is a clean `Build` (C#
   slices) or a PowerShell parse check (script slices); test runs are the dispatcher's. Verification runs use
   `scripts/Invoke-WorktreeTests.ps1 -WorktreeRoot c:\tmp\rs-testtrees`.
-- Slices that edit `scripts/Invoke-WorktreeTests.ps1` (Steps 3, 7) are strictly sequential.
+- Step 7 edits `scripts/Invoke-WorktreeTests.ps1` after `plan_full_suite_nightly_and_debt_check.md` Step 4 has landed.
 - Non-C# files with Edit/Write; C# with the MCP edit tools. No new C# types, so no contract skeleton.
-- Text-neutral slices first: Steps 3, 4, 7, 8, 9 can start at once; Step 1 changes warning text on `RunTest` and `Git` commit
-  results.
+- Text-neutral slices first: Steps 7, 8, 9 can start at once.
 - Compare results with the 0-failure baseline (`reference_known_failing_tests.md`); a load timeout is handled by the D5 rule in
   that file.
 
 ## Steps
 
-### Step 1 - Marker: red counts as stale, optional HeadSha
-- Files: `RoslynSentinel.Engines.Basic/FullTestMarkerStore.cs`
-- Depends on: none (D2, D3)
-- Effect: behaviour-changing: a fast `RunTest` result and a `Git` commit result warn when the last full run had failures; the
-  warning line names the reason.
-- Change:
-  - `public record FullTestMarker(DateTime LastFullRunUtc, int TotalCount, int FailedCount, int FastRunsSince)` (line 17) gains a
-    trailing optional `string? HeadSha = null`. Existing positional construction (`NextMarker` line 94,
-    `FullTestMarkerStoreTests.cs:140`) keeps compiling. Update the type's doc comment: format line gains `"headSha":"<40 hex>"`,
-    written only by `scripts/Invoke-WorktreeTests.ps1`; the server writes null (it does not read HEAD).
-  - `NextMarker` (line 82): the full-run branch keeps `HeadSha` null; the fast-run branch keeps the current value (the `with`
-    expression already does).
-  - `Evaluate` (line 121): when `marker.FailedCount > 0`, add the reason `last full run had {FailedCount} failed tests`.
-  - `Describe` (line 159): append ` ({stale.Reason})` after "fast runs ago" so a recent but red run does not read as only
-    age-related.
-  - No new DTO: `FullSuiteStale` (line 24, on the `RunTest` result) is unchanged; `FullTestMarker` is a persisted file record.
-- Done when: `Build` 0 errors. Lane: `implementer` (1 file, about 4 edits).
-
-### Step 2 - Tests for Step 1
-- Files: `RoslynSentinel.Tests.Basic/FullTestMarkerStoreTests.cs`
-- Depends on: Step 1. Pairs with: Step 3.
-- Effect: text-neutral.
-- Change: new tests `Evaluate_RecentRedMarker_IsStaleWithFailureReason`, `Evaluate_RecentGreenMarker_IsFresh`,
-  `TryRead_MarkerWithHeadSha_ReadsIt`, `TryRead_MarkerWithoutHeadSha_HeadShaIsNull`,
-  `NextMarker_FastRun_KeepsHeadSha`; update any existing assertion on `Describe` text.
-- Done when: `Build` 0 errors; dispatcher runs `FullTestMarkerStoreTests` green. Lane: `test-writer`.
-
-### Step 3 - Worktree script writes headSha
-- Files: `scripts/Invoke-WorktreeTests.ps1`
-- Depends on: none (unknown JSON properties are ignored by `TryRead` until Step 1 lands)
-- Effect: text-neutral.
-- Change: the full-run marker object (lines 487-493) gains `headSha = <full SHA of the tested commit>` (the value already used for
-  `summary.json`'s `commit`, line 245). The fast-run rewrite (lines 499-517) carries an existing `headSha` through unchanged,
-  read from the raw text the same way as `lastFullRunUtc`.
-- Done when: PowerShell parse check; dispatcher runs `-Projects RoslynSentinel.Tests.Integration -Suite full` and the marker
-  shows the run's SHA. Lane: `implementer`.
-
-### Step 4 - Nightly full run script and task registration (new)
-- Files: `scripts/Invoke-NightlyFullRun.ps1` (new), `scripts/Register-NightlyFullRun.ps1` (new)
-- Depends on: Step 3 (reads `headSha`)
-- Effect: text-neutral (nothing runs until the owner registers the task, D4).
-- Change:
-  - `Invoke-NightlyFullRun.ps1`: read the marker; resolve `master`'s SHA with `git -C <repo> rev-parse master`; when the
-    marker's `headSha` equals it and `failedCount` is 0, append a `skip` line and exit 0; otherwise run
-    `Invoke-WorktreeTests.ps1 -WorktreeRoot c:\tmp\rs-testtrees -Ref master -Suite full`. Append one line per night
-    (`yyyy-MM-dd HH:mm | ran|skip | <sha8> | <seconds> | <failed>`) to `<scratch root>\nightly\nightly.log` (resolve with
-    `scripts\roslynsentinel-scratch.ps1`). `-DryRun` prints the decision only.
-  - `Register-NightlyFullRun.ps1`: `Register-ScheduledTask` for the current user, daily at `-Time` (default `03:00`), running
-    `pwsh -NoProfile -File scripts\Invoke-NightlyFullRun.ps1`; `-Unregister` removes it. The script prints what it registered;
-    the owner runs it.
-- Done when: parse check both; `Invoke-NightlyFullRun.ps1 -DryRun` prints `ran` for the current marker (no headSha yet).
-  Lane: `implementer` (2 new files).
-
-### Step 5 - SessionStart full-suite debt check (new)
-- Files: `.claude/hooks/full-suite-debt-session-start.ps1` (new), `scripts/expensive-test-watch-list.json` (new), `.claude/settings.json`
-- Depends on: Step 3
-- Effect: behaviour-changing for agents: a session start prints one block when there is full-suite debt; silent otherwise.
-- Change:
-  - `expensive-test-watch-list.json`: area name to path globs, from the OutOfProcess inventory (2026-11-24): `git` (`RoslynSentinel.Git/**`,
-    `RoslynSentinel.Tests.Git/**`, and the tool-side `RoslynSentinel.Tools.Basic/GitTools.cs`, `GitRemoteTools.cs`,
-    `GitStatusRenameHints.cs`, whose tool-level fixtures live in Tests.Git; not `GitHintText.cs` or
-    `GitHintApplyingOperations.cs`: a hint-text edit is not a Git behaviour change, and the nightly run is the backstop),
-    `runtest` (`RoslynSentinel.Engines.Basic/TestRun*.cs`, `RoslynSentinel.Engines.Basic/TestSuiteFilter.cs`,
-    `RoslynSentinel.Engines.Basic/TestProjectDetector.cs`, `RoslynSentinel.Tools.Basic/WorkspaceBuildTestImpl.cs`),
-    `build` (`RoslynSentinel.Engines.Basic/BuildEngine.cs`, `RoslynSentinel.Engines.Basic/BuildIsolation.cs`,
-    `RoslynSentinel.Common/BuildResult*.cs`), `process` (`RoslynSentinel.Common/ChildProcessCapture.cs`,
-    `RoslynSentinel.Engines.Basic/KillOnCloseJob.cs`, `RoslynSentinel.Engines.Basic/TestInstanceLauncher*.cs`,
-    `RoslynSentinel.Engines.Basic/DocTrailerEngine.cs`), `scripts` (`scripts/Invoke-WorktreeTests.ps1`), and the test side
-    (`RoslynSentinel.Tests.Tools.Basic/RunTestTests.cs`, `Build*Tests.cs`).
-  - Hook (runs on `startup` and `clear`, like `repo-hygiene-session-start.ps1`): read the marker; report when it is missing,
-    red, older than 26 hours (the nightly missed), or when `git diff --name-only <headSha> HEAD` plus uncommitted changes match
-    an area. Output: one line per reason and the matched areas, e.g.
-    `Full-suite debt: areas git, runtest changed since 3f2a9c1d (last full run 14 h ago, green).`. No marker headSha: report
-    "no commit recorded" and skip the area check.
-  - Wire it in `.claude/settings.json` `SessionStart` beside the two existing hooks.
-- Done when: parse check; run the hook by hand against the current tree and get the expected line. Lane: main session or
-  `implementer` (non-C#).
-
-### Step 6 - Skill and plan wording
-- Files: `.claude/skills/implement-plan/SKILL.md` (line 81), `.claude/skills/todo-punchlist/SKILL.md` (line 70),
-  `docs/current/plans/plan_shorten_verification_loop.md` ("Left open after the 2026-11-22 run", E-row item)
-- Depends on: Step 5 (and D5)
-- Effect: behaviour-changing for agents.
-- Change: the two skill lines become: run `RunTest` with `suite: "full"` when the full-suite debt check (Step 5 hook, or
-  `RunTest`'s staleness line) reports debt or the work touched an area in `scripts/expensive-test-watch-list.json`; otherwise a fast run, with
-  the nightly run as the backstop. The old plan's E-row item points to this plan.
-- Done when: the three edits are in. Lane: main session.
+Old Steps 1-6 (safety part) were moved to `plan_full_suite_nightly_and_debt_check.md` on 2026-11-27 (D7).
 
 ### Step 7 - Shard the class-level [NonParallelizable] fixtures into a second process
 - Files: `scripts/Invoke-WorktreeTests.ps1`
-- Depends on: Step 3 (same file, sequential)
+- Depends on: `plan_full_suite_nightly_and_debt_check.md` Step 4 (same file, sequential)
 - Effect: text-neutral (run time only; the same tests run).
 - Change:
   - For each selected project in a `-Suite full` run, scan its sources for classes with a class-level `[NonParallelizable]`
@@ -212,7 +239,7 @@ plus a per-test timeline):**
 
 ### Step 10 - Measure and close
 - Files: this plan
-- Depends on: Steps 7, 8, 9 (and Step 1-5 in place)
+- Depends on: Steps 7, 8, 9 (and `plan_full_suite_nightly_and_debt_check.md` in place)
 - Effect: text-neutral.
 - Change: three full runs at the final commit on an otherwise idle machine; compare with `48fb08e2-20261124-111028-65836`
   (1,378 s) and the `f77f1923` runs (1,128-1,131 s): run wall, Tools.Basic wall and serial seconds, Tests.Server wall, failure
@@ -234,6 +261,54 @@ plus a per-test timeline):**
   revisit only if Step 10 shows a 9a fixture still on the critical path.
 
 ## Risks and open decisions
+
+### plan-design question inventory (2026-11-27)
+
+Grounding (explore-tier2, 2026-11-27) found: the critical path moved to `Tests.Git` (about 800 s in run
+`6c573134-20261127-022016`, 1,519 s wall; Tools.Basic now 282 s); full runs are sequential across projects
+(`parallel=false` in 326 of 334 full summaries), so the 10-12 min estimate does not hold; `RepoWorktrees.ReadHeadCommit`
+(`RoslynSentinel.Git/RepoWorktrees.cs:134`) reads HEAD cheaply and Engines.Basic already reaches it; several anchors stale.
+
+Owner decisions (groups in asking order):
+- G1 structure: Q7 split into two plans (deferral safety / run speed); Q6 (D6) E-row ownership; Q1 (D1) category, no `[Explicit]`.
+- G2 marker: Q2 (D2) red counts stale; Q9 what counts as red (non-zero exit with 0 TRX failures, `Invoke-WorktreeTests.ps1:473`);
+  Q3 (D3) who writes `headSha` (reopened: server can via `RepoWorktrees.ReadHeadCommit`); Q10 stale-reason shape (typed field vs
+  reason constants; `FullTestMarkerStoreTests.cs:291`, `:313` assert literal text); Q11 shared PowerShell marker helper (script
+  writer plus nightly and hook readers).
+- G3 nightly: Q4 (D4) schedule, target, notification; Q12 scheduled-task logon type (interactive only, S4U, stored password).
+- G4 debt check: Q5 (D5) report-only vs gating; Q8 roadmap Phase 1 "a change outside the Git directories skips Tests.Git" vs
+  report-only (depends on Q5); Q13 watch list as file globs (about 13 OutOfProcess fixtures' sources uncovered) vs project
+  directories (roadmap Q44).
+- G5 speed: Q14 scope (generic per-project shard / Tests.Git only / cross-project parallel full run); depends on Q16, Q24.
+- Readiness gate round 1 (2026-11-27, safety plan): Q34 marker age vs nightly `skip` (blocker: a skip never refreshes
+  `LastFullRunUtc`, so the 26 h cause and the server's 2-day `TooOld` fire with nothing changed); Q35 retry as one invocation
+  (implementer default: one `-Projects <all failing> -Filter <all classes>` run; projects still run one at a time); Q36 watch-list
+  entries that match no tracked file; Q37 lanes for script slices and Step 8 over the main-session cap; Q38 D25 extended to the
+  marker file location (`.roslynsentinel/full-test-marker.json` in C# and PowerShell).
+- G3 additions: Q27 nightly retry on red (granularity, settled); Q28 marker outcome when the retry passes (settled); Q29
+  serial-by-default nightly; Q30 a headless Claude Code session that investigates and fixes a still-red night (owner idea,
+  2026-11-27); Q31 the nightly run writes a structured result file the hook reads.
+- G3 addition (settled): Q26 what the nightly run does when the box is busy (another test run, an overnight autonomous run).
+- G2 addition (settled): Q25 accept the item-2 exception that the marker's JSON field names live in C# (`FullTestMarker`) and in the
+  PowerShell helper, or add a guard.
+
+Investigations and probes:
+- Q24 (owner OK needed): one measured `Invoke-WorktreeTests.ps1 -Suite full -Parallel` run (15-25 min, occupies the box's test runs).
+- Q16 probe: NUnit adapter with a long `&`-chained `FullyQualifiedName!~` filter and nested-class FQNs; only if Q14 picks script-scan sharding.
+
+Implementer defaults (no longer open once the step states them):
+- Q17: Step 9 uses `[Parallelizable(ParallelScope.All)]` plus `InstancePerTestCase` (15 Tests.Git fixtures already do), not `Children`.
+- Q18: `GitCasCommitTests` leaves Step 9 (committer-race flake, `INBOX.md:21`).
+- Q19: Step 3 depends on Step 1 (the pre-Step-1 server drops unknown JSON properties on its fast-run rewrite, `FullTestMarkerStore.cs:61`, `:192`).
+- Q20: Step 6 also edits `reference_autonomous_run_conventions.md:106-109`, `dispatch-implementer/SKILL.md:115-121` (the two
+  skill lines only point there), `TODO.md:9`, `:16` and roadmap lines 257-258.
+- Q21: a note in `plan_isolate_build_test_area_into_own_project.md` that its move updates the watch list and Step 1's path.
+- Q23: filtered and per-project runs never clear debt (the marker stays all-or-nothing); stated in the hook's doc comment.
+
+Phase 6: Q22 Step 3's acceptance (needs an unfiltered full run to write the marker, `Invoke-WorktreeTests.ps1:485`) and a fresh
+baseline (current full runs 1,519 s and 1,934 s, high variance).
+
+### Original decisions D1-D6 (from the 2026-11-24 draft)
 
 Decisions for the owner (each with a recommendation):
 
@@ -269,7 +344,7 @@ Risks and unverified points:
 - `FullyQualifiedName!~` clauses: one per sharded class (about 20 in Tools.Basic, plus Tests.Server's); filter length is far
   below command-line limits, but the NUnit adapter's handling of a long `&`-chained filter is untested.
 - Estimates in the Decision rest on today's timeline (one run); Step 10 measures.
-- Another session may be editing `scripts/Invoke-WorktreeTests.ps1` or the skills; re-read before Steps 3, 6, 7.
+- Another session may be editing `scripts/Invoke-WorktreeTests.ps1` or the skills; re-read before Step 7.
 - `GitCommitMessageParityTests` (excluded from Step 9) stays intra-fixture serial; it was not on today's critical path.
 
 ## Related
