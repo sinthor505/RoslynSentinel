@@ -45,6 +45,10 @@ Dated entries; later entries do not override earlier ones unless they say so. Q-
   things can move out of Common. Owner context: `*.Advanced` used to depend on `*.Basic` and has been kept separate on purpose, so the flavors do not
   depend on each other and shared code needs a home of its own. Design belongs to Phase 3. (Fact to reconcile there: `Engines.Advanced` still references
   `Engines.Basic`.)
+- **2026-11-27, Q42 SnippetMatching goes into `Engines.Core` (owner):** Phase 2 creates `RoslynSentinel.Engines.Core` with SnippetMatching as its
+  first resident, so the engine-side Core project of Q40 exists from Phase 2 on. (The planner had recommended a focused project of its own; the owner
+  chose `Engines.Core`.) Planner follow-up for the Phase 2 design: one folder and namespace per area inside it, and a written admission rule
+  (engine-like logic used by both engine flavors or by engines and tools; no tool-surface text), so it does not become a second Common.
 - **2026-11-27, Q41 start now (owner):** Phases 0 to 2 need no design and run while Phase 3 is designed. The Git namespace rename is dispatched first.
 - **2026-11-27, order boundary (planner, proposed, not yet confirmed):** the Build/RunTest move is gated only by work that touches its files (its own
   extraction, Phase 1's `FullTestMarkerStore` edit, the plans that edit `TestInstanceLauncher`); the repo-wide rollout (Phase 5) does not gate it.
@@ -99,12 +103,12 @@ Dated entries; later entries do not override earlier ones unless they say so. Q-
 - Done when: a change outside `RoslynSentinel.Git/` and `RoslynSentinel.Tests.Git/` skips `Tests.Git` at task end and the nightly run covers it.
 - Effort: M
 
-### Phase 2 - First mechanical split out of Common: SnippetMatching
-- Doc: to be written (plan-design; mechanical).
+### Phase 2 - First mechanical split out of Common: SnippetMatching into a new Engines.Core
+- Doc: to be written (plan-design; mechanical; grounding started 2026-11-27).
 - Depends on: Phase 0.1 (so the first real `ChangeNamespace` result is known).
 - Effect: text-neutral.
-- Change: 18 files / 3,945 lines (`SnippetMatching/` plus `LineBlockAligner`, `SnippetMatchOutcome`, `SnippetSpan`) into a project above Common and a
-  test project for its fixtures. Two uses to cut first: `ToolException.cs` -> `SnippetFailureDetail`, and one edit-application file ->
+- Change: create `RoslynSentinel.Engines.Core` (Q42; above Common, below both engine flavors) and move 18 files / 3,945 lines (`SnippetMatching/` plus
+  `LineBlockAligner`, `SnippetMatchOutcome`, `SnippetSpan`) into it, with a test project for its fixtures. Two uses to cut first: `ToolException.cs` -> `SnippetFailureDetail`, and one edit-application file ->
   `LineBlockAligner`. First real use of the multi-file `MoveFile` on production code. It carries its own inversion with it (10 exception
   constructions and 2 `ToolCallHint` uses in `SnippetErrorFormatter`), recorded for Phase 5.
 - Done when: `Build` 0 errors, test counts preserved, full run clean, plan closed.
@@ -178,11 +182,14 @@ Dated entries; later entries do not override earlier ones unless they say so. Q-
 
 ## Risks and open decisions
 
-1. **Q42 home of SnippetMatching (owner, at Phase 2 design):** its own focused project, or the first resident of an `Engines.Core`. Recommendation: its
-   own project; a Core project that collects every engine-like piece of Common would become a second junk drawer.
+1. **`Engines.Core` must not become a second Common** (follows Q42). Phase 2 writes its admission rule and keeps one folder and namespace per area;
+   Phase 3 confirms or adjusts the rule when it settles what else goes there.
 2. **Q43 (owner, Phase 3):** does `Engines.Advanced` stop referencing `Engines.Basic` once a shared engine project exists? It uses
    `DeclarationNotFoundDetail` at 58 sites, constructs `SymbolNavigationEngine` and is injected with `BasicRefactoringEngine`.
-3. **Q44 (owner):** who designs the nightly plan's D1-D6; it was drafted by another session and has no TODO.md line.
+3. **Q44 (owner, recommendation given 2026-11-27):** the nightly plan's D1-D6 are settled in a fresh session running `plan-design` on that draft, in
+   parallel with this roadmap's other items; each decision already carries a recommendation there. Constraints that session takes from this roadmap:
+   the area watch list names project directories (today `RoslynSentinel.Git/`, `RoslynSentinel.Tests.Git/` and the tool-side Git files; later
+   `RoslynSentinel.Engines.BuildTest/` and its test project), and its Step 1 lands before Phase 4.2.
 4. **Q37 and Q38** (fact shape, render point) are carried into Phase 3; the owner leans to typed facts plus a tool-layer builder.
 5. **The order boundary** in Decision is proposed, not confirmed.
 6. **Survey quality.** Counts are text searches; the engine survey was a light pass and the Common consumer counts can include name collisions. Each
