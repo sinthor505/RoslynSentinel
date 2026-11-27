@@ -1,4 +1,5 @@
-# Regression check for Get-RunDigest.ps1 (Step 6a: header keys, verdict discovery, batch-root refusal).
+# Regression check for Get-RunDigest.ps1 (Step 6a: header keys, verdict discovery, batch-root refusal;
+# Step 6b: guidance, reactions, flags, think-tag leak).
 #
 # Run:  pwsh -NoProfile -File scripts\Get-RunDigest.Tests.ps1
 #       (exit code 0 = all passed, 1 = at least one failure)
@@ -112,6 +113,50 @@ try {
     $batch = Get-RunDigest -RunPath $batchRoot
     Assert-That (($batch.ExitCode -eq 1) -and (Test-HasDigestCode @($batch.Codes) 'UseBatchRoot')) 'UseBatchRoot: sample-NN folders give ExitCode 1 and code UseBatchRoot'
     Assert-That (-not (Test-Path -LiteralPath (Join-Path $batchRoot 'digest.json')) -and -not (Test-Path -LiteralPath (Join-Path $batchRoot 'sample-01\digest.json')) -and -not (Test-Path -LiteralPath (Join-Path $batchRoot 'sample-02\digest.json'))) 'UseBatchRoot: no digest.json is written'
+
+    # Step 6b cases read the turn script of the unmodified fixture ($base, run above).
+    $baseTurns = @($base.Digest.turns)
+    Assert-That (($baseTurns.Count -eq 6) -and (Test-Path -LiteralPath $base.Result.DigestMdPath)) 'Turns: the fixture has 6 turn rows and digest.md is written'
+
+    # GuidanceFiveSources: messageNext, a verdict, diagnostics, TrailingText and an assist are each filled.
+    $call2 = @($baseTurns[1].calls)[0]
+    $call4 = @($baseTurns[3].calls)[0]
+    Assert-That (-not [string]::IsNullOrEmpty([string]$call2.guidance.messageNext)) 'GuidanceFiveSources: turn 2 guidance.messageNext is filled'
+    Assert-That (-not [string]::IsNullOrEmpty([string]@($call2.guidance.verdicts)[0].suggestedTool)) 'GuidanceFiveSources: turn 2 guidance.verdicts[0].suggestedTool is filled'
+    Assert-That ($call2.guidance.diagnosticsCount -eq 2) 'GuidanceFiveSources: turn 2 guidance.diagnosticsCount is 2'
+    Assert-That (-not [string]::IsNullOrEmpty([string]$call4.guidance.trailingTextExcerpt)) 'GuidanceFiveSources: turn 4 guidance.trailingTextExcerpt is filled'
+    Assert-That (-not [string]::IsNullOrEmpty([string]@($baseTurns[4].assists)[0].kind)) 'GuidanceFiveSources: turn 5 assists[0].kind is filled'
+
+    # Reactions: the five booleans on every turn equal the Step 6b table (the names listed are the true ones).
+    $reactionNames = @('sameToolChangedArgs', 'identicalResend', 'differentTool', 'noCall', 'finalMessage')
+    $expectedReactions = @(
+        @(),
+        @('differentTool'),
+        @('identicalResend'),
+        @('sameToolChangedArgs'),
+        @('differentTool'),
+        @('noCall', 'finalMessage')
+    )
+    for ($i = 0; $i -lt 6; $i++) {
+        $actualTrue = @($reactionNames | Where-Object { $baseTurns[$i].reaction.$_ -eq $true })
+        $expectedTrue = @($expectedReactions[$i])
+        $same = ($actualTrue.Count -eq $expectedTrue.Count) -and (@($expectedTrue | Where-Object { $_ -notin $actualTrue }).Count -eq 0)
+        Assert-That $same ("Reactions: turn $($i + 1) true set equals the table (" + ($expectedTrue -join ',') + ')')
+    }
+
+    # Flags: the exact set of turn:reason pairs equals the union of the table's flags column.
+    $expectedFlags = @('2:ErrorTurn', '2:StreakStart', '3:AfterError', '3:ErrorTurn', '3:IdenticalResend', '4:AfterError', '4:ErrorTurn', '4:StreakEnd',
+        '5:AfterError', '5:AssistTurn', '5:LongReasoning', '5:FinalTurns', '6:AfterAssist', '6:ThinkLeak', '6:FinalTurns')
+    $actualFlags = [string[]]@($base.Digest.flags | ForEach-Object { "$($_.turn):$($_.reason)" })
+    $expectedSorted = [string[]]$expectedFlags.Clone()
+    [Array]::Sort($actualFlags, [System.StringComparer]::Ordinal)
+    [Array]::Sort($expectedSorted, [System.StringComparer]::Ordinal)
+    Assert-That (($actualFlags -join '|') -ceq ($expectedSorted -join '|')) 'Flags: the {turn, reason} set equals the table'
+    Assert-That (@($base.Digest.flags | Where-Object { $_.turn -eq 2 -and $_.reason -eq 'ErrorTurn' }).Count -eq 1) 'Flags: turn 2 has ErrorTurn'
+
+    # ThinkLeak: true on turn 6 only.
+    $leakTurns = @($baseTurns | Where-Object { $_.thinkLeak -eq $true } | ForEach-Object { $_.turn })
+    Assert-That (($leakTurns.Count -eq 1) -and ($leakTurns[0] -eq 6)) 'ThinkLeak: thinkLeak is true on turn 6 only'
 }
 finally {
     Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue

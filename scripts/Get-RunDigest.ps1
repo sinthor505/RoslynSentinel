@@ -1,4 +1,5 @@
-# Run digest for one model-eval transcript (plan_modeleval_run_review_pipeline, Step 6a: header, keys, verdict, turn rows).
+# Run digest for one model-eval transcript (plan_modeleval_run_review_pipeline, Steps 6a-6b: header, keys, verdict,
+# turn and call rows, guidance, reactions, flags, digest.md).
 #
 # Functions only. Dot-sourcing loads the functions and runs nothing:
 #   pwsh -NoProfile -Command ". ./scripts/Get-RunDigest.ps1"
@@ -83,8 +84,229 @@ function Get-DigestKeyHash([string]$Text) {
     return (-join ($hash | ForEach-Object { $_.ToString('x2') })).Substring(0, 12)
 }
 
-# Writes digest.json beside one transcript.json. A folder that holds only sample-NN subfolders gives
-# UseBatchRoot and writes nothing. Returns { ExitCode, DigestPath, Digest, Codes }.
+# First $Max characters of the text; $null stays $null.
+function Get-DigestExcerpt($Text, [int]$Max) {
+    if ($null -eq $Text) { return $null }
+    $s = [string]$Text
+    if ($s.Length -le $Max) { return $s }
+    return $s.Substring(0, $Max)
+}
+
+# Last $Max characters of the text; $null stays $null.
+function Get-DigestTailExcerpt($Text, [int]$Max) {
+    if ($null -eq $Text) { return $null }
+    $s = [string]$Text
+    if ($s.Length -le $Max) { return $s }
+    return $s.Substring($s.Length - $Max)
+}
+
+# Compact JSON of a parsed value with object keys sorted ordinally, recursively.
+function ConvertTo-DigestCanonicalJson($Value) {
+    if ($null -eq $Value) { return 'null' }
+    if ($Value -is [pscustomobject]) {
+        $names = [string[]]@($Value.PSObject.Properties | ForEach-Object { $_.Name })
+        [Array]::Sort($names, [System.StringComparer]::Ordinal)
+        $parts = foreach ($n in $names) {
+            (ConvertTo-Json -InputObject $n -Compress) + ':' + (ConvertTo-DigestCanonicalJson $Value.PSObject.Properties[$n].Value)
+        }
+        return '{' + (@($parts) -join ',') + '}'
+    }
+    if ($Value -is [System.Collections.IEnumerable] -and $Value -isnot [string]) {
+        $items = foreach ($i in $Value) { ConvertTo-DigestCanonicalJson $i }
+        return '[' + (@($items) -join ',') + ']'
+    }
+    return (ConvertTo-Json -InputObject $Value -Compress)
+}
+
+# argsHash: key hash of the arguments JSON with the top-level 'reason' removed and keys sorted ordinally.
+# Arguments that do not parse hash their raw text.
+function Get-DigestArgsHash($ArgumentsJson) {
+    $text = [string]$ArgumentsJson
+    $parsed = $null
+    $ok = $false
+    if (-not [string]::IsNullOrWhiteSpace($text)) {
+        try { $parsed = ConvertFrom-Json -InputObject $text -Depth 100 -DateKind String -ErrorAction Stop; $ok = $true }
+        catch { $ok = $false }
+    }
+    if ($ok) {
+        if ($parsed -is [pscustomobject] -and (Test-EvalProperty $parsed 'reason')) { $parsed.PSObject.Properties.Remove('reason') }
+        $text = ConvertTo-DigestCanonicalJson $parsed
+    }
+    return Get-DigestKeyHash $text
+}
+
+# The 'Next:' / 'Next step:' prose that ends an error message, excerpt-capped; $null when absent.
+function Get-DigestMessageNext($Message, [int]$Max) {
+    if (-not (Test-EvalValue $Message)) { return $null }
+    $m = [regex]::Match([string]$Message, '(?s)\bNext(?: step)?:\s*(.+)$')
+    if (-not $m.Success) { return $null }
+    return Get-DigestExcerpt $m.Groups[1].Value.Trim() $Max
+}
+
+# One calls[] row for digest.json from a tool-call record.
+function New-DigestCallRow($Vocabulary, $Call, [int]$Max) {
+    $result = ConvertFrom-EvalToolResult ([string](Get-EvalProperty $Call 'ResultJson'))
+    $errorCode = $result.ErrorCode
+    $errorBucket = $null
+    if (Test-EvalValue $errorCode) {
+        $buckets = $Vocabulary.errorBuckets
+        if (Test-EvalProperty $buckets ([string]$errorCode)) { $errorBucket = [string](Get-EvalProperty $buckets ([string]$errorCode)) }
+        else { $errorBucket = [string](Get-EvalProperty $buckets '*') }
+    }
+
+    $verdicts = New-Object System.Collections.Generic.List[object]
+    $diagnosticsCount = 0
+    $details = Get-EvalProperty $result.ErrorData 'structuredDetail'
+    if ($null -ne $details) {
+        foreach ($detail in @($details)) {
+            foreach ($v in @(Get-EvalProperty $detail 'verdicts')) {
+                if ($null -eq $v) { continue }
+                $verdicts.Add([ordered]@{
+                    suggestedTool = Get-EvalProperty $v 'suggestedTool'
+                    nextStep      = Get-DigestExcerpt (Get-EvalProperty $v 'nextStep') $Max
+                })
+            }
+            $diagnostics = Get-EvalProperty $detail 'diagnostics'
+            if ($null -ne $diagnostics) { $diagnosticsCount += @($diagnostics).Count }
+        }
+    }
+
+    $argsText = Get-EvalProperty $Call 'ArgumentsJson'
+    return [ordered]@{
+        tool           = Get-EvalProperty $Call 'ToolName'
+        argsExcerpt    = Get-DigestExcerpt $argsText $Max
+        argsHash       = Get-DigestArgsHash $argsText
+        isError        = ((Get-EvalProperty $Call 'IsError') -eq $true)
+        errorCode      = $errorCode
+        errorBucket    = $errorBucket
+        messageExcerpt = Get-DigestExcerpt $result.Message $Max
+        guidance       = [ordered]@{
+            messageNext         = Get-DigestMessageNext $result.Message $Max
+            verdicts            = $verdicts.ToArray()
+            diagnosticsCount    = $diagnosticsCount
+            trailingTextExcerpt = Get-DigestExcerpt (Get-EvalProperty $Call 'TrailingText') $Max
+        }
+        resultShape    = $result.Shape
+        largeResultRef = $result.LargeResultRef
+    }
+}
+
+# The five reaction booleans for one turn against the previous turn's calls (an empty list on turn 1).
+function Get-DigestReaction($Calls, $PreviousCalls, [bool]$IsFirst, [bool]$IsLast) {
+    $calls = @($Calls)
+    $reaction = [ordered]@{ sameToolChangedArgs = $false; identicalResend = $false; differentTool = $false; noCall = ($calls.Count -eq 0); finalMessage = ($IsLast -and $calls.Count -eq 0) }
+    if ($IsFirst -or $calls.Count -eq 0) { return $reaction }
+
+    $previous = @($PreviousCalls)
+    $identical = $false
+    $sameTool = $false
+    foreach ($c in $calls) {
+        foreach ($p in $previous) {
+            if ($p.tool -ceq $c.tool) {
+                $sameTool = $true
+                if ($p.argsHash -ceq $c.argsHash) { $identical = $true }
+            }
+        }
+    }
+    $reaction.identicalResend = $identical
+    $reaction.sameToolChangedArgs = ($sameTool -and -not $identical)
+    $reaction.differentTool = (-not $sameTool)
+    return $reaction
+}
+
+# flags[]: one { turn, reason } per turn and reason, ordered by turn then vocabulary reason order.
+function Get-DigestFlags($Vocabulary, $TurnRows) {
+    $rows = @($TurnRows)
+    $limit = [int]$Vocabulary.limits.longReasoningChars
+    $reasonsByIndex = @{}
+    for ($i = 0; $i -lt $rows.Count; $i++) { $reasonsByIndex[$i] = New-Object System.Collections.Generic.HashSet[string] }
+
+    $errored = @()
+    $assisted = @()
+    $erroringTools = @()
+    foreach ($row in $rows) {
+        $errorCalls = @($row.calls | Where-Object { $_.isError })
+        $errored += ($errorCalls.Count -gt 0)
+        $assisted += (@($row.assists).Count -gt 0)
+        $erroringTools += , @($errorCalls | ForEach-Object { [string]$_.tool } | Select-Object -Unique)
+    }
+
+    # Longest run of consecutive turns that each have an erroring call to one tool; earliest wins a tie.
+    $bestStart = -1
+    $bestLength = 0
+    $tools = @($erroringTools | ForEach-Object { $_ } | Select-Object -Unique)
+    foreach ($tool in $tools) {
+        $i = 0
+        while ($i -lt $rows.Count) {
+            if ($erroringTools[$i] -ccontains $tool) {
+                $j = $i
+                while (($j + 1) -lt $rows.Count -and ($erroringTools[$j + 1] -ccontains $tool)) { $j++ }
+                $length = $j - $i + 1
+                if ($length -gt $bestLength -or ($length -eq $bestLength -and $i -lt $bestStart)) { $bestLength = $length; $bestStart = $i }
+                $i = $j + 1
+            }
+            else { $i++ }
+        }
+    }
+
+    for ($i = 0; $i -lt $rows.Count; $i++) {
+        $row = $rows[$i]
+        $set = $reasonsByIndex[$i]
+        if ($errored[$i]) { [void]$set.Add('ErrorTurn') }
+        if ($i -gt 0 -and $errored[$i - 1]) { [void]$set.Add('AfterError') }
+        if ($assisted[$i]) { [void]$set.Add('AssistTurn') }
+        if ($i -gt 0 -and $assisted[$i - 1]) { [void]$set.Add('AfterAssist') }
+        if ($row.reaction.identicalResend) { [void]$set.Add('IdenticalResend') }
+        if ($bestLength -ge 2 -and $i -eq $bestStart) { [void]$set.Add('StreakStart') }
+        if ($bestLength -ge 2 -and $i -eq ($bestStart + $bestLength - 1)) { [void]$set.Add('StreakEnd') }
+        if ([int]$row.reasoningChars -gt $limit) { [void]$set.Add('LongReasoning') }
+        if ($row.thinkLeak) { [void]$set.Add('ThinkLeak') }
+        if ($i -ge ($rows.Count - 2)) { [void]$set.Add('FinalTurns') }
+    }
+
+    $flags = New-Object System.Collections.Generic.List[object]
+    for ($i = 0; $i -lt $rows.Count; $i++) {
+        foreach ($reason in @($Vocabulary.flagReasons)) {
+            if ($reasonsByIndex[$i].Contains([string]$reason)) { $flags.Add([ordered]@{ turn = $rows[$i].turn; reason = [string]$reason }) }
+        }
+    }
+    return $flags.ToArray()
+}
+
+# digest.md text: the header lines plus one line per flagged turn.
+function Get-DigestMarkdown($Digest) {
+    $h = $Digest.header
+    $lines = New-Object System.Collections.Generic.List[string]
+    $lines.Add("# Run digest: $($Digest.runId)")
+    $lines.Add('')
+    $lines.Add("- testName: $($h.testName)")
+    $lines.Add("- scenario: $($h.scenario)")
+    $lines.Add("- layoutKind: $($h.layoutKind)")
+    $lines.Add("- armKey: $($h.armKey)")
+    $lines.Add("- comparabilityKey: $($h.comparabilityKey)")
+    $lines.Add("- boundary: $($h.boundary)")
+    $lines.Add("- stopReason: $($h.stopReason)")
+    if ($null -eq $h.harnessVerdict) { $lines.Add('- harnessVerdict: none') }
+    else {
+        $v = $h.harnessVerdict
+        $lines.Add("- harnessVerdict: passed=$($v.passed) failureClass=$($v.failureClass) finalStateVerdict=$($v.finalStateVerdict) stopReason=$($v.stopReason) outcome=$($v.outcome) outcomeClass=$($v.outcomeClass)")
+    }
+    $codeNames = @($Digest.codes | ForEach-Object { if (Test-EvalValue $_.field) { "$($_.code)($($_.field))" } else { [string]$_.code } })
+    $lines.Add('- codes: ' + $(if ($codeNames.Count -gt 0) { $codeNames -join ', ' } else { 'none' }))
+    $lines.Add('')
+    $lines.Add('## Flagged turns')
+    $lines.Add('')
+    $turns = @($Digest.flags | ForEach-Object { $_.turn } | Select-Object -Unique)
+    if ($turns.Count -eq 0) { $lines.Add('none') }
+    foreach ($t in $turns) {
+        $reasons = @($Digest.flags | Where-Object { $_.turn -eq $t } | ForEach-Object { $_.reason })
+        $lines.Add("- turn ${t}: " + ($reasons -join ', '))
+    }
+    return (($lines -join "`n") + "`n")
+}
+
+# Writes digest.json and digest.md beside one transcript.json. A folder that holds only sample-NN subfolders gives
+# UseBatchRoot and writes nothing. Returns { ExitCode, DigestPath, DigestMdPath, Digest, Codes }.
 function Get-RunDigest {
     param([Parameter(Mandatory)][string]$RunPath)
 
@@ -171,27 +393,69 @@ function Get-RunDigest {
     foreach ($c in @($layout.Codes)) { $codes.Add($c) }
     if ($null -eq $verdict) { $codes.Add((New-DigestCode $vocab 'VerdictNotFound')) }
 
+    $excerptChars = [int]$vocab.limits.excerptChars
     $turnRows = New-Object System.Collections.Generic.List[object]
-    foreach ($turn in $turnItems) {
+    $previousCalls = @()
+    for ($index = 0; $index -lt $turnItems.Count; $index++) {
+        $turn = $turnItems[$index]
         $message = Get-EvalProperty $turn 'ModelMessage'
+        $reasoning = Get-EvalProperty $message 'ReasoningContent'
+        $content = Get-EvalProperty $message 'Content'
+
+        $reasoningText = ''
+        if ($null -ne $reasoning) { $reasoningText = [string]$reasoning }
+        $reasoningHead = $null
+        $reasoningTail = $null
+        if ($reasoningText.Length -gt 0) {
+            $reasoningHead = Get-DigestExcerpt $reasoningText $excerptChars
+            $reasoningTail = Get-DigestTailExcerpt $reasoningText $excerptChars
+        }
+
+        $thinking = $null
+        $rawThinking = Get-EvalProperty $turn 'Thinking'
+        if ($null -ne $rawThinking) {
+            $thinking = [ordered]@{
+                requested       = Get-EvalProperty $rawThinking 'Requested'
+                firedTriggers   = Get-EvalProperty $rawThinking 'FiredTriggers'
+                reasoningDeltas = Get-EvalProperty $rawThinking 'ReasoningDeltas'
+                overBudget      = Get-EvalProperty $rawThinking 'OverBudget'
+            }
+        }
+
+        $assistRows = New-Object System.Collections.Generic.List[object]
+        $rawAssists = Get-EvalProperty $turn 'Assists'
+        if ($null -ne $rawAssists) {
+            foreach ($assist in @($rawAssists)) {
+                $assistRows.Add([ordered]@{ kind = Get-EvalProperty $assist 'Kind'; excerpt = Get-DigestExcerpt (Get-EvalProperty $assist 'Text') $excerptChars })
+            }
+        }
+
+        $callRows = New-Object System.Collections.Generic.List[object]
+        $rawCalls = Get-EvalProperty $turn 'ToolCalls'
+        if ($null -ne $rawCalls) {
+            foreach ($call in @($rawCalls)) { $callRows.Add((New-DigestCallRow $vocab $call $excerptChars)) }
+        }
+        $callArray = $callRows.ToArray()
+
         $turnRows.Add([ordered]@{
             turn           = Get-EvalProperty $turn 'TurnNumber'
             startedAt      = Get-EvalProperty $turn 'StartedAt'
-            reasoningChars = 0
-            reasoningHead  = $null
-            reasoningTail  = $null
-            contentExcerpt = $null
-            thinkLeak      = $false
-            thinking       = $null
-            assists        = @()
-            calls          = @()
-            reaction       = [ordered]@{ sameToolChangedArgs = $false; identicalResend = $false; differentTool = $false; noCall = $false; finalMessage = $false }
+            reasoningChars = $reasoningText.Length
+            reasoningHead  = $reasoningHead
+            reasoningTail  = $reasoningTail
+            contentExcerpt = Get-DigestExcerpt $content $excerptChars
+            thinkLeak      = (($null -ne $content) -and ([string]$content).Contains('</think>'))
+            thinking       = $thinking
+            assists        = $assistRows.ToArray()
+            calls          = $callArray
+            reaction       = Get-DigestReaction $callArray $previousCalls ($index -eq 0) ($index -eq ($turnItems.Count - 1))
             tokens         = [ordered]@{
                 input  = Get-EvalProperty $message 'InputTokens'
                 output = Get-EvalProperty $message 'OutputTokens'
                 cached = Get-EvalProperty $message 'CachedInputTokens'
             }
         })
+        $previousCalls = $callArray
     }
 
     $runId = [string]$layout.TestName
@@ -221,14 +485,17 @@ function Get-RunDigest {
         }
         codes          = $codes.ToArray()
         turns          = $turnRows.ToArray()
-        flags          = @()
+        flags          = @(Get-DigestFlags $vocab $turnRows.ToArray())
     }
 
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
     $digestPath = Join-Path (Split-Path -Parent $transcriptFull) 'digest.json'
     $json = ConvertTo-Json -InputObject $digest -Depth 100
-    [System.IO.File]::WriteAllText($digestPath, $json, (New-Object System.Text.UTF8Encoding($false)))
+    [System.IO.File]::WriteAllText($digestPath, $json, $utf8)
+    $digestMdPath = Join-Path (Split-Path -Parent $transcriptFull) 'digest.md'
+    [System.IO.File]::WriteAllText($digestMdPath, (Get-DigestMarkdown $digest), $utf8)
 
-    return [pscustomobject]@{ ExitCode = 0; DigestPath = $digestPath; Digest = $digest; Codes = $codes.ToArray() }
+    return [pscustomobject]@{ ExitCode = 0; DigestPath = $digestPath; DigestMdPath = $digestMdPath; Digest = $digest; Codes = $codes.ToArray() }
 }
 
 if ($MyInvocation.InvocationName -ne '.') {
