@@ -193,6 +193,10 @@ It worked when:
   four ids).
 - 2026-11-26 Readiness (plan-design): independent review clean at c955116e (four rounds, explore-tier2
   sonnet; findings resolved in D24, D27, D29).
+- 2026-11-26 D30 (implement-plan): staleness check clean (no commits since c955116e besides the
+  APPROVED commit). Mode Batched (A: 1-2, B: 3-6, C: 10-13, D: 7/8/9a-1/9a-2/9b, E: 14a-14b; main
+  session 15-17). Owner away: mid-run decisions deferred to the tracker. Qwen3.5-9B confirmed loaded
+  on 112 and 113 before the run started.
 
 ### Design summary
 
