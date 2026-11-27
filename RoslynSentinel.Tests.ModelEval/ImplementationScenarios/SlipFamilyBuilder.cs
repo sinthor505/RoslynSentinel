@@ -136,13 +136,24 @@ internal static class SlipFamilyBuilder
     public static string RenderPrompt(SlipSiteSet set)
     {
         var directory = (Path.GetDirectoryName(set.FilePath) ?? string.Empty).Replace('\\', '/');
-        var changedLines = set.Sites.Where(site => site.Role == SiteRole.Changed).Select(RenderChangeLine);
+        var changedSites = set.Sites.Where(site => site.Role == SiteRole.Changed).ToList();
+        var conditions = set.PromptStyle switch
+        {
+            SlipPromptStyle.FullLine => "Make exactly these edits and change nothing else:\n"
+                + string.Join("\n", changedSites.Select(site => $"- {site.Name}: replace the declaration with `{ApplyChanges(site).Trim()}`.")),
+            SlipPromptStyle.TypeMap => "Make exactly these edits and change nothing else.\nType names to replace:\n"
+                + string.Join("\n", (set.TypeMap ?? Array.Empty<SiteChange>()).Select(change => $"- `{change.Old}` -> `{change.New}`"))
+                + "\nMembers to edit (replace every listed type name in each): "
+                + string.Join(", ", changedSites.Select(site => site.Name)) + ".",
+            _ => "Make exactly these edits and change nothing else:\n"
+                + string.Join("\n", changedSites.Select(RenderChangeLine)),
+        };
         var task = new ScenarioTask(
             Goal: $"Make the listed text edits in {set.ClassName}.",
             Files: $"{set.ClassName}.cs in {directory}. No other file.",
             IfFails: EvalContractOptions.PlainIfFails,
             DoneWhen: "every listed edit is made and the solution builds.",
-            Conditions: "Make exactly these edits and change nothing else:\n" + string.Join("\n", changedLines));
+            Conditions: conditions);
         return EvalContractOptions.Render(task);
     }
 
@@ -198,6 +209,58 @@ internal static class SlipFamilyBuilder
             }
 
             ValidateSite(site, name, violations);
+        }
+
+        if (set.PromptStyle == SlipPromptStyle.TypeMap)
+        {
+            var typeMap = set.TypeMap ?? Array.Empty<SiteChange>();
+            if (typeMap.Count == 0)
+            {
+                violations.Add("prompt style TypeMap needs a non-empty TypeMap.");
+            }
+
+            foreach (var site in sites)
+            {
+                if (site is null)
+                {
+                    continue;
+                }
+
+                var name = site.Name ?? string.Empty;
+                var seed = site.SeedText ?? string.Empty;
+                var changes = site.Changes ?? Array.Empty<SiteChange>();
+                if (site.Role == SiteRole.Changed)
+                {
+                    foreach (var change in changes)
+                    {
+                        if (!typeMap.Any(entry => entry.Old == change.Old && entry.New == change.New))
+                        {
+                            violations.Add($"site '{name}' changes '{change.Old}' to '{change.New}', which is not an entry of TypeMap.");
+                        }
+                    }
+                }
+
+                foreach (var entry in typeMap)
+                {
+                    var expected = changes.Any(change => change.Old == entry.Old) ? 1 : 0;
+                    var count = FindOccurrences(seed, entry.Old).Count;
+                    if (count != expected)
+                    {
+                        violations.Add($"site '{name}' has {count} occurrences of TypeMap key '{entry.Old}'; expected {expected}.");
+                    }
+                }
+            }
+
+            foreach (var entry in typeMap)
+            {
+                foreach (var site in sites)
+                {
+                    if (site is not null && FindOccurrences(site.SeedText ?? string.Empty, entry.New).Count > 0)
+                    {
+                        violations.Add($"TypeMap value '{entry.New}' already occurs in site '{site.Name}'.");
+                    }
+                }
+            }
         }
 
         return violations;

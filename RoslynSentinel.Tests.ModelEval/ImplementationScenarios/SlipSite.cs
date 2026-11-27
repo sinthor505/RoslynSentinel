@@ -5,6 +5,9 @@ namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios;
 /// <summary>Role a site plays in a slip-first family: changed, control or separator.</summary>
 internal enum SiteRole { Changed, Control, Separator }
 
+/// <summary>How a slip-first prompt states its edits: per-site change lists, full new declarations, or a type map.</summary>
+internal enum SlipPromptStyle { PerSiteChanges, FullLine, TypeMap }
+
 /// <summary>One exact-text replacement applied to a slip site's seed text.</summary>
 internal sealed record SiteChange(string Old, string New);
 
@@ -12,7 +15,7 @@ internal sealed record SiteChange(string Old, string New);
 internal sealed record SlipSite(string Name, string SeedText, IReadOnlyList<SiteChange> Changes, SiteRole Role);
 
 /// <summary>The full set of slip sites for one file, with the class shell they render into.</summary>
-internal sealed record SlipSiteSet(string FilePath, string Namespace, string ClassName, string Preamble, IReadOnlyList<SlipSite> Sites);
+internal sealed record SlipSiteSet(string FilePath, string Namespace, string ClassName, string Preamble, IReadOnlyList<SlipSite> Sites, SlipPromptStyle PromptStyle = SlipPromptStyle.PerSiteChanges, IReadOnlyList<SiteChange>? TypeMap = null);
 
 /// <summary>Fixed layout constants for the slip-first site family.</summary>
 internal static class SlipFamilyLayout
