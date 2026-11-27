@@ -74,26 +74,6 @@ public sealed record SnippetNearMatch(
     IReadOnlyList<SnippetDifference> Differences);
 
 /// <summary>
-/// One of the file's windows that scored closest to a snippet that matched at no tier. Never
-/// usable for an edit: it shares no base type or interface with <see cref="SnippetMatch"/>. The dispatcher lists
-/// these in <see cref="SnippetMatchResult.ClosestWindows"/> only when nothing matched at any tier (see
-/// <c>SnippetCandidateFinder</c> for the scoring, threshold and cap).
-/// </summary>
-/// <param name="StartLine">1-based line in the file where the window starts.</param>
-/// <param name="ActualLines">The file's actual lines, verbatim.</param>
-/// <param name="Score">Similarity score in 0..1; higher is closer. Never 1 (a full match would have been found).</param>
-public sealed record SnippetClosestWindow(int StartLine, IReadOnlyList<string> ActualLines, double Score);
-
-/// <summary>
-/// One entry of a result's filter trail: a selector that was applied after tier resolution and how many matches it
-/// removed. Data only. Entries are in application order: matchLine, withinMember, lineBefore, lineAfter (a selector
-/// that was not supplied has no entry).
-/// </summary>
-/// <param name="Selector">The selector's parameter name: <c>matchLine</c>, <c>withinMember</c>, <c>lineBefore</c> or <c>lineAfter</c>.</param>
-/// <param name="Removed">How many of the then-remaining matches this selector removed.</param>
-public sealed record SnippetFilterStep(string Selector, int Removed);
-
-/// <summary>
 /// Result of looking a snippet up in a text. Carries data only (no message text): wording lives
 /// in the removed legacy ContextErrorBuilder. Build one with <see cref="Create"/>, which enforces:
 /// <see cref="NearMatches"/> is non-empty only when <see cref="Matches"/> is empty, and
@@ -136,45 +116,78 @@ public sealed record SnippetMatchResult
     }
 
     /// <summary>The tier the caller asked for (echoed back).</summary>
-    public WhitespaceTolerance RequestedTolerance { get; }
+    public WhitespaceTolerance RequestedTolerance
+    {
+        get;
+    }
 
     /// <summary>The case mode the caller asked for (echoed back).</summary>
-    public SnippetCaseMode RequestedCaseMode { get; }
+    public SnippetCaseMode RequestedCaseMode
+    {
+        get;
+    }
 
     /// <summary>Why the lookup ended as it did, for error-code mapping.</summary>
-    public SnippetMatchOutcome Outcome { get; }
+    public SnippetMatchOutcome Outcome
+    {
+        get;
+    }
 
     /// <summary>Accepted matches, at or stricter than <see cref="RequestedTolerance"/>.</summary>
-    public IReadOnlyList<SnippetMatch> Matches { get; }
+    public IReadOnlyList<SnippetMatch> Matches
+    {
+        get;
+    }
 
     /// <summary>Matches that exist only at a looser tier (capped list). Never usable for an edit.</summary>
-    public IReadOnlyList<SnippetNearMatch> NearMatches { get; }
+    public IReadOnlyList<SnippetNearMatch> NearMatches
+    {
+        get;
+    }
 
     /// <summary>Total number of near-matches found, which can exceed <see cref="NearMatches"/>.Count when the list was capped.</summary>
-    public int NearMatchTotalCount { get; }
+    public int NearMatchTotalCount
+    {
+        get;
+    }
 
     /// <summary>The file's windows closest to the snippet, listed only when nothing matched at any tier.</summary>
-    public IReadOnlyList<SnippetClosestWindow> ClosestWindows { get; }
+    public IReadOnlyList<SnippetClosestWindow> ClosestWindows
+    {
+        get;
+    }
 
     /// <summary>
     /// How many windows scored at or above the minimum similarity, which can exceed <see cref="ClosestWindows"/>.Count
     /// when the list was capped (the caller can say how many were omitted). Zero unless <see cref="ClosestWindows"/> is
     /// non-empty.
     /// </summary>
-    public int ClosestWindowTotalCount { get; }
+    public int ClosestWindowTotalCount
+    {
+        get;
+    }
 
     /// <summary>
     /// The tiers the dispatcher actually ran, strictest first (it stops at the first tier that matches, and a blank
     /// snippet runs none). The case mode is <see cref="RequestedCaseMode"/>. Empty when the producer did not record it.
     /// A result rebuilt by the selector filter carries the tier result's value forward unchanged.
     /// </summary>
-    public IReadOnlyList<WhitespaceTolerance> TiersProbed { get; }
+    public IReadOnlyList<WhitespaceTolerance> TiersProbed
+    {
+        get;
+    }
 
     /// <summary>Number of file lines examined while looking for closest windows; zero when no window search ran.</summary>
-    public int LinesExamined { get; }
+    public int LinesExamined
+    {
+        get;
+    }
 
     /// <summary>Number of candidate windows scored while looking for closest windows; zero when no window search ran.</summary>
-    public int WindowsExamined { get; }
+    public int WindowsExamined
+    {
+        get;
+    }
 
     /// <summary>
     /// True when this result lists no candidate of any kind: no accepted matches, no near-matches, no closest windows
@@ -185,13 +198,22 @@ public sealed record SnippetMatchResult
         Matches.Count == 0 && NearMatches.Count == 0 && ClosestWindowTotalCount == 0 && PreFilterMatches.Count == 0;
 
     /// <summary>Filter trail: candidates before withinMember/matchLine selectors ran.</summary>
-    public int CandidatesBeforeSelectors { get; }
+    public int CandidatesBeforeSelectors
+    {
+        get;
+    }
 
     /// <summary>Filter trail: candidates remaining after withinMember/matchLine selectors.</summary>
-    public int CandidatesAfterSelectors { get; }
+    public int CandidatesAfterSelectors
+    {
+        get;
+    }
 
     /// <summary>Filter trail: candidates remaining after lineBefore/lineAfter filtering.</summary>
-    public int CandidatesAfterAdjacentLines { get; }
+    public int CandidatesAfterAdjacentLines
+    {
+        get;
+    }
 
     private readonly IReadOnlyList<SnippetMatch>? preFilterMatchesOrNull;
 
@@ -199,7 +221,10 @@ public sealed record SnippetMatchResult
     /// Which selectors were applied after tier resolution and how many matches each removed, in application order.
     /// Empty when no selector ran (none supplied, or the lookup ended before selectors could apply).
     /// </summary>
-    public IReadOnlyList<SnippetFilterStep> FilterTrail { get; }
+    public IReadOnlyList<SnippetFilterStep> FilterTrail
+    {
+        get;
+    }
 
     /// <summary>
     /// The matches at the winning tier before any selector ran. Equal to <see cref="Matches"/> when no selector ran.
@@ -213,13 +238,22 @@ public sealed record SnippetMatchResult
     /// <see cref="Matches"/> when the adjacent-line selectors did not run or removed nothing; on
     /// <see cref="SnippetMatchOutcome.AdjacentLineMismatch"/> it holds the matches that lineBefore/lineAfter rejected.
     /// </summary>
-    public IReadOnlyList<SnippetMatch> SelectorSurvivors { get; }
+    public IReadOnlyList<SnippetMatch> SelectorSurvivors
+    {
+        get;
+    }
 
     /// <summary>For <see cref="SnippetMatchOutcome.InvalidDisambiguator"/>: the name of the offending parameter (lineBefore, lineAfter or withinMember); otherwise null.</summary>
-    public string? InvalidParameterName { get; }
+    public string? InvalidParameterName
+    {
+        get;
+    }
 
     /// <summary>For <see cref="SnippetMatchOutcome.InvalidDisambiguator"/>: the offending value, verbatim; otherwise null.</summary>
-    public string? InvalidParameterValue { get; }
+    public string? InvalidParameterValue
+    {
+        get;
+    }
 
     /// <summary>True when exactly one accepted match exists: the only check an editing caller needs.</summary>
     public bool IsSingleMatch => Matches.Count == 1;
