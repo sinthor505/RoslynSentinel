@@ -1,6 +1,6 @@
 # Plan: model-eval run review pipeline (digest script, grader agent, rollup, agent refresh)
 
-**Status:** APPROVED 2026-11-26. 20 steps (digest, grader, rollup, vocabulary, arm-table fold-in, agent refresh, calibration); run with `/implement-plan` in a fresh chat.
+**Status:** APPROVED 2026-11-26. 20 steps (digest, grader, rollup, vocabulary, arm-table fold-in, agent refresh, calibration); re-anchored at 82dc6706 with Q28-Q29; Batched run started.
 
 ## Problem
 
@@ -228,6 +228,32 @@ harness. Design and evidence:
     the log analyst's tools, `35,000`, `FindReferences`). The calibration run is the end-to-end smoke
     test.
 
+- 2026-11-26 Staleness review at 82dc6706 (implement-plan; slip-variants commits landed after f97a6b55).
+  Anchors in the Decision entries above are as of f97a6b55; the Steps below are re-anchored:
+  `Get-ThinkingArmTable.ps1` is 220 lines (a TODO was added at line 67), its outcome parse is 104-114,
+  `Read-Run` 102-155, the arm suffix 168-169; `Get-ToolResultFormatArmTable.ps1` `Read-Run` is at 91;
+  the procedure doc's "Comparability boundaries" heading is at 512; `WriteTranscriptAsync` is at
+  `ModelAgentRunner.cs:1157`. Unchanged: `</think>` TODO at 434, 16 `AgentStopReason` members, csproj
+  line 62, the `largeResult` shape. New since approval: `scripts/roslynsentinel-transcriptmetrics.ps1`
+  (run discovery `Get-EvalTranscripts`, `Get-OutcomeToken`, `Get-EnvValue`, escape-copy metrics; no
+  transcript or outcome parse) and `scripts/Get-SlipCounts.ps1` (parses transcripts and outcome files).
+  Ownership: the metrics helper owns evalqueue run discovery and escape-copy metrics; `EvalRunReader.ps1`
+  owns transcript, outcome and verdict parsing. `EvalRunReader.ps1` must not define functions named
+  `Get-OutcomeToken`, `Get-EnvValue` or any other name in the helper. Step 5 gains `Get-SlipCounts.ps1`
+  (5 markers) and Step 9a lists 14 scripts.
+- 2026-11-26 Q28 (owner): Step 8 extends the shared helper instead of the arm table's own `$jobsDir`
+  block. Evalqueue job JSONs record `commit` (all jobs), `testedCommit`/`testedDirty` (most since about
+  Nov 13) and `pinnedCommit` (since about Nov 20); `scripts/eval-hosts.json` gives each host a `machine`,
+  which is the queue folder name. `Get-EvalTranscripts` gets an optional `-Machine [string[]]` (default:
+  the distinct `machine` values in `eval-hosts.json`; a missing folder warns and is skipped; throws only
+  when none exist) and a `-Commit <prefix>` filter on `testedCommit`, falling back to `commit`. Rows
+  carry `Commit`, `Dirty` and the job object. The arm table switches to the helper, gets `-Commit`, and
+  defaults to all machines. `Get-RunDigest -BatchRoot` stays folder-based (Q24). Why: one discovery
+  implementation; closes the line-67 TODO and both INBOX lines.
+- 2026-11-26 Q29 (owner): an `OffloadPointerResult` (`{offloaded, resultId, sizeBytes, sizeChars, ...}`)
+  is classified as `LargeResult` with `LargeResultRef = resultId`; `resultShapes` stays at 4.
+- 2026-11-26 Run setup (owner): present during the run; Batched mode.
+
 ## Execution rules
 
 - Every new or edited file in this plan is outside C#, so it is edited with Edit/Write, except the
@@ -296,7 +322,9 @@ Fields that later steps rely on. A step may add fields; it may not rename or dro
   - `Json`: an object with `isError`. On error, `errorData` holds `errorCode`, `message` and an
     optional `structuredDetail[]`. `IsError` is `isError`.
   - `LargeResult`: `{"largeResult":{"resultType":...,"writtenToFile":true,"filePath":...,"resultId":...}}`.
-    `LargeResultRef` is `filePath`, else `resultId`, and `IsError` is `$null`.
+    `LargeResultRef` is `filePath`, else `resultId`, and `IsError` is `$null`. An offload pointer
+    (`{"offloaded":true,"resultId":...,"sizeBytes":...}`, `OffloadPointerResult.cs`) is also
+    `LargeResult`, with `LargeResultRef` = `resultId` (Q29).
   - `ToolCallWrapper`: an object whose `toolCall` property wraps one of the other shapes. It is
     unwrapped, then classified again; `Shape` stays `ToolCallWrapper`.
   - `Text`: anything that does not parse as JSON. `IsError` is `$null`, and `RawText` holds the text.
@@ -374,6 +402,8 @@ NUnit test and the arm-table tests. Those run the script as a child `pwsh -File`
 | `Get-ThinkingArmTable.Tests.ps1` :: Parity | shared reader, no output change (Q20) | temp queue with 2 job JSONs | `-CsvPath` rows equal the expected rows | equal |
 | :: MultiMachine | Q16 | temp queue with 2 machines plus 1 missing machine name | row count in `-CsvPath`; the child process exit code; its output names the missing machine (checklist item 11 exception: a script that cannot be dot-sourced reports this only as warning text) | sum of both; exit 0; name present |
 | :: GroupByScenario | Q16 | temp, 2 ScenarioIds under one job test | `-GroupByTest -SummaryCsvPath` rows; the per-run CSV `scenario` column | 2 groups; 2 distinct values |
+| :: CommitFilter | Q28 | temp queue, 2 machines, jobs on 2 commits | `-Commit <prefix>` rows in `-CsvPath` | only that commit's rows |
+| :: DefaultMachines | Q28 | temp queue plus a temp `eval-hosts.json` passed with `-HostsFile`, no `-Machine` | row count in `-CsvPath` | rows from both machines |
 | `Get-RunDigest.Tests.ps1` :: Keys | Q12, Q19, Q26 | fx: digest-guidance.transcript.json | a sampler change keeps both keys; a `Tools` or `ToolResultFormat` change alters both; a scenario change alters only `comparabilityKey`; dates either side of a boundary differ; a date before every boundary gives `pre-scenario-rework`; an absent field hashes as `<absent>` | all hold |
 | :: VerdictDiscovery | Q21 | temp tree | layout gives a verdict; an empty folder gives `null`, a `VerdictNotFound` code and a non-empty `verdictSearched` | match |
 | :: UseBatchRoot | Q21 | temp `sample-NN` tree | `UseBatchRoot` code, `ExitCode` 1 | match |
@@ -509,7 +539,7 @@ NUnit test and the arm-table tests. Those run the script as a child `pwsh -File`
 - Depends on: 2a.
 - Effect: text-neutral (docs).
 - Change:
-  - Under the heading `## Comparability boundaries` (line 496), add one line: the machine-readable
+  - Under the heading `## Comparability boundaries` (line 512), add one line: the machine-readable
     list is `scripts/eval-review/vocabulary.json` (`boundaries`).
   - In the design doc, replace the dimension table with one sentence pointing to `vocabulary.json`
     (`dimensions`).
@@ -551,10 +581,12 @@ NUnit test and the arm-table tests. Those run the script as a child `pwsh -File`
 - Change: add
   - `Read-EvalStepOutcome -Path`: returns `{ ScenarioId, Step, Outcome, StopReason, OutcomeClass,
     WallTime, WallSeconds }`.
-    - It parses the keys that `Get-ThinkingArmTable.ps1:103-113` parses, plus the
+    - It parses the keys that `Get-ThinkingArmTable.ps1:104-114` parses, plus the
       `<ScenarioId> step <k>:` prefix.
-    - `WallTime` is the raw string, and `WallSeconds` is a double converted the way lines 110-112
+    - `WallTime` is the raw string, and `WallSeconds` is a double converted the way lines 111-113
       convert it.
+    - No reader function may share a name with one in `scripts/roslynsentinel-transcriptmetrics.ps1`
+      (for example `Get-OutcomeToken`, `Get-EnvValue`); the arm table dot-sources both after Step 8.
   - `Get-EvalRunLayout -TranscriptPath`: returns `{ TestName, Timestamp, SampleIndex, Kind, Codes }`.
   - `Find-EvalRunVerdict -TranscriptPath -Vocabulary`: returns `{ Verdict, Scenario, Searched }`.
     `Verdict` has the `harnessVerdict` shape from "Contracts". `passed` is a bool (the `results.csv`
@@ -578,7 +610,7 @@ NUnit test and the arm-table tests. Those run the script as a child `pwsh -File`
   - Baseline first: copy one machine's jobs folder to
     `<scratch root>\plan_design_modeleval_run_review_pipeline\armtable-jobs\`. Run the unchanged script
     with `-JobFolder <copy> -CsvPath ...\armtable-before.csv`.
-  - Dot-source `eval-review\EvalRunReader.ps1` and replace the outcome parse at lines 103-113 with
+  - Dot-source `eval-review\EvalRunReader.ps1` and replace the outcome parse at lines 104-114 with
     `Read-EvalStepOutcome`. The script's own choice of outcome file stays as it is.
   - The test (`Parity`) runs the script as a child `pwsh -File`, because the script has top-level code
     and cannot be dot-sourced. It builds a temp queue: 2 job JSONs (`id`, `purpose`, `state`, `test`,
@@ -593,17 +625,19 @@ NUnit test and the arm-table tests. Those run the script as a child `pwsh -File`
 
 ### Step 5 - Migration markers on the other transcript readers
 - Files: `scripts/Get-EditToolFriction.ps1`, `scripts/Backfill-TranscriptSummary.ps1`,
-  `scripts/Get-ToolResultFormatArmTable.ps1`, `scripts/Get-EditArmTable.ps1`.
+  `scripts/Get-ToolResultFormatArmTable.ps1`, `scripts/Get-EditArmTable.ps1`,
+  `scripts/Get-SlipCounts.ps1`.
 - Depends on: 3b. Pairs with: Step 4.
 - Effect: text-neutral (comments).
 - Change: add one line, `# TODO migrate transcript parsing to scripts/eval-review/EvalRunReader.ps1`,
   above each parse site:
   - `Get-EditToolFriction.ps1`: above `Get-ErrorText` (line 58);
   - `Backfill-TranscriptSummary.ps1`: above `New-Summary` (line 142);
-  - `Get-ToolResultFormatArmTable.ps1`: above `Read-Run` (line 125);
-  - `Get-EditArmTable.ps1`: above the transcript parse (line 58).
-- Done when: `Select-String -Pattern 'EvalRunReader.ps1' -Path <the 4 scripts>` returns 4 hits.
-- Lane: implementer-sweep (one operation, 4 files). Effort: S.
+  - `Get-ToolResultFormatArmTable.ps1`: above `Read-Run` (line 91);
+  - `Get-EditArmTable.ps1`: above the transcript parse (line 58);
+  - `Get-SlipCounts.ps1`: above the outcome-file parse (line 120).
+- Done when: `Select-String -Pattern 'EvalRunReader.ps1' -Path <the 5 scripts>` returns 5 hits.
+- Lane: implementer-sweep (one operation, 5 files). Effort: S.
 
 ### Step 6a - Digest: header, keys and verdict
 - Files: `scripts/Get-RunDigest.ps1` (new), `scripts/Get-RunDigest.Tests.ps1` (new),
@@ -731,33 +765,53 @@ NUnit test and the arm-table tests. Those run the script as a child `pwsh -File`
   The dispatcher runs the tests.
 - Lane: implementer. Effort: S.
 
-### Step 8 - Arm table: several machines, per-scenario groups
-- Files: `scripts/Get-ThinkingArmTable.ps1`, `scripts/Get-ThinkingArmTable.Tests.ps1`,
-  `docs/current/INBOX.md`.
+### Step 8 - Shared discovery: several machines, commit filter; arm table per-scenario groups
+- Files: `scripts/roslynsentinel-transcriptmetrics.ps1`, `scripts/Get-ThinkingArmTable.ps1`,
+  `scripts/Get-ThinkingArmTable.Tests.ps1`, `docs/current/INBOX.md`.
 - Depends on: 4.
-- Effect: behaviour-changing (rows from several machines; new groups).
-- Change:
-  - `-Machine` becomes `[string[]]`, split on commas (Execution rules). Jobs are read from each
-    `$QueueRoot\<machine>\jobs`, in the block that builds `$jobsDir`.
-    - A missing machine folder gives a `Write-Warning` and is skipped. The script throws only when
-      none of the folders exist.
+- Effect: behaviour-changing (rows from several machines; commit filter; new groups). The other two
+  helper callers (`Get-ToolResultFormatArmTable.ps1`, `Get-SlipCounts.ps1`) keep their behaviour unless
+  they pass the new parameters.
+- Change (Q28):
+  - In `Get-EvalTranscripts` (`roslynsentinel-transcriptmetrics.ps1:61`):
+    - `-Machine` becomes an optional `[string[]]`, split on commas (Execution rules). When it is
+      empty and neither `-JobFolder` nor `-Path` is given, the machines are the distinct `machine`
+      values in `scripts/eval-hosts.json` (a new optional `-HostsFile` parameter, default
+      `$PSScriptRoot\eval-hosts.json`, lets tests pass a temp copy). Jobs are read from each
+      `$QueueRoot\<machine>\jobs`.
+    - A missing machine folder gives a `Write-Warning` and is skipped. It throws only when none of the
+      folders exist.
+    - New `-Commit <string>`: keep a job only when its `testedCommit` (else `commit`) starts with the
+      value, case-insensitive.
+    - Every row gains `Commit` (`testedCommit`, else `commit`), `Dirty` (`testedDirty`, else `dirty`)
+      and `Job` (the parsed job object). `-Path` rows get `$null` for all three. Existing properties
+      are unchanged.
     - `-JobFolder` stays as a single-folder override.
+  - In the arm table: replace its own job discovery (the `$jobsDir` block, lines 68-73, and the loop
+    over job files) with `Get-EvalTranscripts`, building the arm suffix from `$row.Job.env`. Add
+    `-Commit` and `-HostsFile` (both passed through) and make `-Machine` an optional `[string[]]` defaulting to all machines.
+    Remove the line-67 `# TODO use roslynsentinel-transcriptmetrics.ps1 for run discovery` comment.
   - Update the comment-based help (`.SYNOPSIS`/`.DESCRIPTION` near line 7, `.PARAMETER Machine` near
-    lines 34-35) to say "one or more machines".
+    lines 34-35, and a new `.PARAMETER Commit`) to say "one or more machines, default all in
+    eval-hosts.json".
   - A row whose outcome file has a `ScenarioId` is an ImplementationScenario row. `-GroupByTest`
     groups such rows by that `ScenarioId` instead of by the job test name.
   - Add a `scenario` column at the end of the `-CsvPath` rows. Add `-SummaryCsvPath <file>`, which
     writes the aggregate table's rows to a CSV as well as printing them. Step 4's parity check names
     its columns, so the new column does not affect it.
-  - Remove the `# TODO read several machines' queue folders...` comment.
-  - In INBOX, delete the line beginning `- 2026-11-25 12:51 Get-ThinkingArmTable.ps1`, and append
-    one line: the arm key (the block that builds the arm suffix from the job env) ignores
-    `ToolResultFormat`.
-  - Tests: `MultiMachine`, `GroupByScenario`.
+  - Remove the `# TODO read several machines' queue folders...` comment (line 66).
+  - In INBOX, delete the line beginning `- 2026-11-25 12:51 Get-ThinkingArmTable.ps1` and the
+    2026-11-26 18:46 line about the line-67 TODO, and append one line: the arm key (the block that
+    builds the arm suffix from the job env) ignores `ToolResultFormat`.
+  - Tests: `MultiMachine`, `GroupByScenario`, `CommitFilter` (temp queue, 2 machines, jobs on 2
+    commits; `-Commit <prefix of one>` gives only that commit's rows) and `DefaultMachines` (no
+    `-Machine`; a temp `eval-hosts.json` via `-HostsFile` naming the 2 temp machines gives rows from
+    both). The dispatcher also re-runs `scripts/Get-SlipCounts.Tests.ps1` as the regression check for
+    the helper's other callers.
 - Done when: running `pwsh -File scripts/Get-ThinkingArmTable.ps1 -QueueRoot <temp> -Machine a,b
   -CsvPath <temp csv>` on a temp queue with job folders `a` and `b` writes rows from both. The
   dispatcher runs the tests.
-- Lane: implementer. Effort: S.
+- Lane: implementer. Effort: M (shared helper with three callers).
 
 ### Step 9a - Refresh the artifact map
 - Files: `docs/current/references/reference_log_sources_and_cross_referencing.md`.
@@ -776,12 +830,14 @@ NUnit test and the arm-table tests. Those run the script as a child `pwsh -File`
     `Get-RunDigest`, `Get-ReviewRollup`, `Get-ThinkingArmTable`, `Get-ToolResultFormatArmTable`,
     `Get-EditArmTable`, `Get-EditToolFriction`, `Find-OffloadedResults`,
     `Get-ShippingKindTypoCounts`, `Backfill-TranscriptSummary`, `Convert-RunEscapes`,
-    `Probe-OvernightLogprobs`, `roslynsentinel-interrogate`, `roslynsentinel-errorvariants`.
+    `Probe-OvernightLogprobs`, `roslynsentinel-interrogate`, `roslynsentinel-errorvariants`,
+    `Get-SlipCounts`; plus `roslynsentinel-transcriptmetrics` as the shared run-discovery helper
+    (`-Machine`, `-Commit`, evalqueue fields `testedCommit`, `pinnedCommit`).
 
   Replace the "Verified ... / Updated ..." lines at the top with
   `**Status:** CURRENT <date>. Single artifact map; agents point here.`
-- Done when: `Select-String` finds all 13 script names in the file.
-- Lane: implementer-senior (reads 13 script headers plus `runs.csv` docs). Effort: S.
+- Done when: `Select-String` finds all 14 script names and `roslynsentinel-transcriptmetrics` in the file.
+- Lane: implementer-senior (reads 15 script headers plus `runs.csv` docs). Effort: S.
 
 ### Step 9b - Grader agent and `eval-review` skill
 - Files: `.claude/agents/eval-run-grader.md` (new), `.claude/skills/eval-review/SKILL.md` (new).
