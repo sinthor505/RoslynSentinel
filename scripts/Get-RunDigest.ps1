@@ -531,6 +531,7 @@ function Get-RunDigest {
 
     $sampler = [ordered]@{}
     $samplerRaw = Get-EvalProperty (Get-EvalProperty $transcript 'Settings') 'Sampler'
+    # TODO move the 7 sampler names into vocabulary.json (scripts must not copy lists; the plan's Contracts name them but vocabulary has no samplerFields)
     foreach ($name in @('Temperature', 'TopP', 'TopK', 'MinP', 'PresencePenalty', 'FrequencyPenalty', 'RepeatPenalty')) {
         $sampler[$name] = Get-EvalProperty $samplerRaw $name
     }
