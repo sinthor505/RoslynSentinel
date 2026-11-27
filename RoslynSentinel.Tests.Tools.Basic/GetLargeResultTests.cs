@@ -181,8 +181,9 @@ public class GetLargeResultTests
     [Test, CancelAfter(10000)]
     public async Task T18_GetLargeResult_Envelope_NoLimit_FillsSizeBudgetWithShortLines()
     {
-        // 5,000 two-character lines overflow one page, so the page is bound by the size budget, not by a line count.
-        var text = string.Concat(Enumerable.Repeat("x\n", 5000));
+        // Three budgets' worth of two-character lines overflow one page, so the page is bound by the size budget, not by a line count.
+        int lineCount = 3 * LargeResultHelper.DefaultBudgetChars / 2;
+        var text = string.Concat(Enumerable.Repeat("x\n", lineCount));
         var resultId = Guid.NewGuid().ToString("N");
         WriteLargeResultFile(new { successData = new { text } }, ResultWrapperType.Envelope, resultId);
 
@@ -190,9 +191,9 @@ public class GetLargeResultTests
 
         Assert.That(result.IsError, Is.False);
         var returned = (int)result.SuccessData!.GetType().GetProperty("Returned")!.GetValue(result.SuccessData)!;
-        Assert.That(returned, Is.GreaterThan(200), "With no limit the page must fill the size budget, not stop at the old 50-line default.");
+        Assert.That(returned, Is.GreaterThan(LargeResultHelper.DefaultBudgetChars / 100), "With no limit the page must fill the size budget, not stop at the old 50-line default.");
         Assert.That(JsonSerializer.Serialize(result, ModelContextProtocol.McpJsonUtilities.DefaultOptions.GetTypeInfo(typeof(object))).Length,
-            Is.LessThanOrEqualTo(LargeResultHelper.InlineBudgetChars - LargeResultHelper.EchoReserveChars));
+            Is.LessThanOrEqualTo(LargeResultHelper.DefaultBudgetChars));
         Assert.That(result.HasMoreData, Is.True);
         Assert.That(result.NextOffset, Is.EqualTo(returned));
     }

@@ -18,13 +18,14 @@ namespace RoslynSentinel.Tests.Basic;
 /// </summary>
 [TestFixture]
 [Category("WorkspaceTools")] // sentinel:auto-category
+[NonParallelizable]
 public class SequenceLargeResultPagingTests
 {
     private static readonly JsonSerializerOptions Wire = McpJsonUtilities.DefaultOptions;
     private static readonly MethodInfo AnyMethod = typeof(SequenceLargeResultPagingTests).GetMethod(nameof(AnyMethodTarget), BindingFlags.NonPublic | BindingFlags.Static)!;
 
-    // The marshaller's inline budget minus its echo reserve: a whole page response must never exceed it.
-    private const int PageBudget = 15360 - 2560;
+    // The configured default page budget minus the page safety margin: a whole page response must never exceed it.
+    private static readonly int PageBudget = LargeResultHelper.DefaultBudgetChars - LargeResultHelper.PageSafetyMarginChars;
 
     private IWorkspaceManager _workspaceManager = null!;
     private WorkspaceTools _tools = null!;
@@ -49,6 +50,7 @@ public class SequenceLargeResultPagingTests
     [TearDown]
     public void TearDown()
     {
+        InlineBudgetOptions.Configure([]);
         _workspaceManager.Dispose();
         if (Directory.Exists(_tempDir))
         {
@@ -69,8 +71,20 @@ public class SequenceLargeResultPagingTests
     // One fixed-width record per index so every record is the same size and a page holds a predictable count.
     private static string Record(string prefix, int index) => $"{prefix}-{index:D4}-" + new string('x', 160);
 
-    private static TwoLists BigTwoLists(int alpha = 120, int beta = 80) =>
-        new(Enumerable.Range(0, alpha).Select(i => Record("a", i)).ToList(), Enumerable.Range(0, beta).Select(i => Record("b", i)).ToList());
+    // Record count that needs at least three pages at the configured default budget.
+    private static int RecordCount() => 3 * LargeResultHelper.DefaultBudgetChars / Record("a", 0).Length * 11 / 10;
+
+    private static TwoLists BigTwoLists()
+    {
+        int total = RecordCount();
+        int alpha = total * 3 / 5;
+        return new(Enumerable.Range(0, alpha).Select(i => Record("a", i)).ToList(), Enumerable.Range(0, total - alpha).Select(i => Record("b", i)).ToList());
+    }
+
+    private static string Line(int i) => $"line {i:D4} " + new string('y', 40) + "\n";
+
+    // Line count that needs at least three pages at the configured default budget.
+    private static int LineCount() => 3 * LargeResultHelper.DefaultBudgetChars / Line(0).Length * 11 / 10;
 
     // Marshals a result in mode On and returns the first response with its resultId.
     private async Task<(string ResultId, JsonObject First)> MarshalAsync(object result)
@@ -190,7 +204,7 @@ public class SequenceLargeResultPagingTests
     [Test]
     public async Task Lines_ChainedToTheEnd_ConcatenateToTheOriginalText()
     {
-        string text = string.Concat(Enumerable.Range(0, 700).Select(i => $"line {i:D4} " + new string('y', 40) + "\n"));
+        string text = string.Concat(Enumerable.Range(0, LineCount()).Select(i => Line(i)));
         var (resultId, first) = await MarshalAsync(new SentinelCallToolResult<SourceText> { IsError = false, SuccessData = new SourceText(text, StartLine: 100) });
         JsonNode pointer = first["largeResult"]!;
         Assert.That(pointer["message"]!.GetValue<string>(), Does.Contain("file lines 100-"));
@@ -204,7 +218,7 @@ public class SequenceLargeResultPagingTests
             EnvelopePageResult page = PageOf(result);
             Assert.That(WireLength(result), Is.LessThanOrEqualTo(PageBudget));
             Assert.That(page.Unit, Is.EqualTo("lines"));
-            Assert.That(page.Total, Is.EqualTo(700));
+            Assert.That(page.Total, Is.EqualTo(LineCount()));
             Assert.That(page.Offset, Is.EqualTo(nextOffset));
             Assert.That(result.StatusMessage, Does.Contain($"(file lines {100 + page.Offset}-{100 + page.Offset + page.Returned - 1})"));
             string chunk = page.Envelope!["successData"]!["source"]!.GetValue<string>();
@@ -533,5 +547,22 @@ public class SequenceLargeResultPagingTests
 
         var page = PageOf(await PageAsync(resultId, first["largeResult"]!["nextOffset"]!.GetValue<int>()));
         Assert.That(page.Envelope!["statusMessage"]!.GetValue<string>(), Is.EqualTo("3 hidden test hits were not counted."));
+    }
+
+    [Test]
+    public async Task PageFillsConfiguredDefault()
+    {
+        InlineBudgetOptions.Configure([$"{InlineBudgetOptions.BudgetCharsSetting.Flag}={2 * InlineBudgetOptions.StockBudgetChars}"]);
+        Assert.That(LargeResultHelper.DefaultBudgetChars, Is.EqualTo(2 * InlineBudgetOptions.StockBudgetChars), "fixture sanity: the setting took effect");
+
+        // Sized after the configure call, so the data is more than twice the configured budget.
+        TwoLists source = BigTwoLists();
+        var (resultId, _) = await MarshalAsync(new SentinelCallToolResult<TwoLists> { IsError = false, SuccessData = source });
+
+        var result = await PageAsync(resultId, 0);
+
+        Assert.That(PageOf(result).Returned, Is.GreaterThan(0));
+        Assert.That(WireLength(result), Is.GreaterThan(InlineBudgetOptions.StockBudgetChars), "the first page fills the configured default, not the stock one");
+        Assert.That(WireLength(result), Is.LessThanOrEqualTo(LargeResultHelper.DefaultBudgetChars), "the first page never exceeds the configured default");
     }
 }

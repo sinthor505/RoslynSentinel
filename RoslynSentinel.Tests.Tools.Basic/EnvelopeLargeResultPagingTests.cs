@@ -18,13 +18,14 @@ namespace RoslynSentinel.Tests.Basic;
 /// </summary>
 [TestFixture]
 [Category("WorkspaceTools")] // sentinel:auto-category
+[NonParallelizable]
 public class EnvelopeLargeResultPagingTests
 {
     private static readonly JsonSerializerOptions Wire = McpJsonUtilities.DefaultOptions;
     private static readonly MethodInfo AnyMethod = typeof(EnvelopeLargeResultPagingTests).GetMethod(nameof(AnyMethodTarget), BindingFlags.NonPublic | BindingFlags.Static)!;
 
-    // The marshaller's inline budget minus its echo reserve: a page must never exceed it.
-    private const int PageBudget = 15360 - 2560;
+    // The configured default page budget minus the page safety margin: a page must never exceed it.
+    private static readonly int PageBudget = LargeResultHelper.DefaultBudgetChars - LargeResultHelper.PageSafetyMarginChars;
 
     private IWorkspaceManager _workspaceManager = null!;
     private WorkspaceTools _tools = null!;
@@ -44,6 +45,7 @@ public class EnvelopeLargeResultPagingTests
     [TearDown]
     public void TearDown()
     {
+        InlineBudgetOptions.Configure([]);
         _workspaceManager.Dispose();
         if (Directory.Exists(_tempDir))
         {
@@ -277,5 +279,36 @@ public class EnvelopeLargeResultPagingTests
         // Only the seeded Envelope file exists: paging stored nothing new.
         var files = Directory.GetFiles(Path.Combine(_tempDir, ".roslynsentinel", "largeresults"), "largeresult_*.json");
         Assert.That(files, Has.Length.EqualTo(1));
+    }
+
+    private static string Item(int i) => $"item-{i:D4}-" + new string('e', 100);
+
+    // Item count that needs at least three pages at the configured default budget.
+    private static int ItemCount() => 3 * LargeResultHelper.DefaultBudgetChars / Item(0).Length * 11 / 10;
+
+    [Test]
+    public async Task PageFillsConfiguredDefault()
+    {
+        InlineBudgetOptions.Configure([$"{InlineBudgetOptions.BudgetCharsSetting.Flag}={2 * InlineBudgetOptions.StockBudgetChars}"]);
+        Assert.That(LargeResultHelper.DefaultBudgetChars, Is.EqualTo(2 * InlineBudgetOptions.StockBudgetChars), "fixture sanity: the setting took effect");
+
+        // Sized after the configure call, so the stored data is more than twice the configured budget.
+        int itemCount = ItemCount();
+        var envelope = new JsonObject
+        {
+            ["toolCall"] = new JsonObject { ["toolCallId"] = "abc123", ["name"] = "Probe" },
+            ["isError"] = false,
+            ["successData"] = new JsonObject
+            {
+                ["items"] = new JsonArray(Enumerable.Range(0, itemCount).Select(i => (JsonNode?)JsonValue.Create(Item(i))).ToArray()),
+            },
+        };
+        string resultId = await StoreAsync(envelope, omitted: null);
+
+        var result = await PageAsync(resultId, "successData.items", limit: itemCount);
+
+        Assert.That(PageOf(result).Returned, Is.GreaterThan(0));
+        Assert.That(WireLength(result), Is.GreaterThan(InlineBudgetOptions.StockBudgetChars), "the page fills the configured default, not the stock one");
+        Assert.That(WireLength(result), Is.LessThanOrEqualTo(LargeResultHelper.DefaultBudgetChars), "the page never exceeds the configured default");
     }
 }
