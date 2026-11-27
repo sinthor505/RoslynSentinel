@@ -13,12 +13,12 @@ namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.ErrorRecovery;
 /// </summary>
 internal static class SweepConstructionSitesScenario
 {
-    private const string CoreFolder = "ContosoOrders.Core/Evals/SweepConstructionSites/";
-    private const string TestFolder = "ContosoOrders.Tests/Evals/SweepConstructionSites/";
+    internal const string CoreFolder = "ContosoOrders.Core/Evals/SweepConstructionSites/";
+    internal const string TestFolder = "ContosoOrders.Tests/Evals/SweepConstructionSites/";
     private const string DictionaryType = "Dictionary<FilePath, string>";
     private const string SetType = "DocumentChangeSet";
 
-    private static readonly string[] TargetPaths =
+    internal static readonly string[] TargetPaths =
     {
         CoreFolder + "Planner.cs",
         CoreFolder + "Renamer.cs",
@@ -395,7 +395,7 @@ Latest: CS0266 once converted, because a plain Dictionary from the plan results 
 """;
 
     // Expression-bodied on purpose: a static readonly field would render before the contract placement is known (initialisation order).
-    private static string StepPrompt => EvalContractOptions.Render(new ScenarioTask(
+    internal static ScenarioTask StepTask => new ScenarioTask(
         Goal: "In ContosoOrders.Core/Evals/SweepConstructionSites, Planner, Renamer, Mover and Merger build their change-set maps as plain `Dictionary<FilePath, string>`. " +
             "We are about to add behaviour to `DocumentChangeSet` (DocumentChangeSet.cs, a subclass of `Dictionary<FilePath, string>`), " +
             "so every map these four files build and return must be a `DocumentChangeSet`. Create them as `new DocumentChangeSet`, " +
@@ -407,7 +407,9 @@ Latest: CS0266 once converted, because a plain Dictionary from the plan results 
             "convert the rest, and end with DONE: naming the site and the reason.",
         DoneWhen: "The solution builds with 0 errors; all tests in ContosoOrders.Tests pass, including the new class ConstructionSiteTests " +
             "(ContosoOrders.Tests/Evals/SweepConstructionSites/ConstructionSiteTests.cs) and SweepTests; no file outside Files changed.",
-        Report: "Every site you left unconverted: the method name and the compiler error or the reason. Write `none` if there is none."));
+        Report: "Every site you left unconverted: the method name and the compiler error or the reason. Write `none` if there is none.");
+
+    private static string StepPrompt => EvalContractOptions.Render(StepTask);
 
     /// <summary>
     /// The executable outcome table (Spec S6): each variant is an overlay of the four target files (built from the per-file templates
