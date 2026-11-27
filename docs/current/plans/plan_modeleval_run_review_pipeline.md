@@ -1,6 +1,6 @@
 # Plan: model-eval run review pipeline (digest script, grader agent, rollup, agent refresh)
 
-**Status:** IN PROGRESS 2026-11-26. Steps 1, 2a-2c done (397f75fe, d7db5750, 9bfd22b8, f6ffbcea, f7a9185e).
+**Status:** IN PROGRESS 2026-11-26. Steps 1-5 and 8 done (397f75fe, d7db5750, 9bfd22b8, f6ffbcea, f7a9185e, f1b92c96, 8277ad10, 64e3bc19, 81787301, 56916a0e).
 
 ## Problem
 
@@ -576,6 +576,7 @@ NUnit test and the arm-table tests. Those run the script as a child `pwsh -File`
   Tests: `ResultJsonShapes`, `MissingHeader`, `StopReasonName`, `NoSummary`.
 - Done when: `pwsh -NoProfile -Command ". ./scripts/eval-review/EvalRunReader.ps1"` exits 0. The
   dispatcher runs the tests.
+- Done: f1b92c96
 - Lane: implementer. Effort: M.
 
 ### Step 3b - Reader: outcome, layout, verdict
@@ -603,6 +604,7 @@ NUnit test and the arm-table tests. Those run the script as a child `pwsh -File`
   Tests: `OutcomeFile`, `Layout`, `VerdictPassRule`.
 - Done when: `Find-EvalRunVerdict` on a temp ImplementationScenario folder holding an
   `outcome=Pass` file returns `Verdict.passed` true. The dispatcher runs the tests.
+- Done: 8277ad10
 - Lane: implementer. Effort: S.
 
 ### Step 4 - Arm table on the shared reader
@@ -625,6 +627,7 @@ NUnit test and the arm-table tests. Those run the script as a child `pwsh -File`
 - Done when: re-running on the same `-JobFolder` copy gives a CSV for which
   `Compare-Object (Import-Csv before) (Import-Csv after) -Property jobId,arm,outcome,outcomeClass,turns`
   is empty.
+- Done: 64e3bc19 (parity: 40 jobs, 70 rows, empty Compare-Object)
 - Lane: implementer. Effort: S.
 
 ### Step 5 - Migration markers on the other transcript readers
@@ -641,6 +644,7 @@ NUnit test and the arm-table tests. Those run the script as a child `pwsh -File`
   - `Get-EditArmTable.ps1`: above the transcript parse (line 58);
   - `Get-SlipCounts.ps1`: above the outcome-file parse (line 120).
 - Done when: `Select-String -Pattern 'EvalRunReader.ps1' -Path <the 5 scripts>` returns 5 hits.
+- Done: 81787301
 - Lane: implementer-sweep (one operation, 5 files). Effort: S.
 
 ### Step 6a - Digest: header, keys and verdict
@@ -815,6 +819,7 @@ NUnit test and the arm-table tests. Those run the script as a child `pwsh -File`
 - Done when: running `pwsh -File scripts/Get-ThinkingArmTable.ps1 -QueueRoot <temp> -Machine a,b
   -CsvPath <temp csv>` on a temp queue with job folders `a` and `b` writes rows from both. The
   dispatcher runs the tests.
+- Done: 56916a0e (implementer-senior: 4 files)
 - Lane: implementer. Effort: M (shared helper with three callers).
 
 ### Step 9a - Refresh the artifact map
