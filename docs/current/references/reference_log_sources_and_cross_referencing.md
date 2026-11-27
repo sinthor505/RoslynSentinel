@@ -1,160 +1,227 @@
-# Reference — log sources and how to cross-reference them
+# Reference - log sources and how to cross-reference them
 
-Verified 2026-09-12 against the live repo and `PlanStepRunner-archive\20260910-083738-402`.
-Updated 2026-10-09: `build.ps1` does not touch HTTP servers; `roslynsentinel-vscode-control.ps1 restart`
-rebuilds the shared HTTP copy, and `scripts/Launch-RoslynSentinelHttpServer.ps1` starts throwaway ones
-(logs in `bin-vscode\http-<port>-<timestamp>\server.out.log`/`server.err.log` plus the server's own
-`logs\`). Large-result files under `.roslynsentinel/largeresults` older than 7 days are swept on every
-solution load.
+**Status:** CURRENT 2026-11-26. Single artifact map; agents point here.
 
-There are **two independent sides** to every model-driven run, and most analysis mistakes come from
-only reading one of them:
+Every model-driven run has two independent sides, and most analysis mistakes come from reading only one:
 
 | Side | What it records | Where it lives |
 |---|---|---|
-| **Agent side** (`agent.log`, `transcript.json`) | What the model saw, reasoned, called, and got back | The run's own `Logs\` folder |
-| **Server side** (`server-<ts>.log`, `crash.log`) | What RoslynSentinel actually did internally — the real exception, the branch that failed | The **server binary's** `logs\` folder |
+| Agent side (`transcript.json`, `agent.log`) | What the model saw, reasoned, called and got back | The run's own folder |
+| Server side (`server-*.log`, `crash.log`) | What RoslynSentinel did internally: the real exception, the branch that failed | The server binary's `logs\` folder |
 
-The agent side shows the *reported* result of a tool call. The server side shows *why* it was that
-result. Per `CLAUDE.md`'s root-cause discipline, a cause claimed from the agent side alone is a
-hypothesis — tool results can be misleading, and a message may describe a symptom rather than its
-own cause.
+The agent side shows the reported result of a tool call; the server side shows why. A cause claimed from
+the agent side alone is a hypothesis (`CLAUDE.md` root-cause discipline). Pass/fail is a third source: it
+comes from the run's outcome files, `results.csv`, `.trx` or the runner's console output, never from a parsed
+agent log.
 
-## Agent-side artifacts
+## Run layouts (agent side)
 
-**PlanStepRunner** — `<run>\<NN-step-name>\Logs\` holds **both** agent-side files, side by side:
-- `agent.log` — human-readable per-turn transcript (`Turn N: calling X with args:`,
-  `Turn N: X succeeded|FAILED in ... Result:`; failures logged at `[Warning]`). Carries wall-clock
-  timestamps per line.
+The scratch root is env `ROSLYNSENTINEL_SCRATCH_ROOT` when set, else `<parent of the repo>\RoslynSentinel-ScratchDir`
+(`scripts\roslynsentinel-scratch.ps1`). The results root is `<scratch>\ModelTestingResults`;
+`ROSLYNSENTINEL_RESULTS_ROOT` overrides it. The folder under it is the host suffix (`85`, `112`, `113`, or an
+older URL-shaped name such as `http___192_168_1_113_8888_v1`).
 
-  **Oversized payloads are offloaded to sidecar files.** Any argument or result over 2,000 chars is
-  written to `turn-<N>-<callIndex>-<ToolName>-<args|result>.json` in the same `Logs\` folder, and
-  the log line carries a stub instead — `[34.2 KB offloaded → turn-12-01-ReadFile-result.json]` for
-  results, and a small JSON object (`{"_offloaded":true,"_sizeBytes":…,"_file":"…"}`) for arguments.
-  So a huge line in `agent.log` now means an old pre-offload run; new runs stay readable, with the
-  full payload one file away. `transcript.json` is unaffected and keeps everything inline.
-- `transcript.json` — the same conversation as **structured JSON**, and usually the better source:
+- **RunScenario:** `<results root>\<host-suffix>\<TestName>\<yyyyMMdd-HHmmss-fff>\sample-NN\transcript.json`,
+  with `results.csv` in the timestamp folder. Its `transcriptPath` column holds the original build path, so a
+  row is matched on the suffix `<timestamp>\sample-NN\transcript.json`. The `scenarioId` column gives the
+  scenario.
+- **ImplementationScenario:** `<results root>\<host-suffix>\<TestName>\<timestamp>\transcript.json`, with
+  `step-<k>.outcome.txt` in the same folder and no `results.csv`. The same folder can hold `scenario.txt`,
+  `prompt.txt`, `step-<k>.golden.diff` and `test-result.txt`. The outcome file's first line is prefixed
+  `<ScenarioId> step <k>:`; that prefix is the only record of the scenario ID (the transcript's `ScenarioId` is
+  never set for these runs). With several outcome files, the highest `<k>` is used.
+- `TestName` is the name of the folder that holds the timestamp folder. Anything else is `Unrecognized` (code
+  `LayoutUnrecognized`), and `TestName` falls back to the parent folder name. The timestamp folder name is UTC,
+  so it can differ from the local date.
+- `PlanImplementVerify`-style tests add a `<plan|implement|verify>\` phase level, and some have a
+  duplicated-timestamp folder (`<ts>\<ts>\<phase>\`), an archiver quirk `Parse-AgentLog.ps1` handles.
+- **PlanStepRunner:** `<scratch>\TestRuns\PlanStepRunner\<timestamp>\<stepId>\Logs\` holds that step's
+  `agent.log` and `transcript.json`. A step's worktree can hold nested inner-run logs under
+  `Worktree\...\model-eval\<TestName>\<ts>\`; they belong to eval tests the step ran, not to the step itself.
+  Exclude `*/Worktree/` folders from searches and reviews.
 
-  ```
-  { SystemPrompt: str, UserPrompt: str, Turns: [
-      { TurnNumber, ModelMessage, ModelLatency,
-        ToolCalls: [ { ToolName, ArgumentsJson, ResultJson, IsError, Latency } ] } ] }
-  ```
+## Transcript paths (`transcript.json`)
 
-  Each turn and each tool call also carries `StartedAt`/`CompletedAt` as round-trip
-  `DateTimeOffset` (local time, explicit offset), alongside the existing `ModelLatency`/`Latency`
-  durations.
+Prefer `transcript.json` to `agent.log` for analysis: it has a reliable per-call error flag, exact arguments and
+results, absolute timestamps for joining to the server log, and `SystemPrompt`/`UserPrompt`, the direct
+evidence for what the model could see. It always keeps full tool payloads. Query it with a JSON tool, not by
+reading it whole. `ModelAgentRunner` also writes a `Summary` block (run totals) as the last property and a
+`Settings` block; older transcripts lack them (`Backfill-TranscriptSummary.ps1`).
 
-  **Prefer `transcript.json` for essentially all analysis.** It gives you a reliable per-call error
-  flag (`IsError`, rather than grepping for `FAILED`), exact arguments/results as parseable JSON,
-  absolute timestamps for joining to the server log, and — critically for root-cause work —
-  **`SystemPrompt` and `UserPrompt`, which `agent.log` does not expose cleanly**. Those two are the
-  direct evidence for "what could the model actually see", so any finding about prompt or
-  tool-description quality should cite them.
+- **Key fields:**
+  - top level: `Tools` (array of names), `ContractHash`, `ErrorPolicyMode`, `ErrorPolicyHash` (can be `""`),
+    `ModelKey`, `ReasoningReplayMode`, `ReasoningReplayForm`, `ToolResultFormat`;
+  - `Thinking.Mode`, `Thinking.Triggers`, `Thinking.Effort`, `Thinking.ReasoningBudget`;
+  - `Settings.Sampler.*` (`Temperature`, `TopP`, `TopK`, `MinP`, `PresencePenalty`, `FrequencyPenalty`,
+    `RepeatPenalty`; often `{}`);
+  - `Turns[0].StartedAt`, a timestamp with a UTC offset.
 
-  It is also the input to `roslynsentinel-interrogate.ps1`, and it always retains **full** tool
-  payloads (unlike `agent.log`, see offloading below). Query it with `python3`/`jq` rather than
-  reading it whole — 350 KB in the measured sample.
+  Older transcripts omit `Thinking`, `ReasoningReplayForm` and `ToolResultFormat`.
+- **`Turns[i]`** (`AgentTranscript.cs`): `TurnNumber`, `StartedAt`, `Assists[]` (`Kind`, `Text`), `Thinking`, and
+  `ModelMessage` (an `AgentChatMessage`) with `Content`, `ReasoningContent`, `InputTokens`, `OutputTokens` and
+  `CachedInputTokens`. There is no per-turn reasoning-token field.
+- **`Turns[i].ToolCalls[]`** (`AgentToolCallRecord`): `ToolName`, `ArgumentsJson`, `ResultJson`, `IsError` and
+  `TrailingText`. The record's `IsError` is the error flag; never infer it from the parsed `ResultJson`.
+- **`ResultJson` shapes.** `ResultJson` is a JSON string, so it is parsed a second time. Four shapes:
+  - `Json`: an object with `isError`. On error, `errorData` holds `errorCode`, `message` and an optional
+    `structuredDetail[]`.
+  - `LargeResult`: `{"largeResult":{"resultType":...,"writtenToFile":true,"filePath":...,"resultId":...}}`. An
+    offload pointer (`{"offloaded":true,"resultId":...,"sizeBytes":...}`, `OffloadPointerResult`) is also
+    `LargeResult`; its reference is `resultId`.
+  - `ToolCallWrapper`: an object whose `toolCall` property wraps one of the other shapes.
+  - `Text`: anything that does not parse as JSON.
+- **Key hashing** (`armKey`, `comparabilityKey`): each `keyFields` entry in `vocabulary.json` says whether it is
+  in `armKey`; all are in `comparabilityKey`. Values are joined as `name=value` lines in `keyFields` order; an
+  absent field is the literal `<absent>`, an empty string stays empty, and `Tools` is the names sorted
+  ordinally and joined with `,`. A key is the first 12 hex characters of the SHA-256 of the UTF-8 text.
 
-Runs live in `<scratch>\TestRuns\PlanStepRunner\<timestamp>\`, where `<scratch>` is env `ROSLYNSENTINEL_SCRATCH_ROOT` when set, else `<parent of the repo>\RoslynSentinel-ScratchDir`.
+## Companion files in a run folder
 
-**ModelEval** — `<scratch>\ModelTestingResults\<host>\<TestName>\<timestamp>\` containing the same
-`agent.log` + `transcript.json` pair, with the same division of labour. `PlanImplementVerify`-style tests add a `<plan|implement|verify>\` phase level,
-and some have a duplicated-timestamp folder (`<ts>\<ts>\<phase>\`) — an archiver quirk
-`Parse-AgentLog.ps1` already handles.
+- `agent.log`: human-readable per-turn log with wall-clock timestamps. An argument or result longer than
+  `AgentLogOffloadThresholdChars` (`ModelAgentRunner`) is written to `turn-<N>-<callIndex>-<ToolName>-<args|result>.json`
+  beside it and the log line carries a stub; for arguments the stub is
+  `{"_offloaded":true,"_sizeBytes":...,"_file":"..."}`. `transcript.json` is unaffected and keeps everything inline.
+- `step-<k>.outcome.txt`: the harness outcome line(s); the key=value tokens (`outcome=`, `stopReason=`,
+  `outcomeClass=`, `wallTime=`) are the only source of the stop reason name (the transcript's `StopReason` is
+  numeric). `EvalRunReader.ps1` parses it.
+- `results.csv` (RunScenario, resume and sweep tests): one row per sample, with the `transcriptPath` column
+  described above.
 
-**Watch out:** a PlanStepRunner worktree can contain *nested* inner-run logs at
-`Worktree\RoslynSentinel.Tests.ModelEval\bin\Debug\net10.0\model-eval\<TestName>\<ts>\agent.log`.
-These belong to eval tests the step itself ran — they are not the step's own log. Don't conflate
-them, and don't recurse into them unless asked.
+## Vocabulary and verdict types (pointers)
 
-## Server-side artifacts — identifying the right instance
+- `scripts/eval-review/vocabulary.json` is the only place that lists stop reasons, review dimensions and
+  anchors, attributions, confidences, error buckets, boundaries, key fields, the pass rule, flag reasons,
+  selection reasons, codes and limits. Read it; never copy a list.
+- `FailureClass` and `FinalStateVerdict`: `RoslynSentinel.Tests.Harness/ScenarioScorer.cs`.
+- `EvalOutcomeClass`: `RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Graders/ScenarioVerdict.cs`.
+- `ImplementationScenarioOutcome`: `RoslynSentinel.Tests.ModelEval/ImplementationScenarios/ImplementationScenario.cs`.
 
-Configured in `RoslynSentinel.Server.Advanced/ServerStartupHelpers.cs:457` (`ConfigureStdioLogging`)
-and `:480` (`ConfigureHttpLogging`). Both write to:
+## Review artifacts
+
+`Get-RunDigest` writes `digest.json` beside a transcript, and in batch mode `selection.json` into a new folder
+under `<scratch>\eval-review`; `Get-ReviewRollup` writes `rollup.json` and `rollup.md` there. Their field shapes
+are in the Contracts section of `docs/current/plans/plan_modeleval_run_review_pipeline.md`. A grader writes
+`review.json` (or `review.<label>.json`) per run, shaped by `scripts/eval-review/review.schema.json`.
+
+## Eval queue and run index
+
+- **Job JSON:** `%LOCALAPPDATA%\RoslynSentinel\evalqueue\<machine>\jobs\*.json` (root override: env
+  `ROSLYNSENTINEL_EVALQUEUE_ROOT`). `scripts/eval-hosts.json` gives each host a `machine`, which is the queue
+  folder name (`85`, `112`, `113`); older URL-keyed folders are read-only history. Fields a reader uses:
+  `purpose`, `test`, `evalArgs`, `env` (the `ROSLYNSENTINEL_*` variables the job set), `runFolders`, `passed`,
+  `state`, `commit` (all jobs), `testedCommit` and `testedDirty` (jobs since about Nov 13), `pinnedCommit`
+  (jobs since about Nov 20). Older jobs lack the newer fields, so a reader falls back (`testedCommit`, else
+  `commit`).
+- **`runs.csv`:** `<results root>\<suffix>\runs.csv`, where `<suffix>` is the job's `suffix`. The queue worker
+  appends one row per ended job (Finished, Refused, Crashed, ...) through `Add-EvalRunIndexRow`
+  (`scripts/roslynsentinel-evalruns.ps1`), under a named mutex so concurrent workers do not interleave rows.
+  Jobs cancelled while still Queued get no row. Columns: `jobId`, `machine`, `host`, `baseUrl`, `backend`,
+  `test`, `model`, `sessions` (joined with `+`), `purpose`, `pinnedCommit`, `state`, `passed`, `startedUtc`,
+  `endedUtc`, `durationSeconds`, `reason`, `runFolders` (joined with `;`). It records no commit other than
+  `pinnedCommit`; use the job JSON for `testedCommit`.
+
+## Scripts that read transcripts
+
+All are under `scripts\`; descriptions follow each script's own header.
+
+- `roslynsentinel-transcriptmetrics.ps1`: shared helper, dot-sourced. `Get-EvalTranscripts` is run discovery
+  (one object per `transcript.json`, no transcript parse): `-Machine` (default: the distinct `machine` values in
+  `eval-hosts.json`; a missing folder warns and is skipped), `-Commit <prefix>` (filter on `testedCommit`, else
+  `commit`), `-HostsFile`, `-PurposePattern`, `-JobFolder`, `-Path`, `-QueueRoot`. Job rows carry `Commit`,
+  `Dirty` and `Job` (the parsed job object). It also holds `Get-OutcomeToken`, `Get-EnvValue`, the escape-copy
+  read cache and `Get-CallCategory`. `scripts/eval-review/EvalRunReader.ps1` owns transcript, outcome and
+  verdict parsing.
+- `Get-RunDigest.ps1`: run digest for one transcript (`-RunPath` a folder holding `transcript.json` or the file
+  itself; writes `digest.json` and `digest.md`); with `-BatchRoot <folder>[,<folder>...]` (`-Seed`,
+  `-PassesPerArm`) it digests every transcript under the folders, selects runs for review and writes
+  `selection.json`. Exactly one of `-RunPath` and `-BatchRoot` is required.
+- `Get-ReviewRollup.ps1`: rollup of one review folder (`-ReviewDir`, `-ReviewFileName` default `review.json`,
+  `-Vary a,b`, `-Force`); reads `selection.json`, each run's `digest.json` and review file, lists invalid
+  reviews, writes `review.md` beside each valid review and `rollup.json` and `rollup.md` in the folder.
+- `Get-ThinkingArmTable.ps1`: per-arm table for the thinking-setting comparison: outcomes, stop reasons, wall
+  time, turns, thinking turns, reasoning deltas, over-budget turns, host-cap turns and the longest same-tool
+  error streak, from evalqueue jobs filtered by `-PurposePattern` and `-Commit`.
+- `Get-ToolResultFormatArmTable.ps1`: per-arm table for the tool-result format comparison: outcomes, stop
+  reasons, escape-copy lines and calls, argument failures, median model-facing characters and median wall;
+  finds runs from job files or `-Path <folder>`.
+- `Get-EditArmTable.ps1`: per-arm table for the edit-tool 3-arm comparison: pass rate, `callsToRecover` and
+  summed input tokens, per test and arm, from evalqueue jobs (optional `-CsvPath`).
+- `Get-EditToolFriction.ps1`: classifies `ReplaceSnippet`/`ReplaceRange` calls in transcripts by outcome (ok,
+  compile, shape, anchor, disabled, other) to measure edit-tool friction (`-Path`, `-Since`, `-Tool`,
+  `-Detail`).
+- `Find-OffloadedResults.ps1`: scans transcripts for tool results that were offloaded or paged (`largeResult`
+  present) plus large inline results, and reports how the model reacted; writes `offloads.csv`, `inline.csv` and
+  `summary.txt` to `-OutDir`.
+- `Get-ShippingKindTypoCounts.ps1`: counts misspelled `ShippingKinds` members in saved ShippingKind
+  transcripts, by turn part and misspelling, classified near or invented.
+- `Backfill-TranscriptSummary.ps1`: adds the end-of-file `Summary` block (and, where recoverable, `Settings` and
+  `StopReason`) to old `transcript.json` files; dry run unless `-Apply`; keeps `transcript.json.bak`.
+- `Convert-RunEscapes.ps1`: rewrites saved `transcript.json` and `agent.log` files so they hold readable
+  characters instead of `\uXXXX` escapes; dry run unless `-Apply`.
+- `Probe-OvernightLogprobs.ps1`: reads the model's next-token probabilities (via LM Studio) at the point where
+  it writes `ShippingKinds.Overnight`, comparing `.` with `.O`, from a saved ShippingKind transcript.
+- `roslynsentinel-interrogate.ps1`: replays a run's `transcript.json` to an LM Studio host with one added
+  follow-up question, to get the model's own explanation of a failure (one outbound call; `-DryRun` skips it).
+- `roslynsentinel-errorvariants.ps1`: front door for the `ErrorVariants` replay test: saved transcripts are cut
+  at their first error, the error text is swapped for each variant, and the live model's next turn is
+  classified into `variants.csv`.
+- `Get-SlipCounts.ps1`: slip counts for transcripts, one object per run or with `-Summary` one per Scenario and
+  PromptVariant; run discovery as `Get-ToolResultFormatArmTable.ps1`.
+- `Parse-AgentLog.ps1`: per-turn parse of `agent.log` (see `reference_parse_agent_log_script.md`).
+
+## Server-side artifacts
+
+Configured by `ServerStartupHelpers.ConfigureStdioLogging` (Information level) and `ConfigureHttpLogging`
+(Verbose level, also to console) in `RoslynSentinel.Server.Advanced`. Files in the working directory's `logs\`
+folder (the binary directory unless `--working-dir` was given):
 
 ```
-<server binary directory>\logs\server-<yyyyMMdd-HHmmss>.log     # stdio, Information level
-<server binary directory>\logs\http-host-<yyyyMMdd-HHmmss>.log  # http, Verbose level
-<server binary directory>\logs\crash.log                        # appended, never rotated
+logs\server-<yyyyMMdd-HHmmss>-<pid>.log      # stdio
+logs\http-host-<yyyyMMdd-HHmmss>-<pid>.log   # http
+logs\crash.log                               # appended across sessions
 ```
 
-**The timestamp is the server's start time, one file per restart** (`TimestampedLogFileName`,
-`:333`) — so identifying the right instance means picking the log whose timestamp is the latest one
-*at or before* the run's first turn, and whose binary directory matches the flavor that was
-actually running.
+The timestamp is the server's start time and the pid is the process id, one file per start. Old logs are swept
+at start (`RuntimeStateRetention`: at most 50 files, 14 days), so an old run's server log may be gone.
 
 Which binary directory depends on who launched the server:
 
-- **VS Code / your interactive MCP session** → `bin-vscode\<instance-id>\Advanced\logs\`, where
-  `<instance-id>` is the per-VS-Code-window ID (`<pid>-<repoHash>`) derived by
-  `scripts/roslynsentinel-mcp-launch.ps1` (see `reference_roslynsentinel_mcp_launch.md`) — each
-  window's stdio server is a fully separate build/process since 2026-09-14, so there is no longer a
-  single fixed stdio path here. (Or `bin-vscode\Advanced.Http\logs\` for the shared HTTP fallback
-  flavor, still a single fixed path.) Run `scripts/roslynsentinel-vscode-control.ps1 status` to list
-  which instance folders currently exist. This is the one to check when a tool misbehaves during
-  normal interactive work.
-- **A normal dev build** → `RoslynSentinel.Server.{Basic,Advanced}\bin\{Debug,Release}\net10.0\logs\`.
-- **PlanStepRunner** → builds its own server per step into `<worktree>\bin-runner\Advanced\`
-  (`Program.cs:154`), so its log is `<worktree>\bin-runner\Advanced\logs\server-<ts>.log`,
-  stdio transport. See the per-step isolation note below — this path is **per step**, not per run.
+- **VS Code interactive session:** `bin-vscode\<instance-id>\Advanced\logs\` (`<instance-id>` is
+  `<pid>-<repoHash>`, derived by `scripts/roslynsentinel-mcp-launch.ps1`; see
+  `reference_roslynsentinel_mcp_launch.md`). The shared HTTP fallback copy is `bin-vscode\Advanced.Http\logs\`;
+  throwaway HTTP instances write `bin-vscode\http-<port>-<timestamp>\`. `scripts/roslynsentinel-vscode-control.ps1 status`
+  lists the instance folders.
+- **Normal dev build:** `RoslynSentinel.Server.{Basic,Advanced}\bin\{Debug,Release}\net10.0\logs\`.
+- **PlanStepRunner:** each step builds its own server into `<worktree>\bin-runner\Advanced\`, so its log is
+  `<worktree>\bin-runner\Advanced\logs\server-<ts>-<pid>.log`.
 
-### PlanStepRunner is per-step isolated — treat each step as its own experiment
+### PlanStepRunner is per-step isolated
 
-A run folder contains one subfolder per step (`01-baseline\`, `02-phase1-types-and-engine-fix\`, …),
-and each step has its **own** `Logs\` (`agent.log` + `transcript.json`) and its **own** worktree with
-its **own** freshly-built server under `Worktree\bin-runner\Advanced\logs\`.
+Each step has its own `Logs\`, its own worktree and its own freshly built server, branched off the previous
+step's commit. Different steps of one run can therefore exercise different server binaries; a step that changes
+RoslynSentinel changes the tool surface of every later step.
 
-The consequence that matters: because each step branches off the previous step's commit and rebuilds
-the server from *that* worktree's source, **different steps in the same run can be exercising
-different server binaries**. A step whose plan modifies RoslynSentinel itself changes the tool
-surface seen by every later step.
-
-So:
-- Never generalise a finding from one step to the whole run without checking whether the intervening
-  commits touched the server. A defect that "disappeared" at step 5 may simply have been fixed by
-  step 4's own commit — that is a real result, not noise.
-- Conversely, a defect appearing only from step 5 onward may have been *introduced* by step 4.
-  Cross-reference the run branch's per-step commits (`git log --all --grep=<runid>`) before
-  attributing it to the model.
-- Always state which step a finding came from. "The run failed" is not a locatable claim.
-- When comparing steps, compare like with like: each step's `transcript.json` against its own
-  step's server log, not against another step's.
-
-### Known gap: PlanStepRunner server logs do not survive a successful step
-
-A successful step commits and then runs `git worktree remove`, which deletes `bin-runner\` and its
-`logs\` folder with it — confirmed absent from every archived successful step. **Server-side
-evidence therefore only exists while a step is in progress or halted.**
-
-Consequences:
-- If a step **halted**, collect `<worktree>\bin-runner\Advanced\logs\server-*.log` *before* anything
-  cleans the worktree up (and before re-running with `-Clean`). This is the highest-value artifact
-  for a halt and it is the easiest one to lose.
-- If a step **succeeded** but did something suspicious, the server log is already gone; say so
-  explicitly rather than implying the server side was checked.
-- ModelEval runs likewise emit no server log into `<scratch>\ModelTestingResults\` — only agent-side files.
+- Always state which step a finding came from, and compare a step's `transcript.json` only with its own
+  server log.
+- Before attributing a defect that appears or vanishes mid-run to the model, check whether an intervening step
+  commit touched the server (`git log --all --grep=<runid>`).
+- A successful step commits and then removes its worktree, which deletes `bin-runner\` and its `logs\`. Server
+  evidence exists only while a step is in progress or halted: collect `server-*.log` before cleaning a halted
+  worktree or re-running with `-Clean`, and say so when a succeeded step's server log is gone.
+- ModelEval runs emit no server log into the results root, only agent-side files.
 
 ## Cross-referencing procedure
 
-1. **Fix the run window** from the agent side: first/last turn timestamps in `agent.log` (format
-   `HH:mm:ss.fff` at line start).
-2. **Select the server log** whose `server-<ts>` start time is the newest at-or-before that window,
-   in the binary directory matching the launcher above. If no such file exists, the server side is
-   unavailable — state that.
-3. **Join on time.** `agent.log` timestamps and Serilog timestamps are both local wall-clock, so a
-   failing tool call at `01:53:45.891` is matched by looking a few hundred ms either side in the
-   server log. Tool durations in the agent log (`FAILED in 00:00:00.75`) bound the window.
-4. **Confirm the binary is the one you think it is.** Check the server DLL/exe mtime against recent
-   commits before deep-diving — a stale binary explains "impossible" behavior, and loading a
-   worktree's `.slnx` into an already-running server still executes the *old* binary's code.
-5. **Also check `crash.log`** in the same `logs\` folder. It is appended and never rotated, so it
-   spans many sessions — match by timestamp, don't assume the last entry belongs to this run.
+1. Fix the run window from the agent side: the first and last turn `StartedAt`/`CompletedAt` in
+   `transcript.json`, or the `HH:mm:ss.fff` prefix in `agent.log`.
+2. Select the server log whose start time is the newest at or before that window, in the binary directory
+   matching the launcher above. If none exists, say the server side is unavailable.
+3. Join on time: agent timestamps and Serilog timestamps are both local wall-clock; look a few hundred
+   milliseconds either side of a failing call, bounded by the call's `Latency`.
+4. Confirm the binary is the one you think it is (DLL/exe mtime against recent commits). Loading a worktree's
+   `.slnx` into an already-running server still executes the old binary's code.
+5. Check `crash.log` in the same `logs\` folder; it spans sessions, so match by timestamp.
 
-## Pass/fail is a third source
-
-Neither `agent.log` nor the server log records test pass/fail. That comes from NUnit console output
-or `.trx` (`scripts/triage_trx.py`, `scripts/trx_show.py`), and for PlanStepRunner from the runner's
-own console output plus the per-step commit on the run branch
-(`git log --all --grep=<runid>` / `git branch --list '*<runid>*'`). Never infer pass/fail from a
-parsed agent log.
+Pass/fail sources: NUnit console output or `.trx` (`scripts/triage_trx.py`, `scripts/trx_show.py`), the run's
+`step-<k>.outcome.txt` and `results.csv`, and for PlanStepRunner the runner's console output plus the per-step
+commit on the run branch (`git log --all --grep=<runid>`).
