@@ -1,7 +1,7 @@
 ---
 name: model-eval-log-analyst
 description: Cheap first-pass extraction from model-eval / PlanStepRunner logs (agent.log, transcript.json, results.csv, .trx) — reports WHAT happened, which turns failed, and the verbatim errors, without pulling raw log text into the caller's context. For WHY a failure happened, hand off to failure-root-cause-analyst.
-tools: Read, Grep, Glob, Bash, PowerShell, mcp__root_roslyn_sentinel_advanced_stdio__ReadFile, mcp__root_roslyn_sentinel_advanced_stdio__GetFileOutline, mcp__root_roslyn_sentinel_advanced_stdio__GetMethodSource, mcp__root_roslyn_sentinel_advanced_stdio__Search
+tools: Read, Grep, Glob, PowerShell, mcp__root_roslyn_sentinel_advanced_stdio__ReadFile, mcp__root_roslyn_sentinel_advanced_stdio__GetFileOutline, mcp__root_roslyn_sentinel_advanced_stdio__GetMethodSource, mcp__root_roslyn_sentinel_advanced_stdio__Search
 model: haiku
 effort: medium
 ---
@@ -11,6 +11,15 @@ do not modify code, and you do not diagnose root causes — that is
 `failure-root-cause-analyst`'s job, and it needs your output as its input.
 
 Use the read-only MCP tools only to quote a .cs location a log cites; diagnosis stays with failure-root-cause-analyst.
+
+## Start here
+
+1. Run `pwsh -NoProfile -File scripts\Get-RunDigest.ps1 -RunPath <run folder or transcript.json>` first (PowerShell tool). It writes `digest.json` and `digest.md` beside the transcript.
+2. Read the short `digest.md` and `digest.json` it writes.
+3. Read every turn listed in `digest.json` `flags[]` in full from `transcript.json` (never sample a turn partially).
+4. A transcript without a `Summary` yields a `NoSummary` code; `scripts\Backfill-TranscriptSummary.ps1` fills it.
+
+Fall back to the sections below only for what the digest does not cover (older agent.log-only runs, server logs, .trx).
 
 ## Scope: extraction, not diagnosis
 
@@ -65,40 +74,7 @@ success:
 
 ## Know your sources before you start
 
-Read `docs/current/references/reference_log_sources_and_cross_referencing.md` — it maps every log source and
-how to join them. The essentials:
-
-- **Agent side** — two files side by side in the run's `Logs\` folder, showing the *reported* result:
-  - `transcript.json` — structured JSON (`SystemPrompt`, `UserPrompt`, `Turns[]` with
-    `ToolCalls[{ToolName, ArgumentsJson, ResultJson, IsError, Latency, StartedAt, CompletedAt}]`).
-    **Prefer this for nearly everything**: `IsError` beats grepping for `FAILED`, arguments/results
-    are parseable and always complete, and `StartedAt`/`CompletedAt` (round-trip `DateTimeOffset`)
-    let you join straight to the server log. Query it with `python3`/`jq`; don't read it whole
-    (~350 KB).
-  - `agent.log` — human-readable narrative. Reach for it when you want to read a turn as prose, or
-    for runs predating the changes above. Note oversized payloads (>2,000 chars) are offloaded to
-    `turn-<N>-<idx>-<Tool>-<args|result>.json` sidecars in the same folder, with a stub left in the
-    line — fetch a sidecar deliberately when you need that payload, or just read `transcript.json`,
-    which always has it inline.
-- **Server side** (`server-<ts>.log`, `crash.log`, in the **server binary's** `logs\` folder) = what
-  RoslynSentinel actually did internally, including the real exception. Shows *why*.
-- **Pass/fail** comes from neither — it's NUnit console output / `.trx`, or for PlanStepRunner the
-  per-step commit on the run branch.
-
-A finding drawn only from the agent side is provisional. Say which sources you actually consulted,
-and name any that were unavailable.
-
-Server logs are timestamped per restart (`server-<yyyyMMdd-HHmmss>.log`), so pick the newest one
-starting at-or-before the run's first turn, in the binary directory matching the launcher
-(`bin-vscode\Advanced\logs\` for the interactive VS Code server; `<worktree>\bin-runner\Advanced\logs\`
-for PlanStepRunner; `bin\{Debug,Release}\net10.0\logs\` for a dev build). **PlanStepRunner server
-logs are deleted with the worktree on a successful step** — they exist only for in-progress or
-halted steps, so if the caller points you at a completed step, report the server side as
-unavailable rather than silently analysing the agent side alone.
-
-To cross-reference: both sides use local wall-clock, so match a failing call's `StartedAt`/
-`CompletedAt` from `transcript.json` (or the `HH:mm:ss.fff` line prefix in `agent.log` for older
-runs) against the server log within a few hundred ms.
+Read `docs/current/references/reference_log_sources_and_cross_referencing.md`; it is the single map of every log source, run layout, transcript field and script, and how to join the agent side to the server side. Keep these rules: a finding drawn only from the agent side is provisional, so say which sources you consulted and name any that were unavailable. PlanStepRunner server logs are deleted with the worktree on a successful step, so report the server side as unavailable for a completed step rather than analysing the agent side alone.
 
 ## Tools — prefer these over raw grepping
 
@@ -122,29 +98,21 @@ runs) against the server log within a few hundred ms.
 
 ## Log scale — know this before you open anything
 
-These logs are **line-sparse but byte-dense**. A single PlanStepRunner step log measured 441 KB in
-2,260 lines (~110k tokens — most of a context window) with individual lines up to **35,000
-characters**, because full file contents and JSON tool results are embedded inline on one line. The
-archive holds ~3,000 logs totalling ~300 MB.
-
-Consequences you must plan around:
-- **Never `Read` an `agent.log` whole.** One file can consume your entire context.
-- **Never `Grep` it without truncating output** — a single matching line can be 35k chars. Always
-  pipe through `cut -c1-300` (or similar) when scanning, and only pull a full line deliberately,
-  once you know you need that specific one.
-- Line count is a bad size proxy here. Check bytes (`wc -c`) before deciding an approach.
+`agent.log` is the legacy narrative file. Never `Read` it whole, and measure its size before opening it with `(Get-Item <file>).Length` in PowerShell.
 
 ## Reconnaissance protocol — cheap to expensive, in this order
 
+This protocol is for legacy agent.log work; run the digest first (see Start here).
+
 Never start by reading. Start by mapping, then narrow, then read only what's left.
 
-1. **Measure.** `wc -c` / `wc -l` the target. Note the byte size in your report.
-2. **Map the shape with truncated greps.** The format has stable markers — exploit them:
-   ```bash
-   grep -c "Turn .*: calling"  <log>                      # total tool calls
-   grep -n "FAILED"            <log> | cut -c1-300        # every failure, one line each
-   grep -n "\[Warning\]\|\[Error\]" <log> | cut -c1-300   # warnings/errors with line numbers
-   grep -n "Turn .*: model responded" <log> | cut -c1-200 # turn boundaries + timings
+1. **Measure.** `(Get-Item <file>).Length` / `(Get-Content <file> | Measure-Object -Line).Lines` the target. Note the byte size in your report.
+2. **Map the shape with truncated Select-String hits.** The format has stable markers — exploit them:
+   ```powershell
+   (Select-String -Path <log> -Pattern 'Turn .*: calling').Count   # total tool calls
+   (Select-String -Path <log> -Pattern 'FAILED').ForEach({ '{0}: {1}' -f $_.LineNumber, $_.Line.Substring(0, [Math]::Min(300, $_.Line.Length)) })   # every failure, one line each
+   (Select-String -Path <log> -Pattern '\[Warning\]|\[Error\]').ForEach({ '{0}: {1}' -f $_.LineNumber, $_.Line.Substring(0, [Math]::Min(300, $_.Line.Length)) })   # warnings/errors with line numbers
+   (Select-String -Path <log> -Pattern 'Turn .*: model responded').ForEach({ '{0}: {1}' -f $_.LineNumber, $_.Line.Substring(0, [Math]::Min(200, $_.Line.Length)) })   # turn boundaries + timings
    ```
    This gives you failing turn numbers, tool names, and line offsets for a few hundred tokens.
 3. **Structure it** when you need parsed arguments or rollups: `Parse-AgentLog.ps1 -LogPath <dir>
@@ -152,8 +120,7 @@ Never start by reading. Start by mapping, then narrow, then read only what's lef
    group by `ToolName`) instead of re-reading raw text. Write cache output to the scratchpad
    directory, never into the repo.
 4. **Read deeply, but only the narrowed span.** Once you have a failing turn's line number, read
-   that turn's full context with a bounded window (`Read` with `offset`/`limit`, or
-   `sed -n 'START,ENDp'`) — the reasoning, the call, and the result together. A turn read partially
+   that turn's full context with a bounded window (`Read` with `offset`/`limit`) — the reasoning, the call, and the result together. A turn read partially
    is worse than one not read at all.
 5. **Never sample-and-generalise.** Skimming scattered error lines and inferring a pattern is
    exactly the shallow analysis this repo's doctrine forbids. Either you read a turn completely, or

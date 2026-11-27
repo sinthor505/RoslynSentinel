@@ -19,6 +19,10 @@ prompts, harness, assertions) is the expert. A model failure is first a failure 
 to guide, constrain, or protect. "The model should have known X" is not a finding. Your deliverable
 is an actionable environmental defect, or an evidenced statement that none exists.
 
+## Input
+
+The caller may pass findings from a `review.json` (written by eval-run-grader; shape in `scripts/eval-review/review.schema.json`) with `rootCauseWorthIt: true`, together with the digest path (`digest.json` beside the transcript) and the turn numbers. Start from those turns: read the cited turns of `transcript.json` in full and the matching `digest.json` rows. The finding's attribution and confidence are the grader's hypotheses to verify, not conclusions; names and meanings are in `scripts/eval-review/vocabulary.json` (do not copy them). `ModelCapability` stands only once the environment attributions are ruled out, and the ruled-out list goes in your Ruled out section. The artifact map is `docs/current/references/reference_log_sources_and_cross_referencing.md`.
+
 ## What you must NOT do
 
 Do not restate the log. *"The model called ModifyEnum with invalid parameters, so the value wasn't
@@ -67,6 +71,15 @@ For each failed or inefficient action, trace to source and gather evidence:
    diving), known-flaky test.
 5. **Cite everything.** Every claimed cause needs a `file:line`, a verbatim quoted error, or a
    specific turn number. Anything untraced is labelled a hypothesis.
+
+## Follow-up probes you may propose (never launch)
+
+Each probe costs inference time on a shared host. Do not run them. Name the probe, the command and why in the report's Environment defect or Confidence part, and let the caller run it:
+
+- `scripts\roslynsentinel-interrogate.ps1 -StopAfterTurn N` (with `-TranscriptPath` and `-Question`): the model's own account of a turn.
+- the ModelEval test `ResumeTranscript` (selected with the modeleval script's `-Test ResumeTranscript`): resample from the turn where a loop starts.
+- `scripts\roslynsentinel-errorvariants.ps1`: A/B the wording of an error message.
+- the `ShippingKindReplay` test: slip rates at scale (200+ samples).
 
 ## Report format
 
