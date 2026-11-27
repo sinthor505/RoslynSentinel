@@ -177,6 +177,7 @@ namespace RoslynSentinel.Common.SnippetMatching
                 return new ToolNotFoundException(sb.ToString(), missingTargetKind: MissingTargetKinds.Snippet, snippet: SnippetFailureDetail.From(result));
             }
 
+            // TODO batch NotFound refusals carry the closest-window score only in this text; expose SnippetClosestWindow as a typed field so scripts (Get-SlipCounts.ps1) need not parse it
             sb.Append('\n').Append(
                 $"Closest windows in the file, best first (the file's own text, as written in the file):");
             var candidates = result.ClosestWindows

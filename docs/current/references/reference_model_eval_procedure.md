@@ -67,7 +67,7 @@ shows, per endpoint, whether it is reachable, which model ids are loaded, the co
 | `ROSLYNSENTINEL_LLM_PARALLELISM` | Concurrent LLM calls | 2 |
 | `ROSLYNSENTINEL_MODELEVAL_SIZES` | `Model_SizeThresholdSweep` only: comma-separated unrelated-method counts | `0,5,15,30,60` |
 | `ROSLYNSENTINEL_MODELEVAL_REPEATS` | `Model_SizeThresholdSweep` only: runs per size | 3 |
-| `ROSLYNSENTINEL_MODELEVAL_PROMPT_VARIANT` | `Model_SizeThresholdSweep` only: `SingleStep` (default) or `TwoStep` | `SingleStep` |
+| `ROSLYNSENTINEL_MODELEVAL_PROMPT_VARIANT` | `Model_SizeThresholdSweep`: `SingleStep` or `TwoStep`. `ImplementationScenarioAgentTests`: selects an `ImplementationScenarioStep.PromptVariants` entry | `SingleStep` |
 | `ROSLYNSENTINEL_MODELEVAL_REPLAY_TRANSCRIPT` | `TranscriptReplayTests` only: path to a saved `transcript.json` to replay | none |
 | `ROSLYNSENTINEL_MODELEVAL_REPLAY_SIZE` | `TranscriptReplayTests` only: override when the path doesn't carry the size | none |
 | `ROSLYNSENTINEL_MODELEVAL_TOOLSET` | Tool surface of the scenario, resume and chain tests (`ChainEvalToolSurface`): unset, `lean` or any other value = the 18-tool lean surface (default from the Step 6 flip, 2026-11-14); `full` = the 55-tool surface. Results recorded before the flip are 55-tool results and are not comparable. A queued job records the submitting shell's value. Details and the A/B: [eval_modeleval_lean_vs_full.md](../evals/eval_modeleval_lean_vs_full.md). Legacy whole-file fixtures never use it and stay on the full surface. | lean |
@@ -479,6 +479,22 @@ Data-driven family of small implementation tasks distilled from real plan and pu
 - Live-run settings: queue with `-Commit HEAD`, `-NoRunFolderMinutes 0` (the evalqueue SetupStalled check kills any
   test longer than 20 min) and `-EvalArgs "-Scenario <Id> -StepWallClockMinutes 30"` on 113 (45 on 112).
 - Prefer tree-state or syntax checks; final-message keyword checks needed two refinement rounds.
+
+### Slip instruments
+
+A slip is a write call that trips a known tool-surface failure. The primary verdict is the slip rate per write call, reported beside pass/fail.
+
+- Transcription siblings (`ImplementationScenarios/Transcription/`, one file each; seeds derive from the original's `Definition` at load time):
+  - `WidenAcrossFilesSlip` (from `WideningRejectedByGate`): removes the `changes: []` (CS9174), `ChangeJournal.Append(Dictionary)` (CS1503) and target-typed `new() {...}` (CS0144) traps. Ends Done, graded by build, tests and scope.
+  - `WidenDictionaryLeafFirstSlip` (from `WidenToReadOnlyDictionary`): keeps the original fixture; the prompt names the leaf-first retype order.
+  - `SweepNamedSitesSlip` (from `SweepConstructionSites`): removes the three unconvertible sites (`Renamer.FromResult`, `Mover.Choose`, `Merger.Latest`) and the `FailedFiles` decoy; the prompt lists every remaining site; no Report check.
+  - Pin tests T3 and T4 guard the seeds against drift from the originals.
+- `ThreadOptionalParameter`: the fourth slip-cell scenario, run as-is with no sibling.
+- ShippingKind family (its own harness, not `ImplementationScenario`; do not move it): `-Test ShippingKindReplay`, `ShippingKindResume`, `ShippingKindMappingProbe`, and `ShippingKindStep` (the stepped scenario; there is no `-Test ShippingKindStepped`). Typo counts: `scripts\Get-ShippingKindTypoCounts.ps1`.
+- `scripts\Get-SlipCounts.ps1`: one row per run, or with `-Summary` one row per Scenario and PromptVariant. A write call counts once as a slip when any holds: NearWindowNotFound (a NotFound whose highest "score n.nn" is >= `-WindowThreshold`, default 0.9), SwallowedKey (`oldContent` contains `"newContent":`), EscapeCopyWrites, or MalformedArgs (`ArgumentsJson` does not parse, or `InvalidArgument`). ReadMalformedArgs is the only read slip. GateRefusals (`ValidationFailed`) and OtherMalformedArgs are not slips. RunClass is Pass, FailWithSlips or FailNoSlips.
+  - Parameters: `-Machine` (queue key, default 85), `-PurposePattern` (`-like` on the job purpose), `-JobFolder`, `-Path` (folders scanned for transcript.json, instead of job files), `-QueueRoot`, `-WindowThreshold`, `-Summary`.
+  - UnparsedNotFound counts refusals the script cannot classify, so a reworded refusal shows as a count, not a silent zero.
+- `scripts\Get-ToolResultFormatArmTable.ps1`: the per-arm table for format comparisons (outcomes, stop reasons, escape-copy lines, argument failures, median characters and wall time).
 
 ## Schema-patch variants (A/B of how tool schemas are shaped)
 
