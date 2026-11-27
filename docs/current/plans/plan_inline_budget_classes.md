@@ -1,6 +1,6 @@
 # Plan: Per-result inline budget classes for the large-result offload
 
-**Status:** IN PROGRESS 2026-11-26. Steps 1-10, 21 done (efb0ca55, 061dd50d, 3ec48be7, dcf158b2, c99a321a, c02e171a, 33f92df9, 3ed84cb6, 27dcd63f, 78f5751e, 3add9ba4).
+**Status:** IN PROGRESS 2026-11-26. Steps 1-12, 14, 15, 21 done (efb0ca55, 061dd50d, 3ec48be7, dcf158b2, c99a321a, c02e171a, 33f92df9, 3ed84cb6, 27dcd63f, 78f5751e, 3add9ba4, 039e8da3, 9544e7c0, 4cb876cc, 16161d9e, 7061be5e, 60094893, 59000bec).
 
 ## Problem
 
@@ -544,6 +544,7 @@ their builds.
   success data) keeps the `Default` bound (Q24).
 - Done when: dispatcher runs `ToolResultMarshallerOnModeTests`, all pass.
 - Lane: test-writer. Effort: S.
+- Done: 039e8da3, fix 9544e7c0 (MarshalPagedAsync whole-response bound is the threshold, not the budget)
 
 ### Step 11b - Marshaller tests: new behaviour
 - Files: `RoslynSentinel.Tests.Server/ToolResultMarshallerOnModeTests.cs`, `RoslynSentinel.Tests.Server/ToolResultMarshallerPassthroughTests.cs`
@@ -553,6 +554,7 @@ their builds.
   `HonoursConfiguredDefault`.
 - Done when: dispatcher runs both fixtures, all pass.
 - Lane: test-writer. Effort: S.
+- Done: 4cb876cc
 
 ### Step 12 - Detached marshaller tests
 - Files: `RoslynSentinel.Tests.Server/ToolResultMarshallerDetachedTests.cs`
@@ -561,6 +563,7 @@ their builds.
 - Change: move its one `InlineBudgetChars` site to the matching accessor; add the Step 12 rows.
 - Done when: dispatcher runs `ToolResultMarshallerDetachedTests`, all pass.
 - Lane: test-writer. Effort: S.
+- Done: 16161d9e
 
 ### Step 13 - Offload filter tests
 - Files: `RoslynSentinel.Tests.Server/LargeResultOffloadFilterHandlerTests.cs` (new),
@@ -594,6 +597,7 @@ their builds.
   become `[NonParallelizable]`.
 - Done when: dispatcher runs the three fixtures, all pass.
 - Lane: test-writer. Effort: S. Pairs with: Step 15.
+- Done: 7061be5e, fix 60094893 (capped count and last-page offset derived from the fixture size)
 
 ### Step 15 - ReadFile and method-source tests
 - Files: `RoslynSentinel.Tests.Tools.Basic/ReadFileTests.cs`, `RoslynSentinel.Tests.Tools.Basic/ReadFileRecordsObservedTests.cs`,
@@ -605,6 +609,7 @@ their builds.
   to the accessor it means (a page or a gate: `OffloadThresholdChars(Default)`).
 - Done when: dispatcher runs the three fixtures, all pass.
 - Lane: test-writer. Effort: S. Pairs with: Step 14.
+- Done: 59000bec
 
 ### Step 16a - ReadFile paging loop: new page budget, diagnosable asserts
 - Files: `RoslynSentinel.Tests.Tools.Basic/ReadFilePagingLoopTests.cs`
