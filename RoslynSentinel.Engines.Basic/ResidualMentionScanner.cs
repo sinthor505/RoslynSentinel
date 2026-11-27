@@ -5,6 +5,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
 
 using RoslynSentinel.Common;
+using RoslynSentinel.Git;
 
 namespace RoslynSentinel.Engines.Basic;
 

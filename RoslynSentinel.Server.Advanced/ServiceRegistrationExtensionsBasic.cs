@@ -12,6 +12,7 @@ using ModelContextProtocol.Server;
 using RoslynSentinel.Common;
 using RoslynSentinel.Common.AgentLoop;
 using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Git;
 using RoslynSentinel.Tools.Basic;
 using System.Text.Json.Nodes;
 

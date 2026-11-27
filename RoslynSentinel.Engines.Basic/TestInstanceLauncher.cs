@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text;
 using RoslynSentinel.Common;
+using RoslynSentinel.Git;
 
 namespace RoslynSentinel.Engines.Basic;
 

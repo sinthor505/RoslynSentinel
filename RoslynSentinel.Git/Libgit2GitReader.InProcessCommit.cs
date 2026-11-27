@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Git;
 
 /// <summary>
 /// The repository-level declines of the in-process commit route (<see cref="InProcessCommitRoute"/>, step 5c-4 of proposal_libgit2sharp_in_process_git.md) that need this reader's private helpers:

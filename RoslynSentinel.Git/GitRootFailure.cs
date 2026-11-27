@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Git;
 
 /// <summary>Why a Git repository-root lookup found no repository. The engine reports the cause; the tool adds the advice.</summary>
 public enum GitRootFailure

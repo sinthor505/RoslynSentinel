@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Git;
 
 /// <summary>
 /// The in-process commit route of the Git tool's commit (step 5c-4 of proposal_libgit2sharp_in_process_git.md): a plain new commit of the whole index, or of listed paths whose content the caller has

@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Tools.Basic;
+namespace RoslynSentinel.Git;
 
 /// <summary>
 /// Result of operation=config. Get sets Value (null when the key is unset) and Note; set and unset

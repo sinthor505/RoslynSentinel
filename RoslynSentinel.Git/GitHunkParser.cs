@@ -4,7 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-namespace RoslynSentinel.Tools.Basic;
+namespace RoslynSentinel.Git;
 
 /// <summary>One zero-context hunk. <c>RawText</c> is the "@@ ..." line through the last body line, line endings untouched.</summary>
 internal sealed record GitHunk(

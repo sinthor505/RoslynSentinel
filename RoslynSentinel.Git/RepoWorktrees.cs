@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Git;
 
 /// <summary>
 /// Backs the optional <c>repoPath</c> parameter of Build and RunTest: checks that a path is a git worktree of the

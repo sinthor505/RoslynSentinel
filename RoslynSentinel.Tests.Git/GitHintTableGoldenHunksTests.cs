@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Git;
 using RoslynSentinel.Tests.Battery.Basic;
 using RoslynSentinel.Tests.Fakes;
 using RoslynSentinel.Tools.Basic;

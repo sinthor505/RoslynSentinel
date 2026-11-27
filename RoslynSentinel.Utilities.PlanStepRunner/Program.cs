@@ -4,7 +4,7 @@ using ModelContextProtocol.Client;
 
 using RoslynSentinel.Common;
 using RoslynSentinel.Common.AgentLoop;
-using RoslynSentinel.Common.GitWorktree;
+using RoslynSentinel.Git;
 
 namespace RoslynSentinel.Utilities.PlanStepRunner;
 

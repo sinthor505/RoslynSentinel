@@ -1,8 +1,9 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using LibGit2Sharp;
+using RoslynSentinel.Common;
 
-namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Git;
 
 /// <summary>
 /// Warms and reports the libgit2 backend of <see cref="GitReaders.Default"/> without ever sitting on the git call path.

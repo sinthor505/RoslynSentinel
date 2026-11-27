@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Tools.Basic;
+namespace RoslynSentinel.Git;
 
 /// <summary>Result of operation=worktree. Which fields are set depends on the action: list sets Worktrees;
 /// add sets Added, Branch and Note; remove sets Removed, Branch, Note and, when uncommitted changes were

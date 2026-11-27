@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Tools.Basic;
+namespace RoslynSentinel.Git;
 
 /// <summary>Result of staging selected hunks of one file. The inherited GitStatusResult members are the
 /// repository status after the stage (copied from a StatusAsync result), so the caller sees the new index

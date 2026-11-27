@@ -1,5 +1,6 @@
 using RoslynSentinel.Common;
 using RoslynSentinel.Common.AgentLoop;
+using RoslynSentinel.Git;
 
 namespace RoslynSentinel.Tests.ModelEval;
 

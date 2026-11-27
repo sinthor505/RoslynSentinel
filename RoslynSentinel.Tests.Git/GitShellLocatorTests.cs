@@ -1,4 +1,4 @@
-using RoslynSentinel.Common;
+using RoslynSentinel.Git;
 using static RoslynSentinel.Tests.Tools.Basic.GitHookTestSupport;
 
 namespace RoslynSentinel.Tests.Tools.Basic;

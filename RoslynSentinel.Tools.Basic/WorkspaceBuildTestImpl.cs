@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 
 using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Git;
 
 namespace RoslynSentinel.Tools.Basic;
 

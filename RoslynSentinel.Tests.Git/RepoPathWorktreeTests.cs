@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 
 using RoslynSentinel.Common;
+using RoslynSentinel.Git;
 using RoslynSentinel.Tools.Basic;
 
 using static RoslynSentinel.Tests.Battery.Basic.GitTestRepo;

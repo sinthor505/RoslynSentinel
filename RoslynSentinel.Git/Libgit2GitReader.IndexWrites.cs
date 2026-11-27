@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
 using LibGit2Sharp;
 
-namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Git;
 
 /// <summary>
 /// The index-writing half of <see cref="Libgit2GitReader"/>: whole-file stage (<c>git add</c>) and path unstage (<c>git reset -- paths</c>). The aim is the

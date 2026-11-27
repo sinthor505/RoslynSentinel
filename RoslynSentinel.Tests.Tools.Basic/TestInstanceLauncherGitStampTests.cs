@@ -1,5 +1,5 @@
-using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Git;
 using static RoslynSentinel.Tests.Battery.Basic.GitTestRepo;
 
 namespace RoslynSentinel.Tests.Battery.Basic;

@@ -1,7 +1,8 @@
 using System.Collections.Concurrent;
 using LibGit2Sharp;
+using RoslynSentinel.Common;
 
-namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Git;
 
 /// <summary>
 /// The reader the server's probes use: tries the primary (libgit2) implementation first and answers from the fallback (CLI)

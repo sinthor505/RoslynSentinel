@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Tools.Basic;
+namespace RoslynSentinel.Git;
 
 public record GitCheckoutResult : GitResult
 {

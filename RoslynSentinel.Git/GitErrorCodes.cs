@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Tools.Basic;
+namespace RoslynSentinel.Git;
 
 /// <summary>Specific ResultError.ErrorCode values for failed GitTool results. GitError stays the fallback.</summary>
 public static class GitErrorCodes

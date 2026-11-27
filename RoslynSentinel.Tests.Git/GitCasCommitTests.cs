@@ -1,4 +1,4 @@
-using RoslynSentinel.Common;
+using RoslynSentinel.Git;
 using RoslynSentinel.Tests.Battery.Basic;
 using static RoslynSentinel.Tests.Battery.Basic.GitTestRepo;
 using static RoslynSentinel.Tests.Tools.Basic.CasCommitTestSupport;

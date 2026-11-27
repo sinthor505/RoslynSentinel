@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Git;
 
 /// <summary>What <see cref="GitHooks.ResolveHookPath"/> found.</summary>
 internal enum HookPathOutcome

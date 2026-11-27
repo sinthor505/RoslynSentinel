@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Git;
 
 /// <summary>How <see cref="GitCommitMessage"/> ended.</summary>
 internal enum CommitMessageOutcome

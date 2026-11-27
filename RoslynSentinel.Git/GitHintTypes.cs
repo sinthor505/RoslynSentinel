@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Git;
 
 /// <summary>
 /// Names a tool-side hint text (a next-step sentence or call fragment that names other tools). The Git engine sets

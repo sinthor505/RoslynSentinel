@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Git;
 
 /// <summary>
 /// The effective value of a single config key, read through the reader's own doors so it declines exactly where the reader does: <see cref="Open"/> (process environment in

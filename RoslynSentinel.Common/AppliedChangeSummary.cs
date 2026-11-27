@@ -119,6 +119,7 @@ public record AppliedChangeSummary(
             if (DryRun)
             {
                 // returnDiff may be hidden from the lean schema profile, but the server still accepts it at call time.
+                // TODO this note names returnDiff for tools that do not declare it (ChangeNamespace rejects it)
                 var preview = ChangedContent != null
                     ? "The proposed file contents are in changedContent."
                     : !string.IsNullOrEmpty(Diff)

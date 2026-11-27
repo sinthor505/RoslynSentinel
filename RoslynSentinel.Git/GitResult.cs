@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace RoslynSentinel.Tools.Basic;
+namespace RoslynSentinel.Git;
 
 public record GitResult : IOperationResult
 {

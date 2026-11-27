@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Git;
 
 /// <summary>How a <see cref="GitProcess"/> run ended. Caller cancellation is not an outcome: it throws <see cref="OperationCanceledException"/>.</summary>
 internal enum GitRunOutcome

@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Tools.Basic;
+namespace RoslynSentinel.Git;
 
 /// <summary>One worktree in a worktree list (parsed from git worktree list --porcelain).</summary>
 public record GitWorktreeEntry

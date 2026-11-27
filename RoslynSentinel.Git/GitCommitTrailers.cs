@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Git;
 
 /// <summary>
 /// The commit trailers the Git tool's <c>commit</c> can add (<c>Tool-Call-Id</c>, <c>Tool-Agent</c>) and the parsing the

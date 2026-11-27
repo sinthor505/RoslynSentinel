@@ -2,7 +2,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using LibGit2Sharp;
 
-namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Git;
 
 /// <summary>
 /// Patch text for the Git tool's <c>diff</c> (staged, refA..refB) and <c>show</c>, served from <c>Diff.Compare&lt;Patch&gt;</c> only where the text is the one

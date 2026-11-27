@@ -1,6 +1,7 @@
 using System.ComponentModel;
 
 using RoslynSentinel.Common;
+using RoslynSentinel.Git;
 
 namespace RoslynSentinel.Tools.Basic;
 

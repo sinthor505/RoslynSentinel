@@ -3,8 +3,9 @@ using System.Buffers.Binary;
 using System.Numerics;
 using System.Text.RegularExpressions;
 using LibGit2Sharp;
+using RoslynSentinel.Common;
 
-namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Git;
 
 /// <summary>
 /// <see cref="IGitReader"/> over LibGit2Sharp (in-process, no process spawn). A <see cref="Repository"/> is opened per

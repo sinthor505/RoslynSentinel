@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Git;
 
 /// <summary>
 /// Finds Git for Windows' <c>sh.exe</c> (the shell git runs hooks with) from the git installation, never from a fixed install path. Used by <see cref="GitHooks"/>; no other caller.

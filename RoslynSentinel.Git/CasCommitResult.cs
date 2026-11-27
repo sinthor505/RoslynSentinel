@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Git;
 
 /// <summary>Which tree <see cref="Libgit2GitReader.CommitWithCompareAndSwap"/> commits.</summary>
 internal enum CasCommitTreeSource

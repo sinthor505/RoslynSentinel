@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 
 using RoslynSentinel.Common;
+using RoslynSentinel.Git;
 
 namespace RoslynSentinel.Tools.Basic;
 

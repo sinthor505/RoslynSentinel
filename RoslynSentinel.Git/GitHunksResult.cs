@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Tools.Basic;
+namespace RoslynSentinel.Git;
 
 /// <summary>Result of operation=hunks: the unstaged hunks of one file. Fingerprint covers the whole file diff,
 /// not only the listed hunks, and must be passed back when staging.</summary>

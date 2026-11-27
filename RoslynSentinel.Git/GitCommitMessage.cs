@@ -1,7 +1,7 @@
 using System.Text;
 using LibGit2Sharp;
 
-namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Git;
 
 /// <summary>
 /// The commit message <c>git commit</c> stores, produced in process (step 5c-3 of proposal_libgit2sharp_in_process_git.md; no caller yet, step 5c-4 wires it into the commit tool).

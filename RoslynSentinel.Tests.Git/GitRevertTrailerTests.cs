@@ -8,6 +8,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Common;
+using RoslynSentinel.Git;
 using RoslynSentinel.Tests.Fakes;
 using RoslynSentinel.Tools.Basic;
 

@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Git;
 
 /// <summary>
 /// Reads which multi-step git operation a repository is in the middle of from the repository's own state files.

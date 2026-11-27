@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using System.Xml.Linq;
+using RoslynSentinel.Git;
 
 namespace RoslynSentinel.Engines.Basic;
 

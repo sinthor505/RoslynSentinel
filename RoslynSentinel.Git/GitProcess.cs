@@ -2,9 +2,8 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
 
-namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Git;
 
-// TODO rename namespace to RoslynSentinel.Git (no ChangeNamespace tool; see plan_isolate_git_area_into_own_project Step 19)
 /// <summary>
 /// The single runner for non-interactive <c>git</c> commands, with a hard timeout. <see cref="Run"/> and
 /// <see cref="RunAsync"/> return a <see cref="GitRunResult"/> and never throw for start failure or timeout (only

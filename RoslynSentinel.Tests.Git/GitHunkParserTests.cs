@@ -1,6 +1,6 @@
 using System.Text;
 
-using RoslynSentinel.Tools.Basic;
+using RoslynSentinel.Git;
 
 namespace RoslynSentinel.Tests.Battery.Basic;
 

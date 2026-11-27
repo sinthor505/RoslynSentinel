@@ -1,6 +1,6 @@
 using LibGit2Sharp;
 
-namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Git;
 
 /// <summary>
 /// The configuration check of <see cref="GitCommitMessage.FormatForRepository"/> (step 5c-3 of proposal_libgit2sharp_in_process_git.md), read through the reader's own doors so it declines

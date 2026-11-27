@@ -1,5 +1,5 @@
 using LibGit2Sharp;
-using RoslynSentinel.Common;
+using RoslynSentinel.Git;
 using static RoslynSentinel.Tests.Battery.Basic.GitTestRepo;
 
 namespace RoslynSentinel.Tests.Tools.Basic;

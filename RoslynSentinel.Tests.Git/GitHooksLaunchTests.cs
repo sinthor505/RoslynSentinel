@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using RoslynSentinel.Common;
+using RoslynSentinel.Git;
 using static RoslynSentinel.Tests.Battery.Basic.GitTestRepo;
 using static RoslynSentinel.Tests.Tools.Basic.CasCommitTestSupport;
 using static RoslynSentinel.Tests.Tools.Basic.GitHookTestSupport;

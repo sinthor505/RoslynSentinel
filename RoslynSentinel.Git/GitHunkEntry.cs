@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Tools.Basic;
+namespace RoslynSentinel.Git;
 
 /// <summary>One zero-context hunk of a file's unstaged diff, as listed by operation=hunks.</summary>
 public record GitHunkEntry

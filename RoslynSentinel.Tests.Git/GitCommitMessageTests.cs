@@ -1,4 +1,4 @@
-using RoslynSentinel.Common;
+using RoslynSentinel.Git;
 
 namespace RoslynSentinel.Tests.Tools.Basic;
 

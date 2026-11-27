@@ -6,11 +6,10 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Common;
 
-namespace RoslynSentinel.Tools.Basic;
+namespace RoslynSentinel.Git;
 
 // ── Operation implementations ─────────────────────────────────────────────
 
-// TODO rename namespace to RoslynSentinel.Git (no ChangeNamespace tool; see plan_isolate_git_area_into_own_project Step 19)
 public class GitEngine : IGitOperations
 {
     private readonly ISolutionProvider _workspaceManager;

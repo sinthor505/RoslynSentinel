@@ -1,6 +1,6 @@
 using LibGit2Sharp;
 
-namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Git;
 
 /// <summary>
 /// The compare-and-swap commit primitive of <see cref="Libgit2GitReader"/> (proposal_libgit2sharp_in_process_git.md, step 5b result and 5c-1). No caller yet. The sequence is the

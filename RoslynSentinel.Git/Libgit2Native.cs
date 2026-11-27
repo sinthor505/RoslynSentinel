@@ -2,7 +2,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using LibGit2Sharp;
 
-namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Git;
 
 /// <summary>
 /// The one libgit2 call LibGit2Sharp does not expose: <c>git_reference_create_matching</c>, a compare-and-swap ref update (<c>Repository.Commit</c> moves the branch with a plain

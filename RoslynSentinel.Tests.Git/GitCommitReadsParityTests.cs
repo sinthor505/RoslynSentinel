@@ -2,8 +2,8 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging.Abstractions;
 using RoslynSentinel.Common;
+using RoslynSentinel.Git;
 using RoslynSentinel.Tests.Fakes;
-using RoslynSentinel.Tools.Basic;
 using static RoslynSentinel.Tests.Battery.Basic.GitTestRepo;
 
 namespace RoslynSentinel.Tests.Tools.Basic;

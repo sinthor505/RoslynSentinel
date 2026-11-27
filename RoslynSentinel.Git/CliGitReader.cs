@@ -1,4 +1,6 @@
-namespace RoslynSentinel.Common;
+using RoslynSentinel.Common;
+
+namespace RoslynSentinel.Git;
 
 /// <summary>
 /// <see cref="IGitReader"/> over the git CLI (<see cref="GitProcess.TryRun"/>): the reference behaviour the libgit2

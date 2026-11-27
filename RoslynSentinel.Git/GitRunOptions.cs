@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Git;
 
 /// <summary>Optional knobs for <see cref="GitProcess.Run"/> / <see cref="GitProcess.RunAsync"/>; null options means all defaults.</summary>
 internal sealed record GitRunOptions

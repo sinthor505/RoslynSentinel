@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Git;
 
 /// <summary>
 /// The abbreviation length git itself uses for a repository, probed once with <c>git rev-parse --short HEAD</c> and cached.

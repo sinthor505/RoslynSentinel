@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.Text;
 using LibGit2Sharp;
 
-namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Git;
 
 /// <summary>
 /// Git hooks for commits made in process (proposal_libgit2sharp_in_process_git.md, step 5c-2; no caller yet): where git would find a hook, whether a hook that blocks or rewrites a commit exists,

@@ -1,4 +1,6 @@
-namespace RoslynSentinel.Common;
+using RoslynSentinel.Common;
+
+namespace RoslynSentinel.Git;
 
 /// <summary>A commit's full hash and its raw message exactly as stored (line endings and trailing newline untouched).</summary>
 internal sealed record CommitMessage(string Sha, string Message);

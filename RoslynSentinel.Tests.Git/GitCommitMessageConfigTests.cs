@@ -1,5 +1,5 @@
 using System.Text;
-using RoslynSentinel.Common;
+using RoslynSentinel.Git;
 using static RoslynSentinel.Tests.Tools.Basic.GitCommitMessageTestSupport;
 
 namespace RoslynSentinel.Tests.Tools.Basic;

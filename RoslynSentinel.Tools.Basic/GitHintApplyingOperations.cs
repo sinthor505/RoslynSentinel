@@ -1,3 +1,5 @@
+using RoslynSentinel.Git;
+
 namespace RoslynSentinel.Tools.Basic;
 
 /// <summary>

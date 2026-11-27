@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Tools.Basic;
+namespace RoslynSentinel.Git;
 
 /// <summary>Result of operation=stash. Which fields are set depends on the action: list sets Entries,
 /// TotalCount and IsTruncated; push sets Created, Message, Note and Status; apply and pop set

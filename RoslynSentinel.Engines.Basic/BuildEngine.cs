@@ -5,6 +5,7 @@ using RoslynSentinel.Common;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using RoslynSentinel.Git;
 
 namespace RoslynSentinel.Engines.Basic;
 
