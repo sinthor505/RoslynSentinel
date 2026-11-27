@@ -112,8 +112,8 @@ Dated entries; later entries do not override earlier ones unless they say so. Q-
   review clean at 9bfab1e7; dispatched).
 - Depends on: Phase 0.1 (so the first real `ChangeNamespace` result is known).
 - Effect: text-neutral.
-- Change: create `RoslynSentinel.Engines.Core` (Q42; above Common, below both engine flavors) and move 18 files / 3,945 lines (`SnippetMatching/` plus
-  `LineBlockAligner`, `SnippetMatchOutcome`, `SnippetSpan`) into it, with a test project for its fixtures. Two uses to cut first: `ToolException.cs` -> `SnippetFailureDetail`, and one edit-application file ->
+- Change: create `RoslynSentinel.Engines.Core` (Q42; above Common, below both engine flavors) and move 17 files (`SnippetMatching/` plus
+  `SnippetMatchOutcome`, `SnippetSpan`; `LineBlockAligner` and three data records stay in Common; the tests stay in `RoslynSentinel.Tests`). Two uses to cut first: `ToolException.cs` -> `SnippetFailureDetail`, and one edit-application file ->
   `LineBlockAligner`. First real use of the multi-file `MoveFile` on production code. It carries its own inversion with it (10 exception
   constructions and 2 `ToolCallHint` uses in `SnippetErrorFormatter`), recorded for Phase 5.
 - Done when: `Build` 0 errors, test counts preserved, full run clean, plan closed.

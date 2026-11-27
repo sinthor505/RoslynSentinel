@@ -165,12 +165,12 @@ pipeline, write chokepoint, tool registration, workspace manager) read
 and fix the map.
 
 - **Layering is one-way:** `Common` <- `Git` <- `Engines.*` <- `Tools.*` <- `Server.*` (`RoslynSentinel.<Layer>.<Flavor>`).
-  `Git`: git readers, Git engine, worktree harness. Engines hold Roslyn logic with no MCP types; Tools
+  `Git`: git readers, Git engine, worktree harness. `Engines.Core`: engine logic shared by both engine flavors, one folder per area; references only `Common`. Engines hold Roslyn logic with no MCP types; Tools
   hold `[McpServerToolType]` classes; Server is hosting/DI only. `AgentLoop` (agent harness) references only `Common`;
   `Utilities.PlanStepRunner` references only `Common`, `Git` and `AgentLoop`.
 - **Sibling projects cannot see each other** (`Tools.Advanced` not `Tools.Basic`; `Engines.Basic` not
-  `Engines.Advanced`). Shared helpers go one layer down: `Engines.Basic` for engine logic, `Common` for
-  result/MCP plumbing. Advanced is additive, not a fork: verify with `scripts/build.ps1 -Flavor Solution`.
+  `Engines.Advanced`). Shared engine logic goes to `Engines.Core`,
+  never to `Common`; `Common` keeps result/MCP plumbing. Advanced is additive, not a fork: verify with `scripts/build.ps1 -Flavor Solution`.
 - **A new MCP tool needs two things**, or startup or tests fail: the `[McpServerToolType]` class in a
   `Tools.*` project and its `Server.Advanced/ToolClassRegistry.cs` entries (a mode plus a
   `BasicToolClassTypes`/`AdvancedToolClassTypes` row, in tools/list order).

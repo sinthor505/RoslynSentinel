@@ -2,7 +2,7 @@
 
 # Code TODO markers
 
-333 markers in 159 files. Links are relative to this file.
+335 markers in 160 files. Links are relative to this file.
 
 ## RoslynSentinel.AgentLoop/LmStudioAgentClient.cs (1)
 
@@ -91,13 +91,6 @@
 
 - [282](../../RoslynSentinel.Common/ServerBinaryStaleness.cs#L282) `// TODO production no longer calls this (DescribeUncommittedServerSource reads typed rows via RepoQueryProvider.Current and DescribeUncommittedChanges); kept only for its text-parser tests in ServerBinaryStalenessTests. Delete it with them.`
 - [340](../../RoslynSentinel.Common/ServerBinaryStaleness.cs#L340) `// TODO production no longer calls this (EvaluateGit reads typed commits via RepoQueryProvider.Current and FilterServerSourceCommits); kept only for its text-parser tests in ServerBinaryStalenessTests. Delete it with them.`
-
-## RoslynSentinel.Common/SnippetMatching/SnippetErrorFormatter.cs (4)
-
-- [180](../../RoslynSentinel.Common/SnippetMatching/SnippetErrorFormatter.cs#L180) `// TODO batch NotFound refusals carry the closest-window score only in this text; expose SnippetClosestWindow as a typed field so scripts (Get-SlipCounts.ps1) need not parse it`
-- [194](../../RoslynSentinel.Common/SnippetMatching/SnippetErrorFormatter.cs#L194) `// TODO AmbiguityAdvice still orders the caller,`
-- [476](../../RoslynSentinel.Common/SnippetMatching/SnippetErrorFormatter.cs#L476) `// TODO C6f: an invalid selector is an InvalidArgument condition (a malformed matchLine/lineBefore/lineAfter), not a lookup miss;`
-- [629](../../RoslynSentinel.Common/SnippetMatching/SnippetErrorFormatter.cs#L629) `// TODO The model reads this text and the file JSON-encoded, so "plain quotes (\")" arrives as (\") and the file's line as .\"; - the example shows the escaped form as the plain one (thinking smoke 192447 T8-T13: reasoning "has \"; instead of \";", oldContent kept .\"; on the line); name the characters instead of showing them, or give the corrected line in a form that survives JSON encoding`
 
 ## RoslynSentinel.Common/SpeculativeAdvice.cs (1)
 
@@ -272,7 +265,7 @@
 
 - [86](../../RoslynSentinel.Engines.Basic/MemberEditEffectFacts.cs#L86) `// TODO an Added effect carries no SymbolDocId (the declaration is parsed from source before the write); slice 3 matches Added by simple name only, so resolve a doc id after the write if a later slice needs one`
 
-## RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs (11)
+## RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs (12)
 
 - [580](../../RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs#L580) `// TODO tuple outcome slot is always Modified; return only the list`
 - [1283](../../RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs#L1283) `// TODO tuple outcome slot is always Modified; return only the list`
@@ -282,9 +275,10 @@
 - [2597](../../RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs#L2597) `// TODO the tool layer (Step 6) still calls this single-declaration path; ReplaceMemberWithAdditionsAsync takes N declarations when exactly one matches the target by name and kind`
 - [2858](../../RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs#L2858) `// TODO fold the AddMemberAsync wrapper into callers once TypedMember callers move to AddMembersAsync`
 - [2969](../../RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs#L2969) `// TODO not a lookup miss: several namespaces and no namespaceName is an ambiguous target but is coded NotFound; code it Ambiguous or InvalidArgument (a tool-level branch on the code may depend on it)`
-- [3505](../../RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs#L3505) `// TODO a targetFilePath that matches no document yields an empty search here, so a misspelt targetFilepath looks like "no existing class" (a new class is synthesized); route it through DocumentLookup so the miss is reported`
-- [3633](../../RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs#L3633) `// TODO not a lookup miss: the target exists and is not a base class of the source, so this is a refusal coded NotFound; the factories of MemberRefactoringNotFound do not apply (prose fix only)`
-- [5959](../../RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs#L5959) `// TODO a base list that exists but names nothing matching baseTypeName falls through to Modified with unchanged text; return MemberRefactoringNotFound.BaseTypeMessage(baseTypeName, typeName, container) as AlreadyInTargetState so a near name gets its Did-you-mean retry.`
+- [3481](../../RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs#L3481) `// TODO a record is refused as the source type (INBOX 2026-11-27)`
+- [3506](../../RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs#L3506) `// TODO a targetFilePath that matches no document yields an empty search here, so a misspelt targetFilepath looks like "no existing class" (a new class is synthesized); route it through DocumentLookup so the miss is reported`
+- [3634](../../RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs#L3634) `// TODO not a lookup miss: the target exists and is not a base class of the source, so this is a refusal coded NotFound; the factories of MemberRefactoringNotFound do not apply (prose fix only)`
+- [5960](../../RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs#L5960) `// TODO a base list that exists but names nothing matching baseTypeName falls through to Modified with unchanged text; return MemberRefactoringNotFound.BaseTypeMessage(baseTypeName, typeName, container) as AlreadyInTargetState so a near name gets its Did-you-mean retry.`
 
 ## RoslynSentinel.Engines.Basic/MemberRefactoringNotFound.cs (1)
 
@@ -294,6 +288,10 @@
 
 - [338](../../RoslynSentinel.Engines.Basic/MemberSelection.cs#L338) `// TODO no filePath reaches SelectMembers, so the no-candidate case cannot prefill GetFileOutline(filePath)`
 - [347](../../RoslynSentinel.Engines.Basic/MemberSelection.cs#L347) `// TODO no filePath reaches SelectMembers, so the no-candidate case cannot prefill GetFileOutline(filePath)`
+
+## RoslynSentinel.Engines.Basic/MoveSetEdgeAnalyzer.cs (1)
+
+- [67](../../RoslynSentinel.Engines.Basic/MoveSetEdgeAnalyzer.cs#L67) `// TODO the gate adds only direct edges; projects that reach the destination through another project still fail (INBOX 2026-11-27)`
 
 ## RoslynSentinel.Engines.Basic/MsToolAugmentEngine.cs (2)
 
@@ -351,6 +349,13 @@
 ## RoslynSentinel.Engines.Basic/TestRunEngine.cs (1)
 
 - [670](../../RoslynSentinel.Engines.Basic/TestRunEngine.cs#L670) `// TODO no automated test drives this branch end to end: the TestSolutionFixture project uses xunit, which reports a malformed filter as 0 matched, so only InvalidFilterDetail is unit tested (NUnit cause verified by hand 2026-11-24 on Tests.Asyncify)`
+
+## RoslynSentinel.Engines.Core/SnippetMatching/SnippetErrorFormatter.cs (4)
+
+- [181](../../RoslynSentinel.Engines.Core/SnippetMatching/SnippetErrorFormatter.cs#L181) `// TODO batch NotFound refusals carry the closest-window score only in this text; expose SnippetClosestWindow as a typed field so scripts (Get-SlipCounts.ps1) need not parse it`
+- [195](../../RoslynSentinel.Engines.Core/SnippetMatching/SnippetErrorFormatter.cs#L195) `// TODO AmbiguityAdvice still orders the caller,`
+- [477](../../RoslynSentinel.Engines.Core/SnippetMatching/SnippetErrorFormatter.cs#L477) `// TODO C6f: an invalid selector is an InvalidArgument condition (a malformed matchLine/lineBefore/lineAfter), not a lookup miss;`
+- [630](../../RoslynSentinel.Engines.Core/SnippetMatching/SnippetErrorFormatter.cs#L630) `// TODO The model reads this text and the file JSON-encoded, so "plain quotes (\")" arrives as (\") and the file's line as .\"; - the example shows the escaped form as the plain one (thinking smoke 192447 T8-T13: reasoning "has \"; instead of \";", oldContent kept .\"; on the line); name the characters instead of showing them, or give the corrected line in a form that survives JSON encoding`
 
 ## RoslynSentinel.Git/GitEngine.cs (2)
 

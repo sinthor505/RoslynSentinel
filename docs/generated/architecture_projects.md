@@ -7,12 +7,13 @@
 | DummyApp |  |
 | RoslynSentinel.AgentLoop | RoslynSentinel.Common |
 | RoslynSentinel.Common |  |
-| RoslynSentinel.Engines.Advanced | RoslynSentinel.Common, RoslynSentinel.Engines.Basic |
-| RoslynSentinel.Engines.Basic | RoslynSentinel.Common, RoslynSentinel.Git |
+| RoslynSentinel.Engines.Advanced | RoslynSentinel.Common, RoslynSentinel.Engines.Basic, RoslynSentinel.Engines.Core |
+| RoslynSentinel.Engines.Basic | RoslynSentinel.Common, RoslynSentinel.Engines.Core, RoslynSentinel.Git |
+| RoslynSentinel.Engines.Core | RoslynSentinel.Common |
 | RoslynSentinel.Git | RoslynSentinel.Common |
 | RoslynSentinel.Server.Advanced | RoslynSentinel.Common, RoslynSentinel.Engines.Basic, RoslynSentinel.Git, RoslynSentinel.Tools.Advanced, RoslynSentinel.Tools.Basic, RoslynSentinel.Tools.Experimental |
-| RoslynSentinel.Tests | RoslynSentinel.Common, RoslynSentinel.Engines.Basic, RoslynSentinel.Tests.Support.Basic |
-| RoslynSentinel.Tests.Advanced | RoslynSentinel.Common, RoslynSentinel.Engines.Advanced, RoslynSentinel.Engines.Basic, RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Advanced, RoslynSentinel.Tests.Support.Basic, RoslynSentinel.Tools.Advanced, RoslynSentinel.Tools.Experimental |
+| RoslynSentinel.Tests | RoslynSentinel.Common, RoslynSentinel.Engines.Basic, RoslynSentinel.Engines.Core, RoslynSentinel.Tests.Support.Basic |
+| RoslynSentinel.Tests.Advanced | RoslynSentinel.Common, RoslynSentinel.Engines.Advanced, RoslynSentinel.Engines.Basic, RoslynSentinel.Engines.Core, RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Advanced, RoslynSentinel.Tests.Support.Basic, RoslynSentinel.Tools.Advanced, RoslynSentinel.Tools.Experimental |
 | RoslynSentinel.Tests.Asyncify | RoslynSentinel.Common, RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Advanced, RoslynSentinel.Tests.Support.Basic, RoslynSentinel.Tools.Advanced, RoslynSentinel.Tools.Experimental |
 | RoslynSentinel.Tests.Basic | RoslynSentinel.Common, RoslynSentinel.Engines.Basic, RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Basic, RoslynSentinel.Utilities.AgentIdentityHook |
 | RoslynSentinel.Tests.Battery.Advanced | RoslynSentinel.Engines.Advanced, RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Advanced, RoslynSentinel.Tests.Support.Basic |
@@ -22,13 +23,13 @@
 | RoslynSentinel.Tests.Harness | RoslynSentinel.AgentLoop, RoslynSentinel.Common, RoslynSentinel.Git, RoslynSentinel.Server.Advanced, RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Basic, RoslynSentinel.Tools.Advanced, RoslynSentinel.Utilities.PlanStepRunner |
 | RoslynSentinel.Tests.Integration | RoslynSentinel.Common, RoslynSentinel.Server.Advanced, RoslynSentinel.Tests |
 | RoslynSentinel.Tests.ModelEval | RoslynSentinel.AgentLoop, RoslynSentinel.Common, RoslynSentinel.Server.Advanced, RoslynSentinel.Tests, RoslynSentinel.Tests.Harness |
-| RoslynSentinel.Tests.Server | RoslynSentinel.Common, RoslynSentinel.Server.Advanced, RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Basic |
+| RoslynSentinel.Tests.Server | RoslynSentinel.Common, RoslynSentinel.Engines.Core, RoslynSentinel.Server.Advanced, RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Basic |
 | RoslynSentinel.Tests.Support.Advanced | RoslynSentinel.Common, RoslynSentinel.Engines.Advanced, RoslynSentinel.Tests.Support.Basic, RoslynSentinel.Tools.Advanced |
 | RoslynSentinel.Tests.Support.Basic | RoslynSentinel.Common, RoslynSentinel.Engines.Basic, RoslynSentinel.Tools.Basic |
 | RoslynSentinel.Tests.Tools.Advanced | RoslynSentinel.Common, RoslynSentinel.Engines.Advanced, RoslynSentinel.Engines.Basic, RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Advanced, RoslynSentinel.Tests.Support.Basic, RoslynSentinel.Tools.Advanced, RoslynSentinel.Tools.Basic |
-| RoslynSentinel.Tests.Tools.Basic | RoslynSentinel.Common, RoslynSentinel.Engines.Basic, RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Basic, RoslynSentinel.Tools.Basic |
+| RoslynSentinel.Tests.Tools.Basic | RoslynSentinel.Common, RoslynSentinel.Engines.Basic, RoslynSentinel.Engines.Core, RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Basic, RoslynSentinel.Tools.Basic |
 | RoslynSentinel.Tools.Advanced | RoslynSentinel.AgentLoop, RoslynSentinel.Common, RoslynSentinel.Engines.Advanced, RoslynSentinel.Engines.Basic, RoslynSentinel.Git |
-| RoslynSentinel.Tools.Basic | RoslynSentinel.Common, RoslynSentinel.Engines.Basic, RoslynSentinel.Git |
+| RoslynSentinel.Tools.Basic | RoslynSentinel.Common, RoslynSentinel.Engines.Basic, RoslynSentinel.Engines.Core, RoslynSentinel.Git |
 | RoslynSentinel.Tools.Experimental | RoslynSentinel.Common, RoslynSentinel.Engines.Advanced, RoslynSentinel.Engines.Basic |
 | RoslynSentinel.Utilities.AgentIdentityHook |  |
 | RoslynSentinel.Utilities.PlanStepRunner | RoslynSentinel.AgentLoop, RoslynSentinel.Common, RoslynSentinel.Git |
