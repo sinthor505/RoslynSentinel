@@ -20,21 +20,4 @@ public sealed record SnippetFailureDetail(
     string? InvalidParameterName,
     string? InvalidParameterValue)
 {
-    /// <summary>Projects a lookup result onto its wire-safe shape.</summary>
-    public static SnippetFailureDetail From(SnippetMatchResult result)
-    {
-        return new SnippetFailureDetail(
-            result.Outcome.ToString(),
-            result.RequestedTolerance.ToString(),
-            result.RequestedCaseMode.ToString(),
-            result.TiersProbed.Select(tier => tier.ToString()).ToList(),
-            result.ClosestWindows,
-            result.ClosestWindowTotalCount,
-            result.NearMatchTotalCount,
-            result.FilterTrail,
-            result.CandidatesBeforeSelectors,
-            result.CandidatesAfterSelectors,
-            result.InvalidParameterName,
-            result.InvalidParameterValue);
-    }
 }

@@ -1,25 +1,7 @@
 using System.Globalization;
 using System.Text;
+
 using Microsoft.CodeAnalysis.Text;
-
-namespace RoslynSentinel.Common
-{
-    /// <summary>
-    /// A contextSnippet/oldContent matched the file only at a looser whitespace tolerance than the call accepts, so
-    /// nothing was located or applied; the message lists the file's own copy-ready lines. Distinct from
-    /// <see cref="ToolNotFoundException"/> (nothing close exists) so a caller can tell "retype with the file's text"
-    /// from "re-read the file". Maps to <see cref="ToolErrorCode.MatchedLooserThanRequested"/>. Lives beside
-    /// <c>SnippetErrorFormatter</c> for now; it can move to ToolException.cs when callers migrate.
-    /// </summary>
-    public sealed class ToolMatchedLooserTierException : ToolException
-    {
-        public override string ErrorCode => ToolErrorCode.MatchedLooserThanRequested;
-
-        public ToolMatchedLooserTierException(string message) : base(message)
-        {
-        }
-    }
-}
 
 namespace RoslynSentinel.Common.SnippetMatching
 {
@@ -113,6 +95,24 @@ namespace RoslynSentinel.Common.SnippetMatching
             }
         }
 
+        /// <summary>Projects a lookup result onto its wire-safe shape.</summary>
+        public static SnippetFailureDetail ToFailureDetail(SnippetMatchResult result)
+        {
+            return new SnippetFailureDetail(
+                result.Outcome.ToString(),
+                result.RequestedTolerance.ToString(),
+                result.RequestedCaseMode.ToString(),
+                result.TiersProbed.Select(tier => tier.ToString()).ToList(),
+                result.ClosestWindows,
+                result.ClosestWindowTotalCount,
+                result.NearMatchTotalCount,
+                result.FilterTrail,
+                result.CandidatesBeforeSelectors,
+                result.CandidatesAfterSelectors,
+                result.InvalidParameterName,
+                result.InvalidParameterValue);
+        }
+
         // ---- NoMatch ----
 
         private static ToolNotFoundException BuildNoMatch(SnippetMatchResult result, SourceText sourceText, string snippet, string label)
@@ -121,7 +121,7 @@ namespace RoslynSentinel.Common.SnippetMatching
             {
                 return new ToolNotFoundException(
                     $"{label} is empty or whitespace only, so there is nothing to look for and nothing was searched. " +
-                    $"No candidates exist: the file's windows are scored against the text of {label}, and it has none.", missingTargetKind: MissingTargetKinds.Snippet, snippet: SnippetFailureDetail.From(result));
+                    $"No candidates exist: the file's windows are scored against the text of {label}, and it has none.", missingTargetKind: MissingTargetKinds.Snippet, snippet: SnippetErrorFormatter.ToFailureDetail(result));
             }
 
             var sb = new StringBuilder();
@@ -174,7 +174,7 @@ namespace RoslynSentinel.Common.SnippetMatching
                     (literalEscapes is null
                         ? "The text does not appear in the file that was searched."
                         : "Unescaping its literal escape sequences gives text that matches or nearly matches the file."));
-                return new ToolNotFoundException(sb.ToString(), missingTargetKind: MissingTargetKinds.Snippet, snippet: SnippetFailureDetail.From(result));
+                return new ToolNotFoundException(sb.ToString(), missingTargetKind: MissingTargetKinds.Snippet, snippet: SnippetErrorFormatter.ToFailureDetail(result));
             }
 
             // TODO batch NotFound refusals carry the closest-window score only in this text; expose SnippetClosestWindow as a typed field so scripts (Get-SlipCounts.ps1) need not parse it
@@ -186,7 +186,7 @@ namespace RoslynSentinel.Common.SnippetMatching
                     Array.Empty<string>(), w.ActualLines))
                 .ToList();
             ListCandidates(sb, candidates, result.ClosestWindowTotalCount, "window(s)");
-            return new ToolNotFoundException(sb.ToString(), missingTargetKind: MissingTargetKinds.Snippet, snippet: SnippetFailureDetail.From(result));
+            return new ToolNotFoundException(sb.ToString(), missingTargetKind: MissingTargetKinds.Snippet, snippet: SnippetErrorFormatter.ToFailureDetail(result));
         }
 
         // ---- MatchedLooserThanRequested ----
@@ -315,7 +315,7 @@ namespace RoslynSentinel.Common.SnippetMatching
             sb.Append('\n').Append("Candidates in file order (the file's own text, with the values that select each):");
             var listed = ListCandidates(sb, candidates, matches.Count, "candidate(s)");
             AppendTieNote(sb, label, selectorsSupported, adjacentLinesSupported, before, after, listed);
-            return new ToolAmbiguousMatchException(sb.ToString(), snippet: SnippetFailureDetail.From(result));
+            return new ToolAmbiguousMatchException(sb.ToString(), snippet: SnippetErrorFormatter.ToFailureDetail(result));
         }
 
         private static string AmbiguityAdvice(string label, bool selectorsSupported, bool adjacentLinesSupported, bool anyMember)
@@ -347,7 +347,7 @@ namespace RoslynSentinel.Common.SnippetMatching
                 $"Candidates in file order (the file's own text, with the matchLine/withinMember values that select each):");
             var listed = ListCandidates(sb, candidates, matches.Count, "candidate(s)");
             AppendTieNote(sb, label, selectorsSupported, adjacentLinesSupported, before, after, listed);
-            return new ToolNotFoundException(sb.ToString(), missingTargetKind: MissingTargetKinds.Snippet, snippet: SnippetFailureDetail.From(result));
+            return new ToolNotFoundException(sb.ToString(), missingTargetKind: MissingTargetKinds.Snippet, snippet: SnippetErrorFormatter.ToFailureDetail(result));
         }
 
         private static ToolNotFoundException BuildAdjacentLineMismatch(
@@ -369,7 +369,7 @@ namespace RoslynSentinel.Common.SnippetMatching
                 $"Candidates in file order (the file's own text, with the {(adjacentLinesSupported ? "lineBefore/lineAfter values that select each" : "matchLine value that selects each")}):");
             var listed = ListCandidates(sb, candidates, matches.Count, "candidate(s)");
             AppendTieNote(sb, label, selectorsSupported, adjacentLinesSupported, before, after, listed);
-            return new ToolNotFoundException(sb.ToString(), missingTargetKind: MissingTargetKinds.Snippet, snippet: SnippetFailureDetail.From(result));
+            return new ToolNotFoundException(sb.ToString(), missingTargetKind: MissingTargetKinds.Snippet, snippet: SnippetErrorFormatter.ToFailureDetail(result));
         }
 
         private static string SuppliedSelectors(SnippetMatchResult result, params string[] names)
@@ -486,17 +486,17 @@ namespace RoslynSentinel.Common.SnippetMatching
                     var direction = name == "lineAfter" ? "after" : "before";
                     return new ToolNotFoundException(
                         $"Invalid argument: {name} must be a single line, but the supplied value spans multiple lines: \"{value}\". " +
-                        $"Pass only the one real source line immediately {direction} the match (the nearest distinguishing line, not a multi-line block).", missingTargetKind: MissingTargetKinds.Snippet, snippet: SnippetFailureDetail.From(result));
+                        $"Pass only the one real source line immediately {direction} the match (the nearest distinguishing line, not a multi-line block).", missingTargetKind: MissingTargetKinds.Snippet, snippet: SnippetErrorFormatter.ToFailureDetail(result));
 
                 case "withinMember":
                     var alternative = !adjacentLinesSupported ? "matchLine" : selectorsSupported ? "matchLine, lineBefore or lineAfter" : "lineBefore or lineAfter";
                     return new ToolNotFoundException(
                         $"Invalid argument: withinMember (\"{value}\") cannot be applied here because member names cannot be resolved for this lookup. " +
-                        $"Remove withinMember and narrow with {alternative} instead.", missingTargetKind: MissingTargetKinds.Snippet, snippet: SnippetFailureDetail.From(result));
+                        $"Remove withinMember and narrow with {alternative} instead.", missingTargetKind: MissingTargetKinds.Snippet, snippet: SnippetErrorFormatter.ToFailureDetail(result));
 
                 default:
                     return new ToolNotFoundException(
-                        $"Invalid argument: {name} (\"{value}\") is not a usable selector value for this lookup. Remove it or correct it.", missingTargetKind: MissingTargetKinds.Snippet, snippet: SnippetFailureDetail.From(result));
+                        $"Invalid argument: {name} (\"{value}\") is not a usable selector value for this lookup. Remove it or correct it.", missingTargetKind: MissingTargetKinds.Snippet, snippet: SnippetErrorFormatter.ToFailureDetail(result));
             }
         }
 
