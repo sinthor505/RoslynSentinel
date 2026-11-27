@@ -635,7 +635,7 @@ public static class RoslynSentinelServiceExtensionsBasic
     }
 
     // Wire path relativization backstop filter (see docs/current/plans/closed/plan_wire_relative_paths_backstop_filter.md):
-    // runs inside (registered after) the offload filter so the 15KB threshold and stored raw file see the
+    // runs inside (registered after) the offload filter so the offload threshold and stored raw file see the
     // relativized text; never throws. Rewrites absolute paths in tool result JSON text blocks to be relative
     // to the solution root, enabling agents to work with portable relative paths.
     private static void AddWirePathRelativizeFilter(IMcpRequestFilterBuilder filters)
