@@ -1,6 +1,6 @@
 # Idea: Logic-simpler variants of the ImplementationScenarios that keep their slip-prone content
 
-**Status:** APPROVED 2026-11-26. Plan: [plans/plan_slip_focused_scenario_variants.md](../plans/plan_slip_focused_scenario_variants.md)
+**Status:** IMPLEMENTED 2026-11-26. Plan [plan_slip_focused_scenario_variants.md](../../plans/closed/plan_slip_focused_scenario_variants.md) built the siblings and E1; the slip-rate baseline moves to [idea_slip_first_scenarios.md](../idea_slip_first_scenarios.md).
 
 ## What happened
 

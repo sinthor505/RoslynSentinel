@@ -8,6 +8,12 @@ Only the newest month (2026-11) is kept here. Older entries are archived unchang
 [archive/closed_2026-10.md](archive/closed_2026-10.md), [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Logic-simpler Transcription sibling scenarios and a slip-rate metric - resolved (2026-11-26)
+
+Logic-simpler Transcription sibling scenarios and a slip-rate metric (2026-11-26) - 3 siblings (WidenAcrossFilesSlip, WidenDictionaryLeafFirstSlip, SweepNamedSitesSlip) derived from the originals' definitions, `Get-SlipCounts.ps1` (slip rate per write and per read), E1 logic gate then E2 slip-cell baseline on Qwen3.5-9B; effort L - [plan](plans/closed/plan_slip_focused_scenario_variants.md)
+
+Evidence: IMPLEMENTED 2026-11-26. Steps 1-15 done (d4e4b364, 130cbb85, bdb48529, 60b77a1d, 9adb6d36, 412100c1, c3980e8a, 3fbcc732, 6cd34123, 7b34e891, 66a7d3b0, 6143a1d3, d6046006; E1 6bb05553, all three siblings kept); Steps 16-17 superseded by idea_slip_first_scenarios.
+
 ## Inline budget classes for the large-result offload - resolved (2026-11-26)
 
 Inline budget classes for the large-result offload (2026-11-26) - body-only configurable budget (stock 15360) with 25% tolerance, a Whole class for `[InlineBudget(Whole)]` tools and error-only failures, typed offload pointer with capped error; effort L - [plan](plans/closed/plan_inline_budget_classes.md)

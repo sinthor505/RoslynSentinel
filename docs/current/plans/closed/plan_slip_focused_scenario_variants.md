@@ -1,10 +1,10 @@
 # Plan: Logic-simpler sibling scenarios that keep the slip-prone content, plus a slips-per-run metric
 
-**Status:** IN PROGRESS 2026-11-26. Steps 1-14 done (d4e4b364, 130cbb85, bdb48529, 60b77a1d, 9adb6d36, 412100c1, c3980e8a, 3fbcc732, 6cd34123, 7b34e891, 66a7d3b0, 6143a1d3, d6046006); live Steps 15-17 next.
+**Status:** IMPLEMENTED 2026-11-26. Steps 1-15 done (d4e4b364, 130cbb85, bdb48529, 60b77a1d, 9adb6d36, 412100c1, c3980e8a, 3fbcc732, 6cd34123, 7b34e891, 66a7d3b0, 6143a1d3, d6046006; E1 6bb05553, all three siblings kept); Steps 16-17 superseded by idea_slip_first_scenarios.
 
 ## Problem
 
-Source: [idea_slip_focused_scenario_variants.md](../ideas/idea_slip_focused_scenario_variants.md).
+Source: [idea_slip_focused_scenario_variants.md](../../ideas/closed/idea_slip_focused_scenario_variants.md).
 
 The model eval measures slips first: token-path slips, escape-copies and transcription errors. Three of
 the four ImplementationScenarios also carry a logic trap, and at cap 35 with `plain` tool results
@@ -166,6 +166,11 @@ Entries marked "superseded" are kept for the record; the later entry wins.
   refusals and 2 malformed-argument writes (a slip loop, not logic). `UnparsedNotFound` 0 in every run.
   The queue attaches a resubmit with the same commit, test and arguments to the existing job whatever
   the `-Purpose`; repeated runs need `-Force`.
+
+- 2026-11-26 (owner, after E1): close the plan at Step 15. Steps 16 (E2 slip cell) and 17 (finding)
+  are superseded. Why: runs make only 2-13 write calls (batched edits), so E2 would need 16-40 runs per
+  scenario to reach its power target, and slips cluster per run. The next step is purpose-built slip
+  scenarios graded per site: [idea_slip_first_scenarios.md](../../ideas/idea_slip_first_scenarios.md).
 
 ### Grounding facts (2026-11-26)
 - The traps are wider than the idea says:
