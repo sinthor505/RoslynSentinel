@@ -6,7 +6,7 @@ namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Transcription;
 internal static class LongGenericsSlipScenario
 {
     // Initialisation order matters: Sites must be declared before Definition. Positions 4, 10, 16, 22, 28 and 34 are untouched controls.
-    private static readonly SlipSiteSet Sites = new(
+    internal static readonly SlipSiteSet Sites = new(
         FilePath: "ContosoOrders.Core/Evals/LongGenericsSlip/LongGenericDeclarations.cs",
         Namespace: "ContosoOrders.Evals.LongGenericsSlip",
         ClassName: "LongGenericDeclarations",
