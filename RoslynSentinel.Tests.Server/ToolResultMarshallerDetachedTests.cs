@@ -53,6 +53,11 @@ public class ToolResultMarshallerDetachedTests
     {
     }
 
+    [InlineBudget(InlineBudgetClass.Whole)]
+    private static void WholeMethodTarget()
+    {
+    }
+
     private sealed class CapturingLogger<T> : ILogger<T>
     {
         public List<(LogLevel Level, Exception? Exception, string Message)> Entries { get; } = [];
@@ -70,6 +75,22 @@ public class ToolResultMarshallerDetachedTests
 
     private static async Task<string> MarshalAsync(ToolResultMarshaller marshaller, object result) =>
         (string)(await marshaller.MarshalAsync("Probe", AnyMethod, result, typeof(object), Wire, TestContext.CurrentContext.CancellationToken))!;
+
+    private static async Task<string> MarshalAsync(ToolResultMarshaller marshaller, MethodInfo method, object result) =>
+        (string)(await marshaller.MarshalAsync("Probe", method, result, typeof(object), Wire, TestContext.CurrentContext.CancellationToken))!;
+
+    // A result whose serialized size is exactly padChars more than PaddedSummary(0): the padding is the only variable part.
+    private static SentinelCallToolResult<object> PaddedSummary(int padChars) =>
+        new()
+        {
+            IsError = false,
+            SuccessData = new
+            {
+                passed = 120,
+                padding = new string('x', padChars)
+            },
+            StatusMessage = "pinned status message",
+        };
 
     private static string FullText(object result) =>
         JsonSerializer.Serialize(result, Wire.GetTypeInfo(typeof(object)));
@@ -314,12 +335,19 @@ public class ToolResultMarshallerDetachedTests
     [Test]
     public async Task Detach_WhenTheRemainderIsAlsoOverBudget_KeepsTheUsualPageAndAppendsTheDetachedPointer()
     {
-        var result = BigSearch(400);
+        // Enough records that the remainder is over the Default offload threshold; measured, not guessed.
+        int count = 1;
+        while (FullText(BigSearch(count)).Length <= LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default))
+        {
+            count++;
+        }
+
+        var result = BigSearch(count);
         result.Detach(Name, Rows(7));
 
         string text = await MarshalAsync(Marshaller(_root), result);
 
-        Assert.That(text.Length, Is.LessThanOrEqualTo(LargeResultHelper.InlineBudgetChars));
+        Assert.That(text.Length, Is.LessThanOrEqualTo(LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default)));
         Assert.That(text, Does.Not.Contain(Marker));
         var envelope = JsonNode.Parse(text)!.AsObject();
         Assert.That(envelope.First().Key, Is.EqualTo("largeResult"));
@@ -328,10 +356,10 @@ public class ToolResultMarshallerDetachedTests
 
         // The usual sequence page of the remainder: cursor fields and its own message.
         int returned = pointer["returned"]!.GetValue<int>();
-        Assert.That(returned, Is.InRange(1, 399));
+        Assert.That(returned, Is.InRange(1, count - 1));
         Assert.That(pointer["nextOffset"]!.GetValue<int>(), Is.EqualTo(returned));
         string message = pointer["message"]!.GetValue<string>();
-        Assert.That(message, Does.StartWith($"INCOMPLETE: {returned} of 400 records returned."));
+        Assert.That(message, Does.StartWith($"INCOMPLETE: {returned} of {count} records returned."));
 
         // Two files: the paged remainder (a sequence file, payload-free) and the detached payload (path-addressed).
         Assert.That(StoredFiles().Count(), Is.EqualTo(2));
@@ -346,6 +374,59 @@ public class ToolResultMarshallerDetachedTests
             .Single(id => id != pagedId);
         Assert.That(detachedSentence, Is.EqualTo($"Stored, not inline: {Name} (7 records). {LargeResultHints.FetchCall(detachedId, path: "successData." + Name)}"));
         var rows = ResultPager.SelectNode(StoredWrapper(detachedId)["Data"]!, "successData." + Name) as JsonArray;
+        Assert.That(rows!, Has.Count.EqualTo(7));
+    }
+
+    // ---- remainder bounds: the remainder is judged against the offload threshold, not the budget ----
+
+    [Test]
+    public async Task RemainderUsesThreshold()
+    {
+        int budget = LargeResultHelper.BudgetChars(InlineBudgetClass.Default);
+        int threshold = LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default);
+        // Midway between the budget and the threshold: over the budget, under the threshold.
+        int padChars = (budget + threshold) / 2 - FullText(PaddedSummary(0)).Length;
+        var result = PaddedSummary(padChars);
+        result.Detach(Name, Rows(7));
+        Assert.That(FullText(result).Length, Is.GreaterThan(budget).And.LessThanOrEqualTo(threshold), "the remainder sits between the budget and the threshold");
+
+        string text = await MarshalAsync(Marshaller(_root), result);
+
+        Assert.That(text, Does.Not.Contain(Marker));
+        var envelope = JsonNode.Parse(text)!.AsObject();
+        Assert.That(envelope["successData"]!["padding"]!.GetValue<string>(), Has.Length.EqualTo(padChars), "the remainder is returned inline, not cut");
+        Assert.That(envelope["successData"]!.AsObject().ContainsKey(Name), Is.False);
+        var pointer = envelope["largeResult"]!.AsObject();
+        string message = pointer["message"]!.GetValue<string>();
+        Assert.That(message, Does.StartWith($"Stored, not inline: {Name} (7 records)."));
+        Assert.That(message, Does.Not.Contain("INCOMPLETE"));
+        Assert.That(StoredFiles().Count(), Is.EqualTo(1), "only the detached payload is stored; the remainder is not");
+    }
+
+    [Test]
+    public async Task WholeMethodWithDetachedPayload()
+    {
+        int threshold = LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default);
+        int wholeThreshold = LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Whole);
+        // Midway between the Default and the Whole threshold: over the Default threshold, under the Whole one.
+        int padChars = (threshold + wholeThreshold) / 2 - FullText(PaddedSummary(0)).Length;
+        var result = PaddedSummary(padChars);
+        result.Detach(Name, Rows(7));
+        Assert.That(FullText(result).Length, Is.GreaterThan(threshold).And.LessThanOrEqualTo(wholeThreshold), "the remainder sits between the Default and the Whole threshold");
+        MethodInfo wholeMethod = typeof(ToolResultMarshallerDetachedTests).GetMethod(nameof(WholeMethodTarget), BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        string text = await MarshalAsync(Marshaller(_root), wholeMethod, result);
+
+        Assert.That(text, Does.Not.Contain(Marker));
+        var envelope = JsonNode.Parse(text)!.AsObject();
+        Assert.That(envelope["successData"]!["padding"]!.GetValue<string>(), Has.Length.EqualTo(padChars), "the Whole-class remainder is returned inline, not cut");
+        Assert.That(envelope["successData"]!.AsObject().ContainsKey(Name), Is.False);
+        var pointer = envelope["largeResult"]!.AsObject();
+        string resultId = pointer["resultId"]!.GetValue<string>();
+        Assert.That(resultId, Is.Not.Empty);
+        Assert.That(pointer["message"]!.GetValue<string>(), Does.StartWith($"Stored, not inline: {Name} (7 records)."));
+        Assert.That(StoredFiles().Count(), Is.EqualTo(1), "only the detached payload is stored; the remainder is not");
+        var rows = ResultPager.SelectNode(StoredWrapper(resultId)["Data"]!, "successData." + Name) as JsonArray;
         Assert.That(rows!, Has.Count.EqualTo(7));
     }
 
