@@ -1,7 +1,9 @@
-namespace RoslynSentinel.Common.SnippetMatching;
+using RoslynSentinel.Common;
+
+namespace RoslynSentinel.Common;
 
 /// <summary>
-/// Wire-safe projection of a <see cref="SnippetMatchResult"/> for the tool layer: the lookup outcome and the
+/// Wire-safe projection of a <c>SnippetMatchResult</c> for the tool layer: the lookup outcome and the
 /// candidate lists an agent needs to correct a snippet. Deliberately omits the search-effort counters, the full
 /// Matches list and other internal fields. ClosestWindows is the engine-capped list; ClosestWindowTotalCount says
 /// how many windows existed before the cap.

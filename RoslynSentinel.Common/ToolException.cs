@@ -68,7 +68,7 @@ public sealed class ToolNotFoundException : ToolException
 
     /// <summary>Builds a not-found error; <paramref name="candidates"/> carries same-named candidates for structured retry hints when the throw site has them.</summary>
     /// <param name="candidates">Candidates that made the lookup fail to pick one (for example same-named declarations); null when the throw site did not supply them.</param>
-    public ToolNotFoundException(string message, string? missingTargetKind = null, string? missingTargetName = null, SnippetMatching.SnippetFailureDetail? snippet = null, IReadOnlyList<AmbiguousCandidate>? candidates = null) : base(message)
+    public ToolNotFoundException(string message, string? missingTargetKind = null, string? missingTargetName = null, RoslynSentinel.Common.SnippetFailureDetail? snippet = null, IReadOnlyList<AmbiguousCandidate>? candidates = null) : base(message)
     {
         MissingTargetKind = missingTargetKind;
         MissingTargetName = missingTargetName;
@@ -86,7 +86,7 @@ public sealed class ToolNotFoundException : ToolException
     public IReadOnlyList<AmbiguousCandidate>? Candidates { get; }
 
     /// <summary>Set when the not-found cause is a snippet that did not match; null otherwise.</summary>
-    public SnippetMatching.SnippetFailureDetail? Snippet { get; }
+    public RoslynSentinel.Common.SnippetFailureDetail? Snippet { get; }
 
     /// <summary>Candidates (when set) followed by snippet detail (when set) as structured-detail objects; null when neither is set.</summary>
     public override IReadOnlyList<object>? StructuredDetail
@@ -180,7 +180,7 @@ public sealed class ToolAmbiguousMatchException : ToolException
 {
     public override string ErrorCode => ToolErrorCode.Ambiguous;
 
-    public ToolAmbiguousMatchException(string message, IReadOnlyList<AmbiguousCandidate>? candidates = null, SnippetMatching.SnippetFailureDetail? snippet = null) : base(message)
+    public ToolAmbiguousMatchException(string message, IReadOnlyList<AmbiguousCandidate>? candidates = null, RoslynSentinel.Common.SnippetFailureDetail? snippet = null) : base(message)
     {
         Candidates = candidates;
         Snippet = snippet;
@@ -190,7 +190,7 @@ public sealed class ToolAmbiguousMatchException : ToolException
     public IReadOnlyList<AmbiguousCandidate>? Candidates { get; }
 
     /// <summary>Set when the ambiguity came from a snippet match; null otherwise.</summary>
-    public SnippetMatching.SnippetFailureDetail? Snippet { get; }
+    public RoslynSentinel.Common.SnippetFailureDetail? Snippet { get; }
 
     /// <summary>Candidates as objects with the snippet detail appended when set; null when there is neither.</summary>
     public override IReadOnlyList<object>? StructuredDetail

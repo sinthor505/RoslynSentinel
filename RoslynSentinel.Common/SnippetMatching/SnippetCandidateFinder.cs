@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis.Text;
+using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Common.SnippetMatching;
 

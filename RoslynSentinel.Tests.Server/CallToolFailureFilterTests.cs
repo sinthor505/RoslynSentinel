@@ -9,7 +9,7 @@ using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
-using RoslynSentinel.Common.SnippetMatching;
+using RoslynSentinel.Common;
 using RoslynSentinel.Server.Advanced;
 
 namespace RoslynSentinel.Tests.Server;

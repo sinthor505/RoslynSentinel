@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 
 using Microsoft.CodeAnalysis.Text;
+using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Common.SnippetMatching
 {

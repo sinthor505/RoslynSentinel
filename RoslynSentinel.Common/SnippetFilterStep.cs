@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Common.SnippetMatching;
+namespace RoslynSentinel.Common;
 
 /// <summary>
 /// One entry of a result's filter trail: a selector that was applied after tier resolution and how many matches it

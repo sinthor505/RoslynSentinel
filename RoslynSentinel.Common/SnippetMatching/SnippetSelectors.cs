@@ -1,4 +1,5 @@
 using Microsoft.CodeAnalysis.Text;
+using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Common.SnippetMatching;
 

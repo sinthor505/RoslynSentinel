@@ -1,3 +1,5 @@
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Common.SnippetMatching;
 
 /// <summary>

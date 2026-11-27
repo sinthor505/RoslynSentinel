@@ -1,9 +1,9 @@
-namespace RoslynSentinel.Common.SnippetMatching;
+namespace RoslynSentinel.Common;
 
 /// <summary>
 /// One of the file's windows that scored closest to a snippet that matched at no tier. Never
-/// usable for an edit: it shares no base type or interface with <see cref="SnippetMatch"/>. The dispatcher lists
-/// these in <see cref="SnippetMatchResult.ClosestWindows"/> only when nothing matched at any tier (see
+/// usable for an edit: it shares no base type or interface with <c>SnippetMatch</c>. The dispatcher lists
+/// these in <c>SnippetMatchResult.ClosestWindows</c> only when nothing matched at any tier (see
 /// <c>SnippetCandidateFinder</c> for the scoring, threshold and cap).
 /// </summary>
 /// <param name="StartLine">1-based line in the file where the window starts.</param>
