@@ -44,6 +44,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\RoslynSentinel.Common\RoslynSentinel.Common.csproj" />
+    <ProjectReference Include="..\RoslynSentinel.Engines.Core\RoslynSentinel.Engines.Core.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Engines.Advanced\RoslynSentinel.Engines.Advanced.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Engines.Basic\RoslynSentinel.Engines.Basic.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Tools.Advanced\RoslynSentinel.Tools.Advanced.csproj" />
