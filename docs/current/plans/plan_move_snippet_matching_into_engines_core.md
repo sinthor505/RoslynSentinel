@@ -1,7 +1,6 @@
 # Plan: Create RoslynSentinel.Engines.Core and move snippet matching into it
 
-**Status:** DRAFT 2026-11-27. plan-design phase 8: owner questions settled; readiness review round 1 returned 5 blocking findings, all fixed in this
-revision; round 2 running.
+**Status:** APPROVED 2026-11-27. Owner questions settled, independent readiness review clean; dispatched to an orchestrator; nothing built yet.
 
 ## Problem
 
@@ -78,6 +77,9 @@ Dated entries; later entries do not override earlier ones unless they say so.
   harness." add "`Engines.Core`: engine logic shared by both engine flavors, one folder per area; references only `Common`."; replace "Shared
   helpers go one layer down: `Engines.Basic` for engine logic, `Common` for result/MCP plumbing." with "Shared engine logic goes to `Engines.Core`,
   never to `Common`; `Common` keeps result/MCP plumbing."
+- **2026-11-27, Readiness (plan-design): independent review clean at 9bfab1e7.** Round 1 found 5 blocking items (slice size, three checks that could
+  not run as written, a shorthand move list), all fixed; round 2 found none. It did not compile or dry-run anything; the tool shapes listed in Risks
+  item 2 remain untested until their steps.
 
 ## Current design
 
@@ -110,7 +112,10 @@ Dated entries; later entries do not override earlier ones unless they say so.
   is resolved with its owner first (`peer-coordination` skill). The dispatching session sends the heads-up messages.
 - **Filtered run** (dispatcher, where a step names it; parameters re-read from the script first):
   `scripts/Invoke-WorktreeTests.ps1 -WorktreeRoot <root> -Ref <commit> -Suite fast -WithRatchets -Filter "FullyQualifiedName~Snippet|FullyQualifiedName~ContextHelper|FullyQualifiedName~NewContentIndenter|FullyQualifiedName~LineBlockAligner|FullyQualifiedName~ErrorPolicyKindRatchet|FullyQualifiedName~ServerBinaryStalenessTests"`.
-  `TestInstanceLauncherTests` is `[Category("OutOfProcess")]`, so the fast suite excludes it; it is covered by the full run of Step 8.
+  `TestInstanceLauncherTests` is `[Category("OutOfProcess")]`, so the fast suite excludes it; it is covered by the full run of Step 8. The name
+  filter is deliberately wide: `~Snippet` and `~ContextHelper` also match the tool-level `ReplaceSnippet*` and snippet-miss classes in
+  `Tests.Tools.Basic` and `Tests.Server` (about 33 test files in all), which exercise the area through the tools.
+- File listings for the dispatcher's checks use PowerShell (`Get-ChildItem <folder> -Name`, `Test-Path`); a listing reads no C# content.
 - Commit each slice at a compile-green point with `Git` (scope `listed`), trailers `Plan: plan_move_snippet_matching_into_engines_core` and
   `Co-Authored-By`; the last commit carries `Closes:`. The MCP server is not restarted by the run.
 - The owner is present: a decision point stops the step with `DECISION NEEDED:` and the evidence.
@@ -161,8 +166,8 @@ Single lane (every step touches the same folder). Steps 1 to 3 are in Common onl
   (d) `ChangeNamespace(filePath: "RoslynSentinel.Common/SnippetFilterStep.cs", newNamespace: "RoslynSentinel.Common")`, then the same for
   `SnippetClosestWindow.cs`, then for `SnippetFailureDetail.cs`; dry run before each.
 - Done when: `Build` 0 errors.
-- Dispatcher checks: `Glob` `RoslynSentinel.Common/SnippetMatching/*.cs` lists exactly the 15 files of Appendix A marked "moves" that live in the folder;
-  `Search(mode: text, query: "SnippetMatching\\.SnippetFailureDetail")` returns nothing; the filtered run passes.
+- Dispatcher checks: a listing of `RoslynSentinel.Common/SnippetMatching/` shows exactly 15 files (the 14 existing files Appendix A marks "moves" plus
+  `ToolMatchedLooserTierException.cs`); `Search(mode: text, query: "SnippetMatching\\.SnippetFailureDetail")` returns nothing; the filtered run passes.
 - Decision point: if a `ChangeNamespace` dry run does not validate (the relative-qualified `SnippetMatching.SnippetFailureDetail` in `ToolException.cs`
   is an untested shape), leave the three records in namespace `RoslynSentinel.Common.SnippetMatching` in the root folder, add a `// TODO` at the first
   record and an INBOX line, and continue; Step 5 is unaffected.
@@ -196,8 +201,8 @@ Single lane (every step touches the same folder). Steps 1 to 3 are in Common onl
   must not end up twice in a csproj); then the real call. In the same slice add `"RoslynSentinel.Engines.Core"` to
   `ErrorPolicyKindRatchetTests.ScannedProjects` (`:26`).
 - Done when: `Build` 0 errors.
-- Dispatcher checks: remove the emptied `RoslynSentinel.Common/SnippetMatching/` folder; `Glob` `RoslynSentinel.Common/SnippetMatching/**` returns
-  nothing; the filtered run passes.
+- Dispatcher checks: `RoslynSentinel.Common/SnippetMatching/` holds no file and the empty folder is removed (`Test-Path` then reports false);
+  `RoslynSentinel.Engines.Core/SnippetMatching/` lists 17 files; the filtered run passes.
 - Decision point: a dry-run fact that needs more than a reference line, an `InternalsVisibleTo` line or a package line stops the step.
 - Effort: M
 
@@ -276,7 +281,7 @@ in-process), run whole. Each behaviour of this plan maps to an existing check:
 
 | Behaviour | Check (run by the dispatcher) | Pass criterion |
 | --- | --- | --- |
-| The area still works after each prep step and after the move | the filtered run of Execution rules: `Snippet*`, `ContextHelper*`, `NewContentIndenterTests`, `LineBlockAlignerTests` (`RoslynSentinel.Tests`), `SnippetResolverCrossAssemblyTests` (`Tests.Tools.Basic`) | all pass, same counts as before the step |
+| The area still works after each prep step and after the move | the filtered run of Execution rules (the area's own classes in `RoslynSentinel.Tests`, `SnippetResolverCrossAssemblyTests`, and the tool-level snippet classes its name filter also matches) | 0 failures; the run's test count does not drop from one step to the next |
 | Error-policy ratchet still covers the moved throw sites | `ErrorPolicyKindRatchetTests` (in the filtered run) | passes with `RoslynSentinel.Engines.Core` in `ScannedProjects` |
 | A stale server is still detected for the new project | `ServerBinaryStalenessTests` (filtered run); `TestInstanceLauncherTests` (OutOfProcess: full run only) | pass unchanged (prefix match) |
 | Generated architecture docs match the solution | `ArchitectureDocFreshnessTests` (`RoslynSentinel.Tests.Server`, full run) | passes after regeneration |

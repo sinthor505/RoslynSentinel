@@ -108,8 +108,8 @@ Dated entries; later entries do not override earlier ones unless they say so. Q-
 - Effort: M
 
 ### Phase 2 - First mechanical split out of Common: SnippetMatching into a new Engines.Core
-- Doc: [plan_move_snippet_matching_into_engines_core.md](plan_move_snippet_matching_into_engines_core.md) (DRAFT 2026-11-27; grounded; owner
-  questions settled; readiness review running).
+- Doc: [plan_move_snippet_matching_into_engines_core.md](plan_move_snippet_matching_into_engines_core.md) (APPROVED 2026-11-27, readiness
+  review clean at 9bfab1e7; dispatched).
 - Depends on: Phase 0.1 (so the first real `ChangeNamespace` result is known).
 - Effect: text-neutral.
 - Change: create `RoslynSentinel.Engines.Core` (Q42; above Common, below both engine flavors) and move 18 files / 3,945 lines (`SnippetMatching/` plus
