@@ -27,9 +27,25 @@ The `AskUserQuestion` dialog is narrow, not resizable, and drops newlines and fo
   on with evidence, each option with an example (code shape, output, call sequence) and its
   implications (files, effort, risk, what it rules out later), and a recommendation. Then ask in the
   dialog with short option labels that point back to the chat ("Q4: option B").
+- **Separate turns.** Write the chat write-up and end the turn. Ask in the dialog on the next turn,
+  or take the answer from the chat. While the dialog is open, chat text from the same turn is hidden
+  (Claude Code issue #80576).
+- **One decision per number.** Never use lettered sub-parts (Q9a/b/c); give each its own number. An
+  answer like "as recommended" settles only the questions shown, each with its own recommendation, in
+  that message.
+- **Consequences go in the option.** An option that accepts a checklist exception, cuts scope or
+  defers a feature says so in its label and description, for example "parse text (accepts item-6
+  exception)" or "identifiers out of v1".
 - **Dependencies:** say when a question will affect later ones ("Q3 decides whether Q5 and Q6 are
-  needed") and when a question depends on an earlier one ("depends on Q2: assumes option A"). Ask a
-  dependent question only after the one it depends on is answered, unless the dependency is stated.
+  needed"). For a dependent question, write "the options below assume Q2 = A; this still needs your
+  answer". Write "settled by Q2 = A" only when the earlier answer decides it. Never write "depends on
+  Q2: assumes A", which reads as settled. Ask a dependent question only after the one it depends on
+  is answered, unless the dependency is stated.
+- **Stable labels.** A settled decision gets a short label in the Decision log, for example "D9c:
+  near-miss identifiers out of v1". Later text refers to it by that label and the same words, never a
+  paraphrase.
+- **Reopened decisions.** A question that changes an earlier decision says "Reopens Q2" and lists
+  what changes downstream.
 - Question text stands alone (item number and title, what the choice decides); recommended option
   first, labelled "(Recommended)". Up to 4 questions per call, grouped by topic.
 - Effort: tag each option label S/M/L/DS (`plan-writer` skill, section 3a), in the chat write-up too.
@@ -83,12 +99,21 @@ marked), and let the owner reclassify:
 | probe | a measurement in this session (phase 4, "Probes") |
 | implementer default | low risk and reversible: the step states the default and it is no longer open |
 
-The numbers stay fixed for the session.
+The numbers stay fixed for the session. Group the owner decisions by topic, upstream groups first;
+phase 4 settles one group per round.
 
 ## 4. Resolve (loop until nothing is open)
 
 - **Order:** investigations and probes first when an owner decision depends on their result; run
   independent ones in parallel with the owner's questions.
+- **One group per round.** Before asking, run a quick checklist pass (items 1-7) on each option, so
+  its checklist cost is known. A group whose questions depend on each other gets a combinations
+  table: one row per viable combination, with columns for what is built, what is left out, checklist
+  exceptions, effort, and the questions it opens later. Mark one row recommended; the owner picks a
+  row. Small independent questions can still be asked one at a time.
+- **Design so far.** After each group, update a `## Current design` section in the draft plan (built,
+  left out, exceptions, still open) and post it in the chat, so the owner sees the end result of the
+  answers so far.
 - **Probes:**
   - Keep them small (a few requests, minutes). Scripts and output go under
     `<scratch root>\plan_design_<slug>\`; never commit them.
@@ -114,7 +139,9 @@ numbered question back in phase 4, usually one of:
   structured field instead of text, a different home for the logic);
 - add an enabling step (an extraction from an oversized class, a shared helper or factory, a
   single-source error/hint definition), text-neutral and early in the plan;
-- an owner-approved exception, recorded in the Decision log with its reason.
+- an owner-approved exception, recorded in the Decision log with its reason. Each exception is its
+  own explicit question, even when an earlier answer implied it; never record one as "approved via"
+  another answer.
 
 Item 7 always gets an explicit answer in the chat: the simplest version of the design, what small
 change elsewhere would enable it, and why the chosen design is not more complex than needed.
@@ -155,7 +182,9 @@ path only (not this chat or the decisions' reasoning). Brief:
   size, parallel-ready, contract skeleton, open questions).
 
 Each question or failure it returns goes back into phase 3 as a new numbered question. Repeat the
-gate after fixes until it returns none (or only items the owner explicitly accepts).
+gate after fixes until it returns none (or only items the owner explicitly accepts). A repeat round
+after a list of fixes may resume the same reviewer (`SendMessage`), asking for each finding to be
+marked fixed or not plus any new ones; after a structural rewrite, use a fresh reviewer.
 
 ## 9. Finalize
 

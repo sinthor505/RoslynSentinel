@@ -49,8 +49,13 @@ Do not read the code yourself beyond a small verification read.
 Ask with `AskUserQuestion`. The dialog is narrow and drops newlines and formatting, so anything
 beyond a simple choice (architecture, behaviour, wire shape) is first written in the chat, one
 heading per question: problem, evidence, each option with an example and its implications, a
-recommendation; the dialog then asks with short labels pointing back ("Q4: option B"). Say when a
-question affects later ones or depends on an earlier one. **One item per question**: never bundle
+recommendation; the dialog then asks with short labels pointing back ("Q4: option B"). The
+write-up and the dialog go in separate turns: post the write-up and end the turn, then ask on the
+next turn or take the answer from the chat (dialog-hidden chat text, Claude Code issue #80576).
+Say when a question affects later ones. For a dependent question, write "the options below assume
+Q2 = A; this still needs your answer", never "depends on Q2: assumes A". One decision per number,
+never lettered sub-parts. An option that cuts scope, defers work or accepts a rule exception says so
+in its label. A question that changes an earlier answer says "Reopens Q2". **One item per question**: never bundle
 several items into one question or one multi-select. An item with several independent decisions gets one question per
 decision, each repeating the item context. Up to 4 questions per call, grouped by item rather than
 packed with unrelated ones.
