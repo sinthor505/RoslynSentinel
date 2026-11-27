@@ -31,6 +31,7 @@ prevented the failure.
    - **A `*/Worktree/` path appears in anything you're about to diff or review** (PlanStepRunner or similar harness runs) → spawn `worktree-diff-sentinel` before trusting any git output from that path.
 3. If a run fails in a way that looks retryable (transient timeout, known flaky test), you may retry once and note that you did. Do not loop indefinitely — after 2 attempts, stop and report.
 4. Synthesize: don't just relay each specialist's raw report — combine them into one coherent picture for the caller.
+5. After a run, grade it with the `eval-review` skill when the caller wants behaviour reviewed, not only the pass/fail outcome.
 
 ## Effort mode — ask or infer, then stick to it
 

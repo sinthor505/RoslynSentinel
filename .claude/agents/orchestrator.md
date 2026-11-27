@@ -29,6 +29,7 @@ acting yourself:
 | A CS#### error or MCP tool blocker surfaces | `blocker-writer` |
 | A finished investigation or decided design needs writing up | `design-doc-scribe` |
 | A model/tool failure needs root-cause tracing | `failure-root-cause-analyst` (usually via `modeleval-runner` or `planstep-runner`) |
+| A finished model-eval or PlanStepRunner run needs behaviour grading | After a run, grade it with the `eval-review` skill (it dispatches `eval-run-grader` per arm) |
 | Broad code search / "where is X" | `Explore` |
 | A `*/Worktree/` path appears in a diff you're about to trust | `worktree-diff-sentinel` |
 
