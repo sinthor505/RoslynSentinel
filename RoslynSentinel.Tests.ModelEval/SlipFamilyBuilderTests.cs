@@ -128,6 +128,120 @@ public class SlipFamilyBuilderTests
         Assert.That(scenario.PrimaryAxis, Is.EqualTo(EvalAxis.Transcription));
     }
 
+    [Test]
+    public void RenderPrompt_DefaultStyle_Unchanged()
+    {
+        var set = ThreeSiteSet();
+
+        var prompt = SlipFamilyBuilder.RenderPrompt(set);
+
+        var conditions = "Make exactly these edits and change nothing else:\n"
+            + string.Join("\n", set.Sites.Where(site => site.Role == SiteRole.Changed).Select(site => SlipFamilyBuilder.RenderChangeLine(site)));
+        Assert.That(prompt, Does.Contain(conditions));
+        Assert.That(prompt, Does.Not.Contain("replace the declaration with"));
+        Assert.That(prompt, Does.Not.Contain("Type names to replace"));
+    }
+
+    [Test]
+    public void RenderPrompt_FullLine_ListsEachChangedSitesNewDeclaration()
+    {
+        var set = ThreeSiteSet() with { PromptStyle = SlipPromptStyle.FullLine };
+
+        var prompt = SlipFamilyBuilder.RenderPrompt(set);
+
+        foreach (var site in set.Sites.Where(site => site.Role == SiteRole.Changed))
+        {
+            var expected = $"- {site.Name}: replace the declaration with `{SlipFamilyBuilder.ApplyChanges(site).Trim()}`.";
+            Assert.That(prompt, Does.Contain(expected));
+        }
+
+        Assert.That(prompt, Does.Not.Contain("Msg02"));
+        Assert.That(prompt, Does.Not.Contain("Type names to replace"));
+    }
+
+    [Test]
+    public void RenderPrompt_TypeMap_ListsMapAndChangedMemberNames()
+    {
+        var set = ThreeSiteSet() with
+        {
+            PromptStyle = SlipPromptStyle.TypeMap,
+            TypeMap = [new SiteChange("alpha", "omega"), new SiteChange("delta", "sigma")],
+        };
+
+        var prompt = SlipFamilyBuilder.RenderPrompt(set);
+
+        Assert.That(
+            prompt,
+            Does.Contain("Make exactly these edits and change nothing else.\nType names to replace:\n- `alpha` -> `omega`\n- `delta` -> `sigma`\nMembers to edit (replace every listed type name in each): Msg01, Msg03."));
+        Assert.That(prompt, Does.Not.Contain("Msg02"));
+    }
+
+    [Test]
+    public void Validate_TypeMap_ValidBaseline_ReturnsNothing()
+    {
+        var set = TypeMapSet(TypeMapSites(), TypeMapEntries());
+
+        Assert.That(SlipFamilyBuilder.Validate(set), Is.Empty);
+    }
+
+    [Test]
+    public void Validate_TypeMap_RejectsKeyInControl()
+    {
+        var sites = TypeMapSites();
+        // Position 4 is a Control position; its seed text contains the map keys alpha and delta.
+        sites[3] = new SlipSite(sites[3].Name, SiteText(sites[3].Name), [], SiteRole.Control);
+        var set = TypeMapSet(sites, TypeMapEntries());
+
+        var violations = SlipFamilyBuilder.Validate(set);
+
+        Assert.That(violations, Is.Not.Empty);
+        Assert.That(violations, Has.Some.Contains("site 'Msg04' has 1 occurrences of TypeMap key 'alpha'; expected 0."));
+    }
+
+    [Test]
+    public void Validate_TypeMap_RejectsKeyInsideLongerName()
+    {
+        var sites = TypeMapSites();
+        // "Dictionary" also occurs inside "SortedDictionary", so the seed holds two occurrences where one is expected.
+        sites[0] = new SlipSite(
+            sites[0].Name,
+            $"public static SortedDictionary<int, Dictionary<int, string>> {sites[0].Name}() => \"delta\";",
+            [new SiteChange("Dictionary", "ConcurrentDictionary"), new SiteChange("delta", "sigma")],
+            SiteRole.Changed);
+        var set = TypeMapSet(sites, TypeMapEntries());
+
+        var violations = SlipFamilyBuilder.Validate(set);
+
+        Assert.That(violations, Is.Not.Empty);
+        Assert.That(violations, Has.Some.Contains("site 'Msg01' has 2 occurrences of TypeMap key 'Dictionary'; expected 1."));
+    }
+
+    [Test]
+    public void Validate_TypeMap_RejectsTargetAlreadyPresent()
+    {
+        var sites = TypeMapSites();
+        // A control seed already holds the map value "omega", so the rewrite target is not new.
+        sites[3] = new SlipSite(sites[3].Name, $"public static string {sites[3].Name}() => \"omega\";", [], SiteRole.Control);
+        var set = TypeMapSet(sites, TypeMapEntries());
+
+        var violations = SlipFamilyBuilder.Validate(set);
+
+        Assert.That(violations, Is.Not.Empty);
+        Assert.That(violations, Has.Some.Contains("TypeMap value 'omega' already occurs in site 'Msg04'."));
+    }
+
+    [Test]
+    public void Validate_TypeMap_RejectsChangeNotInMap()
+    {
+        // The map has no alpha entry, but every changed site still changes alpha to omega.
+        var set = TypeMapSet(TypeMapSites(), [new SiteChange("delta", "sigma"), new SiteChange("Dictionary", "ConcurrentDictionary")]);
+
+        var violations = SlipFamilyBuilder.Validate(set);
+
+        Assert.That(violations, Is.Not.Empty);
+        Assert.That(violations, Has.Some.Contains("site 'Msg01' changes 'alpha' to 'omega', which is not an entry of TypeMap."));
+    }
+
     private static string SiteText(string name) => $"public static string {name}() => \"{MemberBody}\";";
 
     private static string SiteName(int position) => $"Msg{position:00}";
@@ -153,6 +267,27 @@ public class SlipFamilyBuilderTests
         {
             var name = SiteName(position);
             sites.Add(SlipFamilyLayout.ControlPositions.Contains(position) ? ControlSite(name) : ChangedSite(name));
+        }
+
+        return sites;
+    }
+
+    private static IReadOnlyList<SiteChange> TypeMapEntries() =>
+        [new SiteChange("alpha", "omega"), new SiteChange("delta", "sigma"), new SiteChange("Dictionary", "ConcurrentDictionary")];
+
+    private static SlipSiteSet TypeMapSet(IReadOnlyList<SlipSite> sites, IReadOnlyList<SiteChange> typeMap) =>
+        new("src/Msgs.cs", "Sample.Messages", "Msgs", string.Empty, sites, SlipPromptStyle.TypeMap, typeMap);
+
+    // Like ValidSites, but control seeds hold no map key, so a TypeMap set has no violations at baseline.
+    private static List<SlipSite> TypeMapSites()
+    {
+        var sites = new List<SlipSite>();
+        for (var position = 1; position <= SlipFamilyLayout.ObservedSiteCount; position++)
+        {
+            var name = SiteName(position);
+            sites.Add(SlipFamilyLayout.ControlPositions.Contains(position)
+                ? new SlipSite(name, $"public static string {name}() => \"beta two gamma three\";", [], SiteRole.Control)
+                : ChangedSite(name));
         }
 
         return sites;
