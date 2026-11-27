@@ -1,6 +1,6 @@
 # Plan: Logic-simpler sibling scenarios that keep the slip-prone content, plus a slips-per-run metric
 
-**Status:** APPROVED 2026-11-26. Three Transcription sibling scenarios plus `Get-SlipCounts.ps1` (slip rate per write and per read), a logic gate (E1) and a slip-cell baseline (E2).
+**Status:** IN PROGRESS 2026-11-26. Steps 1-3, 12 done (d4e4b364, bdb48529, 130cbb85, 66a7d3b0).
 
 ## Problem
 
@@ -266,6 +266,7 @@ Entries marked "superseded" are kept for the record; the later entry wins.
   - One `batchEdits` call per file (or `ModifyModifier` for the visibility changes).
 - Done when: `Build` 0 errors.
 - Lane: implementer. Effort: S.
+- Done: d4e4b364
 
 ### Step 2 - Enabling: `EvalAxis.Transcription`, WidenToReadOnlyDictionary `StepTask`, catalog doc comment
 - Files:
@@ -285,6 +286,7 @@ Entries marked "superseded" are kept for the record; the later entry wins.
     becomes "listing the ..."), so it no longer needs bumping.
 - Done when: `Build` 0 errors.
 - Lane: implementer. Effort: S.
+- Done: 130cbb85
 
 ### Step 3 - Shared template-edit helper `ScenarioTemplateEdits` (new)
 - Files: `RoslynSentinel.Tests.ModelEval/ImplementationScenarios/ScenarioTemplateEdits.cs` (new)
@@ -306,6 +308,7 @@ Entries marked "superseded" are kept for the record; the later entry wins.
     Add one INBOX line for it.
 - Done when: `Build` 0 errors.
 - Lane: implementer. Effort: S.
+- Done: bdb48529
 
 ### Step 4 - Sibling `WidenDictionaryLeafFirstSlip` (new)
 - Files: `RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Transcription/WidenDictionaryLeafFirstSlipScenario.cs` (new)
@@ -553,6 +556,7 @@ Entries marked "superseded" are kept for the record; the later entry wins.
 - Done when: T6 passes. The dispatcher re-runs the four captures into `t6-after\` and the files are
   identical.
 - Lane: implementer. Effort: S.
+- Done: 66a7d3b0 (T6 identical; one fix dispatch for a `return ,array` wrap that zeroed the escape count)
 
 ### Step 13 - `Get-SlipCounts.ps1` (new)
 - Files: `scripts/Get-SlipCounts.ps1` (new)
