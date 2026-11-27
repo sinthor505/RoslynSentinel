@@ -69,6 +69,16 @@ public class ImplementationScenarioGoldenTests
             ? EvalOutcomeClass.CorrectBlocked
             : EvalOutcomeClass.CorrectDone;
         Assert.That(verdict.Class, Is.EqualTo(expectedClass), $"{scenario.Id} step {step}: {verdict.Detail}");
+
+        // Slip-site steps: every site must be graded Correct, so the golden implements each site as the brief asks.
+        if (scenario.Steps[step - 1].Sites is not null)
+        {
+            Assert.That(verdict.Sites, Is.Not.Null, $"{scenario.Id} step {step}: the check produced no site grades");
+            foreach (var grade in verdict.Sites ?? Array.Empty<SiteGrade>())
+            {
+                Assert.That(grade.Outcome, Is.EqualTo(SiteOutcome.Correct), $"{scenario.Id} step {step}: site '{grade.SiteName}' is {grade.Outcome}: {grade.EndStateText}");
+            }
+        }
     }
 
     [TestCaseSource(nameof(PreviousCases))]
@@ -93,6 +103,17 @@ public class ImplementationScenarioGoldenTests
             outcome,
             Is.Not.EqualTo(ImplementationScenarioOutcome.Pass),
             $"{scenario.Id} step {step} check passed on the step-{step - 1} state: {detail}");
+
+        // Slip-site steps: the previous state must fail the check and grade each site as the slip predicts.
+        if (scenario.Steps[step - 1].Sites is not null)
+        {
+            Assert.That(outcome, Is.EqualTo(ImplementationScenarioOutcome.CheckFailed), $"{scenario.Id} step {step}: the step-{step - 1} state must be CheckFailed: {detail}");
+            foreach (var grade in verdict.Sites ?? Array.Empty<SiteGrade>())
+            {
+                var expected = grade.Role == SiteRole.Changed ? SiteOutcome.Unchanged : SiteOutcome.Correct;
+                Assert.That(grade.Outcome, Is.EqualTo(expected), $"{scenario.Id} step {step}: site '{grade.SiteName}' ({grade.Role}) is {grade.Outcome} on the step-{step - 1} state, expected {expected}: {grade.EndStateText}");
+            }
+        }
     }
 
     [TestCaseSource(nameof(BudgetCases))]
