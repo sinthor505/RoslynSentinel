@@ -55,6 +55,7 @@ foreach ($file in Get-ChildItem -LiteralPath $jobsDir -Filter '*.json') {
 
     $inputTokens = $null; $toolCalls = $null; $toolErrors = $null; $callsToRecover = $null; $maxEditArgChars = $null
     if ($transcript) {
+        # TODO migrate transcript parsing to scripts/eval-review/EvalRunReader.ps1
         $t = Get-Content -LiteralPath $transcript.FullName -Raw | ConvertFrom-Json
         $inputTokens = $t.Summary.InputTokens
         $toolCalls = $t.Summary.ToolCallCount

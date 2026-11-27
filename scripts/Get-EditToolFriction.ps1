@@ -55,6 +55,7 @@ $ErrorActionPreference = 'Stop'
 
 if (-not $Path) { $Path = @(Get-RoslynSentinelResultsRoot) }
 
+# TODO migrate transcript parsing to scripts/eval-review/EvalRunReader.ps1
 function Get-ErrorText {
     param([string]$ResultJson)
     if (-not $ResultJson) { return '' }

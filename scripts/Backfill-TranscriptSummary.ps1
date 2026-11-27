@@ -139,6 +139,7 @@ function Get-TimeSpan($node) {
 }
 
 # Mirrors RunTotals.FromTranscript. Property order is the declaration order of RunTotals.
+# TODO migrate transcript parsing to scripts/eval-review/EvalRunReader.ps1
 function New-Summary($turns) {
     $toolErrorCodes = [ordered]@{}
     $compilerErrorCodes = [ordered]@{}

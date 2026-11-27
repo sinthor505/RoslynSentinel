@@ -88,6 +88,7 @@ function Format-Counts($values) {
     return (($v | Group-Object | Sort-Object @{ Expression = 'Count'; Descending = $true }, Name | ForEach-Object { "$($_.Name):$($_.Count)" }) -join ' ')
 }
 
+# TODO migrate transcript parsing to scripts/eval-review/EvalRunReader.ps1
 function Read-Run([string]$transcriptPath, [string]$jobFormat, [string]$jobThinking) {
     $dir = Split-Path -Parent $transcriptPath
     $outcome = $null; $stop = $null; $wall = $null

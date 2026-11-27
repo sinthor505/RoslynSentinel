@@ -117,6 +117,7 @@ function Get-RunSlipRow($tr, [double]$Threshold) {
     }
 
     $outcome = ''; $stop = ''; $promptVariant = ''
+    # TODO migrate transcript parsing to scripts/eval-review/EvalRunReader.ps1
     $outFile = Get-ChildItem -LiteralPath $dir -Filter 'step-*.outcome.txt' -File -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($outFile) {
         $text = [string](Get-Content -LiteralPath $outFile.FullName -Raw -ErrorAction SilentlyContinue)
