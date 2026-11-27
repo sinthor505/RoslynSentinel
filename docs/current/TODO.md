@@ -7,6 +7,7 @@ Rules: (1) one entry = one line (`- [OPEN|READY|IN-PROGRESS|BLOCKED|PARKED] Titl
 In-flight slices.
 
 - [IN-PROGRESS] Shorten the verification loop (2026-11-21) - fast and full runs done; left: Step 13 gate (from 2026-11-29) and E-row sharding - [plan](plans/plan_shorten_verification_loop.md)
+- [IN-PROGRESS] Rename the RoslynSentinel.Git namespaces (2026-11-27) - `ChangeNamespace` to `RoslynSentinel.Git` and `RoslynSentinel.Git.Worktrees`, folder `GitWorktree/` -> `Worktrees/`; dispatched to an orchestrator 2026-11-27; effort M - [plan](plans/plan_rename_git_project_namespaces.md)
 
 ## P2 Next
 
