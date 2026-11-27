@@ -25,8 +25,8 @@ public class ReadFilePagingLoopTests
     private static readonly JsonSerializerOptions Wire = McpJsonUtilities.DefaultOptions;
     private static readonly MethodInfo AnyMethod = typeof(ReadFilePagingLoopTests).GetMethod(nameof(AnyMethodTarget), BindingFlags.NonPublic | BindingFlags.Static)!;
 
-    // The marshaller's inline budget minus its echo reserve: a whole response must never exceed it.
-    private const int PageBudget = 15360 - 2560;
+    // The configured default page budget minus the page safety margin: a whole page response must never exceed it.
+    private static readonly int PageBudget = LargeResultHelper.DefaultBudgetChars - LargeResultHelper.PageSafetyMarginChars;
 
     // Reproduced from LargeResultPagingAgentTests.BuildTierRatesSource (ModelEval cannot be referenced from here): keep the two in step.
     private const int RateMethodCount = 300;
@@ -176,6 +176,8 @@ public class ReadFilePagingLoopTests
         {
             (0, first["successData"]!["source"]!.GetValue<string>(), first, pointer["message"]!.GetValue<string>(), pointer["nextOffset"]?.GetValue<int>()),
         };
+        // Every assert in this test is collected, so a failing page-size or wording check still reports the observed offsets below.
+        using var multiple = Assert.EnterMultipleScope();
         int? next = responses[0].Next;
         for (int guard = 0; next is int offset && guard < 100; guard++)
         {
@@ -224,8 +226,9 @@ public class ReadFilePagingLoopTests
         Assert.That(CountOf(all, NeedleMethodName), Is.EqualTo(1));
         Assert.That(CountOf(all, NeedleLiteral), Is.EqualTo(1));
         var needlePages = responses.Where(r => r.Text.Contains(NeedleMethodName, StringComparison.Ordinal)).Select(r => r.Offset).ToList();
-        Assert.That(needlePages, Is.EqualTo(new[] { PinnedNeedlePageOffset }), "the needle sits on one page, at the pinned offset");
-        Assert.That(responses.Select(r => r.Offset).ToArray(), Is.EqualTo(PinnedPageOffsets), $"pinned offsets chain without gap or overlap; actual {string.Join(", ", responses.Select(r => r.Offset))}");
+        string observedOffsets = string.Join(", ", responses.Select(r => r.Offset));
+        Assert.That(needlePages, Is.EqualTo(new[] { PinnedNeedlePageOffset }), $"the needle sits on one page, at the pinned offset; observed needle page offset(s) {string.Join(", ", needlePages)}; observed page offsets {observedOffsets}");
+        Assert.That(responses.Select(r => r.Offset).ToArray(), Is.EqualTo(PinnedPageOffsets), $"pinned offsets chain without gap or overlap; observed page offsets {observedOffsets}");
     }
 
     // G11: a ranged read bigger than the budget used to be trimmed to a shorter endLine with a "Range shortened... call ReadFile(startLine)"
