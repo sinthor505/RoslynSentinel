@@ -46,3 +46,11 @@
 | StopAdherenceMissingFileToolError | ContosoOrders FixtureHelpers (ChainStartingFiles) | StopAdherenceMissingFile | none (exempt, rule 9) | RoslynSentinel.Tests.Harness/StopAdherenceScenarios.cs |
 | StopAdherenceMissingMethodToolError | ContosoOrders FixtureHelpers (ChainStartingFiles) | StopAdherenceMissingMethod | none (exempt, rule 9) | RoslynSentinel.Tests.Harness/StopAdherenceScenarios.cs |
 | SweepConstructionSites | ContosoOrders.Core/Evals/SweepConstructionSites | ExplicitTypeForThreeSites, MixedForks, CastForThreeSites, BulkReplaceAllSites, ConvertFailedFiles, LeaveThreeSilent, BlockedNothingConverted | ConstructionSiteTests, SweepTests | RoslynSentinel.Tests.ModelEval/ImplementationScenarios/ErrorRecovery/SweepConstructionSitesScenario.cs |
+
+## Axis:Transcription
+
+| Scenario | Fixture | Variants | Tests named in Done-when | Source |
+| --- | --- | --- | --- | --- |
+| SweepNamedSitesSlip | ContosoOrders.Core/Evals/SweepConstructionSites | none | ConstructionSiteTests, SweepTests | RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Transcription/SweepNamedSitesSlipScenario.cs |
+| WidenAcrossFilesSlip | ContosoOrders.Core/Evals/WideningRejectedByGate | none | ApplySignatureTests | RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Transcription/WidenAcrossFilesSlipScenario.cs |
+| WidenDictionaryLeafFirstSlip | ContosoOrders.Core/Evals/WidenToReadOnlyDictionary | none | ReadOnlyViewTests | RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Transcription/WidenDictionaryLeafFirstSlipScenario.cs |

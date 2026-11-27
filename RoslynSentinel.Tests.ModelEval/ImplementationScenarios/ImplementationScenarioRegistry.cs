@@ -3,10 +3,11 @@ using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.ErrorRecovery;
 using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.InstructionAdherence;
 using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.MultiStepState;
 using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.ToolUse;
+using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Transcription;
 
 namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios;
 
-/// <summary>The 15 implementation scenarios: the 14 of the plan's scenario table in its order, then LargeBlockRewrite (edit-tool comparison).</summary>
+/// <summary>The implementation scenarios: the 14 of the plan's scenario table in its order, then LargeBlockRewrite (edit-tool comparison).</summary>
 internal static class ImplementationScenarioRegistry
 {
     private const string ScenarioRoot = "RoslynSentinel.Tests.ModelEval.ImplementationScenarios";
@@ -28,6 +29,9 @@ internal static class ImplementationScenarioRegistry
         ObsoleteNamespaceCopyScenario.Definition,
         MigrateOntoEnvironmentHelperScenario.Definition,
         LargeBlockRewriteScenario.Definition,
+        WidenAcrossFilesSlipScenario.Definition,
+        WidenDictionaryLeafFirstSlipScenario.Definition,
+        SweepNamedSitesSlipScenario.Definition,
     ];
 
     /// <summary>Case-insensitive lookup; throws listing the known ids when nothing matches.</summary>

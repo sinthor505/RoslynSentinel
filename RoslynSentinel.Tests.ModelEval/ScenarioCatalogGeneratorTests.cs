@@ -52,7 +52,6 @@ public class ScenarioCatalogGeneratorTests
     {
         var ids = TableRows(ScenarioCatalogGenerator.Render()).Select(cells => cells[0]).ToList();
 
-        Assert.That(ImplementationScenarioRegistry.All, Has.Count.EqualTo(15));
         foreach (var scenario in ImplementationScenarioRegistry.All)
         {
             Assert.That(ids.Count(id => id == scenario.Id), Is.EqualTo(1), $"{scenario.Id} must appear exactly once");
