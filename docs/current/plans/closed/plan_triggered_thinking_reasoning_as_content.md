@@ -1,6 +1,6 @@
 # Plan: replay earlier reasoning as visible assistant content in triggered thinking mode
 
-**Status:** IN PROGRESS 2026-11-26. Steps 1-7 done (9267ba2b 31bf8986 074c2e48 541f8b3c 3ead6848 190b89ec d44dffb7); Step 8 (live) next.
+**Status:** IMPLEMENTED 2026-11-26. Steps 1-7 (9267ba2b 31bf8986 074c2e48 541f8b3c 3ead6848 190b89ec d44dffb7), Step 8 live (56 runs at 5006238e, verdict drop), Step 9 (83a8e80b): triggered runs default to the drop form.
 
 ## Problem
 
@@ -95,6 +95,18 @@ Evidence (INBOX 2026-11-25 15:35 and 2026-11-26 00:30; probes under `<scratch>/t
   6 pass (enum header field per Q13, int summary field); 7 simplest version = hard-code the content form in triggered
   mode with no setting or fields; the setting is needed for the A/B arms and the fields for the thresholds, so
   the chosen design adds only what the measurement uses.
+- 2026-11-26 Run: owner present, Batched mode (Batch A = Steps 1-7, one orchestrator).
+- 2026-11-26 Step 8 result (all jobs pinned at 5006238e, before the inline budget change 33f92df9; Qwen3.5-9B on 112/113,
+  triggered/error, plain tool results). Main 24 runs: items 8 runs, 2 pass, 27 leaked turns; content 3 pass + 1 after
+  cap, 0 leaks; drop 4 pass + 1 after cap, 0 leaks. Valid (items >= 8 leaks); both forms met the keep bar and the rule
+  picked drop. Owner asked for more runs: +16 (content and drop, both scenarios, tie 3+1 each) and +16
+  ThreadOptionalParameter-only. ThreadOptionalParameter totals: content 16 runs 9 pass + 5 after cap, median 25 turns;
+  drop 16 runs 11 pass + 4 after cap, median 22 turns; 0 leaks in all 48 content/drop runs. SweepConstructionSites
+  passed 0 in every arm. `outcomeClass` was SilentIncomplete on every run, passes included (final-message token
+  classifier), so the class guard carried no signal. Jobs and rows: `c:\tmp\step8-replayform-jobs`,
+  `c:\tmp\step8-replayform-runs-all2.csv`.
+- 2026-11-26 Step 9 (owner: A): F = Drop. Why: drop led in every batch (4-3, 3-3, 4-3), fewest turns, smallest
+  context, model-card practice and the pre-agreed rule; content stays available through the variable.
 
 ## Execution rules
 
@@ -306,6 +318,7 @@ behaviour-changing and conditional.
   Every run's transcript `form` must match its arm; a mismatched run is excluded and resubmitted.
 - Done when: 24 jobs finished, the table and verdict are in the run tracker, and the owner has reviewed them.
 - Effort: M
+- Done: 2026-11-26, 56 jobs at 5006238e, verdict drop (Decision, Step 8 result)
 
 ### Step 9 - Default flip (only on a keep result, after owner review)
 - Files: `RoslynSentinel.AgentLoop/ReasoningReplayPolicy.cs`, `RoslynSentinel.AgentLoop/ModelAgentRunner.cs`,
@@ -325,6 +338,7 @@ behaviour-changing and conditional.
 - Done when: `Build` 0 errors; T16, T17, existing `ReasoningReplayRunnerTests` and
   `ConfigurationReferenceFreshnessTests` pass.
 - Lane: `implementer` then `test-writer`. Effort: S
+- Done: 83a8e80b (F = Drop)
 
 ## Tests
 
