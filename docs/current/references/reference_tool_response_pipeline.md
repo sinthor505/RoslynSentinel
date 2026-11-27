@@ -1,6 +1,6 @@
 # Reference: how a tool's return value becomes the response (result marshaller and call-tool filters)
 
-**Status:** CURRENT 2026-11-06. Verified against source on this date; cites symbols, not line numbers (lines drift).
+**Status:** CURRENT 2026-11-26. Budget, offload filter and hints sections updated for plan_inline_budget_classes; verified against source on this date; cites symbols, not line numbers (lines drift).
 
 ## Purpose
 
@@ -48,15 +48,31 @@ name was built this way.
 
 ### Marshaller decisions (`ToolResultMarshaller.MarshalAsync`, `FitAndStoreAsync`)
 
-Budget: `LargeResultHelper.InlineBudgetChars` (15360) minus `EchoReserveChars` (2560), in chars of the wire text. In order:
+Budget (plan_inline_budget_classes): the budget covers the response body only, in chars of the marshaller's text.
+Echo and stamps are added on top by outer filters and never counted, so a model sees the same body size with them on
+or off. `LargeResultHelper` resolves it:
+
+- Class: `ClassFor(method, errorOnly)` returns `InlineBudgetClass.Whole` for an error-only failure (`isError` true and no
+  success data: `IFindingsEnvelope.HasSuccessData` in the marshaller, `IsErrorOnlyBody` on text in the filter) or for a
+  method tagged `[InlineBudget(InlineBudgetClass.Whole)]` (today only `McpServerStatus`); otherwise `Default`. A Build or
+  RunTest failure carries `successData` and stays `Default`, so its error list still pages.
+- Budget: `BudgetChars(Default)` = `DefaultBudgetChars` = `InlineBudgetOptions.BudgetChars` (setting
+  `--inline-budget-chars` / `ROSLYNSENTINEL_INLINE_BUDGET_CHARS`, default `StockBudgetChars` 15360, minimum 8192; a lower
+  value is rejected, not clamped). `BudgetChars(Whole)` = max(`WholeFloorChars` 32768, 2 x default).
+- Offload threshold: `OffloadThresholdChars(c)` = budget x `ToleranceFactor` (1.25): 19,200 and 40,960 at the stock
+  default. A body within the threshold goes out whole; a body over it is cut to fill its class budget (not the threshold).
+- Per-call slot: the marshaller writes the resolved threshold to `InlineBudgetSignal` (also in mode `passthrough`); the
+  offload filter (item 10) reads it after `next`.
+
+In order:
 
 1. `ForwardGuidance` hands the never-serialized `GuidanceHint` to the telemetry collector. Then `WithNotFoundNotes` adds any
    `NotFoundEvidence` findings to a not-found error, through `IFindingsEnvelope` (filter 8 below covers the thrown form).
 2. `Passthrough`: `null`, `string`, `ContentBlock`, `AIContent`, `CallToolResult` and enumerables of the content types
    are returned unchanged and never cut. Anything else is serialized once with the tool's wire options, by default
    `McpJsonUtilities.DefaultOptions` (camelCase, nulls omitted), not `SharedJsonOptions`.
-3. Mode not `on`, or text within budget: return the text.
-4. Page already built by `GetLargeResult` (`Paging.AlreadyPaged`) and still over budget: one unit is larger than a page,
+3. Mode not `on`, or text within the class threshold: return the text.
+4. Page already built by `GetLargeResult` (`Paging.AlreadyPaged`) and still over the `Default` threshold: one unit is larger than a page,
    so it goes out unchanged, logged, with `OversizeUnitSignal` raised. Never a second cut or a new `resultId`.
 5. JSON root is not an object: return the full text (the offload filter handles it).
 6. `SequencePager.ResolveSequence` finds the sequence, first match wins: `Paging.RecordsPaths`; the `[ResultRecords]`
@@ -82,8 +98,8 @@ An `Envelope` file (`LargeResultHelper.StoreEnvelopeAsync`) holds the full marsh
 | `Envelope` without `Sequence` | `PageEnvelope` -> `ResultPager` | `path` plus `offset`/`limit` |
 | Older `ResultWrapperType` values, including `Raw` | Legacy cases in `GetLargeResult` | Per type |
 
-Both Envelope readers mark the page `AlreadyPaged` and leave a small margin under the same budget. An omitted `limit`
-fills the budget; a given `limit` is an upper bound.
+Both Envelope readers mark the page `AlreadyPaged` and fill `DefaultBudgetChars - PageSafetyMarginChars` (64), with no
+tolerance. An omitted `limit` fills that budget; a given `limit` is an upper bound.
 
 ### Hints a tool can give
 
@@ -92,11 +108,12 @@ fills the budget; a given `limit` is an upper bound.
 | `[ResultRecords]` | Property on the `SuccessData` type | The default sequence would pick the wrong list. Today: `TextSearchResult.LiteralResults`, `EnvelopePageResult.Items`, `BuildResult.Errors` |
 | `SentinelCallToolResult.Paging` (`PagingHints`) | Set on the envelope; never serialized | Several lists form one sequence, or anonymous and bare-list shapes that cannot carry an attribute |
 | `SentinelCallToolResult.Detach(name, list)` / `ToolCallContext.DetachCurrent` | Set on the result or the call context; never serialized | A payload that must be stored, not inline (RunTest `fullResults`, apply `changedFiles`). Must be an array or string |
+| `[InlineBudget(InlineBudgetClass.Whole)]` | Attribute on the `[McpServerTool]` method (`Common/InlineBudgetAttribute.cs`) | The caller needs the result in one piece (today `McpServerStatus`). Read through the method's `MethodInfo`; not honoured in marshaller mode `off` (no marshaller writes the signal), where only error-only failures get the `Whole` threshold |
 
 ### Call-tool filters
 
 First added is outermost (csharp-sdk `McpServerImpl.BuildFilterPipeline` folds from the last filter inward). The order is
-the `CallToolFilterRegistrations` table in `Server.Advanced/ServiceRegistrationExtensionsBasic.cs` (15 filters, 16 when the error policy is on; the call transcript, the loop latch and the error policy are listed as 2a, 3a and 7a to keep the older item numbers), pinned by
+the `CallToolFilterRegistrations` table in `Server.Advanced/ServiceRegistrationExtensionsBasic.cs` (16 fixed filters, including `ConfigurationHalt` last, plus the optional `NearMissRecord` and `ErrorPolicy`; the call transcript, the loop latch and the error policy are listed as 2a, 3a and 7a to keep the older item numbers), pinned by
 `ToolTelemetryFilterOrderTests` via `CallToolFilterNames`. In registration order:
 
 1. `AddAgentIdentityFilter` (`Server.Advanced/AgentIdentityCapture.cs`): strips `_agentId`/`_agentType`/`_sessionId` from the
@@ -121,7 +138,7 @@ the `CallToolFilterRegistrations` table in `Server.Advanced/ServiceRegistrationE
    diagnostic id for a compile-gate rejection; arguments not part of the key) with no successful call in between, refuses that
    tool's next call WITHOUT running it, for that caller agent id only (no id = one shared `default` key), as a `TargetIneligible`
    failure body whose message starts "{Tool} is DISABLED until another tool succeeds". Any successful call releases the agent's
-   latch. Sits fourth, outside argument validation, so plain-text validation rejections count and the refusal precedes them.
+   latch. Sits fifth, outside argument validation, so plain-text validation rejections count and the refusal precedes them.
    `McpServerStatus.loopLatch` lists latched tools per agent (only while the flag is on). Harness side: `ModelAgentRunner` records a
    refusal as a `latch` assist and stops with `AgentStopReason.LoopLatchIgnored` after the model calls the refused tool twice more.
 4. `AddArgumentValidationFilter` (`Server.Advanced/ToolArgumentValidator.cs`): repairs parameter-name case,
@@ -151,7 +168,7 @@ the `CallToolFilterRegistrations` table in `Server.Advanced/ServiceRegistrationE
    operator's policy pointer (`Pointer` mode) or inline entry (`Inline` mode) as ONE trailing text block; the first block is never
    modified, and nothing is appended when the call's `ToolCallContext` has `HasEditEffectFact` set. It sits outside
    `LargeResultOffload` (item 10), so the appended block is added after the offload step and is exempt from the offload budget by
-   construction; `EchoReserveChars` is only the shared margin. The mode and policy file are read once at startup, and the first
+   construction (the body budget never counts it). The mode and policy file are read once at startup, and the first
    tool call logs a warning for each Inline entry over `ErrorPolicyFilter.LongEntryThreshold` (1000) characters. A diagnostic aid:
    any failure leaves the result untouched.
 8. `AddWorkspaceNotLoadedFilter` exception catch-all (`CallToolFailureHandler`): an escaped exception becomes a structured
@@ -159,10 +176,18 @@ the `CallToolFilterRegistrations` table in `Server.Advanced/ServiceRegistrationE
    `ToolException` keeps its code) with `IsError=true`; a client abort is rethrown. A thrown error never reaches the
    marshaller, so `ToFailureResult` adds the `NotFoundEvidence` findings itself.
 9. Post-call drift diagnostic (`AddDriftFilter`, `GetContentExternalFileChangesAsync`, log only).
-10. `AddLargeResultOffloadFilter`: the backstop for text the marshaller did not cut (exception catch-all and refusal
-    bodies, plain-string returns, marshaller mode off). A text block over `InlineBudgetChars` (read as chars) is stored as
+10. `AddLargeResultOffloadFilter` (`Server.Advanced/LargeResultOffloadFilter.cs`; the logic is the public static
+    `InvokeAsync`, unit-tested by `LargeResultOffloadFilterHandlerTests`): the backstop for text the marshaller did not cut
+    (exception catch-all and refusal bodies, plain-string returns, marshaller mode off). Threshold: the
+    `InlineBudgetSignal` value the marshaller wrote; with none, `OffloadThresholdChars(Default)`, raised to
+    `OffloadThresholdChars(Whole)` when the body is error-only (`IsErrorOnlyBody`). A text block over it is stored as
     an `Envelope` file via `StoreEnvelopeAsync` (no omitted list, no sequence; `GetLargeResult` pages the largest array or
-    string, inferred), and the caller gets a pointer with a `resultId`. A body that is not JSON cannot be stored and goes
+    string, inferred), and the caller gets an `OffloadPointerResult` (`Common/OffloadPointerResult.cs`, serialized with
+    `SentinelToolFactory.WireSerializerOptions`, null fields omitted) with a `resultId`. For an error-only body the pointer
+    keeps `errorData.errorCode` and `errorData.message`, the message capped at `DefaultBudgetChars` with
+    `errorMessageTotalChars` set when cut. A response the marshaller already stored is offloaded again only when it is
+    still over the threshold (an error whose pinned message is huge): the "Result marshaller miss" log flags that second
+    store, and the capped pointer is small, so it cannot cycle. A body that is not JSON cannot be stored and goes
     out whole. Skips any response that raised `OversizeUnitSignal`, to avoid a re-offload loop. Two raisers: the marshaller
     (mode On, for an oversize-unit result it returns whole) and `PagingHints.ForAlreadyPagedPage()` (`Common/PagingHints.cs`),
     the only producer of the `AlreadyPaged` hint, which the `GetLargeResult` page builders call while building the page.
@@ -200,8 +225,8 @@ the `CallToolFilterRegistrations` table in `Server.Advanced/ServiceRegistrationE
 | Return a result that can be large | Return the whole DTO; add a hint only if the default sequence picks wrongly |
 | Change what a page or pointer says | `SequencePager`, `SequenceMessages`, `ToolResultMarshaller.PageSequenceAsync`, `LargeResultHints` |
 | Decide using the typed result | The marshaller; filters only have text |
-| Add a stamp or other text-level change | A filter (mind the order). If it adds text to every response, check `EchoReserveChars` |
-| Change the size budget | `LargeResultHelper` constants; `GetLargeResult` pages use the same ones |
+| Add a stamp or other text-level change | A filter (mind the order). Outer additions are on top of the body budget, never counted |
+| Change the size budget | Per deployment: `--inline-budget-chars`. Per tool: `[InlineBudget]`. Shape: `LargeResultHelper` (`ToleranceFactor`, `WholeFloorChars`); `GetLargeResult` pages use the same accessors |
 | Rule the marshaller out while debugging | Run a test instance with `ROSLYNSENTINEL_RESULT_MARSHALLER=off` |
 | Upgrade the MCP SDK | Re-diff the replicated members against the new tag; `SentinelToolFactoryParityTests` is the guard |
 
@@ -212,7 +237,8 @@ Tests, one `RunTest` at a time:
 | Marshaller | `ToolResultMarshallerOnModeTests`, `ToolResultMarshallerPassthroughTests`, `ToolResultMarshallerDetachedTests` (`Tests.Server`) |
 | Factory | `SentinelToolFactoryParityTests` (`Tests.Server`) |
 | Pagers | `SequencePagerTests`, `ResultPagerTests` (`Tests.Server`) |
-| Filters | `LargeResultOffloadFilterTests`, `ToolTelemetryFilterOrderTests`, `ToolCallTranscriptTests` (`Tests.Server`) |
+| Filters | `LargeResultOffloadFilterTests`, `LargeResultOffloadFilterHandlerTests`, `ToolTelemetryFilterOrderTests`, `ToolCallTranscriptTests` (`Tests.Server`) |
+| Budget | `LargeResultHelperBudgetTests`, `McpServerStatusWireSizeTests` (`Tests.Server`) |
 | `GetLargeResult` | `SequenceLargeResultPagingTests`, `EnvelopeLargeResultPagingTests`, `GetLargeResultTests`, `LargeResultHintsTests` (`Tests.Tools.Basic`) |
 | Readers of stored results | `SubAgentOffloadedResultTests` (`Tests.Harness`) |
 | A model following the pointer | `LargeResultPagingAgentTests` (`Tests.ModelEval`; run with `modeleval-runner`) |
@@ -224,8 +250,11 @@ Tests, one `RunTest` at a time:
   top-level `hasMoreData`. Seen live 2026-11-06; a `// TODO` in `PageSequenceAsync` marks it.
 - **Text the marshaller never saw is not fitted.** That covers filter-built bodies and pass-through return kinds. Exception
   bodies come from filter 8, outside the offload filter, so nothing measures them.
-- **What outer filters add is not measured.** The echo and the stamps run outside the offload filter, so only the reserve
-  covers them. It is a measured guess; "Result marshaller miss" in the server log means it, or a pager, is wrong.
+- **What outer filters add is not measured.** The echo (about 2.3K) and the stamps (a few hundred chars each) run outside
+  the offload filter and are added on top of the body budget by design. "Result marshaller miss" in the server log
+  means a hooked tool's body reached the filter over its threshold: a pager is wrong, or an error message is huge.
+- **`[InlineBudget]` needs the marshaller.** In mode `off` no signal is written, so a tagged tool's non-error result
+  between the two thresholds is offloaded; error-only failures still get `Whole` through the body's `isError`.
 - **The stored text is the marshaller's, not the final wire text:** no echo or stamps, and paths not yet relativized.
   Pages are relativized on their way out like any other response.
 - **Two offload paths still exist.** `largeResult.resultType` tells them apart: `Envelope` is the marshaller, `Raw` is the

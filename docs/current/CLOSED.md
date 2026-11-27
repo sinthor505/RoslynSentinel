@@ -8,6 +8,12 @@ Only the newest month (2026-11) is kept here. Older entries are archived unchang
 [archive/closed_2026-10.md](archive/closed_2026-10.md), [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Inline budget classes for the large-result offload - resolved (2026-11-26)
+
+Inline budget classes for the large-result offload (2026-11-26) - body-only configurable budget (stock 15360) with 25% tolerance, a Whole class for `[InlineBudget(Whole)]` tools and error-only failures, typed offload pointer with capped error; effort L - [plan](plans/closed/plan_inline_budget_classes.md)
+
+Evidence: plans/closed/plan_inline_budget_classes.md; efb0ca55..f97a6b55 (behaviour change 27dcd63f); full suite 0 failures at f97a6b55
+
 ## Startup configuration registry - resolved (2026-11-25)
 
 Startup configuration registry (2026-11-25) - every flag and env var declared once as `StartupSetting<T>`; generated `docs/generated/configuration.md`, `McpServerStatus(settings:)`, `--list-options`, config halt latch (staged); 33 slices across Common, AgentLoop, Server, PlanStepRunner and tests; run with `/implement-plan` - [plan](plans/plan_startup_configuration_registry.md)

@@ -1,6 +1,8 @@
 # The marshaller writes the echo and stamps itself, so EchoReserveChars can go
 
-**Status:** PROPOSED 2026-11-07. Awaiting review; nothing built. Replaces the "merge the stamping filters" idea in
+**Status:** PROPOSED 2026-11-07. Awaiting review; nothing built. 2026-11-26: the reserve part is superseded by
+[plan_inline_budget_classes](../plans/closed/plan_inline_budget_classes.md) Q13 (the budget covers the body only; echo and stamps are
+added on top, and `EchoReserveChars` is deleted). Only the optional finalizer merge below remains relevant. Replaces the "merge the stamping filters" idea in
 plan_wire_result_marshaller "Out of scope", which a survey on 2026-11-07 showed cannot remove the reserve by itself.
 
 ## Motivation

@@ -48,6 +48,6 @@ The server forgets an offload as soon as the pointer goes out. Nothing connects 
 
 ## Related
 
-- `docs/current/plans/plan_inline_budget_classes.md` (Q17 scan, Q25, Q29)
+- `docs/current/plans/closed/plan_inline_budget_classes.md` (Q17 scan, Q25, Q29)
 - `docs/current/references/reference_tool_response_pipeline.md` (marshaller, `GetLargeResult`, filters)
 - `docs/current/ideas/idea_tool_attribution.md` (another per-call telemetry idea)

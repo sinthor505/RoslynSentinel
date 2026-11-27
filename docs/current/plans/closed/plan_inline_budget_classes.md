@@ -1,6 +1,6 @@
 # Plan: Per-result inline budget classes for the large-result offload
 
-**Status:** IN PROGRESS 2026-11-26. Steps 1-12, 14, 15, 21 done (efb0ca55, 061dd50d, 3ec48be7, dcf158b2, c99a321a, c02e171a, 33f92df9, 3ed84cb6, 27dcd63f, 78f5751e, 3add9ba4, 039e8da3, 9544e7c0, 4cb876cc, 16161d9e, 7061be5e, 60094893, 59000bec).
+**Status:** IMPLEMENTED 2026-11-26. efb0ca55, 061dd50d, 3ec48be7, dcf158b2, c99a321a, c02e171a, 33f92df9, 3ed84cb6, 27dcd63f (behaviour change), 78f5751e, 039e8da3, 9544e7c0, 4cb876cc, 16161d9e, 7061be5e, 60094893, 59000bec, 97393184, 06b71b8c, 2631e4fc, f65998c8, f97a6b55, 3add9ba4; Step 22 re-scan is a TODO.md follow-up.
 
 ## Problem
 
@@ -580,6 +580,7 @@ their builds.
   `:297`, and the harness reader `SubAgentEvalResult.cs:186` (covered by `SubAgentOffloadedResultTests`).
 - Done when: dispatcher runs both fixtures plus `ToolCallEchoFilterTests` and `WirePathRelativizeFilterTests`, all pass.
 - Lane: test-writer. Effort: M.
+- Done: 97393184
 
 ### Step 14 - Paging tests
 - Files: `RoslynSentinel.Tests.Tools.Basic/SequenceLargeResultPagingTests.cs`,
@@ -622,6 +623,7 @@ their builds.
 - Done when: `Build` 0 errors. Expected state: red only on the pinned-offset and needle-offset asserts, with the
   observed values in the failure output.
 - Lane: test-writer. Effort: S.
+- Done: 06b71b8c
 
 ### Step 16b - Observe the new ReadFile page offsets (dispatcher)
 - Files: none
@@ -631,6 +633,7 @@ their builds.
   and the needle page offset for the 300-method fixture. Any other red assert is a new failure: stop and report it.
 - Done when: the observed offsets are written into the Step 16c brief.
 - Lane: dispatcher. Effort: S.
+- Done: observed page offsets 0, 375, 746, 1117, 1488, 1859; needle page offset 746 (no commit)
 
 ### Step 16c - Re-pin the ReadFile page offsets
 - Files: `RoslynSentinel.Tests.Tools.Basic/ReadFilePagingLoopTests.cs`
@@ -642,6 +645,7 @@ their builds.
   `LargeResultPagingAgentTests.BuildTierRatesSource` (Tests.ModelEval) needs nothing while the fixture is unchanged.
 - Done when: dispatcher runs `ReadFilePagingLoopTests`, all pass.
 - Lane: test-writer. Effort: S.
+- Done: 2631e4fc
 
 ### Step 17 - McpServerStatus size guard
 - Files: `RoslynSentinel.Tests.Server/McpServerStatusWireSizeTests.cs` (new)
@@ -665,6 +669,7 @@ their builds.
   with the owner; the fix belongs to `proposal_mcpserverstatus_single_view_parameter.md`, not this plan).
 - Done when: dispatcher runs `McpServerStatusWireSizeTests`, outcome **fits**.
 - Lane: test-writer. Effort: S.
+- Done: f65998c8 (outcome fits; claude-lean-sized surface from ToolClassRegistry.ClaudeLeanToolNames)
 
 ### Step 18 - Retire the old constants and stale comments (cleanup)
 - Files: `RoslynSentinel.Common/LargeResultHelper.cs`, `RoslynSentinel.Tools.Basic/WorkspaceBuildTestImpl.cs` (`:141` comment)
@@ -676,6 +681,7 @@ their builds.
 - Done when: `scripts/build.ps1 -Flavor Solution` 0 errors; `Search(mode: text, query: "InlineBudgetChars|EchoReserveChars", includeTests: true)`
   returns nothing in `.cs` files.
 - Lane: implementer. Effort: S.
+- Done: f97a6b55
 
 ### Step 19 - Full verification
 - Files: none
@@ -689,6 +695,7 @@ their builds.
   `ConfigurationReferenceFreshnessTests`, `EnvVarDeclarationGuardTests` and `KnownArgSetsTests`.
 - Done when: all of the above hold.
 - Lane: dispatcher (plain calls). Effort: S.
+- Done: full suite at f97a6b55: 0 failures across 12 projects (c:\tmp\rs-testtrees\_results\f97a6b55-20261126-175331-48880); Tests.ModelEval guards 38 passed, 1 skipped; Build 0 errors, 15 warnings = baseline
 
 ### Step 20 - Docs
 - Files: `docs/current/references/reference_tool_response_pipeline.md`,
@@ -706,6 +713,7 @@ their builds.
 - Done when: `Grep` for `InlineBudgetChars|EchoReserveChars|echo reserve` in the pipeline reference returns nothing;
   links resolve.
 - Lane: main session (non-C# docs). Effort: S.
+- Done: closing commit
 
 ### Step 21 - Promote the scan script
 - Files: `scripts/Find-OffloadedResults.ps1` (new, from `<scratch root>\plan_design_inline_budget_classes\Find-OffloadedResults.ps1`)
@@ -731,6 +739,7 @@ their builds.
   (any such row: INBOX line with run id, turn and tool).
 - Done when: the TODO line is added at closing; the re-scan runs later.
 - Lane: main session. Effort: S.
+- Done: TODO.md line added at closing (re-scan pending the next eval batches pinned at or after 27dcd63f)
 
 ## Out of scope
 

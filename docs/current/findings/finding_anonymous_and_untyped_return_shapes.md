@@ -1,6 +1,8 @@
 # Finding: Tool payloads are mostly `object`, built from anonymous objects, which hides return shapes
 
-**Status:** OPEN 2026-10-02. Fix order proposed below; nothing decided or built.
+**Status:** OPEN 2026-10-02. Fix order proposed below; nothing decided or built. 2026-11-26: item 5 (the offload
+envelope) is done: the pointer is the named `OffloadPointerResult` (`Common/OffloadPointerResult.cs`), built in
+`Server.Advanced/LargeResultOffloadFilter.cs` (plan_inline_budget_classes Q27).
 
 ## Context
 Audit run 2026-10-02 in session cc715aa0 at the user's request: anonymous return types make shapes hard to
