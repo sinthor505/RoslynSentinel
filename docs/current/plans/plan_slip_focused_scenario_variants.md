@@ -1,6 +1,6 @@
 # Plan: Logic-simpler sibling scenarios that keep the slip-prone content, plus a slips-per-run metric
 
-**Status:** IN PROGRESS 2026-11-26. Steps 1-8, 12, 13 done (d4e4b364, 130cbb85, bdb48529, 60b77a1d, 9adb6d36, 412100c1, c3980e8a, 3fbcc732, 66a7d3b0, 6143a1d3).
+**Status:** IN PROGRESS 2026-11-26. Steps 1-14 done (d4e4b364, 130cbb85, bdb48529, 60b77a1d, 9adb6d36, 412100c1, c3980e8a, 3fbcc732, 6cd34123, 7b34e891, 66a7d3b0, 6143a1d3, d6046006); live Steps 15-17 next.
 
 ## Problem
 
@@ -463,6 +463,7 @@ Entries marked "superseded" are kept for the record; the later entry wins.
   - The dispatcher then runs `.\scripts\Generate-ArchitectureMap.ps1` and commits it all together.
 - Done when: `Build` 0 errors, and the dispatcher's T2 run is all green.
 - Lane: implementer (code), then the dispatcher (regeneration, T2, commit). Effort: S.
+- Done: 6cd34123 (only `docs/generated/modeleval_scenarios.md` regenerated; T2 green)
 
 ### Step 10 - Docs and TODO markers
 - Files:
@@ -488,6 +489,7 @@ Entries marked "superseded" are kept for the record; the later entry wins.
   - Add one INBOX line for that TODO.
 - Done when: `Build` 0 errors.
 - Lane: implementer. Effort: S.
+- Done: 7b34e891 (the ShippingKind stepped test is `-Test ShippingKindStep`, not `ShippingKindStepped`)
 
 ### Step 11 - Golden verification (dispatcher run)
 - Files: none. A failure goes back to the owning step's agent, resumed with `SendMessage`.
@@ -498,6 +500,7 @@ Entries marked "superseded" are kept for the record; the later entry wins.
   The original ids are included to prove Steps 1-2 changed nothing.
 - Done when: every T1 case is green for the 3 new and the 3 original ids.
 - Lane: dispatcher (`RunTest`). Effort: S.
+- Done: green, 30/30 at 7b34e891. The filter above selects no `[Explicit]` case: run the cases with `Name=<exact case name>` alternatives only (a mixed filter with `FullyQualifiedName~` also drops them). `EvalToolSchemaVisibilityTests` (iterates the registry) 7/7.
 
 ### Step 12 - Extract the transcript metrics into a shared script helper
 - Files: `scripts/roslynsentinel-transcriptmetrics.ps1` (new), `scripts/Get-ToolResultFormatArmTable.ps1`
@@ -629,6 +632,7 @@ Entries marked "superseded" are kept for the record; the later entry wins.
 - Done when: `pwsh -NoProfile -File scripts\Get-SlipCounts.Tests.ps1` exits 0, and the dispatcher
   confirms T5b.
 - Lane: test-writer. Effort: S.
+- Done: d6046006 (T5a exit 0, 17 synthetic runs; T5b: 4, 1, 0/0, 59 as expected)
 
 ### Step 15 - E1: logic gate (live)
 - Files: none (results are under the scratch root and in the queue).
