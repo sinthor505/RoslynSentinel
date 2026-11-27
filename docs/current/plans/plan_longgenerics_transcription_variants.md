@@ -46,6 +46,24 @@ measure what it is for.
   (11 of 19 baseline runs at 91c493ad hit the cap with about 30 writes each). The 27 open jobs were
   cancelled; baseline and both variants are requeued at the turn-cap commit (purpose
   `slipsite-cap60-<sha8>`), so Step 8 compares those runs only.
+- D7 (Step 8 result, 2026-11-27): 48 runs at dd3b8a00 (`slipsite-cap60-dd3b8a00`), Qwen3.5-9B, 112 / 113:
+
+  | Id | Runs | Pass | Residual (CI) | Collateral | Completion | Classes Clean/Slip/Short/Broken | E2 n |
+  | --- | --- | --- | --- | --- | --- | --- | --- |
+  | LongGenericsSlip | 12 / 12 | 1 / 2 | 0.23 (0.17-0.29) / 0.19 (0.11-0.27) | 0.10 / 0.07 | 0.88 / 0.92 | 1/10/1/0, 2/8/2/0 | 119 / 226 |
+  | LongGenericsFullLineSlip | 6 / 6 | 4 / 3 | 0.01 (0-0.02) / 0.01 (0-0.02) | 0.17 / 0.20 | 0.85 / 1.00 | 4/1/1/0, 3/2/0/1 | 3 / 3 |
+  | ConcurrentCollectionsSlip | 6 / 6 | 5 / 2 | 0.02 (0-0.05) / 0.02 (0-0.04) | 0.00 / 0.00 | 1.00 / 0.96 | 5/1/0/0, 4/2/0/0 | 17 / 9 |
+
+  Turn cap 60 cut baseline cap hits to 3 of 24 (from 11 of 19 at 40) but left its residual unchanged,
+  so the baseline's errors are comprehension, not turn budget. FullLine changed the task shape: runs
+  with 3-6 large `ReplaceSnippet`/`ReplaceRange` blocks, two of which (112 184415, 113 181132) deleted
+  all six controls (the collateral figure); its Wrong sites are a missed first change (ShipmentLegs)
+  and a line copied from another site (PickingTasks). ConcurrentCollections' Wrong sites are copy
+  slips: the outer `Stack` left unconverted (3) and a dropped nesting level (3). Other: one FullLine
+  run on 113 (174733) has no sidecar and no stop reason (testhost crash, Broken); one FullLine run on
+  112 (183545) stopped on RepeatedToolFailure after 15 `ReplaceSnippet` calls.
+  The Step 8 rule (lowest residual, CI clear of the baseline) picks FullLine; both variants clear it.
+  E2 choice pending the owner (recommendation: ConcurrentCollectionsSlip, no collateral).
 
 ## Execution rules
 
