@@ -14,6 +14,12 @@ Create RoslynSentinel.Engines.Core and move snippet matching into it (2026-11-27
 
 Evidence: IMPLEMENTED 2026-11-27. Steps 1 to 7 at 373ff903, e968ccd4, 4545a2af, 87931adb, 1e509d72 (5a), d04798a6 (5b), 64088182 (6), 6c573134 (7); full run 6c573134-20261127-022016-39260 (suite full, 1,519 s): 12,633 tests, 12,585 passed, 48 skipped, 0 failures, test count equal to the baseline cc147f9e-20261127-004211-40584 (12,633, 0 failures). Filtered runs per step: 942 tests each; the only failure, ArchitectureDocFreshness at d04798a6 and 64088182, was the expected stale generated docs, fixed by the Step 7 regeneration. Tool gaps recorded in INBOX (MoveFile gate adds only direct edges; MoveMember refuses a record as source type). CLAUDE.md is 15,073 bytes after Step 7; the hygiene script reports 0 findings.
 
+## LongGenerics transcription-first variants - resolved (2026-11-27)
+
+Two variants beside LongGenericsSlip (whose errors were comprehension, not copy slips): LongGenericsFullLineSlip (full new lines in the prompt) and ConcurrentCollectionsSlip (global Dictionary/Queue/Stack -> Concurrent* map); slip-family turn cap 40 -> 60 - [plan](plans/closed/plan_longgenerics_transcription_variants.md)
+
+Evidence: plan IMPLEMENTED: 87f7268d..fb534b14, 48 runs at dd3b8a00: residual 0.23/0.19 baseline, 0.01/0.01 FullLine (collateral 0.17/0.20, controls deleted by block rewrites), 0.02/0.02 ConcurrentCollections (collateral 0); E2 uses ConcurrentCollectionsSlip (D7, D8); variant guide in each scenario class comment
+
 ## Slip-first scenarios graded per site - resolved (2026-11-27)
 
 Slip-first scenarios graded per site (2026-11-26) - four slip-family scenarios (36 per-site-graded members each, silent slips counted) with builder, token grader, sidecar, Get-SlipCounts metrics and an E1 validity batch; run `/implement-plan` in a fresh chat; `batchEdits` A/B arm is a later plan; effort L - [plan](plans/closed/plan_slip_first_scenarios.md)

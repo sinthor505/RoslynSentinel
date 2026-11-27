@@ -1,6 +1,6 @@
 # Plan: Two transcription-first variants of the LongGenerics slip family
 
-**Status:** IN PROGRESS 2026-11-27. Steps 1-7 done (87f7268d, d501ea47, 5d0329bd, 7b70a640, 878d8f84, 40bbce12; gate green at 40bbce12; 24 runs queued); Step 8 waits for the runs.
+**Status:** IMPLEMENTED 2026-11-27. 87f7268d..fb534b14 (Steps 1-8; turn cap 60 at dd3b8a00, D6); E2 uses ConcurrentCollectionsSlip (D8); ModelEval fast suite 0 failures.
 
 ## Problem
 
@@ -64,6 +64,9 @@ measure what it is for.
   112 (183545) stopped on RepeatedToolFailure after 15 `ReplaceSnippet` calls.
   The Step 8 rule (lowest residual, CI clear of the baseline) picks FullLine; both variants clear it.
   E2 choice pending the owner (recommendation: ConcurrentCollectionsSlip, no collateral).
+- D8 (owner, 2026-11-27): E2 uses ConcurrentCollectionsSlip (overriding the Step 8 rule, which ignores
+  collateral). LongGenericsSlip and LongGenericsFullLineSlip stay registered; each scenario class carries a
+  variant guide (strengths, weaknesses, the D7 table) so a caller picks the id for the axis measured (fb534b14).
 
 ## Execution rules
 
@@ -209,6 +212,7 @@ measure what it is for.
 - Lane: dispatcher. Effort: S
 
 ### Step 8 - Compare and record
+- Done: ac87f6c8 (D7 table), D8 recorded at close
 - Files: this plan, `docs/current/TODO.md`
 - Depends on: 7 (runs drained, roughly 4 h after queueing)
 - Effect: none
