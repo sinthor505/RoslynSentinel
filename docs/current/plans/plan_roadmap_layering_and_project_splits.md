@@ -122,7 +122,8 @@ Dated entries; later entries do not override earlier ones unless they say so. Q-
 - Effort: M
 
 ### Phase 3 - Layering design
-- Doc: to be written: one proposal (working name `proposal_engines_report_facts_tool_layer_writes_text.md`).
+- Doc: [proposal_engines_report_facts_tool_layer_writes_text.md](../proposals/proposal_engines_report_facts_tool_layer_writes_text.md) (DRAFT
+  2026-11-27, design session in progress).
 - Depends on: none (runs in parallel with Phases 0 to 2).
 - Effect: design only.
 - Change: settle (a) how facts travel: the engine-layer exception family, fact records on exceptions and results (Q37), the rename of the
