@@ -2,19 +2,24 @@
 
 # Code TODO markers
 
-323 markers in 151 files. Links are relative to this file.
+333 markers in 159 files. Links are relative to this file.
 
 ## RoslynSentinel.AgentLoop/LmStudioAgentClient.cs (1)
 
-- [255](../../RoslynSentinel.AgentLoop/LmStudioAgentClient.cs#L255) `// TODO per-request sampler path on /v1/chat/completions (top_k, min_p, repetition_penalty, penalties) so those fields can be enforced; deferred until a comparison needs it (docs/current/findings/finding_overnight_token_path_slips.md, item 7)`
+- [257](../../RoslynSentinel.AgentLoop/LmStudioAgentClient.cs#L257) `// TODO per-request sampler path on /v1/chat/completions (top_k, min_p, repetition_penalty, penalties) so those fields can be enforced; deferred until a comparison needs it (docs/current/findings/finding_overnight_token_path_slips.md, item 7)`
 
-## RoslynSentinel.AgentLoop/ModelAgentRunner.cs (5)
+## RoslynSentinel.AgentLoop/ModelAgentRunner.cs (6)
 
 - [92](../../RoslynSentinel.AgentLoop/ModelAgentRunner.cs#L92) `// TODO generic server-options snapshot in the run stamp`
-- [273](../../RoslynSentinel.AgentLoop/ModelAgentRunner.cs#L273) `// TODO no runner-level test pins the ModelKey/Temperature/TopP header fields yet (ContextExhaustedRunnerTests is the place)`
-- [443](../../RoslynSentinel.AgentLoop/ModelAgentRunner.cs#L443) `// TODO force a reasoning drop (policy DroppedTurns) and retry once before ending the run as ContextExhausted (plan_reasoning_replay_pressure_policy, out of scope).`
-- [726](../../RoslynSentinel.AgentLoop/ModelAgentRunner.cs#L726) `// TODO two identical failing calls alternated per turn (A,B,A,B: 10-chain run 301, 2026-11-10, T8-T19) never trip this consecutive-only breaker; Breaker_DoesNotTrip_WhenFailuresAreNotConsecutive pins that as "exploring" - decide whether repeats of the same signature since the last success should count.`
-- [820](../../RoslynSentinel.AgentLoop/ModelAgentRunner.cs#L820) `// TODO seeded failures do not feed the consecutive-failure breaker (lastFailureSignature/consecutiveFailures live in RunAsync); harmless while the limit is high, as in the eval fixtures.`
+- [289](../../RoslynSentinel.AgentLoop/ModelAgentRunner.cs#L289) `// TODO no runner-level test pins the ModelKey/Temperature/TopP header fields yet (ContextExhaustedRunnerTests is the place)`
+- [479](../../RoslynSentinel.AgentLoop/ModelAgentRunner.cs#L479) `// TODO force a reasoning drop (policy DroppedTurns) and retry once before ending the run as ContextExhausted (plan_reasoning_replay_pressure_policy, out of scope).`
+- [779](../../RoslynSentinel.AgentLoop/ModelAgentRunner.cs#L779) `// TODO two identical failing calls alternated per turn (A,B,A,B: 10-chain run 301, 2026-11-10, T8-T19) never trip this consecutive-only breaker; Breaker_DoesNotTrip_WhenFailuresAreNotConsecutive pins that as "exploring" - decide whether repeats of the same signature since the last success should count.`
+- [873](../../RoslynSentinel.AgentLoop/ModelAgentRunner.cs#L873) `// TODO seeded failures do not feed the consecutive-failure breaker (lastFailureSignature/consecutiveFailures live in RunAsync); harmless while the limit is high, as in the eval fixtures.`
+- [1140](../../RoslynSentinel.AgentLoop/ModelAgentRunner.cs#L1140) `// TODO _sizeBytes holds json.Length (UTF-16 chars), not bytes; rename to _sizeChars once agent-log readers are checked`
+
+## RoslynSentinel.Common/AppliedChangeSummary.cs (1)
+
+- [122](../../RoslynSentinel.Common/AppliedChangeSummary.cs#L122) `// TODO this note names returnDiff for tools that do not declare it (ChangeNamespace rejects it)`
 
 ## RoslynSentinel.Common/BatchTypes.cs (1)
 
@@ -45,14 +50,6 @@
 - [65](../../RoslynSentinel.Common/FileNotFoundMessage.cs#L65) `// TODO optional per-error-code operator policy suffix (idea_error_policy_pointer)`
 - [171](../../RoslynSentinel.Common/FileNotFoundMessage.cs#L171) `// TODO remember server-side file renames (old path -> new path) and name the new path here instead of hedging.`
 
-## RoslynSentinel.Common/FullSuiteStalenessOptions.cs (1)
-
-- [38](../../RoslynSentinel.Common/FullSuiteStalenessOptions.cs#L38) `// TODO share this helper with LlmOptions.GetArgValue (every options class carries a private copy with the same behaviour).`
-
-## RoslynSentinel.Common/IdleRestartOptions.cs (1)
-
-- [37](../../RoslynSentinel.Common/IdleRestartOptions.cs#L37) `// TODO share this helper with LlmOptions.GetArgValue (currently a private copy with the same behaviour).`
-
 ## RoslynSentinel.Common/McpToolSchemaPatcher.cs (2)
 
 - [230](../../RoslynSentinel.Common/McpToolSchemaPatcher.cs#L230) `// TODO this enumeration and SentinelToolMethods both walk a type's [McpServerTool] methods and derive the tool name; they differ in`
@@ -66,21 +63,24 @@
 
 - [152](../../RoslynSentinel.Common/OperationBlobWriter.cs#L152) `// TODO cancellation: propagating OCE would report cancelled for a change already applied with no undo blob; see docs/current/proposals/proposal_throw_typed_exceptions_not_failure_results.md S1a`
 
-## RoslynSentinel.Common/PersistentWorkspaceManager.cs (13)
+## RoslynSentinel.Common/PersistentWorkspaceManager.cs (12)
 
-- [498](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L498) `// TODO name ListWorkspaceSolutions (it lists the solutions under the base directory) as an option here once Common`
-- [992](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L992) `// TODO a load failure is not a lookup miss (inventory C5b); it is coded NotFound through ToolNotFoundException; reclassify when a load-failure code exists.`
-- [1036](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L1036) `// TODO a seeding task still running from the previous load can add the old solution's effects after this clear (bounded by the seeder's 5 s budget); give the seeder a per-load generation if that shows up.`
-- [1042](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L1042) `// TODO an open that succeeds with zero projects still replaces a previously good solution (same as before this change); consider keeping the old one.`
-- [1075](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L1075) `// TODO a load failure is not a lookup miss (inventory C5b); it is coded NotFound through ToolNotFoundException; reclassify when a load-failure code exists.`
-- [1838](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L1838) `// TODO the debounce busy path waits up to DebounceWait while holding _solutionLock (accepted for v1, plan_stale_read_guard_followups Step 9c)`
-- [2107](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L2107) `// TODO LoadSolution (WorkspaceProjectManagementImpl) and SubAgentModelRun.AwaitSolutionLoadAsync time out with the plain LoadWaitTimedOut text: they only see ISolutionProvider, which does not expose that a background reload is the load in progress.`
+- [501](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L501) `// TODO name ListWorkspaceSolutions (it lists the solutions under the base directory) as an option here once Common`
+- [995](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L995) `// TODO a load failure is not a lookup miss (inventory C5b); it is coded NotFound through ToolNotFoundException; reclassify when a load-failure code exists.`
+- [1039](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L1039) `// TODO a seeding task still running from the previous load can add the old solution's effects after this clear (bounded by the seeder's 5 s budget); give the seeder a per-load generation if that shows up.`
+- [1045](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L1045) `// TODO an open that succeeds with zero projects still replaces a previously good solution (same as before this change); consider keeping the old one.`
+- [1078](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L1078) `// TODO a load failure is not a lookup miss (inventory C5b); it is coded NotFound through ToolNotFoundException; reclassify when a load-failure code exists.`
+- [1841](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L1841) `// TODO the debounce busy path waits up to DebounceWait while holding _solutionLock (accepted for v1, plan_stale_read_guard_followups Step 9c)`
 - [2427](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L2427) `// TODO _sessionHalted can no longer be set; remove the dead latch and its readers (HaltInfo, IdleRestartPolicy, HaltStamp) in a cleanup slice`
 - [2649](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L2649) `// TODO cancellation: rethrowing mid-loop would skip rollbackOnPartialFailure and workspace sync and leave written files on disk; decide cancel-vs-rollback semantics; see docs/current/proposals/proposal_throw_typed_exceptions_not_failure_results.md S1a`
 - [2766](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L2766) `// TODO cancellation: rethrowing mid-loop would skip rollbackOnPartialFailure and workspace sync and leave written files on disk; decide cancel-vs-rollback semantics; see docs/current/proposals/proposal_throw_typed_exceptions_not_failure_results.md S1a`
 - [2926](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L2926) `// TODO the release-on-exception path (Step 9b test row X) is untested: it needs a fault-injection seam (a test hook that throws after the lock is acquired and before the write completes) so a test can prove the lock is released when the write faults.`
 - [3287](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L3287) `// TODO this persisting-mismatch Warning reuses WorkspaceStaleText.Recovery, whose text talks about a broken .csproj/.sln; the persisting-mismatch case needs its own recovery wording.`
 - [3489](../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L3489) `// TODO a ProjectLoadFailedException here does not re-baseline the structural file hashes (the debounce path does, under the lock), so reverting a broken project file to its previous content is hash-confirmed as a no-op and the failure stays until a LoadSolution(forceReload) or another edit.`
+
+## RoslynSentinel.Common/ResultPager.cs (1)
+
+- [50](../../RoslynSentinel.Common/ResultPager.cs#L50) `// TODO use LargeResultHelper.ErrorDataKey`
 
 ## RoslynSentinel.Common/RoslynFormattingHelper.cs (2)
 
@@ -92,10 +92,12 @@
 - [282](../../RoslynSentinel.Common/ServerBinaryStaleness.cs#L282) `// TODO production no longer calls this (DescribeUncommittedServerSource reads typed rows via RepoQueryProvider.Current and DescribeUncommittedChanges); kept only for its text-parser tests in ServerBinaryStalenessTests. Delete it with them.`
 - [340](../../RoslynSentinel.Common/ServerBinaryStaleness.cs#L340) `// TODO production no longer calls this (EvaluateGit reads typed commits via RepoQueryProvider.Current and FilterServerSourceCommits); kept only for its text-parser tests in ServerBinaryStalenessTests. Delete it with them.`
 
-## RoslynSentinel.Common/SnippetMatching/SnippetErrorFormatter.cs (2)
+## RoslynSentinel.Common/SnippetMatching/SnippetErrorFormatter.cs (4)
 
-- [193](../../RoslynSentinel.Common/SnippetMatching/SnippetErrorFormatter.cs#L193) `// TODO AmbiguityAdvice still orders the caller,`
-- [475](../../RoslynSentinel.Common/SnippetMatching/SnippetErrorFormatter.cs#L475) `// TODO C6f: an invalid selector is an InvalidArgument condition (a malformed matchLine/lineBefore/lineAfter), not a lookup miss;`
+- [180](../../RoslynSentinel.Common/SnippetMatching/SnippetErrorFormatter.cs#L180) `// TODO batch NotFound refusals carry the closest-window score only in this text; expose SnippetClosestWindow as a typed field so scripts (Get-SlipCounts.ps1) need not parse it`
+- [194](../../RoslynSentinel.Common/SnippetMatching/SnippetErrorFormatter.cs#L194) `// TODO AmbiguityAdvice still orders the caller,`
+- [476](../../RoslynSentinel.Common/SnippetMatching/SnippetErrorFormatter.cs#L476) `// TODO C6f: an invalid selector is an InvalidArgument condition (a malformed matchLine/lineBefore/lineAfter), not a lookup miss;`
+- [629](../../RoslynSentinel.Common/SnippetMatching/SnippetErrorFormatter.cs#L629) `// TODO The model reads this text and the file JSON-encoded, so "plain quotes (\")" arrives as (\") and the file's line as .\"; - the example shows the escaped form as the plain one (thinking smoke 192447 T8-T13: reasoning "has \"; instead of \";", oldContent kept .\"; on the line); name the characters instead of showing them, or give the corrected line in a form that survives JSON encoding`
 
 ## RoslynSentinel.Common/SpeculativeAdvice.cs (1)
 
@@ -123,7 +125,7 @@
 
 ## RoslynSentinel.Common/ToolResultMarshaller.cs (1)
 
-- [298](../../RoslynSentinel.Common/ToolResultMarshaller.cs#L298) `// TODO StripToolPaging leaves successData.envelope untouched: a cut GetMethodSource page still says isComplete:true and the pre-cut returnedToLine/lineCount, contradicting largeResult.`
+- [300](../../RoslynSentinel.Common/ToolResultMarshaller.cs#L300) `// TODO StripToolPaging leaves successData.envelope untouched: a cut GetMethodSource page still says isComplete:true and the pre-cut returnedToLine/lineCount, contradicting largeResult.`
 
 ## RoslynSentinel.Common/ValidateAndApplyHelper.cs (3)
 
@@ -159,8 +161,8 @@
 
 ## RoslynSentinel.Engines.Advanced/CommentingEngine.cs (2)
 
-- [340](../../RoslynSentinel.Engines.Advanced/CommentingEngine.cs#L340) `catch (ToolException ex) // TODO no test pins this per-item catch (needs a workspace-backed CommentFileAsync fixture with FakeLlmClient)`
-- [421](../../RoslynSentinel.Engines.Advanced/CommentingEngine.cs#L421) `// TODO cancellation: per-item catch around the LLM call; an HTTP timeout (TaskCanceledException) would abort the whole run if filtered (unverified); see docs/current/proposals/proposal_throw_typed_exceptions_not_failure_results.md S1a`
+- [341](../../RoslynSentinel.Engines.Advanced/CommentingEngine.cs#L341) `catch (ToolException ex) // TODO no test pins this per-item catch (needs a workspace-backed CommentFileAsync fixture with FakeLlmClient)`
+- [422](../../RoslynSentinel.Engines.Advanced/CommentingEngine.cs#L422) `// TODO cancellation: per-item catch around the LLM call; an HTTP timeout (TaskCanceledException) would abort the whole run if filtered (unverified); see docs/current/proposals/proposal_throw_typed_exceptions_not_failure_results.md S1a`
 
 ## RoslynSentinel.Engines.Advanced/OutParamRefactoringEngine.cs (1)
 
@@ -209,17 +211,17 @@
 
 ## RoslynSentinel.Engines.Basic/BasicRefactoringEngine.cs (2)
 
-- [1116](../../RoslynSentinel.Engines.Basic/BasicRefactoringEngine.cs#L1116) `// TODO rebind refusals show file paths with backslashes, unlike other results (paths come from declPath.ToString() and skippedSites FilePath.ToString())`
-- [2156](../../RoslynSentinel.Engines.Basic/BasicRefactoringEngine.cs#L2156) `// TODO bare catch swallows Roslyn failures into a warning string; throw ToolTargetIneligibleException instead`
+- [1117](../../RoslynSentinel.Engines.Basic/BasicRefactoringEngine.cs#L1117) `// TODO rebind refusals show file paths with backslashes, unlike other results (paths come from declPath.ToString() and skippedSites FilePath.ToString())`
+- [2157](../../RoslynSentinel.Engines.Basic/BasicRefactoringEngine.cs#L2157) `// TODO bare catch swallows Roslyn failures into a warning string; throw ToolTargetIneligibleException instead`
 
 ## RoslynSentinel.Engines.Basic/BuildEngine.cs (1)
 
-- [102](../../RoslynSentinel.Engines.Basic/BuildEngine.cs#L102) `// TODO maxDetails is no longer used by RunQuickBuildAsync/RunFullBuildAsync; drop the parameter and its callers' arguments.`
+- [103](../../RoslynSentinel.Engines.Basic/BuildEngine.cs#L103) `// TODO maxDetails is no longer used by RunQuickBuildAsync/RunFullBuildAsync; drop the parameter and its callers' arguments.`
 
 ## RoslynSentinel.Engines.Basic/BuildIsolation.cs (2)
 
-- [99](../../RoslynSentinel.Engines.Basic/BuildIsolation.cs#L99) `// TODO Part 3: replace with the ServerInstancePaths working-dir leaf name (plan_build_isolation_prod_instances_and_test_servers.md).`
-- [413](../../RoslynSentinel.Engines.Basic/BuildIsolation.cs#L413) `// TODO move the three BuildGate types below into their own BuildGate.cs; CreateFile's compile gate rejected a new file here (CS0518 on the seeded class), so they live beside BuildIsolation for now.`
+- [100](../../RoslynSentinel.Engines.Basic/BuildIsolation.cs#L100) `// TODO Part 3: replace with the ServerInstancePaths working-dir leaf name (plan_build_isolation_prod_instances_and_test_servers.md).`
+- [414](../../RoslynSentinel.Engines.Basic/BuildIsolation.cs#L414) `// TODO move the three BuildGate types below into their own BuildGate.cs; CreateFile's compile gate rejected a new file here (CS0518 on the seeded class), so they live beside BuildIsolation for now.`
 
 ## RoslynSentinel.Engines.Basic/ChangeNamespaceEngine.cs (1)
 
@@ -236,26 +238,18 @@
 - [811](../../RoslynSentinel.Engines.Basic/CompilerErrorLookupHelper.cs#L811) `// TODO FindExtensionMethods is named unconditionally; name it only when active (gated-tool rule)`
 - [919](../../RoslynSentinel.Engines.Basic/CompilerErrorLookupHelper.cs#L919) `// TODO share path matching with ValidateAndApplyHelper.DescribeUntouchedFileErrors`
 
-## RoslynSentinel.Engines.Basic/CopyAndObsoleteCallerRewrite.cs (1)
-
-- [700](../../RoslynSentinel.Engines.Basic/CopyAndObsoleteCallerRewrite.cs#L700) `// TODO moved mode (oldTypesGone) qualifies on "global using of old" and "old using must stay", where adding a using of the new namespace beside the kept old one is safe (old types gone, conflicts checked below); live ChangeNamespace dry run over RoslynSentinel.Git qualified 98+ references this way. Also check globalUsingPath scoping: an Engines.Basic file cited Common's obj GlobalUsings.g.cs.`
-
 ## RoslynSentinel.Engines.Basic/CopyAndObsoleteEdits.cs (1)
 
 - [182](../../RoslynSentinel.Engines.Basic/CopyAndObsoleteEdits.cs#L182) `// TODO a partial qualification inside a doc-comment cref (NameMemberCref/QualifiedCref) is not recognised here, so it still refuses a namespace change of the set`
 
-## RoslynSentinel.Engines.Basic/CsprojEdgeWriter.cs (1)
-
-- [32](../../RoslynSentinel.Engines.Basic/CsprojEdgeWriter.cs#L32) `: edge.ToProject; // TODO an InternalsVisibleTo Include names the receiving ASSEMBLY; AugmentBaseline uses the receiver's AssemblyName but this writes the project name, which differ when the project sets AssemblyName`
-
 ## RoslynSentinel.Engines.Basic/DocTrailerEngine.cs (1)
 
-- [705](../../RoslynSentinel.Engines.Basic/DocTrailerEngine.cs#L705) `// TODO reference-style link definitions ("[label]: target") and angle-bracket targets are not rewritten.`
+- [706](../../RoslynSentinel.Engines.Basic/DocTrailerEngine.cs#L706) `// TODO reference-style link definitions ("[label]: target") and angle-bracket targets are not rewritten.`
 
 ## RoslynSentinel.Engines.Basic/EditImpactAnalyzer.cs (2)
 
 - [615](../../RoslynSentinel.Engines.Basic/EditImpactAnalyzer.cs#L615) `// TODO also mark unverified when the only evidence is other unattributed CS0246/CS0103/CS0234 in the member's call-site files (not only a renamed owner type)`
-- [875](../../RoslynSentinel.Engines.Basic/EditImpactAnalyzer.cs#L875) `// TODO unify with the SameFile local in ValidateAndApplyHelper.DescribeUntouchedFileErrors once that file is free`
+- [971](../../RoslynSentinel.Engines.Basic/EditImpactAnalyzer.cs#L971) `// TODO unify with the SameFile local in ValidateAndApplyHelper.DescribeUntouchedFileErrors once that file is free`
 
 ## RoslynSentinel.Engines.Basic/EditImpactGate.cs (1)
 
@@ -352,21 +346,16 @@
 
 ## RoslynSentinel.Engines.Basic/TestInstanceLauncher.cs (1)
 
-- [128](../../RoslynSentinel.Engines.Basic/TestInstanceLauncher.cs#L128) `// TODO delete <workingDirectory>\server when the instance is stopped (KillHandle/Stop); today the copy stays until the instances dir is swept.`
+- [129](../../RoslynSentinel.Engines.Basic/TestInstanceLauncher.cs#L129) `// TODO delete <workingDirectory>\server when the instance is stopped (KillHandle/Stop); today the copy stays until the instances dir is swept.`
 
 ## RoslynSentinel.Engines.Basic/TestRunEngine.cs (1)
 
-- [669](../../RoslynSentinel.Engines.Basic/TestRunEngine.cs#L669) `// TODO no automated test drives this branch end to end: the TestSolutionFixture project uses xunit, which reports a malformed filter as 0 matched, so only InvalidFilterDetail is unit tested (NUnit cause verified by hand 2026-11-24 on Tests.Asyncify)`
+- [670](../../RoslynSentinel.Engines.Basic/TestRunEngine.cs#L670) `// TODO no automated test drives this branch end to end: the TestSolutionFixture project uses xunit, which reports a malformed filter as 0 matched, so only InvalidFilterDetail is unit tested (NUnit cause verified by hand 2026-11-24 on Tests.Asyncify)`
 
-## RoslynSentinel.Git/GitEngine.cs (3)
+## RoslynSentinel.Git/GitEngine.cs (2)
 
-- [13](../../RoslynSentinel.Git/GitEngine.cs#L13) `// TODO rename namespace to RoslynSentinel.Git (no ChangeNamespace tool; see plan_isolate_git_area_into_own_project Step 19)`
-- [1493](../../RoslynSentinel.Git/GitEngine.cs#L1493) `// TODO the line re-join below reproduces the old BeginOutputReadLine/AppendLine output (every line ends in`
-- [3431](../../RoslynSentinel.Git/GitEngine.cs#L3431) `// TODO the condition is amend || IsNullOrWhiteSpace(message), but a blank message without amend is refused at the top of CommitAsync, so only amend reaches this branch; keep the reason text (the Step 5 audit script catalogue reads it)`
-
-## RoslynSentinel.Git/GitProcess.cs (1)
-
-- [7](../../RoslynSentinel.Git/GitProcess.cs#L7) `// TODO rename namespace to RoslynSentinel.Git (no ChangeNamespace tool; see plan_isolate_git_area_into_own_project Step 19)`
+- [1492](../../RoslynSentinel.Git/GitEngine.cs#L1492) `// TODO the line re-join below reproduces the old BeginOutputReadLine/AppendLine output (every line ends in`
+- [3430](../../RoslynSentinel.Git/GitEngine.cs#L3430) `// TODO the condition is amend || IsNullOrWhiteSpace(message), but a blank message without amend is refused at the top of CommitAsync, so only amend reaches this branch; keep the reason text (the Step 5 audit script catalogue reads it)`
 
 ## RoslynSentinel.Git/Libgit2GitReader.Config.cs (1)
 
@@ -374,7 +363,7 @@
 
 ## RoslynSentinel.Git/Libgit2GitReader.cs (1)
 
-- [1736](../../RoslynSentinel.Git/Libgit2GitReader.cs#L1736) `// TODO a path-limited log on a merge-heavy history (this repo's) walks to its first merge and then declines: measured 25-100 ms of wasted in-process work`
+- [1737](../../RoslynSentinel.Git/Libgit2GitReader.cs#L1737) `// TODO a path-limited log on a merge-heavy history (this repo's) walks to its first merge and then declines: measured 25-100 ms of wasted in-process work`
 
 ## RoslynSentinel.Git/Libgit2GitReader.IndexWrites.cs (1)
 
@@ -391,15 +380,15 @@
 
 ## RoslynSentinel.Server.Advanced/ServerHttp.cs (1)
 
-- [37](../../RoslynSentinel.Server.Advanced/ServerHttp.cs#L37) `// TODO symbol member inventory untested (plan_error_policy_pointer arm I never reached a container); decide default after an eval that exercises containingType/filePath misses`
+- [31](../../RoslynSentinel.Server.Advanced/ServerHttp.cs#L31) `// TODO symbol member inventory untested (plan_error_policy_pointer arm I never reached a container); decide default after an eval that exercises containingType/filePath misses`
 
 ## RoslynSentinel.Server.Advanced/ServerStdio.cs (1)
 
-- [49](../../RoslynSentinel.Server.Advanced/ServerStdio.cs#L49) `// TODO symbol member inventory untested (plan_error_policy_pointer arm I never reached a container); decide default after an eval that exercises containingType/filePath misses`
+- [43](../../RoslynSentinel.Server.Advanced/ServerStdio.cs#L43) `// TODO symbol member inventory untested (plan_error_policy_pointer arm I never reached a container); decide default after an eval that exercises containingType/filePath misses`
 
 ## RoslynSentinel.Server.Advanced/ServiceRegistrationExtensionsBasic.cs (1)
 
-- [238](../../RoslynSentinel.Server.Advanced/ServiceRegistrationExtensionsBasic.cs#L238) `// TODO generate the filter order into docs/generated from CallToolFilterNames so ArchitectureDocFreshnessTests catches a stale filter list in the reference doc.`
+- [239](../../RoslynSentinel.Server.Advanced/ServiceRegistrationExtensionsBasic.cs#L239) `// TODO generate the filter order into docs/generated from CallToolFilterNames so ArchitectureDocFreshnessTests catches a stale filter list in the reference doc.`
 
 ## RoslynSentinel.Server.Advanced/ToolArgumentValidator.cs (1)
 
@@ -507,17 +496,17 @@
 
 ## RoslynSentinel.Tests.Git/GitPatchParityHarness.cs (2)
 
-- [142](../../RoslynSentinel.Tests.Git/GitPatchParityHarness.cs#L142) `// TODO remove CompareAsync and CompareRootCommitAsync: no caller remains after the Step 13 pin (AssertPinAsync replaces the record-only corpus)`
-- [170](../../RoslynSentinel.Tests.Git/GitPatchParityHarness.cs#L170) `// TODO remove CompareRootCommitAsync with CompareAsync: no caller remains after the Step 13 pin`
+- [141](../../RoslynSentinel.Tests.Git/GitPatchParityHarness.cs#L141) `// TODO remove CompareAsync and CompareRootCommitAsync: no caller remains after the Step 13 pin (AssertPinAsync replaces the record-only corpus)`
+- [169](../../RoslynSentinel.Tests.Git/GitPatchParityHarness.cs#L169) `// TODO remove CompareRootCommitAsync with CompareAsync: no caller remains after the Step 13 pin`
 
 ## RoslynSentinel.Tests.Git/GitToolsSmokeTests.cs (2)
 
-- [164](../../RoslynSentinel.Tests.Git/GitToolsSmokeTests.cs#L164) `Assert.That(result.IsError, Is.False); Assert.That(System.Text.Json.JsonSerializer.Serialize(result.SuccessData), Does.Contain("\"IsClean\":true").And.Contain("\"Staged\":[]").And.Contain("\"Unstaged\":[]").And.Contain("\"Untracked\":[]")); // TODO fixture dependence: Branch is the temp repo's default branch name, so it is not pinned`
-- [175](../../RoslynSentinel.Tests.Git/GitToolsSmokeTests.cs#L175) `Assert.That(result.IsError, Is.False); Assert.That(System.Text.Json.JsonSerializer.Serialize(result.SuccessData), Does.Contain("\"Message\":\"initial commit\"")); // TODO fixture dependence: pins the fixture's single commit; hash and date are not stable`
+- [165](../../RoslynSentinel.Tests.Git/GitToolsSmokeTests.cs#L165) `Assert.That(result.IsError, Is.False); Assert.That(System.Text.Json.JsonSerializer.Serialize(result.SuccessData), Does.Contain("\"IsClean\":true").And.Contain("\"Staged\":[]").And.Contain("\"Unstaged\":[]").And.Contain("\"Untracked\":[]")); // TODO fixture dependence: Branch is the temp repo's default branch name, so it is not pinned`
+- [176](../../RoslynSentinel.Tests.Git/GitToolsSmokeTests.cs#L176) `Assert.That(result.IsError, Is.False); Assert.That(System.Text.Json.JsonSerializer.Serialize(result.SuccessData), Does.Contain("\"Message\":\"initial commit\"")); // TODO fixture dependence: pins the fixture's single commit; hash and date are not stable`
 
 ## RoslynSentinel.Tests.Harness/EvalRunStamp.cs (1)
 
-- [23](../../RoslynSentinel.Tests.Harness/EvalRunStamp.cs#L23) `// TODO symbol member inventory untested (plan_error_policy_pointer arm I never reached a container); decide default after an eval that exercises containingType/filePath misses`
+- [24](../../RoslynSentinel.Tests.Harness/EvalRunStamp.cs#L24) `// TODO symbol member inventory untested (plan_error_policy_pointer arm I never reached a container); decide default after an eval that exercises containingType/filePath misses`
 
 ## RoslynSentinel.Tests.Harness/FaultScenarios.cs (1)
 
@@ -542,6 +531,10 @@
 - [164](../../RoslynSentinel.Tests.Harness/TranscriptResume.cs#L164) `// TODO: a field this survey missed will show up as drift on every sample; when that happens, add its key to this list (or, if it sits inside a string, a narrow regex in NormalizeResultText).`
 - [411](../../RoslynSentinel.Tests.Harness/TranscriptResume.cs#L411) `// TODO delegate to ReplayKeptCallsDetailedAsync once TranscriptResumeAgentTests moves to the detailed result.`
 
+## RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Graders/ScenarioVerdict.cs (1)
+
+- [43](../../RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Graders/ScenarioVerdict.cs#L43) `// TODO passing runs classed SilentIncomplete under the default legacy contract: its prompt never asks for DONE:, so token is None (finding_outcome_class_silentincomplete_on_passing_runs_legacy_contract)`
+
 ## RoslynSentinel.Tests.ModelEval/ImplementationScenarios/InstructionAdherence/MigrateOntoEnvironmentHelperScenario.cs (1)
 
 - [180](../../RoslynSentinel.Tests.ModelEval/ImplementationScenarios/InstructionAdherence/MigrateOntoEnvironmentHelperScenario.cs#L180) `// TODO extract the shared setup (third copy)`
@@ -554,6 +547,10 @@
 - [384](../../RoslynSentinel.Tests.ModelEval/ImplementationScenarios/InstructionAdherence/PropertyFirstRetypeScenario.cs#L384) `return "no '// TODO retype this parameter' comment on the changedContent parameter's line or the line above it";`
 - [454](../../RoslynSentinel.Tests.ModelEval/ImplementationScenarios/InstructionAdherence/PropertyFirstRetypeScenario.cs#L454) `var todoRemoved = Edited(GoldenSummarySource, " // TODO retype this parameter", string.Empty);`
 - [463](../../RoslynSentinel.Tests.ModelEval/ImplementationScenarios/InstructionAdherence/PropertyFirstRetypeScenario.cs#L463) `var looseTodo = Edited(GoldenSummarySource, "// TODO retype this parameter", "// TODO: retype this parameter later");`
+
+## RoslynSentinel.Tests.ModelEval/ImplementationScenarios/ScenarioTemplateEdits.cs (1)
+
+- [8](../../RoslynSentinel.Tests.ModelEval/ImplementationScenarios/ScenarioTemplateEdits.cs#L8) `// TODO move the 14 private Edited copies (CRLF-aware form: ChangeSetTypeFromSpecScenario.cs:460) onto ScenarioTemplateEdits.ReplaceExactly`
 
 ## RoslynSentinel.Tests.ModelEval/ModelTestingResultsArchiver.cs (1)
 
@@ -658,7 +655,7 @@
 
 ## RoslynSentinel.Tests.Tools.Basic/ReadFilePagingLoopTests.cs (1)
 
-- [57](../../RoslynSentinel.Tests.Tools.Basic/ReadFilePagingLoopTests.cs#L57) `// TODO share these SetUp/helpers with SequenceLargeResultPagingTests through a common base fixture instead of the copy below.`
+- [58](../../RoslynSentinel.Tests.Tools.Basic/ReadFilePagingLoopTests.cs#L58) `// TODO share these SetUp/helpers with SequenceLargeResultPagingTests through a common base fixture instead of the copy below.`
 
 ## RoslynSentinel.Tests.Tools.Basic/RealProjectPatternTests.cs (1)
 
@@ -677,11 +674,12 @@
 - [20](../../RoslynSentinel.Tools.Advanced/AdvancedRefactoringTools.cs#L20) `// TODO _memberRefactoringEngine is assigned but never read since MoveMember moved to CoreRefactoringTools; drop it (and the constructor parameter) in the DI-shape cleanup slice of the core split, with BuildDiffAsync/BuildDiffFromPreImages below, which have no caller.`
 - [83](../../RoslynSentinel.Tools.Advanced/AdvancedRefactoringTools.cs#L83) `// TODO this wrapper has no recordEffects parameter, so the 23 apply sites in this class record no EditEffects (CoreRefactoringTools.ValidateAndApplyAsync passes one); GenerationTools.ValidateAndApplyAsync has the same gap`
 
-## RoslynSentinel.Tools.Advanced/AsyncifyTools.cs (3)
+## RoslynSentinel.Tools.Advanced/AsyncifyTools.cs (4)
 
-- [1460](../../RoslynSentinel.Tools.Advanced/AsyncifyTools.cs#L1460) `new DocumentChangeSet { { target.FilePath, updatedSource! } }, // TODO S4: UpdatedText becomes non-nullable`
-- [3195](../../RoslynSentinel.Tools.Advanced/AsyncifyTools.cs#L3195) `new DocumentChangeSet { { candidate.FilePath, updatedSource! } }, // TODO S4: UpdatedText becomes non-nullable`
-- [3696](../../RoslynSentinel.Tools.Advanced/AsyncifyTools.cs#L3696) `new DocumentChangeSet { { filePath, updatedSource! } }, // TODO S4: UpdatedText becomes non-nullable`
+- [225](../../RoslynSentinel.Tools.Advanced/AsyncifyTools.cs#L225) `// TODO these logs say bytes but summaryJson.Length counts UTF-16 chars, the unit of the inline budget; relabel as chars`
+- [1461](../../RoslynSentinel.Tools.Advanced/AsyncifyTools.cs#L1461) `new DocumentChangeSet { { target.FilePath, updatedSource! } }, // TODO S4: UpdatedText becomes non-nullable`
+- [3196](../../RoslynSentinel.Tools.Advanced/AsyncifyTools.cs#L3196) `new DocumentChangeSet { { candidate.FilePath, updatedSource! } }, // TODO S4: UpdatedText becomes non-nullable`
+- [3697](../../RoslynSentinel.Tools.Advanced/AsyncifyTools.cs#L3697) `new DocumentChangeSet { { filePath, updatedSource! } }, // TODO S4: UpdatedText becomes non-nullable`
 
 ## RoslynSentinel.Tools.Advanced/IntelligenceTools.cs (1)
 
@@ -697,13 +695,17 @@
 - [107](../../RoslynSentinel.Tools.Basic/AdminTools.cs#L107) `// TODO remove AcknowledgeDrift once its direct-call tests move to AcknowledgeDriftResult; kept for its plain-text contract.`
 - [649](../../RoslynSentinel.Tools.Basic/AdminTools.cs#L649) `// TODO remove ControlServer once its direct-call tests move to ControlServerResult; kept for its plain-text contract.`
 
+## RoslynSentinel.Tools.Basic/CoreRefactoringTools.cs (1)
+
+- [293](../../RoslynSentinel.Tools.Basic/CoreRefactoringTools.cs#L293) `// TODO A doc-comment cref to the method blocks the call as "not a simple invocation" (192009-439 T4)`
+
 ## RoslynSentinel.Tools.Basic/EditSnippetsTools.cs (1)
 
 - [20](../../RoslynSentinel.Tools.Basic/EditSnippetsTools.cs#L20) `// TODO remove EditSnippets or replace ReplaceSnippet after the A/B decision`
 
 ## RoslynSentinel.Tools.Basic/GitStatusRenameHints.cs (1)
 
-- [106](../../RoslynSentinel.Tools.Basic/GitStatusRenameHints.cs#L106) `// TODO Step 15: rename-hint finding reads blobs through IGitReader in Tools.Basic; decide whether it belongs behind a GitEngine/IGitOperations method (plan_isolate_git_area_into_own_project)`
+- [107](../../RoslynSentinel.Tools.Basic/GitStatusRenameHints.cs#L107) `// TODO Step 15: rename-hint finding reads blobs through IGitReader in Tools.Basic; decide whether it belongs behind a GitEngine/IGitOperations method (plan_isolate_git_area_into_own_project)`
 
 ## RoslynSentinel.Tools.Basic/RefactoringExtractionDocsImpl.cs (2)
 
@@ -732,28 +734,27 @@
 - [92](../../RoslynSentinel.Tools.Basic/SymbolNavigationImpl.cs#L92) `// TODO isCallable: SymbolNavigationImpl has no ActiveToolSurface, so hints name tools unconditionally (as the old text did)`
 - [282](../../RoslynSentinel.Tools.Basic/SymbolNavigationImpl.cs#L282) `// TODO hierarchy.Error is the type-not-found text (SymbolNavigationEngine.GetTypeHierarchyAsync), a lookup miss like the others: code it NotFound (TypeHierarchyReport has no error code field yet)`
 
-## RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs (7)
+## RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs (6)
 
 - [69](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L69) `// TODO reads existing text from disk, not the workspace document`
 - [245](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L245) `// TODO DeleteFile with no solution loaded returns NotFound; the cause is SolutionNotLoaded (ResolveFromWire yields an empty path), so the code is wrong.`
-- [543](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L543) `// TODO the three analyzer calls below each repeat the whole analysis (a FindReferences pass per moved type); expose one call that returns edges, cycles and package facts together`
-- [1165](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L1165) `// TODO no shrink/no-type-left guard here (ApplyDiff files format has LargeShrinkRejectionThreshold; ReplaceSnippet has the no-type-left guard)`
-- [1167](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L1167) `// TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)`
-- [1314](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L1314) `// TODO no shrink/no-type-left guard here (ApplyDiff files format has LargeShrinkRejectionThreshold; ReplaceSnippet has the no-type-left guard)`
-- [1316](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L1316) `// TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)`
+- [1176](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L1176) `// TODO no shrink/no-type-left guard here (ApplyDiff files format has LargeShrinkRejectionThreshold; ReplaceSnippet has the no-type-left guard)`
+- [1178](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L1178) `// TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)`
+- [1325](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L1325) `// TODO no shrink/no-type-left guard here (ApplyDiff files format has LargeShrinkRejectionThreshold; ReplaceSnippet has the no-type-left guard)`
+- [1327](../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L1327) `// TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)`
 
 ## RoslynSentinel.Tools.Basic/WorkspaceBuildTestImpl.cs (1)
 
-- [313](../../RoslynSentinel.Tools.Basic/WorkspaceBuildTestImpl.cs#L313) `// TODO this Options text still tells the caller to run Build(fullBuild) before LoadSolution(forceReload); LoadSolution now restores by itself, so name only LoadSolution(forceReload: true) (punchlist #19 follow-up)`
+- [314](../../RoslynSentinel.Tools.Basic/WorkspaceBuildTestImpl.cs#L314) `// TODO this Options text still tells the caller to run Build(fullBuild) before LoadSolution(forceReload); LoadSolution now restores by itself, so name only LoadSolution(forceReload: true) (punchlist #19 follow-up)`
 
 ## RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs (6)
 
-- [452](../../RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs#L452) `// TODO UndoChange reverts multi-item files last-write-wins (the last item's BeforeSource is restored); AsyncifyTools makes every item of a file carry the first BeforeSource to compensate`
-- [1152](../../RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs#L1152) `// TODO ReplaceSnippet silently applies an edit that strips only the file-scoped namespace line (its types move to the global namespace); flag it like this check does`
-- [1153](../../RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs#L1153) `// TODO pre-check whether an edit's new text declares a type that already exists in another file, ahead of compile validation`
-- [1595](../../RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs#L1595) `// TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)`
-- [2381](../../RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs#L2381) `// TODO duplicate-apply no-op for batch edits (single-edit path has it: AppliedEditMemory, Batch H4 R1)`
-- [2587](../../RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs#L2587) `// TODO a .cs file outside every project folder (e.g. the solution root) is written without compile validation: no project owns it, so the gate compiles nothing; WriteFile has the same gap`
+- [453](../../RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs#L453) `// TODO UndoChange reverts multi-item files last-write-wins (the last item's BeforeSource is restored); AsyncifyTools makes every item of a file carry the first BeforeSource to compensate`
+- [1153](../../RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs#L1153) `// TODO ReplaceSnippet silently applies an edit that strips only the file-scoped namespace line (its types move to the global namespace); flag it like this check does`
+- [1154](../../RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs#L1154) `// TODO pre-check whether an edit's new text declares a type that already exists in another file, ahead of compile validation`
+- [1596](../../RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs#L1596) `// TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)`
+- [2472](../../RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs#L2472) `// TODO duplicate-apply no-op for batch edits (single-edit path has it: AppliedEditMemory, Batch H4 R1)`
+- [2678](../../RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs#L2678) `// TODO a .cs file outside every project folder (e.g. the solution root) is written without compile validation: no project owns it, so the gate compiles nothing; WriteFile has the same gap`
 
 ## RoslynSentinel.Tools.Basic/WorkspaceHealthMiscImpl.cs (1)
 
@@ -766,16 +767,49 @@
 - [922](../../RoslynSentinel.Tools.Basic/WorkspaceProjectManagementImpl.cs#L922) `// TODO the target project this creates (engine CreateProjectAsync) is not restored the way CreateProject restores its project (punchlist #19 follow-up)`
 - [1051](../../RoslynSentinel.Tools.Basic/WorkspaceProjectManagementImpl.cs#L1051) `// TODO surface resolution.Note (a parameter-list-less id was resolved to the only method of that name) in the response WarningDetails, as RenameSymbol does with docCommentIdNote`
 
-## RoslynSentinel.Tools.Basic/WorkspaceReadNavigationImpl.cs (2)
+## RoslynSentinel.Tools.Basic/WorkspaceReadNavigationImpl.cs (3)
 
 - [304](../../RoslynSentinel.Tools.Basic/WorkspaceReadNavigationImpl.cs#L304) `// TODO GetMethodSource does not auto-resolve a unique bare file name (D4 follow-up)`
-- [1409](../../RoslynSentinel.Tools.Basic/WorkspaceReadNavigationImpl.cs#L1409) `var justTripped = _workspaceManager.RecordSearchOutcome(0); // TODO ForZeroHitSearch takes one isRegex flag, so a query that is both a valid regex and a literal (e.g. a+b) gets only the regex match; add a literal-and-regex overload.`
+- [415](../../RoslynSentinel.Tools.Basic/WorkspaceReadNavigationImpl.cs#L415) `// TODO methodBytes is a UTF-8 byte count while the inline budget is chars; measure methodSource.Length for consistency`
+- [1410](../../RoslynSentinel.Tools.Basic/WorkspaceReadNavigationImpl.cs#L1410) `var justTripped = _workspaceManager.RecordSearchOutcome(0); // TODO ForZeroHitSearch takes one isRegex flag, so a query that is both a valid regex and a literal (e.g. a+b) gets only the regex match; add a literal-and-regex overload.`
 
 ## RoslynSentinel.Tools.Experimental/CodeTransformTools.cs (2)
 
 - [867](../../RoslynSentinel.Tools.Experimental/CodeTransformTools.cs#L867) `// TODO dead catch: ConvertAbstractClassToInterfaceAsync throws only ToolException types; confirm its helpers before removing`
 - [1366](../../RoslynSentinel.Tools.Experimental/CodeTransformTools.cs#L1366) `// TODO a failed MsAugmentResult (type miss: NotFound, existing ToString: TargetIneligible) is returned as SuccessData with IsError = false; map result.IsError to an error with result.ErrorCode like ExtractMethod does`
 
+## scripts/Backfill-TranscriptSummary.ps1 (1)
+
+- [142](../../scripts/Backfill-TranscriptSummary.ps1#L142) `# TODO migrate transcript parsing to scripts/eval-review/EvalRunReader.ps1`
+
+## scripts/Get-EditArmTable.ps1 (1)
+
+- [58](../../scripts/Get-EditArmTable.ps1#L58) `# TODO migrate transcript parsing to scripts/eval-review/EvalRunReader.ps1`
+
+## scripts/Get-EditToolFriction.ps1 (1)
+
+- [58](../../scripts/Get-EditToolFriction.ps1#L58) `# TODO migrate transcript parsing to scripts/eval-review/EvalRunReader.ps1`
+
+## scripts/Get-RunDigest.ps1 (1)
+
+- [534](../../scripts/Get-RunDigest.ps1#L534) `# TODO move the 7 sampler names into vocabulary.json (scripts must not copy lists; the plan's Contracts name them but vocabulary has no samplerFields)`
+
+## scripts/Get-SlipCounts.ps1 (1)
+
+- [155](../../scripts/Get-SlipCounts.ps1#L155) `# TODO migrate transcript parsing to scripts/eval-review/EvalRunReader.ps1`
+
+## scripts/Get-ThinkingArmTable.ps1 (1)
+
+- [153](../../scripts/Get-ThinkingArmTable.ps1#L153) `# TODO add ToolResultFormat to the arm key`
+
 ## scripts/Get-TodoMarkers.ps1 (1)
 
 - [7](../../scripts/Get-TodoMarkers.ps1#L7) `("// TODO", "# TODO", "<!-- TODO") and writes a Markdown list grouped by file. Only tracked files are`
+
+## scripts/Get-ToolResultFormatArmTable.ps1 (1)
+
+- [91](../../scripts/Get-ToolResultFormatArmTable.ps1#L91) `# TODO migrate transcript parsing to scripts/eval-review/EvalRunReader.ps1`
+
+## scripts/roslynsentinel-interrogate.ps1 (1)
+
+- [239](../../scripts/roslynsentinel-interrogate.ps1#L239) `# TODO replays ResultJson; a run with ROSLYNSENTINEL_MODELEVAL_TOOL_RESULT_FORMAT=plain|xml showed the model rendered text instead (plan_plain_text_tool_results_for_eval_model Q12)`

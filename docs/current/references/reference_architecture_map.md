@@ -16,7 +16,7 @@ pointers: open the cited file for detail, and trust the source over this doc if 
 | Layer | Projects | Owns |
 | --- | --- | --- |
 | Common | `RoslynSentinel.Common` | Workspace manager, result types, filters' helpers, schema patcher, toolset catalog; the git seam (`IRepoQuery`/`RepoQueryProvider`, `IRepoProbe`) that Common code calls instead of the git readers |
-| Git | `RoslynSentinel.Git` | Git plumbing (`IGitReader` and its CLI/libgit2/fallback readers, `GitProcess`, hooks, commit routes, warmup), the Git engine `GitEngine` behind `IGitOperations` with its result DTOs and hint keys (no tool names; `Tools.Basic/GitHintText` renders hints), and the `GitWorktree/` harness. Namespaces still `RoslynSentinel.Common`/`RoslynSentinel.Tools.Basic` (rename pending a namespace-change tool). The only `LibGit2Sharp` reference |
+| Git | `RoslynSentinel.Git` | Git plumbing (`IGitReader` and its CLI/libgit2/fallback readers, `GitProcess`, hooks, commit routes, warmup), the Git engine `GitEngine` behind `IGitOperations` with its result DTOs and hint keys (no tool names; `Tools.Basic/GitHintText` renders hints), and the `Worktrees/` harness. Namespaces are `RoslynSentinel.Git` and, for the harness, `RoslynSentinel.Git.Worktrees`. The only `LibGit2Sharp` reference |
 | Engines | `Engines.Basic`, `Engines.Advanced` | Roslyn analysis/refactoring logic. No MCP types |
 | Tools | `Tools.Basic`, `Tools.Advanced`, `Tools.Experimental` | `[McpServerToolType]` classes plus the `*Impl` classes behind the Basic tools |
 | Server | `Server.Advanced` (the only server project; the former `Server.Basic` was folded in) | Entry points, arg parsing, mode resolution, DI + request filters. No tool/engine logic |

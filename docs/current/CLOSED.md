@@ -8,6 +8,10 @@ Only the newest month (2026-11) is kept here. Older entries are archived unchang
 [archive/closed_2026-10.md](archive/closed_2026-10.md), [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Git project namespace rename - resolved (2026-11-27)
+
+INBOX 2026-11-24 22:10 (the Git split's Step 19 namespace half, `// TODO rename namespace to RoslynSentinel.Git` in `GitEngine.cs` and `GitProcess.cs`) - resolved by [plan_rename_git_project_namespaces](plans/plan_rename_git_project_namespaces.md): all of `RoslynSentinel.Git/` is now `RoslynSentinel.Git`, the worktree harness is `RoslynSentinel.Git.Worktrees` in `Worktrees/` (commits c2b3acb9, fdd7a862). Evidence: `ChangeNamespace` change ids 84b068a4 (144 files, 1,866 references) and 00ef606d (8 files, 19 references); the two markers are deleted.
+
 ## Model-eval run review pipeline - resolved (2026-11-26)
 
 Model-eval run review pipeline (2026-11-26) - Steps 1-10 done (e2bd43b6..56ed5373, run by peer session a43a2312); `Get-RunDigest.ps1` (digest + seeded sample selection), `eval-run-grader` Sonnet agent scoring 8 behaviour dimensions into `review.json`, `Get-ReviewRollup.ps1` with a `-Vary` A/B guard, `vocabulary.json` single source, arm-table multi-machine fold-in, analyst agent refresh, 2-pass calibration; effort L - [plan](plans/closed/plan_modeleval_run_review_pipeline.md)
