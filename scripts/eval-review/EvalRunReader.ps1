@@ -331,3 +331,56 @@ function Find-EvalRunVerdict {
     }
     return [pscustomobject]@{ Verdict = $verdict; Scenario = $outcome.ScenarioId; Searched = @($searched) }
 }
+
+# Reads the first step-*.sites.json (by file name) in a run folder. Returns an array of
+# { siteName, role, outcome, endStateText } (SiteGrade keys), or $null when the folder has none.
+# The comma keeps a one-element array as an array.
+function Read-EvalSiteGrades {
+    param([Parameter(Mandatory)][string]$RunFolder)
+    if (-not (Test-Path -LiteralPath $RunFolder -PathType Container)) { return $null }
+    $file = Get-ChildItem -LiteralPath $RunFolder -File -Filter 'step-*.sites.json' |
+        Sort-Object -Property Name | Select-Object -First 1
+    if ($null -eq $file) { return $null }
+    $text = [string](Get-Content -Raw -LiteralPath $file.FullName)
+    return ,@(ConvertFrom-Json -InputObject $text -Depth 100 -DateKind String)
+}
+
+# Rejects grades whose role is not in vocabulary.siteRoles or whose outcome is not in siteOutcomes (throws,
+# naming the value). Then tallies the grades: the Sites* counts are Changed-role only; Control and Separator
+# hits count Wrong and Missing. Returns { SitesChanged, SitesCorrect, SitesWrong, SitesUnchanged, SitesMissing,
+# ControlSites, ControlHits, SeparatorSites, SeparatorHits }. Vocabulary defaults to Read-EvalVocabulary.
+function Get-EvalSiteTally {
+    param(
+        [Parameter(Mandatory)][AllowEmptyCollection()]$Grades,
+        $Vocabulary = $null
+    )
+    if ($null -eq $Vocabulary) { $Vocabulary = Read-EvalVocabulary }
+    $grades = @($Grades)
+    foreach ($grade in $grades) {
+        $role = Get-EvalProperty $grade 'role'
+        $outcome = Get-EvalProperty $grade 'outcome'
+        if ($role -notin @($Vocabulary.siteRoles)) {
+            throw "Unknown site role '$role' in grade '$(Get-EvalProperty $grade 'siteName')'."
+        }
+        if ($outcome -notin @($Vocabulary.siteOutcomes)) {
+            throw "Unknown site outcome '$outcome' in grade '$(Get-EvalProperty $grade 'siteName')'."
+        }
+    }
+
+    $changed = @($grades | Where-Object { (Get-EvalProperty $_ 'role') -eq 'Changed' })
+    $controls = @($grades | Where-Object { (Get-EvalProperty $_ 'role') -eq 'Control' })
+    $separators = @($grades | Where-Object { (Get-EvalProperty $_ 'role') -eq 'Separator' })
+    $outcomeOf = { param($g) Get-EvalProperty $g 'outcome' }
+
+    return [pscustomobject]@{
+        SitesChanged   = $changed.Count
+        SitesCorrect   = @($changed | Where-Object { (& $outcomeOf $_) -eq 'Correct' }).Count
+        SitesWrong     = @($changed | Where-Object { (& $outcomeOf $_) -eq 'Wrong' }).Count
+        SitesUnchanged = @($changed | Where-Object { (& $outcomeOf $_) -eq 'Unchanged' }).Count
+        SitesMissing   = @($changed | Where-Object { (& $outcomeOf $_) -eq 'Missing' }).Count
+        ControlSites   = $controls.Count
+        ControlHits    = @($controls | Where-Object { (& $outcomeOf $_) -in @('Wrong', 'Missing') }).Count
+        SeparatorSites = $separators.Count
+        SeparatorHits  = @($separators | Where-Object { (& $outcomeOf $_) -in @('Wrong', 'Missing') }).Count
+    }
+}

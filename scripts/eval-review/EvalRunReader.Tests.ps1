@@ -187,6 +187,49 @@ finally {
     Remove-Item -LiteralPath $tempRoot3 -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+# Step 9a-1: shared site sidecar reader and tally. Own temp tree (the $tempRoot above is already deleted),
+# deleted in its own finally block.
+$tempRoot4 = Join-Path ([System.IO.Path]::GetTempPath()) ('evalreader-9a1-' + [guid]::NewGuid().ToString('N'))
+$siteFixture = Join-Path $PSScriptRoot '..\..\RoslynSentinel.Tests.ModelEval\SiteSidecars\step-1.sites.json'
+
+try {
+    New-Item -ItemType Directory -Path $tempRoot4 -Force | Out-Null
+    $vocab4 = Read-EvalVocabulary
+
+    # Fixture copied into a run folder as step-1.sites.json: 7 grades and the expected tally.
+    $siteRun = Join-Path $tempRoot4 'site-run'
+    New-Item -ItemType Directory -Path $siteRun -Force | Out-Null
+    Copy-Item -LiteralPath $siteFixture -Destination (Join-Path $siteRun 'step-1.sites.json')
+    $grades = Read-EvalSiteGrades -RunFolder $siteRun
+    Assert-That (@($grades).Count -eq 7) "SiteGrades: shared fixture gives 7 grades (actual $(@($grades).Count))"
+
+    $t = Get-EvalSiteTally -Grades $grades -Vocabulary $vocab4
+    $tallyText = @($t.SitesChanged, $t.SitesCorrect, $t.SitesWrong, $t.SitesUnchanged, $t.SitesMissing,
+        $t.ControlSites, $t.ControlHits, $t.SeparatorSites, $t.SeparatorHits) -join '/'
+    Assert-That ($tallyText -eq '4/1/1/1/1/2/2/1/1') "SiteTally: fixture gives 4/1/1/1/1/2/2/1/1 (actual $tallyText)"
+
+    # One-element sidecar stays an array.
+    $oneRun = Join-Path $tempRoot4 'one-run'
+    Write-EvalTestFile (Join-Path $oneRun 'step-1.sites.json') '[{"siteName":"OnlySite","role":"Control","outcome":"Correct","endStateText":null}]'
+    $one = Read-EvalSiteGrades -RunFolder $oneRun
+    Assert-That (($one -is [array]) -and (@($one).Count -eq 1)) 'SiteGrades: one-element sidecar stays an array of 1'
+
+    # Empty subfolder: no sidecar gives $null.
+    $emptyRun = Join-Path $tempRoot4 'empty-run'
+    New-Item -ItemType Directory -Path $emptyRun -Force | Out-Null
+    Assert-That ($null -eq (Read-EvalSiteGrades -RunFolder $emptyRun)) 'SiteGrades: folder without a sidecar gives $null'
+
+    # Unknown outcome throws and names the value.
+    $badGrades = @([pscustomobject]@{ siteName = 'BadSite'; role = 'Changed'; outcome = 'Bogus'; endStateText = $null })
+    $threw = $false
+    try { Get-EvalSiteTally -Grades $badGrades -Vocabulary $vocab4 | Out-Null }
+    catch { $threw = ($_.Exception.Message -like '*Bogus*') }
+    Assert-That $threw 'SiteTally: grade with unknown outcome throws and names the value'
+}
+finally {
+    Remove-Item -LiteralPath $tempRoot4 -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 if ($script:failures -gt 0) {
     Write-Host "$($script:failures) assertion(s) failed."
     exit 1
