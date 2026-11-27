@@ -1,0 +1,84 @@
+{
+  "RunId": "20261126-101010-000",
+  "SystemPrompt": "",
+  "UserPrompt": "",
+  "Tools": [
+    "ToolC",
+    "ToolA",
+    "ToolB"
+  ],
+  "CommitHash": "0000000000000000000000000000000000000000",
+  "WorkingTreeDirty": false,
+  "ErrorPolicyMode": "off+inventory",
+  "ErrorPolicyHash": "",
+  "ContractHash": "abcdef012345",
+  "ContractPlacement": "system",
+  "ModelKey": "example/model-GGUF",
+  "ContextLength": 70000,
+  "Settings": {
+    "Sampler": {
+      "Temperature": 0.7,
+      "TopP": 0.95
+    },
+    "Load": {
+      "ContextLength": 70000
+    }
+  },
+  "ReasoningReplayMode": "off",
+  "ReasoningReplayForm": "Drop",
+  "Thinking": {
+    "Mode": "Triggered",
+    "Triggers": "Error",
+    "Effort": "low",
+    "ReasoningBudget": null
+  },
+  "ToolResultFormat": "plain",
+  "ToolDescriptions": {},
+  "ToolSchemas": {},
+  "StopReason": 0,
+  "Turns": [
+    {
+      "TurnNumber": 1,
+      "StartedAt": "2026-11-26T10:00:00-07:00",
+      "Assists": [],
+      "Thinking": null,
+      "ToolCalls": [
+        {
+          "ToolName": "ToolA",
+          "ArgumentsJson": "{\"filePath\":\"ContosoOrders.Core/Example.cs\"}",
+          "ResultJson": "{\"isError\":false,\"successData\":{\"outcome\":\"Done\"}}",
+          "IsError": false,
+          "TrailingText": null
+        }
+      ],
+      "ModelMessage": {
+        "Content": "Read the file and report it is done.",
+        "ReasoningContent": null,
+        "InputTokens": 1200,
+        "OutputTokens": 80,
+        "CachedInputTokens": 900
+      }
+    }
+  ],
+  "Summary": {
+    "TotalDuration": "00:00:04.0000000",
+    "TotalModelTime": "00:00:03.0000000",
+    "TotalToolTime": "00:00:01.0000000",
+    "TurnCount": 1,
+    "ToolCallCount": 1,
+    "ToolErrorCount": 0,
+    "InputTokens": 1200,
+    "CachedInputTokens": 900,
+    "NewInputTokens": 300,
+    "OutputTokens": 80,
+    "ReasoningTokens": null,
+    "ThinkingTurnCount": 0,
+    "OverBudgetTurnCount": 0,
+    "LeakedThinkTagTurnCount": 0,
+    "AverageOutputTokensPerTurn": 80,
+    "AverageReasoningTokensPerTurn": null,
+    "AverageTurnDuration": "00:00:03.0000000",
+    "ToolErrorCodes": {},
+    "CompilerErrorCodes": {}
+  }
+}
