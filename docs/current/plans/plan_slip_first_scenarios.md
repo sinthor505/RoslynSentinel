@@ -1,6 +1,6 @@
 # Plan: Slip-first eval scenarios graded per site, one slip family each
 
-**Status:** IN PROGRESS 2026-11-27. Steps 1-6 done (6ac92264, 8800f9dd, 0dbd860d, df5f648e, 2015fb5b, 007797d9).
+**Status:** IN PROGRESS 2026-11-27. Steps 1-6 done (6ac92264, 8800f9dd, 0dbd860d, df5f648e, 2015fb5b, 007797d9); Steps 10-13 done (a2836ba4, 41453ff4, 35e664c9, dc96f888).
 
 ## Problem
 
@@ -551,6 +551,7 @@ Common to all four:
   `{{ }}`), about 10 regex patterns as verbatim strings (for example `@"^\d{3}-[A-Z]{2}$"`). Each literal
   holds at least two escape constructs. Changes are words inside the literal.
 - Preamble: empty.
+- Done: a2836ba4
 
 ### Step 11 - DocCommentsSlip (class `DocCommentCatalog`)
 - Each site: at most 3 `///` lines, e.g. a one-line `/// <summary>...</summary>` holding `&lt;`/`&gt;`
@@ -561,6 +562,7 @@ Common to all four:
   example `List` to `IReadOnlyList`).
 - Preamble: empty (`ContosoOrders.Core.csproj` has `ImplicitUsings` enabled, so BCL crefs resolve).
 - Budget: this is the largest family; Step 14b's in-process budget test must pass.
+- Done: 41453ff4
 
 ### Step 12 - LongGenericsSlip (class `LongGenericDeclarations`)
 - About 20 fields `public static readonly <type> <Name> = new();` and about 10 methods
@@ -569,6 +571,7 @@ Common to all four:
   parameterless constructor (target-typed `new()`). Changes: two type names at different nesting depths,
   keeping the declaration valid (for example `int` to `long`, `List` to `HashSet`).
 - Preamble: empty (implicit usings).
+- Done: 35e664c9
 
 ### Step 13 - NearDuplicateIdentifiersSlip (class `ShippingKindMessages`)
 - Preamble: `public enum ShippingKinds { Overnight, Overland, Overseas, Overweight }` (no such enum
@@ -576,6 +579,7 @@ Common to all four:
 - Each site: `public static string <Name>(int n) => $"...{ShippingKinds.<A>}...{ShippingKinds.<B>}...";`
   with two different members. Changes: which enum members are referenced (for example `Overnight` to
   `Overland`), never the enum declaration.
+- Done: dc96f888
 
 ### Step 14a - Register the families
 - Files: `RoslynSentinel.Tests.ModelEval/ImplementationScenarios/ImplementationScenarioRegistry.cs`,
