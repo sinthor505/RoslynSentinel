@@ -5,13 +5,21 @@
 #   pwsh -NoProfile -Command ". ./scripts/Get-RunDigest.ps1"
 # Run as a script, it writes digest.json beside the transcript and exits with ExitCode:
 #   pwsh -NoProfile -File scripts\Get-RunDigest.ps1 -RunPath <folder holding transcript.json | transcript.json>
+# Batch mode digests every transcript.json under one or more folders (comma-separated), selects runs for review and
+# writes selection.json into a new folder under <scratch root>\eval-review (Step 6c). Exactly one of -RunPath and
+# -BatchRoot is required:
+#   pwsh -NoProfile -File scripts\Get-RunDigest.ps1 -BatchRoot <folder>[,<folder>...] [-Seed <int>] [-PassesPerArm <int>]
 # Lists (key fields, boundaries, codes, limits) are read from scripts\eval-review\vocabulary.json.
 
 param(
-    [string]$RunPath
+    [string]$RunPath,
+    [string[]]$BatchRoot,
+    [int]$Seed,
+    [int]$PassesPerArm
 )
 
 . (Join-Path $PSScriptRoot 'eval-review\EvalRunReader.ps1')
+. (Join-Path $PSScriptRoot 'roslynsentinel-scratch.ps1')
 
 # Returns the code name when vocabulary.json lists it; the code names live only there.
 function Get-DigestCodeName($Vocabulary, [string]$Code) {
@@ -305,12 +313,164 @@ function Get-DigestMarkdown($Digest) {
     return (($lines -join "`n") + "`n")
 }
 
+# Ordinal sort of selection rows by runPath. Run paths are unique full paths.
+function Sort-SelectionRuns($Runs) {
+    $byPath = @{}
+    foreach ($r in @($Runs)) { $byPath[[string]$r.runPath] = $r }
+    $paths = [string[]]@($byPath.Keys)
+    [Array]::Sort($paths, [System.StringComparer]::Ordinal)
+    return @($paths | ForEach-Object { $byPath[$_] })
+}
+
+# Membership check against vocabulary.json selectionReasons; the names live only there.
+function Get-SelectionReason($Vocabulary, [string]$Name) {
+    if ($Name -notin @($Vocabulary.selectionReasons)) { throw "Selection reason '$Name' is not listed in vocabulary.json" }
+    return $Name
+}
+
+# Fisher-Yates shuffle with a fresh System.Random seeded by $Seed. Returns a new array; the input is not changed.
+function Get-SeededShuffle($Items, [int]$Seed) {
+    $list = @($Items | ForEach-Object { $_ })
+    $rng = [System.Random]::new($Seed)
+    for ($i = $list.Count - 1; $i -ge 1; $i--) {
+        $j = $rng.Next(0, $i + 1)
+        $tmp = $list[$i]
+        $list[$i] = $list[$j]
+        $list[$j] = $tmp
+    }
+    return $list
+}
+
+# One arm of the selection: every Failed and NoVerdict run, then min(PassesPerArm, passes) SampledPass runs; the rest
+# of the passes are PassNotSampled. $Runs holds { armKey, runPath, digestPath, verdict } with verdict Pass, Failed or NoVerdict.
+function New-ArmSelection($Vocabulary, [string]$ArmKey, $Runs, [int]$Seed, [int]$PassesPerArm) {
+    $failing = @(Sort-SelectionRuns @($Runs | Where-Object { $_.verdict -ne 'Pass' }))
+    $passes = @(Sort-SelectionRuns @($Runs | Where-Object { $_.verdict -eq 'Pass' }))
+    $take = [Math]::Min($PassesPerArm, $passes.Count)
+    $shuffled = @(Get-SeededShuffle $passes $Seed)
+    $sampled = @(Sort-SelectionRuns @($shuffled | Select-Object -First $take))
+    $notSampled = @(Sort-SelectionRuns @($shuffled | Select-Object -Skip $take))
+
+    $selected = New-Object System.Collections.Generic.List[object]
+    foreach ($r in $failing) {
+        $selected.Add([ordered]@{ runPath = [string]$r.runPath; digestPath = [string]$r.digestPath; reason = (Get-SelectionReason $Vocabulary ([string]$r.verdict)) })
+    }
+    foreach ($r in $sampled) {
+        $selected.Add([ordered]@{ runPath = [string]$r.runPath; digestPath = [string]$r.digestPath; reason = (Get-SelectionReason $Vocabulary 'SampledPass') })
+    }
+    $skipped = New-Object System.Collections.Generic.List[object]
+    foreach ($r in $notSampled) {
+        $skipped.Add([ordered]@{ runPath = [string]$r.runPath; reason = (Get-SelectionReason $Vocabulary 'PassNotSampled') })
+    }
+    return [ordered]@{ armKey = $ArmKey; selected = $selected.ToArray(); skipped = $skipped.ToArray() }
+}
+
+# Batch mode: digests every transcript.json under the roots, groups the runs by armKey, selects them and writes
+# selection.json into a new <scratch root>\eval-review\<yyyyMMdd-HHmmss> folder. Returns { ExitCode, ReviewDir, SelectionPath, Selection }.
+function Invoke-RunSelection($Vocabulary, [string[]]$BatchRoot, [int]$Seed, [int]$PassesPerArm) {
+    # Non-terminating errors inside a digest (a corrupt transcript) must throw here, so the run lands in failed.
+    $ErrorActionPreference = 'Stop'
+    if ($PassesPerArm -lt 0) { throw 'PassesPerArm must be 0 or more.' }
+
+    $rootList = New-Object System.Collections.Generic.List[string]
+    foreach ($item in @($BatchRoot)) {
+        foreach ($part in ([string]$item).Split(',')) {
+            $trimmed = $part.Trim()
+            if ($trimmed.Length -eq 0) { continue }
+            if (-not (Test-Path -LiteralPath $trimmed -PathType Container)) { throw "Batch root not found: $trimmed" }
+            $full = [System.IO.Path]::GetFullPath($trimmed).TrimEnd('\')
+            if (-not $rootList.Contains($full)) { $rootList.Add($full) }
+        }
+    }
+    if ($rootList.Count -eq 0) { throw 'No batch root given: -BatchRoot needs at least one folder.' }
+
+    $seen = New-Object 'System.Collections.Generic.HashSet[string]'
+    $found = New-Object System.Collections.Generic.List[string]
+    foreach ($root in $rootList) {
+        foreach ($file in @(Get-ChildItem -LiteralPath $root -Recurse -File -Filter 'transcript.json')) {
+            if ($seen.Add($file.FullName)) { $found.Add($file.FullName) }
+        }
+    }
+    $transcriptPaths = [string[]]$found.ToArray()
+    [Array]::Sort($transcriptPaths, [System.StringComparer]::Ordinal)
+
+    $ok = New-Object System.Collections.Generic.List[object]
+    $failed = New-Object System.Collections.Generic.List[object]
+    foreach ($transcriptPath in $transcriptPaths) {
+        $runDir = Split-Path -Parent $transcriptPath
+        try {
+            $one = Get-RunDigest -RunPath $transcriptPath
+            if ($one.ExitCode -ne 0) { throw "digest exit code $($one.ExitCode)" }
+            $verdict = 'NoVerdict'
+            $harnessVerdict = $one.Digest.header.harnessVerdict
+            if (($null -ne $harnessVerdict) -and ($null -ne $harnessVerdict.passed)) {
+                if ($harnessVerdict.passed -eq $true) { $verdict = 'Pass' } else { $verdict = 'Failed' }
+            }
+            $ok.Add([pscustomobject]@{ armKey = [string]$one.Digest.header.armKey; runPath = $runDir; digestPath = [string]$one.DigestPath; verdict = $verdict })
+        }
+        catch {
+            $detail = (([string]$_.Exception.Message) -replace '\s+', ' ').Trim()
+            if ($detail.Length -gt 200) { $detail = $detail.Substring(0, 200) }
+            $failed.Add([ordered]@{ runPath = $runDir; reason = (Get-SelectionReason $Vocabulary 'DigestFailed'); detail = $detail })
+        }
+    }
+
+    $groups = @{}
+    foreach ($run in $ok) {
+        $key = [string]$run.armKey
+        if (-not $groups.ContainsKey($key)) { $groups[$key] = New-Object System.Collections.Generic.List[object] }
+        $groups[$key].Add($run)
+    }
+    $armKeys = [string[]]@($groups.Keys)
+    [Array]::Sort($armKeys, [System.StringComparer]::Ordinal)
+    $arms = New-Object System.Collections.Generic.List[object]
+    foreach ($armKey in $armKeys) {
+        $arms.Add((New-ArmSelection $Vocabulary $armKey $groups[$armKey].ToArray() $Seed $PassesPerArm))
+    }
+
+    $invariant = [System.Globalization.CultureInfo]::InvariantCulture
+    $reviewRoot = Join-Path (Get-RoslynSentinelScratchRoot) 'eval-review'
+    New-Item -ItemType Directory -Path $reviewRoot -Force | Out-Null
+    $stampText = (Get-Date).ToString('yyyyMMdd-HHmmss', $invariant)
+    $reviewDir = Join-Path $reviewRoot $stampText
+    $suffix = 2
+    while (Test-Path -LiteralPath $reviewDir) {
+        $reviewDir = Join-Path $reviewRoot ("$stampText-$suffix")
+        $suffix++
+    }
+    New-Item -ItemType Directory -Path $reviewDir | Out-Null
+
+    $selection = [ordered]@{
+        seed         = $Seed
+        passesPerArm = $PassesPerArm
+        batchRoots   = [string[]]$rootList.ToArray()
+        createdAt    = [DateTimeOffset]::Now.ToString('o', $invariant)
+        arms         = $arms.ToArray()
+        failed       = $failed.ToArray()
+    }
+    $selectionPath = Join-Path $reviewDir 'selection.json'
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($selectionPath, (ConvertTo-Json -InputObject $selection -Depth 100), $utf8)
+    Write-Host $reviewDir
+    return [pscustomobject]@{ ExitCode = 0; ReviewDir = $reviewDir; SelectionPath = $selectionPath; Selection = $selection }
+}
+
 # Writes digest.json and digest.md beside one transcript.json. A folder that holds only sample-NN subfolders gives
-# UseBatchRoot and writes nothing. Returns { ExitCode, DigestPath, DigestMdPath, Digest, Codes }.
+# UseBatchRoot and writes nothing. Returns { ExitCode, DigestPath, DigestMdPath, Digest, Codes }. With -BatchRoot
+# (instead of -RunPath) it returns the Invoke-RunSelection result. Seed and PassesPerArm default to vocabulary limits.
 function Get-RunDigest {
-    param([Parameter(Mandatory)][string]$RunPath)
+    param([string]$RunPath, [string[]]$BatchRoot, [int]$Seed, [int]$PassesPerArm)
+
+    $hasRunPath = $PSBoundParameters.ContainsKey('RunPath')
+    $hasBatchRoot = $PSBoundParameters.ContainsKey('BatchRoot')
+    if ($hasRunPath -eq $hasBatchRoot) { throw 'Give exactly one of -RunPath or -BatchRoot.' }
 
     $vocab = Read-EvalVocabulary -Path (Join-Path $PSScriptRoot 'eval-review\vocabulary.json')
+    if ($hasBatchRoot) {
+        if (-not $PSBoundParameters.ContainsKey('Seed')) { $Seed = [int]$vocab.limits.selectionSeed }
+        if (-not $PSBoundParameters.ContainsKey('PassesPerArm')) { $PassesPerArm = [int]$vocab.limits.passesPerArm }
+        return (Invoke-RunSelection $vocab $BatchRoot $Seed $PassesPerArm)
+    }
     if (-not (Test-Path -LiteralPath $RunPath)) { throw "Run path not found: $RunPath" }
     $item = Get-Item -LiteralPath $RunPath
     if ($item.PSIsContainer) {

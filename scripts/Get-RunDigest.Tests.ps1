@@ -52,8 +52,39 @@ function Invoke-DigestTree([string]$TranscriptPath) {
     return [pscustomobject]@{ Result = $result; Digest = $digest }
 }
 
+# Stamp of the Index-th batch run (yyyyMMdd-HHmmss-fff; indexes below 100 keep the time valid).
+function Get-BatchStamp([int]$Index) { return ('20261126-102{0:D3}-000' -f $Index) }
+
+# Writes <Root>\host\TestA\<stamp>\transcript.json from the fixture after $Mutate, plus step-1.outcome.txt when $Outcome
+# is not null. Returns the run folder.
+function New-BatchRun([string]$Root, [int]$Index, [scriptblock]$Mutate, [string]$Outcome) {
+    $dir = Join-Path $Root ('host\TestA\' + (Get-BatchStamp $Index))
+    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    $obj = Get-Content -Raw -LiteralPath $fixtureSource | ConvertFrom-Json -Depth 100 -DateKind String
+    if ($null -ne $Mutate) { & $Mutate $obj }
+    [System.IO.File]::WriteAllText((Join-Path $dir 'transcript.json'), ($obj | ConvertTo-Json -Depth 100), $utf8)
+    if (-not [string]::IsNullOrEmpty($Outcome)) { [System.IO.File]::WriteAllText((Join-Path $dir 'step-1.outcome.txt'), ($Outcome + "`r`n"), $utf8) }
+    return $dir
+}
+
+# Leaf folder names of the runs an arm lists (selected and skipped).
+function Get-ArmLeafNames($Arm) {
+    $rows = @(@($Arm.selected) + @($Arm.skipped))
+    return @($rows | ForEach-Object { Split-Path -Leaf ([string]$_.runPath) })
+}
+
+# Leaf folder names of the rows that carry one reason.
+function Get-ReasonLeafNames($Rows, [string]$Reason) {
+    return @(@($Rows) | Where-Object { $_.reason -eq $Reason } | ForEach-Object { Split-Path -Leaf ([string]$_.runPath) })
+}
+
+# The scratch root is overridden for the whole run, so no test writes into the real scratch root.
+$previousScratch = $env:ROSLYNSENTINEL_SCRATCH_ROOT
+$scratchDir = Join-Path $tempRoot 'scratch'
+
 try {
     New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
+    $env:ROSLYNSENTINEL_SCRATCH_ROOT = $scratchDir
     $vocab = Read-EvalVocabulary -Path (Join-Path $PSScriptRoot 'eval-review\vocabulary.json')
 
     # Keys: the unmodified fixture is the reference.
@@ -157,8 +188,70 @@ try {
     # ThinkLeak: true on turn 6 only.
     $leakTurns = @($baseTurns | Where-Object { $_.thinkLeak -eq $true } | ForEach-Object { $_.turn })
     Assert-That (($leakTurns.Count -eq 1) -and ($leakTurns[0] -eq 6)) 'ThinkLeak: thinkLeak is true on turn 6 only'
+
+    # BatchSelection: arm 1 = fixture Tools (runs 0-5: 4 passes, run 4 fails, run 5 has no outcome file); arm 2 =
+    # changed Tools (runs 6-11: runs 6 and 7 fail, 8-11 pass); run 12 is a corrupt transcript.
+    $passLine = 'ScenarioX step 1: outcome=Pass stopReason=ModelFinished outcomeClass=CorrectDone wallTime=00:00:05'
+    $failLine = 'ScenarioX step 1: outcome=Fail stopReason=ModelFinished outcomeClass=Incorrect wallTime=00:00:05'
+    $selRoot = Join-Path $tempRoot 'selection'
+    for ($i = 0; $i -lt 4; $i++) { New-BatchRun $selRoot $i $null $passLine | Out-Null }
+    New-BatchRun $selRoot 4 $null $failLine | Out-Null
+    New-BatchRun $selRoot 5 $null $null | Out-Null
+    $armTwo = { param($o) $o.Tools = @('ToolA', 'ToolB', 'ToolD') }
+    New-BatchRun $selRoot 6 $armTwo $failLine | Out-Null
+    New-BatchRun $selRoot 7 $armTwo $failLine | Out-Null
+    for ($i = 8; $i -lt 12; $i++) { New-BatchRun $selRoot $i $armTwo $passLine | Out-Null }
+    $corruptDir = Join-Path $selRoot ('host\TestA\' + (Get-BatchStamp 12))
+    New-Item -ItemType Directory -Path $corruptDir -Force | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $corruptDir 'transcript.json'), '{not json', $utf8)
+
+    $batch1 = Get-RunDigest -BatchRoot $selRoot -Seed 4242 -PassesPerArm 3
+    $sel = $batch1.Selection
+    Assert-That (($batch1.ExitCode -eq 0) -and (Test-Path -LiteralPath (Join-Path $batch1.ReviewDir 'selection.json') -PathType Leaf) -and $batch1.ReviewDir.StartsWith($scratchDir, [System.StringComparison]::OrdinalIgnoreCase)) 'BatchSelection: exit 0, selection.json is in a review folder under the overridden scratch root'
+    Assert-That (($sel.seed -eq 4242) -and ($sel.passesPerArm -eq 3)) 'BatchSelection: seed and passesPerArm are recorded'
+    $armsList = @($sel.arms)
+    Assert-That ($armsList.Count -eq 2) 'BatchSelection: two arms'
+    $arm1 = @($armsList | Where-Object { (Get-ArmLeafNames $_) -contains (Get-BatchStamp 0) })[0]
+    $arm2 = @($armsList | Where-Object { (Get-ArmLeafNames $_) -contains (Get-BatchStamp 6) })[0]
+    Assert-That (($null -ne $arm1) -and ($null -ne $arm2) -and ($arm1.armKey -ne $arm2.armKey)) 'BatchSelection: the two arms have different armKeys'
+    $allArmLeafs = @(Get-ArmLeafNames $arm1) + @(Get-ArmLeafNames $arm2)
+    Assert-That ($allArmLeafs.Count -eq 12) 'BatchSelection: each of the 12 readable runs appears in one arm'
+
+    Assert-That ((@(Get-ReasonLeafNames $arm1.selected 'Failed') -join ',') -eq (Get-BatchStamp 4)) 'BatchSelection: arm 1 selects its failed run'
+    Assert-That ((@(Get-ReasonLeafNames $arm1.selected 'NoVerdict') -join ',') -eq (Get-BatchStamp 5)) 'BatchSelection: arm 1 selects its no-verdict run'
+    Assert-That (@(Get-ReasonLeafNames $arm1.selected 'SampledPass').Count -eq [Math]::Min(3, 4)) 'BatchSelection: arm 1 samples min(3, passes) passes'
+    Assert-That ((@($arm1.skipped).Count -eq 1) -and (@(@($arm1.skipped) | Where-Object { $_.reason -ne 'PassNotSampled' }).Count -eq 0)) 'BatchSelection: arm 1 skipped run carries PassNotSampled'
+
+    $failArm2 = @(Get-ReasonLeafNames $arm2.selected 'Failed')
+    Assert-That (($failArm2.Count -eq 2) -and ($failArm2 -contains (Get-BatchStamp 6)) -and ($failArm2 -contains (Get-BatchStamp 7))) 'BatchSelection: arm 2 selects both failed runs'
+    Assert-That (@(Get-ReasonLeafNames $arm2.selected 'NoVerdict').Count -eq 0) 'BatchSelection: arm 2 has no no-verdict run'
+    Assert-That (@(Get-ReasonLeafNames $arm2.selected 'SampledPass').Count -eq [Math]::Min(3, 4)) 'BatchSelection: arm 2 samples min(3, passes) passes'
+    Assert-That ((@($arm2.skipped).Count -eq 1) -and (@(@($arm2.skipped) | Where-Object { $_.reason -ne 'PassNotSampled' }).Count -eq 0)) 'BatchSelection: arm 2 skipped run carries PassNotSampled'
+
+    $corruptLeaf = Get-BatchStamp 12
+    Assert-That ((@(Get-ReasonLeafNames $sel.failed 'DigestFailed') -join ',') -eq $corruptLeaf) 'BatchSelection: the corrupt transcript is in failed with DigestFailed'
+    Assert-That (-not ($allArmLeafs -contains $corruptLeaf)) 'BatchSelection: the corrupt transcript is in no arm'
+
+    $batch2 = Get-RunDigest -BatchRoot $selRoot -Seed 4242 -PassesPerArm 3
+    $json1 = ConvertTo-Json -InputObject $sel.arms -Depth 100
+    $json2 = ConvertTo-Json -InputObject $batch2.Selection.arms -Depth 100
+    Assert-That (($json1.Length -gt 0) -and ($json1 -ceq $json2)) 'BatchSelection: a second call with the same seed and roots gives identical arms'
+
+    # MultiRoot: runs 20 and 21 under one root, runs 22 and 23 under another; one selection.json covers all four.
+    $rootA = Join-Path $tempRoot 'multi-a'
+    $rootB = Join-Path $tempRoot 'multi-b'
+    New-BatchRun $rootA 20 $null $failLine | Out-Null
+    New-BatchRun $rootA 21 $null $passLine | Out-Null
+    New-BatchRun $rootB 22 $null $failLine | Out-Null
+    New-BatchRun $rootB 23 $null $passLine | Out-Null
+    $multi = Get-RunDigest -BatchRoot "$rootA,$rootB"
+    $multiLeafs = @(@($multi.Selection.arms) | ForEach-Object { Get-ArmLeafNames $_ })
+    Assert-That (($multi.ExitCode -eq 0) -and (@($multi.Selection.batchRoots).Count -eq 2)) 'MultiRoot: exit 0 and batchRoots lists both roots'
+    Assert-That (($multiLeafs.Count -eq 4) -and ($multiLeafs -contains (Get-BatchStamp 20)) -and ($multiLeafs -contains (Get-BatchStamp 21)) -and ($multiLeafs -contains (Get-BatchStamp 22)) -and ($multiLeafs -contains (Get-BatchStamp 23))) 'MultiRoot: the arms cover the runs of both roots'
+    Assert-That ((Test-Path -LiteralPath $multi.ReviewDir -PathType Container) -and (Test-Path -LiteralPath (Join-Path $multi.ReviewDir 'selection.json') -PathType Leaf)) 'MultiRoot: the returned ReviewDir exists and holds selection.json'
 }
 finally {
+    $env:ROSLYNSENTINEL_SCRATCH_ROOT = $previousScratch
     Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 
