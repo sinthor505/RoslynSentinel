@@ -275,7 +275,7 @@ runs jobs one at a time per machine and shows every session what is running and 
   Tests: `pwsh -NoProfile -File scripts\roslynsentinel-evalqueue.Tests.ps1`.
 - `roslynsentinel-planstep.ps1` runs are not queued yet.
 - `Refused`: see the llama-server model rule above; it is a terminal state (exit 2 from `wait`).
-- `runs.csv`: the worker appends one row per ended job (Finished, Refused, Crashed, ...) to `<scratch>\ModelTestingResults\<suffix>\runs.csv` (job id, machine, host, endpoint, test, model, sessions, purpose, pinned commit, state, times, run folders); jobs cancelled while still Queued get no row.
+- `runs.csv`: the worker appends one row per ended job (Finished, Refused, Crashed, ...) to `<scratch>\ModelTestingResults\<suffix>\runs.csv` (`jobId`, `machine`, `host`, `baseUrl`, `backend`, `test`, `model`, `sessions`, `purpose`, `pinnedCommit`, `state`, `passed`, times, `reason`, `runFolders`); jobs cancelled while still Queued get no row.
 - `roslynsentinel-evalqueue.ps1 hosts [-Json]` shows every endpoint (reachable, loaded model, context length) with its machine's queue; `status -Session <name>` and `status -ActiveOnly` filter jobs (also with `-Json`); `submit` warns, never refuses, when `-Session` is not a live Claude session.
 
 ### Resuming from a saved transcript (`-Test ResumeTranscript`)

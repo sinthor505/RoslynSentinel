@@ -945,6 +945,23 @@ NUnit test and the arm-table tests. Those run the script as a child `pwsh -File`
 
   Cost gate: median `subagent_tokens` at most 100k, else Q2 is revisited. Findings that survive
   root-cause tracing are listed, but they do not gate the step.
+- Done: 2026-11-26, outcome **Calibrated** (round 0, no anchor revision), run in the implementing
+  session (the new agent became visible mid-session). Review folder
+  `<scratch root>\eval-review\20261126-224018`; runs copied under
+  `plan_design_modeleval_run_review_pipeline\calibration\runs`: fail 112 WideningRejectedByGate
+  20261126-192356-692, fail 113 WidenToReadOnlyDictionary 20261126-192009-439, pass 112
+  SweepNamedSitesSlip 20261127-022933-876, pass 113 WidenAcrossFilesSlip 20261127-022733-911,
+  thinking (Triggered, fail) 113 ThreadOptionalParameter 20261127-015444-553; 3 arms.
+  - `calibration.json`: 37 scored pairs, 30 exact matches, `exactMatchRatio` 0.811, no `zeroTwoSplits`.
+    Per run 8/8, 6/7, 5/7, 5/8, 6/7. All 7 disagreements are 1-point; `ReadingResponses` split in 3 of 5
+    runs (the weakest anchor), then one each in `Reasoning`, `ToolChoice`, `HonestyVerification`,
+    `GuidanceCompliance`. Two `HonestyVerification` pairs were 1 vs N/A or N/A on both (not scored).
+  - Cost gate: grader `subagent_tokens` 57k-109k, median 79k (<= 100k): Q2 stands.
+  - Smoke test: `Get-ReviewRollup -ReviewFileName review.pass1.json -Vary Tools,ThinkingMode,ThinkingTriggers
+    -Force` exit 0, 0 invalid, 3 arms.
+  - Findings for tracing (not a gate): both graders of SweepNamedSitesSlip and WidenAcrossFilesSlip record
+    a grading defect: harness `outcome=Pass` with `outcomeClass=SilentIncomplete`, and in SweepNamedSitesSlip
+    the model changed 12 public return types against "Public method signatures stay as they are".
 - Lane: main session (dispatches graders; not a supervisor run). Effort: M.
 
 ### Step 11 - Close
@@ -982,6 +999,12 @@ Open questions: none. Q1-Q16 were settled on 2026-11-25 and Q17-Q27 on 2026-11-2
 - Risk: the pass rule (Q27) treats an expected-Blocked step that ends `outcome=Pass` as a pass, while
   the test asserts only `CorrectBlocked` for such steps. The outcome file does not record the
   expected ending. Effect: such a run is sampled as a pass, not selected as a failure.
+
+- Cross-plan (2026-11-26, from the `plan_slip_first_scenarios` session): that plan adds site-graded
+  scenarios that write `step-N.sites.json` beside `step-N.outcome.txt` (JSON array of
+  `{siteName, role, outcome, endStateText}`); `EvalRunReader.ps1` should pick it up. Its Step 7
+  inserts lines in `ImplementationScenarioAgentTests.cs` between :170 and :199, shifting anchors this
+  plan cites (:196, :203-210), including the hand-copied `vocabulary.passRule`.
 
 - Risk: `plan_startup_configuration_registry.md` (APPROVED) renames or centralises
   `ROSLYNSENTINEL_MODELEVAL_*` env vars, so the scripts must read transcript header fields, never env

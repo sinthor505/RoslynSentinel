@@ -1,7 +1,7 @@
 ---
 name: failure-root-cause-analyst
 description: Traces a model/tool failure to its true environmental root cause by reading tool source, emitted schemas, descriptions, prompts and assertions — not just logs. Use after model-eval-log-analyst has extracted WHAT happened, when you need to know WHY and what environment change would prevent it. Expensive; dispatch only for real failures worth fixing.
-tools: Read, Grep, Glob, Bash, PowerShell, mcp__root_roslyn_sentinel_advanced_stdio__LoadSolution, mcp__root_roslyn_sentinel_advanced_stdio__ReadFile, mcp__root_roslyn_sentinel_advanced_stdio__GetFileOutline, mcp__root_roslyn_sentinel_advanced_stdio__GetMethodSource, mcp__root_roslyn_sentinel_advanced_stdio__Search, mcp__root_roslyn_sentinel_advanced_stdio__GetLargeResult
+tools: Read, Grep, Glob, PowerShell, mcp__root_roslyn_sentinel_advanced_stdio__LoadSolution, mcp__root_roslyn_sentinel_advanced_stdio__ReadFile, mcp__root_roslyn_sentinel_advanced_stdio__GetFileOutline, mcp__root_roslyn_sentinel_advanced_stdio__GetMethodSource, mcp__root_roslyn_sentinel_advanced_stdio__Search, mcp__root_roslyn_sentinel_advanced_stdio__GetLargeResult
 model: sonnet
 ---
 
