@@ -17,6 +17,7 @@ namespace RoslynSentinel.Tests.Server;
 /// </summary>
 [TestFixture]
 [Category("SentinelToolFactory")]
+[NonParallelizable]
 public class ToolResultMarshallerOnModeTests
 {
     private static readonly JsonSerializerOptions Wire = McpJsonUtilities.DefaultOptions;
@@ -34,6 +35,7 @@ public class ToolResultMarshallerOnModeTests
     [TearDown]
     public void TearDown()
     {
+        InlineBudgetOptions.Configure([]); // static state: restore the stock budget for whatever test runs next
         try
         {
             Directory.Delete(_root, recursive: true);
@@ -642,5 +644,179 @@ public class ToolResultMarshallerOnModeTests
         Assert.That(SentinelToolFactory.IsHooked("HookedRegistryProbe"), Is.True);
         Assert.That(SentinelToolFactory.IsHooked("NeverBuiltAnywhere"), Is.False);
         Assert.That(SentinelToolFactory.IsHooked(null), Is.False);
+    }
+
+    // ---- inline budget classes (plan_inline_budget_classes.md Step 11b) ----
+
+    [InlineBudget(InlineBudgetClass.Whole)]
+    private static void WholeMethodTarget()
+    {
+    }
+
+    private static readonly MethodInfo WholeMethod = typeof(ToolResultMarshallerOnModeTests).GetMethod(nameof(WholeMethodTarget), BindingFlags.NonPublic | BindingFlags.Static)!;
+
+    private static async Task<object?> MarshalWithAsync(ToolResultMarshaller marshaller, MethodInfo method, object? result) =>
+        await marshaller.MarshalAsync("Probe", method, result, typeof(object), Wire, TestContext.CurrentContext.CancellationToken);
+
+    // A success result whose wire text is exactly targetChars long: the padding is sized from the same result with an empty payload.
+    private static SentinelCallToolResult<object> SuccessOfWireLength(int targetChars)
+    {
+        SentinelCallToolResult<object> Make(string pad) => new() { IsError = false, SuccessData = new { payload = pad } };
+        return Make(new string('x', targetChars - FullText(Make(string.Empty)).Length));
+    }
+
+    // An error-only result (IsError, no SuccessData) whose wire text is exactly targetChars long.
+    private static SentinelCallToolResult<object> ErrorOfWireLength(int targetChars)
+    {
+        SentinelCallToolResult<object> Make(string pad) => new() { IsError = true, ErrorData = new ResultError(ToolErrorCode.Exception, pad) };
+        return Make(new string('x', targetChars - FullText(Make(string.Empty)).Length));
+    }
+
+    // Smallest list length (from 1) whose wire text is at least minChars long, for a result whose list grows by one fixed-size record.
+    private static SentinelCallToolResult<object> AtLeastWireLength(int minChars, Func<int, SentinelCallToolResult<object>> makeWithCount)
+    {
+        int one = FullText(makeWithCount(1)).Length;
+        int perRecord = FullText(makeWithCount(2)).Length - one;
+        return makeWithCount(1 + Math.Max(0, (minChars - one + perRecord - 1) / perRecord));
+    }
+
+    // A success result with a cuttable list directly under successData.
+    private static SentinelCallToolResult<object> SequenceOfAtLeast(int minChars) =>
+        AtLeastWireLength(minChars, count => new SentinelCallToolResult<object>
+        {
+            IsError = false,
+            SuccessData = new { regexResults = Enumerable.Range(1, count).Select(_ => (object)new { filePath = "RoslynSentinel.Common/Detail.cs", preview = new string('p', 200) }).ToList() },
+        });
+
+    // An error-only result with a cuttable list in ErrorData.StructuredDetail and a short message.
+    private static SentinelCallToolResult<object> ErrorWithDetailAtLeast(int minChars) =>
+        AtLeastWireLength(minChars, count => new SentinelCallToolResult<object>
+        {
+            IsError = true,
+            ErrorData = new ResultError(
+                ToolErrorCode.Exception,
+                "short error",
+                StructuredDetail: Enumerable.Range(1, count).Select(_ => (object)new { path = "RoslynSentinel.Common/Detail.cs", note = new string('n', 200) }).ToList()),
+        });
+
+    [Test]
+    public async Task InlineWithinTolerance()
+    {
+        int threshold = LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default);
+        var result = SuccessOfWireLength(threshold - 1);
+        Assert.That(FullText(result).Length, Is.EqualTo(threshold - 1), "fixture sanity");
+        Assert.That(threshold - 1, Is.GreaterThan(LargeResultHelper.BudgetChars(InlineBudgetClass.Default)), "fixture sanity: over the budget, under the tolerance");
+
+        object? marshalled = await MarshalWithAsync(On(_root), AnyMethod, result);
+
+        Assert.That(marshalled, Is.TypeOf<string>());
+        Assert.That(JsonNode.Parse((string)marshalled!)!.AsObject().ContainsKey("largeResult"), Is.False);
+    }
+
+    [Test]
+    public async Task PagedAboveTolerance()
+    {
+        int threshold = LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default);
+        var result = SequenceOfAtLeast(threshold + 1);
+        Assert.That(FullText(result).Length, Is.GreaterThan(threshold), "fixture sanity");
+
+        object? marshalled = await MarshalWithAsync(On(_root), AnyMethod, result);
+
+        Assert.That(marshalled, Is.TypeOf<string>());
+        string text = (string)marshalled!;
+        Assert.That(JsonNode.Parse(text)!.AsObject().ContainsKey("largeResult"), Is.True);
+        Assert.That(text.Length, Is.LessThanOrEqualTo(threshold));
+    }
+
+    [Test]
+    public async Task WholeMethodInline()
+    {
+        int lower = LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default);
+        int upper = LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Whole);
+        var result = SuccessOfWireLength((lower + upper) / 2);
+        Assert.That(FullText(result).Length, Is.GreaterThan(lower).And.LessThan(upper), "fixture sanity: between the Default and Whole thresholds");
+
+        object? marshalled = await MarshalWithAsync(On(_root), WholeMethod, result);
+
+        Assert.That(marshalled, Is.TypeOf<string>());
+        Assert.That(JsonNode.Parse((string)marshalled!)!.AsObject().ContainsKey("largeResult"), Is.False);
+    }
+
+    [Test]
+    public async Task ErrorOnlyFailureInline()
+    {
+        int lower = LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default);
+        int upper = LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Whole);
+        var result = ErrorOfWireLength((lower + upper) / 2);
+        Assert.That(FullText(result).Length, Is.GreaterThan(lower).And.LessThan(upper), "fixture sanity: between the Default and Whole thresholds");
+
+        object? marshalled = await MarshalWithAsync(On(_root), AnyMethod, result);
+
+        Assert.That(marshalled, Is.TypeOf<string>());
+        Assert.That(JsonNode.Parse((string)marshalled!)!.AsObject().ContainsKey("largeResult"), Is.False);
+    }
+
+    [Test]
+    public async Task ErrorOnlyAboveWholeIsCutButKeepsMessage()
+    {
+        int whole = LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Whole);
+        var result = ErrorWithDetailAtLeast(whole + 1);
+        Assert.That(FullText(result).Length, Is.GreaterThan(whole), "fixture sanity");
+
+        object? marshalled = await MarshalWithAsync(On(_root), AnyMethod, result);
+
+        var envelope = JsonNode.Parse((string)marshalled!)!.AsObject();
+        Assert.That(envelope.ContainsKey("largeResult"), Is.True);
+        Assert.That(envelope[LargeResultHelper.ErrorDataKey]?["message"], Is.Not.Null, "the message survives the cut");
+    }
+
+    [Test]
+    public async Task HonoursConfiguredDefault()
+    {
+        int stockThreshold = LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default);
+        InlineBudgetOptions.Configure([$"{InlineBudgetOptions.BudgetCharsSetting.Flag}={2 * InlineBudgetOptions.StockBudgetChars}"]);
+        int configuredThreshold = LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default);
+        Assert.That(configuredThreshold, Is.GreaterThan(stockThreshold), "fixture sanity: the configured default raised the threshold");
+        var result = SuccessOfWireLength((stockThreshold + configuredThreshold) / 2);
+
+        object? marshalled = await MarshalWithAsync(On(_root), AnyMethod, result);
+
+        Assert.That(marshalled, Is.TypeOf<string>());
+        Assert.That(JsonNode.Parse((string)marshalled!)!.AsObject().ContainsKey("largeResult"), Is.False);
+    }
+
+    [Test]
+    public async Task MarshalSetsSignalThreshold()
+    {
+        int defaultThreshold = LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default);
+        int wholeThreshold = LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Whole);
+        var marshaller = On(_root);
+        int? defaultSet;
+        int? wholeSet;
+        int? errorSet;
+        using (var signal = InlineBudgetSignal.Open())
+        {
+            await MarshalWithAsync(marshaller, AnyMethod, SuccessOfWireLength(defaultThreshold - 1));
+            defaultSet = signal.ThresholdChars;
+        }
+
+        using (var signal = InlineBudgetSignal.Open())
+        {
+            await MarshalWithAsync(marshaller, WholeMethod, SuccessOfWireLength(defaultThreshold - 1));
+            wholeSet = signal.ThresholdChars;
+        }
+
+        using (var signal = InlineBudgetSignal.Open())
+        {
+            await MarshalWithAsync(marshaller, AnyMethod, ErrorOfWireLength(defaultThreshold - 1));
+            errorSet = signal.ThresholdChars;
+        }
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(defaultSet, Is.EqualTo(defaultThreshold), "a Default result");
+            Assert.That(wholeSet, Is.EqualTo(wholeThreshold), "an attributed Whole method");
+            Assert.That(errorSet, Is.EqualTo(wholeThreshold), "an error-only result takes the Whole class");
+        });
     }
 }

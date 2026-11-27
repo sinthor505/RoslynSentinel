@@ -107,6 +107,32 @@ public class ToolResultMarshallerPassthroughTests
         Assert.That(logger.Entries[0].Message, Does.Not.Contain("secret-internal-detail"), "exception text goes to the exception, not the message");
     }
 
+    // ---- inline budget signal (plan_inline_budget_classes.md Step 11b) ----
+
+    [InlineBudget(InlineBudgetClass.Whole)]
+    private static void WholeMethodTarget()
+    {
+    }
+
+    private static readonly MethodInfo WholeMethod = typeof(ToolResultMarshallerPassthroughTests).GetMethod(nameof(WholeMethodTarget), BindingFlags.NonPublic | BindingFlags.Static)!;
+
+    [Test]
+    public async Task PassthroughSetsWholeThreshold()
+    {
+        var marshaller = new ToolResultMarshaller(NullLogger<ToolResultMarshaller>.Instance);
+        int wholeThreshold = LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Whole);
+        int? set;
+
+        using (var signal = InlineBudgetSignal.Open())
+        {
+            await marshaller.MarshalAsync(
+                "Probe", WholeMethod, new SentinelCallToolResult<object> { IsError = false, SuccessData = "ok" }, typeof(object), McpJsonUtilities.DefaultOptions, TestContext.CurrentContext.CancellationToken);
+            set = signal.ThresholdChars;
+        }
+
+        Assert.That(set, Is.EqualTo(wholeThreshold));
+    }
+
     // ---- byte identity through the in-memory server ----
 
     // Hand-built instances of the real result envelope and DTO types the named tools return (Search, ListAll, Member,
