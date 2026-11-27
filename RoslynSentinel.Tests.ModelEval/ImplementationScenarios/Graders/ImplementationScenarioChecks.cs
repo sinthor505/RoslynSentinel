@@ -29,6 +29,14 @@ internal static class ImplementationScenarioChecks
 
         var stepDefinition = scenario.Steps[step - 1];
 
+        // A step with Sites is graded from the file it edits; a step without Sites has no grades.
+        IReadOnlyList<SiteGrade>? grades = null;
+        if (stepDefinition.Sites is { } sites)
+        {
+            var full = Path.Combine(solutionDirectory, sites.FilePath);
+            grades = SiteGrader.Grade(File.Exists(full) ? File.ReadAllText(full) : null, sites);
+        }
+
         ImplementationScenarioCheckContext MakeContext(DotnetTestResult? testRun) =>
             new(solutionDirectory, finalMessage, changedPaths, scenario.SeedFiles, cancellationToken, testRun);
 
@@ -39,7 +47,8 @@ internal static class ImplementationScenarioChecks
             var variant = outcomeClass is EvalOutcomeClass.Bypass or EvalOutcomeClass.SilentIncomplete
                 ? stepDefinition.VariantProbe?.Invoke(context) ?? string.Empty
                 : string.Empty;
-            return new ScenarioVerdict(outcome, outcomeClass, variant, detail);
+            var fullDetail = grades is null ? detail : $"{detail} {SiteGrader.Summarize(grades)}";
+            return new ScenarioVerdict(outcome, outcomeClass, variant, fullDetail, grades);
         }
 
         // The project's tests always run: they are the build proof, and the seed tests must keep passing.
@@ -110,6 +119,11 @@ internal static class ImplementationScenarioChecks
             {
                 return Verdict(ImplementationScenarioOutcome.CheckFailed, failure, context);
             }
+        }
+
+        if (grades is not null && !SiteGrader.AllIntact(grades))
+        {
+            return Verdict(ImplementationScenarioOutcome.CheckFailed, "not every site is intact", context);
         }
 
         var scopeViolation = FindScopeViolation(step, changedPaths, stepDefinition.AllowedPaths);

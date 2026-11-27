@@ -171,6 +171,12 @@ public class ImplementationScenarioAgentTests
             scenario, step, _environment.SolutionDirectory, finalMessage, changedPaths, cancellationToken);
         var checkOutcome = verdict.Outcome;
         var checkDetail = verdict.Detail;
+        if (verdict.Sites is not null)
+        {
+            SiteGrader.WriteSidecar(
+                Path.Combine(_runDirectory, string.Format(System.Globalization.CultureInfo.InvariantCulture, SiteGrader.SidecarFileNameFormat, step)),
+                verdict.Sites);
+        }
 
         var outcome = checkOutcome;
         var detail = checkDetail;
