@@ -841,7 +841,7 @@ public class WorkspaceFileEditImpl
                     lineEndings = wholeLineEndings,
                     source = wholeSource
                 };
-            if (textBytes > LargeResultHelper.InlineBudgetChars)
+            if (textBytes > LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default))
             {
                 return new SentinelCallToolResult<object>()
                 {
@@ -1034,7 +1034,7 @@ public class WorkspaceFileEditImpl
             _workspaceManager.RecordObserved(filePathResolved, fullText);
             var mixedEol = EolUtilities.DescribeMixedLineEndings(fullText);
             var textBytes = System.Text.Encoding.UTF8.GetByteCount(fullText);
-            const int thresholdBytes = LargeResultHelper.InlineBudgetChars;
+            var thresholdBytes = LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default);
             var wholeLineEndings = showLineEndings == LineEndingDisplay.None ? null : EolUtilities.DescribeLineEndings(fullText);
             var wholeSource = showLineEndings == LineEndingDisplay.All ? EolUtilities.AnnotateLineEndings(fullText) : fullText;
             var statusNote = showLineEndings == LineEndingDisplay.All ? "source is annotated with line-ending markers and is not verbatim." : null;

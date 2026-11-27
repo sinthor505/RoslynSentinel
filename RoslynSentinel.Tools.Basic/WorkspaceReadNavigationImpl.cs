@@ -1881,19 +1881,18 @@ public class WorkspaceReadNavigationImpl
     // and limit count sequence units (list records interleaved, or lines), the page is built by SequencePager.BuildPage from the
     // stored full envelope, and path is ignored (with a note). The response is one EnvelopePageResult - the page cursor
     // (offset/returned/total/nextOffset/hasMoreData) plus the page in the full envelope shape - and the envelope level keeps no
-    // cursor of its own beyond the non-optional hasMoreData flag. BuildPage gets the budget the marshaller uses (InlineBudgetChars
-    // minus EchoReserveChars, minus a small digits margin) for the WHOLE response: the wrapper around the page is measured and the
+    // cursor of its own beyond the non-optional hasMoreData flag. BuildPage gets the budget the marshaller uses (LargeResultHelper.DefaultBudgetChars
+    // minus LargeResultHelper.PageSafetyMarginChars, a small digits margin; no echo reserve, as echo and stamps are added on top) for the WHOLE response: the wrapper around the page is measured and the
     // page budget reduced by the excess, so the marshaller finds the response within budget and neither re-pages it nor gives it
     // a new resultId. No ResultPager.Fit refit: the page is already built to the budget.
     private SentinelCallToolResult<object> PageSequence(
         ResultWrapper stored, string? path, int offset, int? limit, string? resultId, string? filePath)
     {
-        const int safetyMarginChars = 64;
         const int maxAttempts = 6;
         JsonSerializerOptions wire = ModelContextProtocol.McpJsonUtilities.DefaultOptions;
         var full = (JsonObject)stored.Data!;
         SequenceDescriptor sequence = stored.Sequence!;
-        int budget = LargeResultHelper.InlineBudgetChars - LargeResultHelper.EchoReserveChars - safetyMarginChars;
+        int budget = LargeResultHelper.DefaultBudgetChars - LargeResultHelper.PageSafetyMarginChars;
         int unitLimit = limit is > 0 ? limit.Value : 0;
         string unit = sequence.Kind == SequenceKind.Lines ? "lines" : "records";
 
@@ -1976,12 +1975,11 @@ public class WorkspaceReadNavigationImpl
 
     // GetLargeResult for a stored ResultWrapperType.Envelope file (plan_wire_result_marshaller.md Step 5): the stored Data is the
     // full wire envelope, so a page is a slice of one array (elements) or string (whole lines) addressed by an OmittedPart-style
-    // path. The page is fitted to InlineBudgetChars minus EchoReserveChars (and a small margin for digits) with ResultPager, so
+    // path. The page is fitted to LargeResultHelper.DefaultBudgetChars minus LargeResultHelper.PageSafetyMarginChars (no echo reserve; echo and stamps are added on top) with ResultPager, so
     // the marshaller, which uses the same budget, never cuts it again, and the offload filter never sees it over its threshold.
     private static SentinelCallToolResult<object> PageEnvelope(
         ResultWrapper stored, string? path, int offset, int? limit, string? resultId, string? filePath)
     {
-        const int safetyMarginChars = 64;
         JsonSerializerOptions wire = ModelContextProtocol.McpJsonUtilities.DefaultOptions;
         JsonNode root = stored.Data!;
         IReadOnlyList<string> available = EnvelopePagePaths(stored, root);
@@ -2032,7 +2030,7 @@ public class WorkspaceReadNavigationImpl
         int start = Math.Clamp(offset, 0, total);
         // Omitted limit: the page is as many elements or lines as fit the budget (default fills the budget; plan_wire_result_marshaller).
         int want = limit is null ? total - start : Math.Min(Math.Max(1, limit.Value), total - start);
-        int budget = LargeResultHelper.InlineBudgetChars - LargeResultHelper.EchoReserveChars - safetyMarginChars;
+        int budget = LargeResultHelper.DefaultBudgetChars - LargeResultHelper.PageSafetyMarginChars;
 
         SentinelCallToolResult<object> Build(int count, string? warning)
         {
