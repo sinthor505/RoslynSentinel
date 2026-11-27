@@ -253,7 +253,7 @@ public static class LargeResultOffloadFilter
                     SolutionRoot = resolvedSolutionRoot,
                     Offloaded = true,
                     ResultId = stored.resultId,
-                    SizeBytes = text.Length,
+                    SizeBytes = System.Text.Encoding.UTF8.GetByteCount(text),
                     SizeChars = text.Length,
                     ItemCount = itemCount,
                     IsError = isError,

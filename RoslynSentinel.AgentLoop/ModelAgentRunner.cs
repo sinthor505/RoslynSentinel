@@ -1138,6 +1138,7 @@ public sealed class ModelAgentRunner
         Directory.CreateDirectory(transcriptDirectory);
         File.WriteAllText(sidecarPath, json);
 
+        // TODO _sizeBytes holds json.Length (UTF-16 chars), not bytes; rename to _sizeChars once agent-log readers are checked
         return kind == "args"
             ? $$"""{"_offloaded":true,"_sizeBytes":{{json.Length}},"_file":"{{sidecarFileName}}"}"""
             : $"[{json.Length / 1024.0:F1} KB offloaded -> {sidecarFileName}]";

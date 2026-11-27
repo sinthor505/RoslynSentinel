@@ -412,6 +412,7 @@ public class WorkspaceReadNavigationImpl
             var method = matches[0];
 
             var methodSource = method.ToFullString();
+            // TODO methodBytes is a UTF-8 byte count while the inline budget is chars; measure methodSource.Length for consistency
             var methodBytes = System.Text.Encoding.UTF8.GetByteCount(methodSource);
             var attributes = ExtractAttributes(method);
             var signature = BuildSignature(method);

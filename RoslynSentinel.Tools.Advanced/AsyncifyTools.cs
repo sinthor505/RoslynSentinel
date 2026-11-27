@@ -222,6 +222,7 @@ public class AsyncifyTools
 
             if (_logger.IsEnabled(LogLevel.Information))
             {
+                // TODO these logs say bytes but summaryJson.Length counts UTF-16 chars, the unit of the inline budget; relabel as chars
                 _logger.LogInformation("Summary JSON size: {SizeBytes} bytes", summaryJson.Length);
             }
 

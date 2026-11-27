@@ -822,7 +822,7 @@ public class WorkspaceFileEditImpl
 
             var wholeLineEndings = showLineEndings == LineEndingDisplay.None ? null : EolUtilities.DescribeLineEndings(diskContent);
             var wholeSource = showLineEndings == LineEndingDisplay.All ? EolUtilities.AnnotateLineEndings(diskContent) : diskContent;
-            var textBytes = System.Text.Encoding.UTF8.GetByteCount(wholeSource);
+            var textChars = wholeSource.Length;
             object wholeData = showLineEndings == LineEndingDisplay.None
                 ? new
                 {
@@ -841,7 +841,7 @@ public class WorkspaceFileEditImpl
                     lineEndings = wholeLineEndings,
                     source = wholeSource
                 };
-            if (textBytes > LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default))
+            if (textChars > LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default))
             {
                 return new SentinelCallToolResult<object>()
                 {
@@ -1033,8 +1033,8 @@ public class WorkspaceFileEditImpl
             var fullText = sourceText.ToString();
             _workspaceManager.RecordObserved(filePathResolved, fullText);
             var mixedEol = EolUtilities.DescribeMixedLineEndings(fullText);
-            var textBytes = System.Text.Encoding.UTF8.GetByteCount(fullText);
-            var thresholdBytes = LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default);
+            var textChars = fullText.Length;
+            var thresholdChars = LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default);
             var wholeLineEndings = showLineEndings == LineEndingDisplay.None ? null : EolUtilities.DescribeLineEndings(fullText);
             var wholeSource = showLineEndings == LineEndingDisplay.All ? EolUtilities.AnnotateLineEndings(fullText) : fullText;
             var statusNote = showLineEndings == LineEndingDisplay.All ? "source is annotated with line-ending markers and is not verbatim." : null;
@@ -1056,7 +1056,7 @@ public class WorkspaceFileEditImpl
                     lineEndings = wholeLineEndings,
                     source = wholeSource
                 };
-            if (textBytes > thresholdBytes)
+            if (textChars > thresholdChars)
             {
                 // Over the threshold the marshaller cuts the payload and stores the rest; the source gets the
                 // whole inline budget, so no outline is attached here (GetFileOutline is a separate call).
@@ -1066,7 +1066,7 @@ public class WorkspaceFileEditImpl
                     SuccessData = wholeData,
                     Findings = mixedEol is null ? readFindings : [.. readFindings, new Finding("ReadFile", mixedEol)],
                     HasMoreData = false,
-                    StatusMessage = $"File is {totalLines} lines ({textBytes} bytes), over the inline limit: the first part is returned and the rest is stored (see largeResult). For a structure overview call {ToolCallHint.Call("GetFileOutline")}; for a slice call {ToolCallHint.Call("ReadFile", ("startLine", "1"), ("endLine", "200"))}." + (statusNote is null ? string.Empty : " " + statusNote),
+                    StatusMessage = $"File is {totalLines} lines ({textChars} chars), over the inline limit: the first part is returned and the rest is stored (see largeResult). For a structure overview call {ToolCallHint.Call("GetFileOutline")}; for a slice call {ToolCallHint.Call("ReadFile", ("startLine", "1"), ("endLine", "200"))}." + (statusNote is null ? string.Empty : " " + statusNote),
                     WorkspaceVersion = _workspaceManager.WorkspaceVersion,
                 };
             }

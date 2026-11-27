@@ -17,7 +17,7 @@ public sealed record OffloadPointerResult
     /// <summary>Id to fetch the stored body with GetLargeResult.</summary>
     public string? ResultId { get; init; }
 
-    /// <summary>Size of the offloaded body in bytes.</summary>
+    /// <summary>Size of the offloaded body in UTF-8 bytes (the budget and <see cref="SizeChars"/> count characters).</summary>
     public int SizeBytes { get; init; }
 
     /// <summary>Size of the offloaded body in characters.</summary>
