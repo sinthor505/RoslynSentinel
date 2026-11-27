@@ -48,7 +48,14 @@
     Minimum "score n.nn" in a NotFound refusal for NearWindowNotFound. Default 0.9.
 
 .PARAMETER Summary
-    Emit one object per Scenario and PromptVariant group (pooled rates) instead of one object per run.
+    Emit one object per Scenario and PromptVariant group (pooled rates) instead of one object per run. Adds the D17
+    columns ResidualSlipRate, ResidualCiLow, ResidualCiHigh, CompletionRate, CollateralRate, BoundaryRate,
+    RefusedPer100Sites and RunsWithSlipShare, pooled over the group's runs that have a site sidecar (null when none,
+    or on a zero denominator). ResidualCiLow and ResidualCiHigh are a 95% run-level bootstrap CI of ResidualSlipRate.
+
+.PARAMETER BootstrapSeed
+    Seed of the System.Random that draws the 2000 bootstrap resamples behind ResidualCiLow and ResidualCiHigh.
+    Default 1, so repeated runs give identical CIs.
 
 .EXAMPLE
     .\scripts\Get-SlipCounts.ps1 -Machine 113 -PurposePattern '*cap35plain-590eb1c2*' -Summary
@@ -63,7 +70,8 @@ param(
     [string[]]$Path,
     [string]$QueueRoot,
     [double]$WindowThreshold = 0.9,
-    [switch]$Summary
+    [switch]$Summary,
+    [int]$BootstrapSeed = 1
 )
 
 $ErrorActionPreference = 'Stop'
@@ -236,6 +244,65 @@ function Get-RunSlipRow($tr, [double]$Threshold) {
     return [pscustomobject]$row
 }
 
+# Run-level bootstrap CI of the pooled residual rate (SitesWrong / (SitesCorrect + SitesWrong)) over the given sidecar runs.
+# Returns { Low, High } as unrounded values, both $null when no resample has a non-zero denominator.
+function Get-ResidualCi([object[]]$SiteRuns, [int]$Seed) {
+    $ci = [ordered]@{ Low = $null; High = $null }
+    $n = $SiteRuns.Count
+    if ($n -eq 0) { return $ci }
+    $resamples = 2000
+    $rng = New-Object System.Random -ArgumentList $Seed
+    $stats = New-Object System.Collections.Generic.List[double]
+    for ($b = 0; $b -lt $resamples; $b++) {
+        $wrong = 0; $judged = 0
+        for ($i = 0; $i -lt $n; $i++) {
+            $r = $SiteRuns[$rng.Next($n)]
+            $wrong += [int]$r.SitesWrong
+            $judged += ([int]$r.SitesCorrect + [int]$r.SitesWrong)
+        }
+        if ($judged -gt 0) { $stats.Add([double]$wrong / [double]$judged) }
+    }
+    $m = $stats.Count
+    if ($m -eq 0) { return $ci }
+    $sorted = $stats.ToArray()
+    [Array]::Sort($sorted)
+    $lowIdx = [int][math]::Ceiling(0.025 * $m) - 1
+    $highIdx = [int][math]::Ceiling(0.975 * $m) - 1
+    $ci.Low = $sorted[$lowIdx]
+    $ci.High = $sorted[$highIdx]
+    return $ci
+}
+
+# The D17 summary columns for one Scenario and PromptVariant group, pooled over its runs that have a site sidecar.
+function Get-SummarySiteColumns($group, [int]$Seed) {
+    $cols = [ordered]@{ ResidualSlipRate = $null; ResidualCiLow = $null; ResidualCiHigh = $null; CompletionRate = $null
+        CollateralRate = $null; BoundaryRate = $null; RefusedPer100Sites = $null; RunsWithSlipShare = $null }
+    $sr = @($group | Where-Object { $null -ne $_.SitesChanged })
+    if ($sr.Count -eq 0) { return $cols }
+
+    $correct = Get-Sum $sr 'SitesCorrect'
+    $wrong = Get-Sum $sr 'SitesWrong'
+    $changed = Get-Sum $sr 'SitesChanged'
+    $judged = $correct + $wrong
+    if ($judged -gt 0) { $cols.ResidualSlipRate = [math]::Round([double]$wrong / [double]$judged, 4) }
+    if ($changed -gt 0) {
+        $slipped = Get-Sum $sr 'SlippedWrites'
+        $cols.CompletionRate = [math]::Round([double]$judged / [double]$changed, 4)
+        $cols.RefusedPer100Sites = [math]::Round(([double]$slipped * 100) / [double]$changed, 4)
+    }
+    $ctrlSites = Get-Sum $sr 'ControlSites'
+    if ($ctrlSites -gt 0) { $cols.CollateralRate = [math]::Round([double](Get-Sum $sr 'ControlHits') / [double]$ctrlSites, 4) }
+    $sepSites = Get-Sum $sr 'SeparatorSites'
+    if ($sepSites -gt 0) { $cols.BoundaryRate = [math]::Round([double](Get-Sum $sr 'SeparatorHits') / [double]$sepSites, 4) }
+    $shareRuns = @($sr | Where-Object { ([int]$_.SitesWrong -gt 0) -or ([int]$_.ControlHits -gt 0) -or ([int]$_.SeparatorHits -gt 0) }).Count
+    $cols.RunsWithSlipShare = [math]::Round([double]$shareRuns / [double]$sr.Count, 4)
+
+    $ci = Get-ResidualCi $sr $Seed
+    $cols.ResidualCiLow = $ci.Low
+    $cols.ResidualCiHigh = $ci.High
+    return $cols
+}
+
 $rows = New-Object System.Collections.Generic.List[object]
 
 foreach ($tr in @(Get-EvalTranscripts -Machine $Machine -PurposePattern $PurposePattern -JobFolder $JobFolder -Path $Path -QueueRoot $QueueRoot)) {
@@ -262,6 +329,7 @@ foreach ($g in $groups) {
     $slippedTotal = Get-Sum $gr 'SlippedWrites'
     $readsTotal = Get-Sum $gr 'Reads'
     $readMalTotal = Get-Sum $gr 'ReadMalformedArgs'
+    $sc = Get-SummarySiteColumns $gr $BootstrapSeed
     $summaries.Add([pscustomobject][ordered]@{
         Scenario = [string]$gr[0].Scenario
         PromptVariant = [string]$gr[0].PromptVariant
@@ -284,6 +352,14 @@ foreach ($g in $groups) {
         MalformedArgs = Get-Sum $gr 'MalformedArgs'
         GateRefusals = Get-Sum $gr 'GateRefusals'
         UnparsedNotFound = Get-Sum $gr 'UnparsedNotFound'
+        ResidualSlipRate = $sc.ResidualSlipRate
+        ResidualCiLow = $sc.ResidualCiLow
+        ResidualCiHigh = $sc.ResidualCiHigh
+        CompletionRate = $sc.CompletionRate
+        CollateralRate = $sc.CollateralRate
+        BoundaryRate = $sc.BoundaryRate
+        RefusedPer100Sites = $sc.RefusedPer100Sites
+        RunsWithSlipShare = $sc.RunsWithSlipShare
     })
 }
 $summaries.ToArray() | Sort-Object Scenario, PromptVariant

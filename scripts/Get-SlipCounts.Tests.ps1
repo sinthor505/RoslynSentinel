@@ -30,6 +30,12 @@ function Assert-Fields([string]$Run, [hashtable]$Expected) {
     }
 }
 
+# Passes when a summary value is within 1e-9 of $Want; a $null value fails.
+function Assert-Rate($Actual, [double]$Want, [string]$Name) {
+    $ok = ($null -ne $Actual) -and ([math]::Abs([double]$Actual - $Want) -lt 1e-9)
+    Assert-That $ok "$Name = $Want (actual: $Actual)"
+}
+
 $slipScript = Join-Path $PSScriptRoot 'Get-SlipCounts.ps1'
 $scratch = Get-RoslynSentinelScratchRoot -RepoRoot (Split-Path -Parent $PSScriptRoot)
 $root = Join-Path (Join-Path $scratch 'plan_slip_variants') ('t5a-' + [guid]::NewGuid().ToString('N'))
@@ -240,6 +246,87 @@ try {
     $nositesRow = $byName['nosites']
     $nonNullSite = if ($null -eq $nositesRow) { -1 } else { @($siteColumnNames | Where-Object { $null -ne $nositesRow.$_ }).Count }
     Assert-That ($nonNullSite -eq 0) "nosites: all eleven site columns are null (non-null: $nonNullSite)"
+
+    # -Summary D17 columns. Sidecars are written with explicit grades (Changed, Control and Separator roles).
+    # T5a-sum: sum-a (Changed Correct 2, Wrong 1; Control Wrong 1, Unchanged 1; Separator Wrong 1; one NearWindowNotFound slip)
+    #          sum-b (Changed Correct 1, Missing 1; Control Unchanged 2; Separator Unchanged 1; no slip)
+    #          sum-c (no sidecar; one NearWindowNotFound slip, excluded from every column).
+    # Pooled over sum-a and sum-b: Changed 5, judged 4 (Correct 3, Wrong 1), Control 1 of 4, Separator 1 of 2, one slip.
+    function New-SynthGrade([string]$Name, [string]$Role, [string]$Outcome) {
+        $text = $null
+        if ($Outcome -eq 'Wrong' -or $Outcome -eq 'Unchanged') { $text = "public static int $Name() => 0;" }
+        return [ordered]@{ siteName = $Name; role = $Role; outcome = $Outcome; endStateText = $text }
+    }
+    function Write-SynthSidecar([string]$RunDir, [object[]]$Grades) {
+        $json = ConvertTo-Json -InputObject $Grades -Depth 5
+        [System.IO.File]::WriteAllText((Join-Path $RunDir 'step-1.sites.json'), $json, (New-Object System.Text.UTF8Encoding($false)))
+    }
+    $nearSlip = @(New-SynthCall 'ReplaceSnippet' (New-JsonArgs @{ filePath = $fp; oldContent = 'alpha'; newContent = 'beta' }) $true (New-ErrJson 'NotFound' 'oldContent not found. Closest windows in the file: score 0.95 at line 12.'))
+
+    New-SynthRun 'sum-a' 'T5a-sum' 'VA' 'Fail' $nearSlip -Root $siteRoot
+    Write-SynthSidecar (Join-Path $siteRoot 'sum-a') @(
+        (New-SynthGrade 'SumAC1' 'Changed' 'Correct'),
+        (New-SynthGrade 'SumAC2' 'Changed' 'Correct'),
+        (New-SynthGrade 'SumAW1' 'Changed' 'Wrong'),
+        (New-SynthGrade 'SumACtl1' 'Control' 'Wrong'),
+        (New-SynthGrade 'SumACtl2' 'Control' 'Unchanged'),
+        (New-SynthGrade 'SumASep1' 'Separator' 'Wrong')
+    )
+    New-SynthRun 'sum-b' 'T5a-sum' 'VA' 'Fail' $siteCallsOk -Root $siteRoot
+    Write-SynthSidecar (Join-Path $siteRoot 'sum-b') @(
+        (New-SynthGrade 'SumBC1' 'Changed' 'Correct'),
+        (New-SynthGrade 'SumBM1' 'Changed' 'Missing'),
+        (New-SynthGrade 'SumBCtl1' 'Control' 'Unchanged'),
+        (New-SynthGrade 'SumBCtl2' 'Control' 'Unchanged'),
+        (New-SynthGrade 'SumBSep1' 'Separator' 'Unchanged')
+    )
+    New-SynthRun 'sum-c' 'T5a-sum' 'VA' 'Fail' $nearSlip -Root $siteRoot
+
+    # T5a-ci: three sidecar runs of 30 judged Changed sites with 1, 2 and 3 Wrong; pooled 6/90 = 2/30.
+    foreach ($ciRun in @(@('ci-1', 1), @('ci-2', 2), @('ci-3', 3))) {
+        New-SynthRun $ciRun[0] 'T5a-ci' 'VA' 'Fail' $siteCallsOk -Root $siteRoot
+        $ciGrades = @()
+        for ($k = 0; $k -lt 30; $k++) {
+            $outcome = if ($k -lt $ciRun[1]) { 'Wrong' } else { 'Correct' }
+            $ciGrades += New-SynthGrade "CiSite$k" 'Changed' $outcome
+        }
+        Write-SynthSidecar (Join-Path $siteRoot $ciRun[0]) $ciGrades
+    }
+
+    $sumSummaries = @(& $slipScript -Path $siteRoot -Summary -BootstrapSeed 1 -WarningAction SilentlyContinue)
+
+    $sumGroup = @($sumSummaries | Where-Object { $_.Scenario -eq 'T5a-sum' })
+    if ($sumGroup.Count -eq 1) {
+        $g = $sumGroup[0]
+        Assert-That ($g.Runs -eq 3) "Summary T5a-sum: 3 runs (actual $($g.Runs))"
+        Assert-Rate $g.ResidualSlipRate 0.25 'Summary T5a-sum ResidualSlipRate'
+        Assert-Rate $g.CompletionRate 0.8 'Summary T5a-sum CompletionRate'
+        Assert-Rate $g.CollateralRate 0.25 'Summary T5a-sum CollateralRate'
+        Assert-Rate $g.BoundaryRate 0.5 'Summary T5a-sum BoundaryRate'
+        Assert-Rate $g.RefusedPer100Sites 20 'Summary T5a-sum RefusedPer100Sites (sum-c excluded)'
+        Assert-Rate $g.RunsWithSlipShare 0.5 'Summary T5a-sum RunsWithSlipShare (sum-c excluded from the denominator)'
+    }
+    else { Assert-That $false 'Summary T5a-sum: exactly one object' }
+
+    $noSiteGroup = @($sumSummaries | Where-Object { $_.Scenario -eq 'T5a-nosites' })
+    if ($noSiteGroup.Count -eq 1) {
+        $ns = $noSiteGroup[0]
+        $d17Names = @('ResidualSlipRate', 'ResidualCiLow', 'ResidualCiHigh', 'CompletionRate', 'CollateralRate', 'BoundaryRate', 'RefusedPer100Sites', 'RunsWithSlipShare')
+        $nonNullD17 = @($d17Names | Where-Object { $null -ne $ns.$_ }).Count
+        Assert-That ($nonNullD17 -eq 0 -and $ns.Runs -eq 1 -and $ns.Reads -eq 1) "Summary T5a-nosites: the eight D17 columns are null, existing columns unchanged (non-null: $nonNullD17)"
+    }
+    else { Assert-That $false 'Summary T5a-nosites: exactly one object' }
+
+    $ciGroup = @($sumSummaries | Where-Object { $_.Scenario -eq 'T5a-ci' })
+    $ciAgain = @(& $slipScript -Path $siteRoot -Summary -BootstrapSeed 1 -WarningAction SilentlyContinue | Where-Object { $_.Scenario -eq 'T5a-ci' })
+    if ($ciGroup.Count -eq 1 -and $ciAgain.Count -eq 1) {
+        $c1 = $ciGroup[0]
+        $point = 2 / 30
+        $bracketed = ($null -ne $c1.ResidualCiLow) -and ($null -ne $c1.ResidualCiHigh) -and ([double]$c1.ResidualCiLow -le $point) -and ($point -le [double]$c1.ResidualCiHigh)
+        Assert-That $bracketed "CI on T5a-ci: ResidualCiLow <= 2/30 <= ResidualCiHigh (low $($c1.ResidualCiLow), high $($c1.ResidualCiHigh))"
+        Assert-That ($c1.ResidualCiLow -eq $ciAgain[0].ResidualCiLow -and $c1.ResidualCiHigh -eq $ciAgain[0].ResidualCiHigh) 'CI on T5a-ci: two invocations with -BootstrapSeed 1 give identical bounds'
+    }
+    else { Assert-That $false 'CI on T5a-ci: exactly one object per invocation' }
 }
 finally {
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
