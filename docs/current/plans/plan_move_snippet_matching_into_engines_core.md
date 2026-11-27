@@ -1,6 +1,7 @@
 # Plan: Create RoslynSentinel.Engines.Core and move snippet matching into it
 
-**Status:** DRAFT 2026-11-27. plan-design phase 8: 0 of 3 owner questions open; 9 planner defaults; independent readiness review running.
+**Status:** DRAFT 2026-11-27. plan-design phase 8: owner questions settled; readiness review round 1 returned 5 blocking findings, all fixed in this
+revision; round 2 running.
 
 ## Problem
 
@@ -9,32 +10,36 @@ out of `RoslynSentinel.Common`. Owner decision Q42 (2026-11-27): snippet matchin
 project of Q40. The route and checklists are in
 [reference_splitting_functionality_out_of_common.md](../references/reference_splitting_functionality_out_of_common.md).
 
-Grounding (2026-11-27, HEAD 39a209c2; "symbol" = Roslyn references, "text" = name search):
+Grounding (2026-11-27, HEAD 39a209c2, re-checked by the readiness review at e3df18ef; "symbol" = Roslyn references, "text" = name search):
 
-- **The area:** `RoslynSentinel.Common/SnippetMatching/` (15 files, 3,821 lines, namespace `RoslynSentinel.Common.SnippetMatching`) plus the root files
-  `SnippetMatchOutcome.cs` (39) and `SnippetSpan.cs` (7), both in namespace `RoslynSentinel.Common` and used inside Common only by the area (symbol).
+- **The area:** `RoslynSentinel.Common/SnippetMatching/` (15 files, namespace `RoslynSentinel.Common.SnippetMatching`) plus the root files
+  `SnippetMatchOutcome.cs` and `SnippetSpan.cs`, both in namespace `RoslynSentinel.Common` and used inside Common only by the area (symbol).
   Inventory in Appendix A.
 - **Three uses from Common code that stays:**
   1. `ToolException.cs:71, 89` (`ToolNotFoundException`) and `:183, 193` (`ToolAmbiguousMatchException`) carry `SnippetMatching.SnippetFailureDetail?`.
      `SnippetFailureDetail` is a data record whose members use the data records `SnippetClosestWindow` and `SnippetFilterStep`
-     (`SnippetMatchResult.cs:85, 94`); its only tie to the moving code is the factory `SnippetFailureDetail.From(SnippetMatchResult)`
-     (`SnippetFailureDetail.cs:24`), called from 9 sites, all in `SnippetErrorFormatter.cs` (symbol).
+     (`SnippetMatchResult.cs:85, 94`; both have only primitive and `IReadOnlyList<string>` members). Its only code tie to the moving types is the
+     factory `public static SnippetFailureDetail From(SnippetMatchResult result)` (`SnippetFailureDetail.cs:24`), called from 9 sites, all in
+     `SnippetErrorFormatter.cs` (symbol).
   2. `DiffEngine.cs:313, 324` uses the internal `LineBlockAligner` (`RoslynSentinel.Common/LineBlockAligner.cs`), which `SnippetCandidateFinder.cs:31, 164`
-     also uses.
+     also uses. By name search it is the only internal Common type the area uses.
   3. `ContextHelper.cs:5` has a dead `using RoslynSentinel.Common.SnippetMatching;` (no snippet type used in the file).
-- **A second namespace in one file:** `SnippetErrorFormatter.cs:5-22` declares `ToolMatchedLooserTierException` in namespace `RoslynSentinel.Common`;
-  its only users are the formatter (`:197, :241`) and tests in `RoslynSentinel.Tests` (symbol).
+- **A second namespace in one file:** `SnippetErrorFormatter.cs:14` declares `ToolMatchedLooserTierException` in a `namespace RoslynSentinel.Common`
+  block; its only users are the formatter (`:197, :241`) and `RoslynSentinel.Tests` (`ContextHelperTests.cs:325`, `SnippetErrorFormatterTests.cs:241, 828, 864`).
+  `ChangeNamespace` refuses a file that declares types in two namespaces, so the split of Step 2 is required.
 - **What the area uses from Common** (text; the `MoveFile` dry run is the proof): `ToolException`, `ToolNotFoundException`,
   `ToolAmbiguousMatchException`, `ToolErrorCode`, `MissingTargetKinds`, `ToolCallHint` (all public), the internal `LineBlockAligner`; Roslyn packages
   only (they flow through the reference to Common). No MCP SDK, `ToolCallContext`, `ActiveToolSurface` or `*Options` use.
 - **Consumers outside Common** (text): Engines.Basic 11 files, Engines.Advanced 4, Tools.Basic 1 (`WorkspaceFileEditImpl.cs`); none in Git, AgentLoop,
-  Utilities, Tools.Advanced, Tools.Experimental, Server.Advanced. `using RoslynSentinel.Common.SnippetMatching;` appears in 54 files. No production
-  code outside Common uses an internal member of the area; tests in `RoslynSentinel.Tests` do.
+  Utilities, Tools.Advanced, Tools.Experimental, Server.Advanced. `RoslynSentinel.Common.SnippetMatching` is mentioned on 57 lines: 37 using
+  directives (one of them the dead one), 15 namespace declarations, 4 fully qualified uses, 1 comment (`SnippetMatchResult.cs:10`). No production code
+  outside Common uses an internal member of the area; of the test projects only `RoslynSentinel.Tests` does.
 - **Tests:** about 269 `[Test]` methods in 15 files of `RoslynSentinel.Tests`, all in-process, plus 3 in
   `Tests.Tools.Basic/SnippetResolverCrossAssemblyTests.cs` (Appendix A). No ratchet or baseline is keyed on `SnippetMatching/` paths.
 - **Wiring:** the server-source lists match the `RoslynSentinel.Engines.` prefix (`ServerBinaryStaleness.cs:46-50`, `scripts/server-source-paths.txt:6-12`,
-  `TestInstanceLauncher.cs:625`), so they need no edit; `ErrorPolicyKindRatchetTests.ScannedProjects` (`ErrorPolicyKindRatchetTests.cs:26`) is an explicit
-  list and does.
+  `TestInstanceLauncher.cs:635` `GetSourceRoots`), so they need no edit. `ErrorPolicyKindRatchetTests.ScannedProjects` (`ErrorPolicyKindRatchetTests.cs:26`,
+  5 entries) is an explicit list with the floor `MinimumKindSites = 194` (`:22`); the formatter's 8 `ToolNotFoundException` constructions leave a scanned
+  project, so without the edit the count falls below the floor.
 - **Tool-surface text travels with the area** (recorded for roadmap Phase 5, not fixed here): 2 `ToolCallHint.Call("Member", ...)` uses
   (`SnippetErrorFormatter.cs:163-164`), 10 exception constructions in the formatter, tool and parameter names in message text.
 - **Churn:** at least 14 commits touched the area since 2026-11-14 (latest 7b34e891, 2026-11-26); 4 `// TODO` markers in `SnippetErrorFormatter.cs`
@@ -52,18 +57,17 @@ Dated entries; later entries do not override earlier ones unless they say so.
   - **P2 the three DTO records stay in Common** (`SnippetFailureDetail`, `SnippetClosestWindow`, `SnippetFilterStep`): the exception types in Common
     carry them. They move to Common's root folder and namespace `RoslynSentinel.Common`, so the namespace `RoslynSentinel.Common.SnippetMatching`
     disappears with the area and every project sees them through its global using.
-  - **P3 `SnippetFailureDetail.From` moves to the area** as a static method of `SnippetErrorFormatter` named `ToFailureDetail` (`MoveMember`, then
-    `RenameSymbol`; 9 call sites, one file).
+  - **P3 `SnippetFailureDetail.From` moves to the area** as a static method of `SnippetErrorFormatter` named `ToFailureDetail` (9 call sites, one file).
   - **P4 `LineBlockAligner` stays in Common** (`DiffEngine` uses it); Common grants `InternalsVisibleTo` to `RoslynSentinel.Engines.Core`. Its test
     class `LineBlockAlignerTests` stays.
-  - **P5 `ToolMatchedLooserTierException` travels with the area** in its own file (split out first with `MoveType`), like the build-specific exceptions
-    of the Build/RunTest design (its Q31).
+  - **P5 `ToolMatchedLooserTierException` travels with the area** in its own file, like the build-specific exceptions of the Build/RunTest design (its Q31).
   - **P6 tests stay in `RoslynSentinel.Tests`** (in-process and fast, so a test project of their own buys no selection; same principle as Q7 of the
-    Build/RunTest design). `Engines.Core` grants `InternalsVisibleTo` to `RoslynSentinel.Tests`.
+    Build/RunTest design). `Engines.Core` grants `InternalsVisibleTo` to `RoslynSentinel.Tests`; no other test project uses the area's internals.
   - **P7 namespace:** keep during the moves; one `ChangeNamespace` to `RoslynSentinel.Engines.Core.SnippetMatching` afterwards (folder
     `RoslynSentinel.Engines.Core/SnippetMatching/`).
   - **P8 `SnippetMatchOutcome` and `SnippetSpan` move** with the area into that folder and namespace.
-  - **P9 baseline:** full run `cc147f9e-20261127-004211-40584` (12,633 tests, 0 failures) if no `.cs` commit landed since cc147f9e, else a fresh run.
+  - **P9 baseline:** full run `cc147f9e-20261127-004211-40584` (12,633 tests, 0 failures; `docs/current/CLOSED.md:15`) if no `.cs` commit landed since
+    cc147f9e (true at e3df18ef), else a fresh run.
 - **2026-11-27, Q45 (owner): roadmap Phase 0.2 is dropped.** `PromptTokenEstimator` is used by `Common/LmStudioClient.cs:90-91`; `ErrorPolicyDocument`
   is shared by AgentLoop and a `Server.Advanced` filter. Both are placed later with their groups (roadmap Phase 6).
 - **2026-11-27, Q46 (owner): admission rule for `Engines.Core`, accepted as worded:** "Engine logic that both engine flavors use, or that an engine and
@@ -77,30 +81,36 @@ Dated entries; later entries do not override earlier ones unless they say so.
 
 ## Current design
 
-- Built: `RoslynSentinel.Engines.Core` (new; references Common) holding `SnippetMatching/` (17 files: the 14 that remain of the folder after the DTO
-  file leaves, `ToolMatchedLooserTierException.cs`, `SnippetMatchOutcome.cs`, `SnippetSpan.cs`), namespace `RoslynSentinel.Engines.Core.SnippetMatching`.
+- Built: `RoslynSentinel.Engines.Core` (new; references Common) holding `SnippetMatching/` with 17 files: the folder's 15 minus `SnippetFailureDetail.cs`,
+  plus `ToolMatchedLooserTierException.cs` (split out), `SnippetMatchOutcome.cs` and `SnippetSpan.cs`; namespace `RoslynSentinel.Engines.Core.SnippetMatching`.
 - Left in Common: `SnippetFailureDetail.cs`, `SnippetClosestWindow.cs` (new file), `SnippetFilterStep.cs` (new file) in the root folder, namespace
   `RoslynSentinel.Common`; `LineBlockAligner.cs`.
 - Exceptions to the admission rule (Q46): the area arrives with tool-surface text (Problem); roadmap Phase 5 removes it.
 - Simplest version considered (checklist item 7): leave the three DTO records where they are, in a three-file `Common/SnippetMatching/` folder and
-  namespace. Rejected: two namespaces named `SnippetMatching` would exist, and P2 costs three small tool calls made while everything is still in one
-  project.
+  namespace. Rejected: two namespaces named `SnippetMatching` would exist. The price of P2 is Step 1 and Step 3 (two type splits, one same-project file
+  move, three small namespace changes with a fallback), all made while everything is still in one project.
 
 ## Execution rules
 
 - C# changes only through the RoslynSentinel MCP tools; `.csproj`, `.slnx`, `.md` with Edit. One `Build` or `RunTest` at a time, subagents included.
-- Gated tools: `MoveType`, `ChangeNamespace` need `McpToolsetControl(toolSet: moveExtract, enabled: true)`; `CreateProject` needs `projectAdmin`.
-  `MoveFile`, `MoveMember`, `RenameSymbol`, `UsingDirective`, `DeleteFile` are core tools.
+- Gated tools: `MoveType` and `ChangeNamespace` are in toolset `moveExtract`, `CreateProject` and `ProjectDoc` in `projectAdmin`. The dispatcher enables
+  both with `McpToolsetControl` before the first dispatch; subagents share the server, so the toolsets are on for them. `MoveFile`, `MoveMember`,
+  `RenameSymbol`, `UsingDirective`, `DeleteFile` are core tools.
+- **Acceptance per slice is one check: `Build` 0 errors.** The lines marked "Dispatcher checks" are run by the dispatcher after the slice, not by the
+  implementer.
 - A `MoveFile` set call or a `ChangeNamespace` call is ONE semantic operation over the sweep tier by design (`.claude/implementer-tiers.json`): lane
   `implementer-senior`, and the brief says so. Dry run before every real call; record every `UndoChange` id.
-- `ChangeNamespace` has no diff preview: after a real call and before the commit, read `Git(operation: diff)` for the files whose line counts are more
-  than a using or namespace line. A refused call or an unexpected rewrite is `UndoChange`, `TOOL-GAP:` and stop; no manual edits stand in for a tool.
-- `MoveType` reformats its source file and has left stray marker comments before: check `Git(operation: diff, stat: true)` and the file outline after it.
-- A folder `MoveFile` leaves the emptied source folder on disk: remove the empty folder afterwards.
+- `ChangeNamespace` has no diff preview: after a real call and before the commit, read `Git(operation: diff)`. A refused call or an unexpected rewrite
+  is `UndoChange`, `TOOL-GAP:` and stop; no manual edits stand in for a tool.
+- `MoveType` reformats its source file and has left stray marker comments before: the dispatcher reads `Git(operation: diff, stat: true)` and the file
+  outline after it and reports whitespace-only changes.
+- A folder `MoveFile` leaves the emptied source folder on disk. The dispatcher removes an empty leftover folder with PowerShell `Remove-Item` (an empty
+  directory is not a tracked file).
 - Other sessions share the tree and this area changes often. Before each real call: `Git(operation: status)`; a dirty `.cs` file in the affected set
   is resolved with its owner first (`peer-coordination` skill). The dispatching session sends the heads-up messages.
-- Tests never block a slice: the dispatcher runs the named classes filtered (`scripts/Invoke-WorktreeTests.ps1 ... -Suite fast -Filter ... -WithRatchets`,
-  parameters re-read from the script) and takes one full run at the end.
+- **Filtered run** (dispatcher, where a step names it; parameters re-read from the script first):
+  `scripts/Invoke-WorktreeTests.ps1 -WorktreeRoot <root> -Ref <commit> -Suite fast -WithRatchets -Filter "FullyQualifiedName~Snippet|FullyQualifiedName~ContextHelper|FullyQualifiedName~NewContentIndenter|FullyQualifiedName~LineBlockAligner|FullyQualifiedName~ErrorPolicyKindRatchet|FullyQualifiedName~ServerBinaryStalenessTests"`.
+  `TestInstanceLauncherTests` is `[Category("OutOfProcess")]`, so the fast suite excludes it; it is covered by the full run of Step 8.
 - Commit each slice at a compile-green point with `Git` (scope `listed`), trailers `Plan: plan_move_snippet_matching_into_engines_core` and
   `Co-Authored-By`; the last commit carries `Closes:`. The MCP server is not restarted by the run.
 - The owner is present: a decision point stops the step with `DECISION NEEDED:` and the evidence.
@@ -111,100 +121,116 @@ Dated entries; later entries do not override earlier ones unless they say so.
 
 Single lane (every step touches the same folder). Steps 1 to 3 are in Common only and each ends compile-green; Step 5 is the only cross-project move.
 
-### Step 1 - Split the two DTO records out of SnippetMatchResult.cs; drop the dead using
-- Files: `RoslynSentinel.Common/SnippetMatching/SnippetMatchResult.cs`; `SnippetClosestWindow.cs`, `SnippetFilterStep.cs` (new, same folder);
-  `RoslynSentinel.Common/ContextHelper.cs`.
+### Step 1 - Split the two DTO records out of SnippetMatchResult.cs
+- Files: `RoslynSentinel.Common/SnippetMatching/SnippetMatchResult.cs`; `SnippetClosestWindow.cs`, `SnippetFilterStep.cs` (new, same folder).
 - Depends on: none
 - Effect: text-neutral.
-- Lane: `implementer`.
-- Change: `MoveType` for `SnippetClosestWindow` and for `SnippetFilterStep` (one file per type, namespace unchanged). Remove line 5 of `ContextHelper.cs`
-  (`using RoslynSentinel.Common.SnippetMatching;`) with `UsingDirective`.
-- Done when: `Build` 0 errors; `GetFileOutline` of `SnippetMatchResult.cs` no longer lists the two records; the diff of `SnippetMatchResult.cs` shows no
-  change other than the two removed records (whitespace-only lines are reported).
+- Lane: `implementer` (3 files, 2 edits).
+- Change: `MoveType` with `destination: ownFile` for `SnippetClosestWindow`, then for `SnippetFilterStep` (namespace unchanged).
+- Done when: `Build` 0 errors.
+- Dispatcher checks: `GetFileOutline` of `SnippetMatchResult.cs` no longer lists the two records; `Git(operation: diff, stat: true)` shows no change to
+  `SnippetMatchResult.cs` beyond the removed records (whitespace-only lines are reported, not fixed).
 - Effort: S
 
 ### Step 2 - Give the formatter its own exception file and the failure-detail factory
 - Files: `RoslynSentinel.Common/SnippetMatching/SnippetErrorFormatter.cs`, `SnippetFailureDetail.cs`; `ToolMatchedLooserTierException.cs` (new, same folder).
-- Depends on: Step 1 (same folder; keep one writer at a time)
+- Depends on: Step 1 (same folder; one writer at a time)
 - Effect: text-neutral.
-- Lane: `implementer`.
-- Change: `MoveType` for `ToolMatchedLooserTierException` (it keeps namespace `RoslynSentinel.Common` for now). `MoveMember` of the static method
-  `From` from `SnippetFailureDetail` to `SnippetErrorFormatter` (call sites updated by the tool: 9, all in the formatter), then `RenameSymbol` of the
-  moved method to `ToFailureDetail`.
-- Done when: `Build` 0 errors; `Search(mode: references)` on `SnippetFailureDetail` shows no reference from `SnippetFailureDetail.cs` to
-  `SnippetMatchResult`; `SnippetErrorFormatter.cs` declares one namespace.
+- Lane: `implementer` (3 files, 3 edits).
+- Change, in this order: (a) `MoveType` with `destination: ownFile` for `ToolMatchedLooserTierException` (it keeps namespace `RoslynSentinel.Common` for
+  now). (b) `MoveMember` of the static method `From` from the record `SnippetFailureDetail` to the static class `SnippetErrorFormatter` (the tool
+  rewrites the 9 call sites, all in the formatter). (c) `RenameSymbol` of the moved method to `ToFailureDetail` (no member of that name exists).
+  Fallback if `MoveMember` refuses a record as the source type: report `TOOL-GAP:`, then do it migration-first inside the two files: add
+  `ToFailureDetail` to the formatter with `Member`, switch the 9 callers with one batched `ReplaceSnippet`, delete `From` with `Member`.
+- Done when: `Build` 0 errors.
+- Dispatcher checks: `GetFileOutline` of `SnippetFailureDetail.cs` shows no method; `Search(mode: text, query: "^namespace ", fileGlob:
+  "RoslynSentinel.Common/SnippetMatching/SnippetErrorFormatter.cs")` returns one line; the filtered run passes.
 - Effort: S
 
 ### Step 3 - Move the three DTO records to Common's root namespace
-- Files: `SnippetFailureDetail.cs`, `SnippetClosestWindow.cs`, `SnippetFilterStep.cs` (moved to `RoslynSentinel.Common/`); `ToolException.cs` and the
-  other referencing files the tool rewrites (measured: `SnippetClosestWindow` 27 references in 10 files, `SnippetFilterStep` 16 in 4).
+- Files: `SnippetFailureDetail.cs`, `SnippetClosestWindow.cs`, `SnippetFilterStep.cs` (moved to `RoslynSentinel.Common/`); `ContextHelper.cs`;
+  `ToolException.cs` and the other referencing files the tool rewrites (symbol: `SnippetClosestWindow` 27 references in 10 files, `SnippetFilterStep` 16 in 4).
 - Depends on: Step 2
 - Effect: text-neutral.
-- Lane: `implementer-senior` (four operations, one slice).
-- Change: `MoveFile(moves: [the three files -> RoslynSentinel.Common/<same name>], namespaceHandling: keep)` (same project), then
-  `ChangeNamespace(filePath: <file>, newNamespace: "RoslynSentinel.Common")` for each of the three, dry run first.
-- Done when: `Build` 0 errors; `RoslynSentinel.Common/SnippetMatching/` holds exactly the 14 files of Appendix A marked "moves" plus
-  `ToolMatchedLooserTierException.cs`; `Search(mode: text, query: "SnippetMatching\\.SnippetFailureDetail")` returns nothing.
-- Decision point: if a dry run does not validate, leave the three records in namespace `RoslynSentinel.Common.SnippetMatching` in the root folder,
-  record a `// TODO` and an INBOX line, and continue; Step 5 then moves files by explicit list as planned.
+- Lane: `implementer-senior` (several operations, one slice; over the sweep tier by reference count).
+- Change, in this order: (a) remove line 5 of `ContextHelper.cs` (`using RoslynSentinel.Common.SnippetMatching;`) with `UsingDirective`. (b) In the
+  three DTO files turn doc-comment `<see cref>` references to types that will move into plain `<c>` text (`SnippetFailureDetail.cs:4`
+  `SnippetMatchResult`; the `SnippetClosestWindow` summary's `SnippetMatch` and `SnippetMatchResult.ClosestWindows`), because they would dangle across
+  the project edge. (c) `MoveFile(moves: [{ sourcePath: "RoslynSentinel.Common/SnippetMatching/SnippetFailureDetail.cs", destinationPath:
+  "RoslynSentinel.Common/SnippetFailureDetail.cs" }, the same pair form for `SnippetClosestWindow.cs` and `SnippetFilterStep.cs`], namespaceHandling: keep)`.
+  (d) `ChangeNamespace(filePath: "RoslynSentinel.Common/SnippetFilterStep.cs", newNamespace: "RoslynSentinel.Common")`, then the same for
+  `SnippetClosestWindow.cs`, then for `SnippetFailureDetail.cs`; dry run before each.
+- Done when: `Build` 0 errors.
+- Dispatcher checks: `Glob` `RoslynSentinel.Common/SnippetMatching/*.cs` lists exactly the 15 files of Appendix A marked "moves" that live in the folder;
+  `Search(mode: text, query: "SnippetMatching\\.SnippetFailureDetail")` returns nothing; the filtered run passes.
+- Decision point: if a `ChangeNamespace` dry run does not validate (the relative-qualified `SnippetMatching.SnippetFailureDetail` in `ToolException.cs`
+  is an untested shape), leave the three records in namespace `RoslynSentinel.Common.SnippetMatching` in the root folder, add a `// TODO` at the first
+  record and an INBOX line, and continue; Step 5 is unaffected.
 - Effort: M
 
 ### Step 4 - Create the project and its wiring
 - Files: `RoslynSentinel.Engines.Core/RoslynSentinel.Engines.Core.csproj` (new), `RoslynSentinel.slnx`, `RoslynSentinel.Common/RoslynSentinel.Common.csproj`.
-- Depends on: none (pairs with Steps 1 to 3 only if a second lane exists; default is after Step 3)
+- Depends on: Step 3 (single lane)
 - Effect: text-neutral.
-- Lane: the dispatcher itself (one MCP call plus non-C# edits).
-- Change: `CreateProject(projectName: "RoslynSentinel.Engines.Core", projectType: "classlib")`; `DeleteFile` the template `Class1.cs`; edit the csproj to
-  the conventions of `RoslynSentinel.Engines.Basic.csproj` (`net10.0`, `ImplicitUsings`, `Nullable`, `Configurations` `Debug;Release;DebugVisualStudio`,
-  `<Using Include="RoslynSentinel.Common" />`, `ProjectReference` to Common only, `InternalsVisibleTo` for `RoslynSentinel.Tests`); add
-  `<InternalsVisibleTo Include="RoslynSentinel.Engines.Core" />` to the Common csproj; confirm the slnx entry (`dotnet sln add` by the tool) sits with
-  the other `Engines.*` lines; `LoadSolution(forceReload: true)`.
-- Done when: solution `Build` 0 errors with the empty project; `McpServerStatus` shows the solution loaded with the new project.
+- Lane: the dispatcher itself (MCP calls plus non-C# edits).
+- Change, in this order: (a) `CreateProject(projectName: "RoslynSentinel.Engines.Core", projectType: "classlib")`. (b) Edit the new csproj to the
+  conventions of `RoslynSentinel.Engines.Basic.csproj`: `net10.0`, `ImplicitUsings`, `Nullable`, `Configurations` `Debug;Release;DebugVisualStudio`,
+  `<Using Include="RoslynSentinel.Common" />`, one `ProjectReference` to Common, and `<InternalsVisibleTo Include="RoslynSentinel.Tests" />` (new content,
+  not copied: the area's tests live there). (c) Add `<InternalsVisibleTo Include="RoslynSentinel.Engines.Core" />` to the list in the Common csproj
+  (`:29-43`). (d) Check `RoslynSentinel.slnx`: the tool runs `dotnet sln add`; move the new `<Project Path=... />` line next to the other `Engines.*`
+  lines (`:12-13`) if it landed elsewhere. (e) `LoadSolution(forceReload: true)`. (f) `DeleteFile` the template `RoslynSentinel.Engines.Core/Class1.cs`
+  (after the reload, so it is a loaded document).
+- Done when: solution `Build` 0 errors with the empty project; `McpServerStatus` reports the solution loaded with one more project than before.
 - Effort: S
 
 ### Step 5 - Move the area across the project edge
-- Files: the 17 files of Appendix A marked "moves" -> `RoslynSentinel.Engines.Core/SnippetMatching/`; csproj files the tool writes
-  (`Engines.Basic`, `Engines.Advanced`, `Tools.Basic` references; `InternalsVisibleTo`); `RoslynSentinel.Tests.Basic/ErrorPolicyKindRatchetTests.cs`.
-- Depends on: Steps 3 and 4
+- Files: the 17 files of Appendix A marked "moves" -> `RoslynSentinel.Engines.Core/SnippetMatching/`; the csproj files the tool writes
+  (`ProjectReference` in `Engines.Basic`, `Engines.Advanced`, `Tools.Basic`; `InternalsVisibleTo`); `RoslynSentinel.Tests.Basic/ErrorPolicyKindRatchetTests.cs`.
+- Depends on: Step 4
 - Effect: text-neutral.
 - Lane: `implementer-senior`, one operation plus the ratchet edit.
 - Change: `MoveFile(moves: [{ sourcePath: "RoslynSentinel.Common/SnippetMatching", destinationPath: "RoslynSentinel.Engines.Core/SnippetMatching" },
-  { SnippetMatchOutcome.cs }, { SnippetSpan.cs } -> the same folder], namespaceHandling: keep, addProjectReferences: true, addInternalsVisibleTo: true,
-  dryRun: true)`; act on every fact; then the real call. Add `"RoslynSentinel.Engines.Core"` to `ErrorPolicyKindRatchetTests.ScannedProjects` (`:26`) in
-  the same slice (8 `ToolNotFoundException` sites leave a scanned project; the floor is `MinimumKindSites`). Remove the emptied
-  `RoslynSentinel.Common/SnippetMatching/` folder.
-- Done when: `Build` 0 errors; `Glob` `RoslynSentinel.Common/SnippetMatching/**` returns nothing; the dispatcher's filtered run of
-  `ErrorPolicyKindRatchetTests`, `ServerBinaryStalenessTests`, `TestInstanceLauncherTests` and the `Snippet*Tests`, `ContextHelper*Tests`,
-  `NewContentIndenterTests`, `LineBlockAlignerTests` classes passes.
-- Decision point: a fact the dry run reports that needs more than a reference, an `InternalsVisibleTo` line or a package line stops the step.
+  { sourcePath: "RoslynSentinel.Common/SnippetMatchOutcome.cs", destinationPath: "RoslynSentinel.Engines.Core/SnippetMatching/SnippetMatchOutcome.cs" },
+  { sourcePath: "RoslynSentinel.Common/SnippetSpan.cs", destinationPath: "RoslynSentinel.Engines.Core/SnippetMatching/SnippetSpan.cs" }],
+  namespaceHandling: keep, addProjectReferences: true, addInternalsVisibleTo: true, dryRun: true)`; act on every fact (a grant Step 4 already wrote
+  must not end up twice in a csproj); then the real call. In the same slice add `"RoslynSentinel.Engines.Core"` to
+  `ErrorPolicyKindRatchetTests.ScannedProjects` (`:26`).
+- Done when: `Build` 0 errors.
+- Dispatcher checks: remove the emptied `RoslynSentinel.Common/SnippetMatching/` folder; `Glob` `RoslynSentinel.Common/SnippetMatching/**` returns
+  nothing; the filtered run passes.
+- Decision point: a dry-run fact that needs more than a reference line, an `InternalsVisibleTo` line or a package line stops the step.
 - Effort: M
 
 ### Step 6 - Rename the namespace
-- Files: the 17 moved files and every file with `using RoslynSentinel.Common.SnippetMatching;` (54 by text count) or a use of `SnippetMatchOutcome`,
-  `SnippetSpan`, `ToolMatchedLooserTierException`.
+- Files: the 17 moved files; the 36 files with `using RoslynSentinel.Common.SnippetMatching;`; the users of `SnippetMatchOutcome`, `SnippetSpan` and
+  `ToolMatchedLooserTierException`, which are in the global-using namespace `RoslynSentinel.Common` today (the dry run gives the file count).
 - Depends on: Step 5
 - Effect: text-neutral.
-- Lane: `implementer-senior`, one operation.
+- Lane: `implementer-senior`, one operation plus one comment edit.
 - Change: `ChangeNamespace(filePath: "RoslynSentinel.Engines.Core/SnippetMatching", newNamespace: "RoslynSentinel.Engines.Core.SnippetMatching")`, dry
-  run first. Fully qualified uses exist at `AdvancedStructuralEngine.cs:1299, 1315`, `ModernizationEngine.cs:131`, `MemberRefactoringEngine.cs:458`
-  (rewritten in place, as the Git rename did).
-- Done when: `Build` 0 errors; `Search(mode: text, query: "RoslynSentinel\\.Common\\.SnippetMatching", includeTests: true)` returns nothing; the same
-  filtered run as Step 5 passes.
+  run first. Then correct the one comment the tool does not rewrite (`SnippetMatchResult.cs:10`, `<c>RoslynSentinel.Common.SnippetMatching</c>`) with
+  `ReplaceSnippet`. Before the commit read `Git(operation: diff)`: consumers should gain or swap a using line; the four existing fully qualified uses
+  (`AdvancedStructuralEngine.cs:1299, 1315`, `ModernizationEngine.cs:131`, `MemberRefactoringEngine.cs:458`) are rewritten in place. A qualified
+  `RoslynSentinel.Engines.Core.SnippetMatching.` name on any other code line means the tool qualified a simple name instead of adding a using:
+  `UndoChange`, stop and report with the count.
+- Done when: `Build` 0 errors.
+- Dispatcher checks: `Search(mode: text, query: "RoslynSentinel\\.Common\\.SnippetMatching", includeTests: true)` returns nothing; the filtered run passes.
 - Effort: M
 
 ### Step 7 - Docs and guidance
-- Files: `CLAUDE.md` (Architecture bullets), `docs/current/references/reference_architecture_map.md` (Layers table),
-  `docs/current/references/reference_not_found_error_inventory.md` (15 path mentions),
+- Files: `CLAUDE.md` (Architecture bullets, lines 168 and 172-173), `docs/current/references/reference_architecture_map.md` (Layers table),
+  `docs/current/references/reference_not_found_error_inventory.md` (line 122, the one mention that carries the folder path),
   `docs/current/references/reference_splitting_functionality_out_of_common.md`, `docs/generated/*`,
-  [plan_roadmap_layering_and_project_splits.md](plan_roadmap_layering_and_project_splits.md) (Phase 2 row).
+  [plan_roadmap_layering_and_project_splits.md](plan_roadmap_layering_and_project_splits.md) (Phase 2 row: 17 files moved, not 18).
 - Depends on: Step 6
 - Effect: text-neutral.
 - Lane: the dispatcher itself.
-- Change: CLAUDE.md gets the wording of Q47 (owner-approved text only). Architecture map: an `Engines.Core` row with the admission rule of Q46.
-  Splitting reference: this run's numbers for the first cross-project multi-file `MoveFile`, the "expect masked coupling; record each instance as a
-  finding with its own step or proposal" lesson, and the leftover-folder gotcha. Regenerate `docs/generated/` (`scripts/Generate-ArchitectureMap.ps1`,
-  `scripts/Get-TodoMarkers.ps1`). Run `scripts/Test-GuidanceHygiene.ps1` and report the CLAUDE.md size against its 15 KB budget.
-- Done when: `ArchitectureDocFreshnessTests` passes; the hygiene script reports no new finding.
+- Change: CLAUDE.md gets exactly the wording of Q47 (the sentence to replace wraps across lines 172-173). Architecture map: an `Engines.Core` row with
+  the admission rule of Q46. Splitting reference: this run's numbers for the first cross-project multi-file `MoveFile`, the lesson "expect masked
+  coupling; record each instance as a finding with its own step or proposal", the leftover-folder gotcha, and the corrected `TestInstanceLauncher`
+  anchors. Regenerate `docs/generated/` (`scripts/Generate-ArchitectureMap.ps1`, `pwsh -NoProfile -File scripts/Get-TodoMarkers.ps1`). Run
+  `scripts/Test-GuidanceHygiene.ps1` and report the CLAUDE.md size against its 15 KB budget.
+- Done when: the hygiene script reports no new finding and the regenerated files are committed (`ArchitectureDocFreshnessTests` runs in Step 8).
 - Effort: S
 
 ### Step 8 - Verify and close
@@ -230,31 +256,34 @@ Single lane (every step touches the same folder). Steps 1 to 3 are in Common onl
 
 Q45, Q46 and Q47 are settled (Decision). What remains is unverified fact, each with its check:
 
-1. **The list of Common types the area uses is a text check.** An internal Common type missed by it shows as a `MoveFile` dry-run fact in Step 5
-   (resolved by the `InternalsVisibleTo` line Step 4 already adds, or a decision point).
-2. **`ChangeNamespace` on a file whose references are relative-qualified** (`SnippetMatching.SnippetFailureDetail` in `ToolException.cs`) is untested;
-   Step 3's dry run decides and has a fallback.
-3. **Active area.** 14 commits in two weeks; `plan_unknown_parameter_rejection_reduction.md` (IN PROGRESS, Step 17 left) names `SnippetFailureDetail`;
-   INBOX has an open line asking for a typed closest-window score in `SnippetErrorFormatter`. Heads-up before Step 1 and Step 5; no hold.
-4. **A simple name `Core`** inside `RoslynSentinel.Engines.*` code would bind to the new namespace segment. A text sweep found none in production code
-   but reviewed only part of its matches; the Step 6 dry run and build (the first point at which the namespace `RoslynSentinel.Engines.Core` exists)
-   are the proof.
+1. **The list of Common types the area uses is a name search, not a compile.** An internal Common type missed by it shows as a `MoveFile` dry-run fact
+   in Step 5 (resolved by the `InternalsVisibleTo` line Step 4 adds, or a decision point).
+2. **Untested tool shapes, each with a fallback or stop rule in its step:** `MoveMember` with a record as the source type (Step 2); `ChangeNamespace` on
+   a type whose references are relative-qualified (Step 3); `DeleteFile` on a template file of a just-created project (Step 4, after the reload);
+   `dotnet sln add` on the `.slnx` (Step 4 checks the line).
+3. **Active area.** 14 commits in two weeks; `plan_unknown_parameter_rejection_reduction.md` (IN PROGRESS, its last step left) names
+   `SnippetFailureDetail`; INBOX has an open line asking for a typed closest-window score in `SnippetErrorFormatter`. Heads-up before Step 1 and
+   Step 5; no hold.
+4. **`StaleReadPolicyRatchetTests.IsProductionProject` (`:164`) excludes Common by name**, so the area is newly scanned there. It has no
+   `ApplyProposedChangesAsync` call, so the ratchet should pass; the full run of Step 8 is the proof.
+5. **Namespace shadowing is checked:** no type, member or alias named `Core` or `SnippetMatching` is declared in the solution, tests included, and no
+   code in `Engines.*` or `Tools.*` uses a simple name `Core` (readiness review, 2026-11-27).
 
 ## Tests and measurement
 
 No test is added: every step is text-neutral and the area's behaviour is pinned by its existing classes (Appendix A, about 272 `[Test]` methods, all
-in-process). Each behaviour of this plan maps to an existing check:
+in-process), run whole. Each behaviour of this plan maps to an existing check:
 
 | Behaviour | Check (run by the dispatcher) | Pass criterion |
 | --- | --- | --- |
-| The area still works after each prep step and after the move | `Snippet*Tests`, `ContextHelper*Tests`, `NewContentIndenterTests`, `LineBlockAlignerTests` (`RoslynSentinel.Tests`), `SnippetResolverCrossAssemblyTests` (`Tests.Tools.Basic`) | all pass, same counts as before the step |
-| Error-policy ratchet still covers the moved throw sites | `ErrorPolicyKindRatchetTests` | passes with `RoslynSentinel.Engines.Core` in `ScannedProjects` |
-| A stale server is still detected for the new project | `ServerBinaryStalenessTests`, `TestInstanceLauncherTests` | pass unchanged (prefix match) |
-| Generated architecture docs match the solution | `ArchitectureDocFreshnessTests` | passes after regeneration |
+| The area still works after each prep step and after the move | the filtered run of Execution rules: `Snippet*`, `ContextHelper*`, `NewContentIndenterTests`, `LineBlockAlignerTests` (`RoslynSentinel.Tests`), `SnippetResolverCrossAssemblyTests` (`Tests.Tools.Basic`) | all pass, same counts as before the step |
+| Error-policy ratchet still covers the moved throw sites | `ErrorPolicyKindRatchetTests` (in the filtered run) | passes with `RoslynSentinel.Engines.Core` in `ScannedProjects` |
+| A stale server is still detected for the new project | `ServerBinaryStalenessTests` (filtered run); `TestInstanceLauncherTests` (OutOfProcess: full run only) | pass unchanged (prefix match) |
+| Generated architecture docs match the solution | `ArchitectureDocFreshnessTests` (`RoslynSentinel.Tests.Server`, full run) | passes after regeneration |
 | Nothing else moved | one full run at the final commit against baseline P9 | 0 failures, test count equal to the baseline |
 
 Size: `SnippetFailureDetail.From` 9 call sites in 1 file (symbol); `SnippetClosestWindow` 27 references in 10 files, `SnippetFilterStep` 16 in 4
-(symbol); namespace rename about 54 files with the using plus users of the two root types (text; the dry run gives the exact figure).
+(symbol); namespace rename 36 files with the using plus the users of the two root types and the exception (the dry run gives the exact figure).
 
 ## Appendix A - Inventory (2026-11-27)
 
@@ -263,16 +292,16 @@ Size: `SnippetFailureDetail.From` 9 call sites in 1 file (symbol); `SnippetClose
 | `SnippetMatching/ISnippetMatcher.cs` | 25 | `ISnippetMatcher` (internal) | moves |
 | `SnippetMatching/NewContentIndenter.cs` | 647 | `NewContentIndentResult`, `NewContentIndenter` | moves |
 | `SnippetMatching/SnippetCandidateFinder.cs` | 361 | `ClosestWindowSearch`, `SnippetCandidateFinder` (internal) | moves |
-| `SnippetMatching/SnippetErrorFormatter.cs` | 966 | `SnippetErrorFormatter`; `ToolMatchedLooserTierException` (split out in Step 2) | moves |
+| `SnippetMatching/SnippetErrorFormatter.cs` | 967 | `SnippetErrorFormatter` (public static class); `ToolMatchedLooserTierException` (split out in Step 2) | moves |
 | `SnippetMatching/ToolMatchedLooserTierException.cs` (new in Step 2) | - | `ToolMatchedLooserTierException` | moves |
-| `SnippetMatching/SnippetFailureDetail.cs` | 40 | `SnippetFailureDetail` | stays (Common root, Step 3) |
+| `SnippetMatching/SnippetFailureDetail.cs` | 41 | `SnippetFailureDetail` | stays (Common root, Step 3) |
 | `SnippetMatching/SnippetLookup.cs` | 98 | `SnippetLookup` | moves |
 | `SnippetMatching/SnippetMatchers.cs` | 240 | `SnippetMatcherSupport`, `ExactMatcher`, `LineEndingMatcher`, `CollapsedWhitespaceMatcher`, `IndentationMatcher` (internal) | moves |
-| `SnippetMatching/SnippetMatchResult.cs` | 345 | `SnippetMatch`, `SnippetDifferenceKind`, `SnippetDifference`, `SnippetNearMatch`, `SnippetMatchResult`; `SnippetClosestWindow`, `SnippetFilterStep` (split out in Step 1) | moves |
+| `SnippetMatching/SnippetMatchResult.cs` | 346 | `SnippetMatch`, `SnippetDifferenceKind`, `SnippetDifference`, `SnippetNearMatch`, `SnippetMatchResult`; `SnippetClosestWindow`, `SnippetFilterStep` (split out in Step 1) | moves |
 | `SnippetMatching/SnippetClosestWindow.cs`, `SnippetFilterStep.cs` (new in Step 1) | - | the two records | stay (Common root, Step 3) |
 | `SnippetMatching/SnippetNodeKindError.cs` | 69 | `SnippetNodeKindError` | moves |
 | `SnippetMatching/SnippetResolver.cs` | 210 | `SnippetResolver` | moves |
-| `SnippetMatching/SnippetSelectors.cs` | 188 | `SnippetSelectors`, `SnippetSelectorFilter` (internal) | moves |
+| `SnippetMatching/SnippetSelectors.cs` | 188 | `SnippetSelectors` (record), `SnippetSelectorFilter` (internal) | moves |
 | `SnippetMatching/SnippetStages.cs` | 211 | `SnippetStages` (internal) | moves |
 | `SnippetMatching/SnippetTokenEquivalence.cs` | 302 | `SnippetTokenEquivalence` | moves |
 | `SnippetMatching/ToolCallMarkup.cs` | 35 | `ToolCallMarkup` | moves |
@@ -280,6 +309,9 @@ Size: `SnippetFailureDetail.From` 9 call sites in 1 file (symbol); `SnippetClose
 | `SnippetMatchOutcome.cs` | 39 | `SnippetMatchOutcome` | moves |
 | `SnippetSpan.cs` | 7 | `SnippetSpan` | moves |
 | `LineBlockAligner.cs` | 78 | `LineBlockAligner`, `Alignment` (internal) | stays |
+
+After Step 3 the folder `RoslynSentinel.Common/SnippetMatching/` holds 15 files (the 14 original files marked "moves" plus
+`ToolMatchedLooserTierException.cs`); with the two root files that is the 17 files of Step 5.
 
 Consumers (text): Engines.Basic `SyntaxTargetResolver`, `MsToolAugmentEngine`, `BasicRefactoringEngine`, `SemanticRefactoringEngine`,
 `SymbolNavigationEngine`, `ImpactAnalyzer`, `SnippetSymbolLocator`, `StructuralRefinementEngine`, `SyntaxUpgradeEngine`, `DiscoveryEngine`,
@@ -291,5 +323,5 @@ Tests (all stay; `[Test]` counts by text): in `RoslynSentinel.Tests`: `SnippetEr
 `ContextHelperSelectorTests` 19, `SnippetMatcherTests` 17, `SnippetMatchResultTests` 17, `SnippetLookupTests` 12, `ContextHelperLineAfterTests` 7,
 `LineBlockAlignerTests` 5, `SnippetNodeKindErrorTests` 3, `ContextHelperIndentationDiagnosisTests` 2; in `RoslynSentinel.Tests.Tools.Basic`:
 `SnippetResolverCrossAssemblyTests` 3. Users of the area in mixed test files: `Tests.Tools.Basic/RegressionTests.cs`, `Tests.Server/CallToolFailureFilterTests.cs`,
-`Tests.Server/SchemaLeanProfileTests.cs`, `Tests.Advanced/BugFixTests.cs`. Tests use internals (`SnippetMatchResult.Create`, `MaxMessageChars`, the
-matcher classes), hence the `InternalsVisibleTo` for `RoslynSentinel.Tests`; whether `Tests.Tools.Basic` needs one is settled by the Step 5 dry run.
+`Tests.Server/SchemaLeanProfileTests.cs`, `Tests.Advanced/BugFixTests.cs`. Tests in `RoslynSentinel.Tests` use internals (`SnippetMatchResult.Create`,
+`MaxMessageChars`, the matcher classes), hence its `InternalsVisibleTo`.
