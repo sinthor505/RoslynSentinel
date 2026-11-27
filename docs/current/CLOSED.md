@@ -36,7 +36,7 @@ Resolved:
 - scripts/build.ps1 -Flavor Solution prompt hang - the Read-Host is dead since ad675ffa ($allRunning = $null); the 2026-11-26 hang's cause is untraced, re-open with a new INBOX line if it recurs.
 
 Folded:
-- Get-ThinkingArmTable one machine per call / pooled scenarios, its duplicate run discovery, and five scripts parsing transcripts themselves - plans/plan_modeleval_run_review_pipeline.md (Q16, Q20, Q28, Step 5 markers).
+- Get-ThinkingArmTable one machine per call / pooled scenarios, its duplicate run discovery, and five scripts parsing transcripts themselves - plans/closed/plan_modeleval_run_review_pipeline.md (Q16, Q20, Q28, Step 5 markers).
 - Escaped-quote read/write mismatch, the escape and leak research, the plain-text probe, interrogate replaying ResultJson, the "decode once" note - plans/closed/plan_plain_text_tool_results_for_eval_model.md (implemented; interrogate stays a code TODO at scripts/roslynsentinel-interrogate.ps1:239).
 - Triggered-mode </think> leak, its probe and the plan-line / reasoning-as-content probe - plans/plan_triggered_thinking_reasoning_as_content.md.
 - Ornith StreamTruncated near a full context - TODO.md "Agent-loop auto-compaction".
