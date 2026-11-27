@@ -33,6 +33,9 @@ function Assert-Fields([string]$Run, [hashtable]$Expected) {
 $slipScript = Join-Path $PSScriptRoot 'Get-SlipCounts.ps1'
 $scratch = Get-RoslynSentinelScratchRoot -RepoRoot (Split-Path -Parent $PSScriptRoot)
 $root = Join-Path (Join-Path $scratch 'plan_slip_variants') ('t5a-' + [guid]::NewGuid().ToString('N'))
+# Second synthetic root for the runs that carry a site sidecar (per-run site columns, wider escape scan).
+$siteRoot = Join-Path (Join-Path $scratch 'plan_slip_variants') ('t5a-sites-' + [guid]::NewGuid().ToString('N'))
+$siteFixture = Join-Path $PSScriptRoot '..\RoslynSentinel.Tests.ModelEval\SiteSidecars\step-1.sites.json'
 
 $fp = 'C:/synth/Foo.cs'
 $okJson = '{"successData":{"applied":true}}'
@@ -47,9 +50,10 @@ function New-SynthCall([string]$Tool, [string]$ArgumentsJson, [bool]$IsError, [s
     return [ordered]@{ ToolName = $Tool; ArgumentsJson = $ArgumentsJson; IsError = $IsError; ResultJson = $ResultJson }
 }
 
-# Writes <root>\<Name>\ with scenario.txt, step-1.outcome.txt and transcript.json (one turn holding $Calls).
-function New-SynthRun([string]$Name, [string]$Scenario, [string]$Variant, [string]$Outcome, [object[]]$Calls) {
-    $dir = Join-Path $root $Name
+# Writes <Root>\<Name>\ with scenario.txt, step-1.outcome.txt and transcript.json (one turn holding $Calls).
+# -Root defaults to the main synthetic root.
+function New-SynthRun([string]$Name, [string]$Scenario, [string]$Variant, [string]$Outcome, [object[]]$Calls, [string]$Root = $script:root) {
+    $dir = Join-Path $Root $Name
     New-Item -ItemType Directory -Path $dir -Force | Out-Null
     $utf8 = New-Object System.Text.UTF8Encoding($false)
     [System.IO.File]::WriteAllText((Join-Path $dir 'scenario.txt'), "$Scenario`r`n", $utf8)
@@ -206,9 +210,40 @@ try {
 
     $near = @($summaries | Where-Object { $_.Scenario -eq 'T5a-near' })
     Assert-That ($near.Count -eq 1 -and $near[0].Writes -eq 2 -and $near[0].SlippedWrites -eq 1 -and [math]::Abs([double]$near[0].SlipRate - 0.5) -lt 1e-9) 'Summary T5a-near: Writes 2, SlippedWrites 1, SlipRate 0.5'
+
+    # Site columns: the shared fixture gives the tally 4/1/1/1/1/2/2/1/1; ResidualSlipRate 1/2, CompletionRate 2/4.
+    New-Item -ItemType Directory -Path $siteRoot -Force | Out-Null
+    $siteCallsOk = @(New-SynthCall 'ReadFile' (New-JsonArgs @{ filePath = $fp }) $false $okJson)
+    New-SynthRun 'sites' 'T5a-sites' 'VA' 'Fail' $siteCallsOk -Root $siteRoot
+    New-Item -ItemType Directory -Path (Join-Path $siteRoot 'sites') -Force | Out-Null
+    Copy-Item -LiteralPath $siteFixture -Destination (Join-Path $siteRoot 'sites\step-1.sites.json')
+    New-SynthRun 'nosites' 'T5a-nosites' 'VA' 'Fail' $siteCallsOk -Root $siteRoot
+
+    # Escape copies of the wider scan: a Member newMemberSource and a ReplaceRange firstLineText, each after a ReadFile cache.
+    $escSrc = New-JsonArgs @{ successData = @{ source = $src } }
+    New-SynthRun 'esc-member' 'T5a-sitesesc' 'VA' 'Fail' @(
+        (New-SynthCall 'ReadFile' (New-JsonArgs @{ filePath = $fp }) $false $escSrc),
+        (New-SynthCall 'Member' (New-JsonArgs @{ filePath = $fp; operation = 'replace'; memberName = 'Foo'; newMemberSource = $escOld }) $false $okJson)
+    ) -Root $siteRoot
+    New-SynthRun 'esc-range' 'T5a-sitesesc' 'VA' 'Fail' @(
+        (New-SynthCall 'ReadFile' (New-JsonArgs @{ filePath = $fp }) $false $escSrc),
+        (New-SynthCall 'ReplaceRange' (New-JsonArgs @{ filePath = $fp; startLine = 2; endLine = 2; firstLineText = $escOld; lastLineText = $escOld; newContent = '        var s = 1;' }) $false $okJson)
+    ) -Root $siteRoot
+
+    $siteRaw = @(& $slipScript -Path $siteRoot -WarningAction SilentlyContinue)
+    foreach ($r in $siteRaw) { $byName[(Split-Path -Leaf $r.RunFolder)] = $r }
+    Assert-That ($siteRaw.Count -eq 4) "one row per site run folder (4, actual $($siteRaw.Count))"
+    Assert-Fields 'sites' @{ SitesChanged = 4; SitesCorrect = 1; SitesWrong = 1; SitesUnchanged = 1; SitesMissing = 1; ControlSites = 2; ControlHits = 2; SeparatorSites = 1; SeparatorHits = 1; ResidualSlipRate = 0.5; CompletionRate = 0.5 }
+    Assert-Fields 'esc-member' @{ Writes = 1; EscapeCopyWrites = 1; EscapeCopyLines = 1; SlippedWrites = 1 }
+    Assert-Fields 'esc-range' @{ Writes = 1; EscapeCopyWrites = 1; EscapeCopyLines = 1; SlippedWrites = 1 }
+    $siteColumnNames = @('SitesChanged', 'SitesCorrect', 'SitesWrong', 'SitesUnchanged', 'SitesMissing', 'ControlSites', 'ControlHits', 'SeparatorSites', 'SeparatorHits', 'ResidualSlipRate', 'CompletionRate')
+    $nositesRow = $byName['nosites']
+    $nonNullSite = if ($null -eq $nositesRow) { -1 } else { @($siteColumnNames | Where-Object { $null -ne $nositesRow.$_ }).Count }
+    Assert-That ($nonNullSite -eq 0) "nosites: all eleven site columns are null (non-null: $nonNullSite)"
 }
 finally {
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $siteRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 if ($script:failures -gt 0) {

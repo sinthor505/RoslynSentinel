@@ -16,6 +16,15 @@
     GateRefusals (write calls refused ValidationFailed) and UnparsedNotFound (ReplaceSnippet or EditSnippets NotFound
     with oldContent in the text and neither "Closest windows in the file" nor "No candidates") are not slips.
 
+    The escape-copy scan of write calls also reads newMemberSource, firstLineText and lastLineText (Get-WriteTargets
+    with $EscapeScanFieldsWide).
+
+    Per-run site columns (from the first step-*.sites.json of the run folder, read with EvalRunReader.ps1):
+      SitesChanged, SitesCorrect, SitesWrong, SitesUnchanged, SitesMissing, ControlSites, ControlHits, SeparatorSites,
+      SeparatorHits (the Get-EvalSiteTally fields), ResidualSlipRate (SitesWrong / (SitesCorrect + SitesWrong)) and
+      CompletionRate ((SitesCorrect + SitesWrong) / SitesChanged). A rate is null on a zero denominator. All eleven
+      columns are null when the run folder has no sidecar.
+
     RunClass: Pass when the run passed, else FailWithSlips when SlippedWrites + ReadMalformedArgs >= 1, else FailNoSlips.
     Outcome, StopReason and PromptVariant come from the first step-*.outcome.txt in the run folder; Scenario is the
     first line of scenario.txt. Missing values are empty strings.
@@ -59,6 +68,24 @@ param(
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'roslynsentinel-transcriptmetrics.ps1')
+. (Join-Path $PSScriptRoot 'eval-review\EvalRunReader.ps1')
+
+# Per-run site columns (see the header): the nine Get-EvalSiteTally fields and the two rates, all $null without a sidecar.
+function Get-SiteColumns([string]$RunFolder) {
+    $tallyNames = @('SitesChanged', 'SitesCorrect', 'SitesWrong', 'SitesUnchanged', 'SitesMissing', 'ControlSites', 'ControlHits', 'SeparatorSites', 'SeparatorHits')
+    $cols = [ordered]@{}
+    foreach ($n in $tallyNames) { $cols[$n] = $null }
+    $cols['ResidualSlipRate'] = $null
+    $cols['CompletionRate'] = $null
+    $grades = Read-EvalSiteGrades -RunFolder $RunFolder
+    if ($null -eq $grades) { return $cols }
+    $tally = Get-EvalSiteTally -Grades $grades
+    foreach ($n in $tallyNames) { $cols[$n] = [int]$tally.$n }
+    $judged = [int]$tally.SitesCorrect + [int]$tally.SitesWrong
+    if ($judged -gt 0) { $cols['ResidualSlipRate'] = [math]::Round([double]$tally.SitesWrong / [double]$judged, 4) }
+    if ($tally.SitesChanged -gt 0) { $cols['CompletionRate'] = [math]::Round([double]$judged / [double]$tally.SitesChanged, 4) }
+    return $cols
+}
 
 function Get-ErrorCode([bool]$IsError, [string]$ResultJson) {
     if (-not $IsError -or -not $ResultJson) { return '' }
@@ -154,13 +181,13 @@ function Get-RunSlipRow($tr, [double]$Threshold) {
             $malformed = Test-MalformedCall $parsed $isError $code
 
             $targets = @()
-            if ($callArgs -and -not $isRead) { $targets = Get-WriteTargets $callArgs }
+            if ($callArgs -and -not $isRead) { $targets = Get-WriteTargets $callArgs $EscapeScanFieldsWide }
             $escRowsOfCall = @(Measure-EscapeCopyCall -Tracker $tracker -Run $dir -Turn $turn.TurnNumber -ToolName $tool -Targets $targets -IsError $isError)
 
             $updateTargets = $targets
             if ($isRead) {
                 $updateTargets = @()
-                if ($callArgs) { $updateTargets = Get-WriteTargets $callArgs }
+                if ($callArgs) { $updateTargets = Get-WriteTargets $callArgs $EscapeScanFieldsWide }
             }
             Update-EscapeCopyTracker -Tracker $tracker -Targets $updateTargets -IsRead $isRead -IsError $isError -ResultJson $c.ResultJson
 
@@ -195,7 +222,7 @@ function Get-RunSlipRow($tr, [double]$Threshold) {
     $readSlipRate = if ($reads -gt 0) { [math]::Round([double]$readMal / [double]$reads, 4) } else { [double]0 }
     $runClass = if ($passed) { 'Pass' } elseif (($slipped + $readMal) -ge 1) { 'FailWithSlips' } else { 'FailNoSlips' }
 
-    return [pscustomobject][ordered]@{
+    $row = [ordered]@{
         Machine = [string]$tr.Machine; Purpose = [string]$tr.Purpose; Scenario = $scenario; PromptVariant = $promptVariant; RunFolder = $dir
         Outcome = $outcome; StopReason = $stop; Passed = $passed
         Writes = $writes; Reads = $reads; OtherCalls = $others
@@ -204,6 +231,9 @@ function Get-RunSlipRow($tr, [double]$Threshold) {
         ReadMalformedArgs = $readMal; ReadSlipRate = $readSlipRate; OtherMalformedArgs = $otherMal
         GateRefusals = $gateN; UnparsedNotFound = $unparsedN; RunClass = $runClass
     }
+    $siteCols = Get-SiteColumns $dir
+    foreach ($k in $siteCols.Keys) { $row[$k] = $siteCols[$k] }
+    return [pscustomobject]$row
 }
 
 $rows = New-Object System.Collections.Generic.List[object]

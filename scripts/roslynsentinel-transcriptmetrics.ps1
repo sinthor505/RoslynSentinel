@@ -11,6 +11,8 @@
 $BackslashQuote = '\"'
 # Strings of a call that the escape-copy rule scans for backslash-quote lines.
 $EscapeScanFields = @('oldContent', 'newContent', 'content')
+# Wider scan for Get-SlipCounts: also the source text of Member (newMemberSource) and ReplaceRange (firstLineText, lastLineText).
+$EscapeScanFieldsWide = $EscapeScanFields + @('newMemberSource', 'firstLineText', 'lastLineText')
 # Batch lists whose items carry their own filePath and string fields.
 $BatchFields = @('batchEdits')
 # Fields that carry source text a call writes (Get-CallCategory).
@@ -41,15 +43,15 @@ function Get-LineSet([string]$text) {
 }
 
 # One entry per edit/create target: the filePath and the string arguments written by that call (or batch item).
-function Get-WriteTargets($callArgs) {
-    $fields = $EscapeScanFields
+# -Fields names the string arguments to scan (default $EscapeScanFields; Get-SlipCounts passes $EscapeScanFieldsWide).
+function Get-WriteTargets($callArgs, [string[]]$Fields = $EscapeScanFields) {
     $out = New-Object System.Collections.Generic.List[object]
     $top = [string]$callArgs.filePath
-    $out.Add([pscustomobject]@{ filePath = $top; texts = @(foreach ($f in $fields) { if ($callArgs.$f -is [string]) { $callArgs.$f } }) })
+    $out.Add([pscustomobject]@{ filePath = $top; texts = @(foreach ($f in $Fields) { if ($callArgs.$f -is [string]) { $callArgs.$f } }) })
     foreach ($bf in $BatchFields) {
         foreach ($item in @($callArgs.$bf | Where-Object { $null -ne $_ })) {
             $fp = if ($item.filePath) { [string]$item.filePath } else { $top }
-            $out.Add([pscustomobject]@{ filePath = $fp; texts = @(foreach ($f in $fields) { if ($item.$f -is [string]) { $item.$f } }) })
+            $out.Add([pscustomobject]@{ filePath = $fp; texts = @(foreach ($f in $Fields) { if ($item.$f -is [string]) { $item.$f } }) })
         }
     }
     return , $out.ToArray()
