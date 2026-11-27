@@ -1,7 +1,9 @@
 # Plan: Roadmap for the layering fix and the project splits (Common, engines, tool layer)
 
 **Status:** DRAFT 2026-11-27. Master plan: it orders sub-plans and holds no implementation steps of its own. Phase 0.1 done (Git namespace rename,
-c2b3acb9..1a7f3b1f); Phase 2 grounding started; the phase order below awaits owner review.
+c2b3acb9..1a7f3b1f); Phase 0.2 dropped; Phase 2 done (`RoslynSentinel.Engines.Core` with snippet matching, 373ff903..bc1572a1; full run 12,633
+tests, 0 failures). NEXT: Phase 1 (nightly plan's D1-D6, owner starts a fresh `plan-design` session), Phase 3 (layering proposal, design session),
+Phase 0.3 (doc hygiene). The phase order below awaits owner review.
 
 ## Problem
 
