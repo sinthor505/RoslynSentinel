@@ -1,6 +1,6 @@
 # Plan: Slip-first eval scenarios graded per site, one slip family each
 
-**Status:** APPROVED 2026-11-26. Four per-site-graded slip-family scenarios (escapes, doc comments, long generics, near-duplicate identifiers) with a shared builder, Roslyn token grader, JSON sidecar, Get-SlipCounts metrics and an E1 validity batch.
+**Status:** IN PROGRESS 2026-11-27. Steps 1-6 done (6ac92264, 8800f9dd, 0dbd860d, df5f648e, 2015fb5b, 007797d9).
 
 ## Problem
 
@@ -291,6 +291,7 @@ scheduled before the behaviour-changing 7, 9a-2, 9b; pairs always touch disjoint
     `public static IReadOnlyList<SiteGrade> ReadSidecar(string path)`.
 - Done when: `Build` 0 errors.
 - Lane: implementer. Effort: S
+- Done: 6ac92264
 
 ### Step 2 - Trailing optional `Sites` on the step and the verdict
 - Files: `RoslynSentinel.Tests.ModelEval/ImplementationScenarios/ImplementationScenario.cs`,
@@ -304,6 +305,7 @@ scheduled before the behaviour-changing 7, 9a-2, 9b; pairs always touch disjoint
   `ScenarioVerdict`; all unaffected by a trailing optional parameter.
 - Done when: `Build` 0 errors.
 - Lane: implementer. Effort: S
+- Done: 8800f9dd
 
 ### Step 3 - Implement `SlipFamilyBuilder`
 - Files: `RoslynSentinel.Tests.ModelEval/ImplementationScenarios/SlipFamilyBuilder.cs`
@@ -341,6 +343,7 @@ scheduled before the behaviour-changing 7, 9a-2, 9b; pairs always touch disjoint
     initialisation); the content tests do.
 - Done when: `Build` 0 errors.
 - Lane: implementer. Effort: M. Pairs with: Step 4.
+- Done: 0dbd860d
 
 ### Step 4 - Implement `SiteGrader`
 - Files: `RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Graders/SiteGrader.cs`
@@ -376,6 +379,7 @@ scheduled before the behaviour-changing 7, 9a-2, 9b; pairs always touch disjoint
     `Unchanged`, `Wrong`, `Missing`. `WriteSidecar` creates the parent directory if missing.
 - Done when: `Build` 0 errors.
 - Lane: implementer (NEED-ADVICE to implementer-advisor on Roslyn token details). Effort: M. Pairs with: Step 3.
+- Done: df5f648e
 
 ### Step 5 - `SlipFamilyBuilderTests`
 - Files: `RoslynSentinel.Tests.ModelEval/SlipFamilyBuilderTests.cs` (new)
@@ -385,6 +389,7 @@ scheduled before the behaviour-changing 7, 9a-2, 9b; pairs always touch disjoint
   The 36-site validation case builds its set from `SlipFamilyLayout` values, not literals.
 - Done when: the dispatcher runs `RunTest` on class `SlipFamilyBuilderTests`, all pass.
 - Lane: test-writer. Effort: S. Pairs with: Step 6.
+- Done: 2015fb5b
 
 ### Step 6 - `SiteGraderTests` and the shared sidecar fixture
 - Files: `RoslynSentinel.Tests.ModelEval/SiteGraderTests.cs` (new),
@@ -402,6 +407,7 @@ scheduled before the behaviour-changing 7, 9a-2, 9b; pairs always touch disjoint
   under `ScratchRoot.Resolve()`, not the repo.
 - Done when: the dispatcher runs `RunTest` on class `SiteGraderTests`, all pass.
 - Lane: test-writer. Effort: S. Pairs with: Step 5.
+- Done: 007797d9
 
 ### Step 7 - Wire the grader into the verdict and the run output
 - Files: `RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Graders/ImplementationScenarioChecks.cs`,
