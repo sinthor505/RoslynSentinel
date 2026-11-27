@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis.Text;
+using RoslynSentinel.Common;
 
-namespace RoslynSentinel.Common.SnippetMatching;
+namespace RoslynSentinel.Engines.Core.SnippetMatching;
 
 /// <summary>
 /// The four match stages that the matchers and the legacy <see cref="ContextHelper"/> snippet helpers share,

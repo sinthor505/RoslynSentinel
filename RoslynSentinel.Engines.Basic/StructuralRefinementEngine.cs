@@ -6,7 +6,7 @@ using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.Text;
 
 using RoslynSentinel.Common;
-using RoslynSentinel.Common.SnippetMatching;
+using RoslynSentinel.Engines.Core.SnippetMatching;
 
 namespace RoslynSentinel.Engines.Basic;
 

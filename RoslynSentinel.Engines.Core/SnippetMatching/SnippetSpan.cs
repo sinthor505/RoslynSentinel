@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Engines.Core.SnippetMatching;
 
 /// <summary>
 /// The location and real length of a snippet match in source text. Callers that

@@ -128,7 +128,7 @@ public class SyntaxModernizationEngine
             else
             {
                 var sourceText = await document.GetTextAsync(cancellationToken);
-                var snippetMatch = RoslynSentinel.Common.SnippetMatching.SnippetLookup.ResolveOrThrow(sourceText, contextSnippet ?? string.Empty, lineBefore, lineAfter);
+                var snippetMatch = RoslynSentinel.Engines.Core.SnippetMatching.SnippetLookup.ResolveOrThrow(sourceText, contextSnippet ?? string.Empty, lineBefore, lineAfter);
                 var containing = recordMatches.Where(r => r.FullSpan.Contains(snippetMatch.Start)).ToList();
                 if (containing.Count == 0)
                 {

@@ -1,7 +1,6 @@
 using ModelContextProtocol.Protocol;
 
 using RoslynSentinel.Common;
-using RoslynSentinel.Common.SnippetMatching;
 using RoslynSentinel.Server.Advanced;
 
 namespace RoslynSentinel.Tests.Server;

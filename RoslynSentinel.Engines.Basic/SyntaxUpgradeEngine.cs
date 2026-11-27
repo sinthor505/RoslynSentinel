@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 
 using RoslynSentinel.Common;
-using RoslynSentinel.Common.SnippetMatching;
+using RoslynSentinel.Engines.Core.SnippetMatching;
 
 namespace RoslynSentinel.Engines.Basic;
 

@@ -5,7 +5,7 @@ using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.Formatting;
 
 using RoslynSentinel.Engines.Basic;
-using RoslynSentinel.Common.SnippetMatching;
+using RoslynSentinel.Engines.Core.SnippetMatching;
 
 namespace RoslynSentinel.Engines.Advanced;
 
@@ -1296,7 +1296,7 @@ public class StructuralRefactoringEngine
         // One family: keep the class-first ordering, so a bare name resolves to the implementation.
         MethodDeclarationSyntax? methodNode = representatives.Count == 1 ? methodMatches[0] : null;
         if (representatives.Count == 1 && methodMatches.Count > 1 && !string.IsNullOrWhiteSpace(contextSnippet)
-            && RoslynSentinel.Common.SnippetMatching.SnippetLookup.TryResolve(sourceText, contextSnippet, lineBefore, lineAfter, out var familySnippetMatch, out _))
+            && RoslynSentinel.Engines.Core.SnippetMatching.SnippetLookup.TryResolve(sourceText, contextSnippet, lineBefore, lineAfter, out var familySnippetMatch, out _))
         {
             // The family spans an interface and its implementations in this file: a snippet inside one declaration
             // picks that one (inside the interface method it selects the interface-target path, which updates every
@@ -1312,7 +1312,7 @@ public class StructuralRefactoringEngine
             }
             else
             {
-                var snippetMatch = RoslynSentinel.Common.SnippetMatching.SnippetLookup.ResolveOrThrow(sourceText, contextSnippet ?? string.Empty, lineBefore, lineAfter);
+                var snippetMatch = RoslynSentinel.Engines.Core.SnippetMatching.SnippetLookup.ResolveOrThrow(sourceText, contextSnippet ?? string.Empty, lineBefore, lineAfter);
                 var containing = representatives.Where(m => m.FullSpan.Contains(snippetMatch.Start)).ToList();
                 if (containing.Count == 0)
                 {

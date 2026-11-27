@@ -2,7 +2,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
 
-namespace RoslynSentinel.Common.SnippetMatching;
+namespace RoslynSentinel.Engines.Core.SnippetMatching;
 
 /// <summary>
 /// Second chance for a ReplaceSnippet oldContent that the whitespace ladder matched only at a looser tier: a looser-tier

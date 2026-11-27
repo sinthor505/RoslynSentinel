@@ -1,7 +1,7 @@
 using Microsoft.CodeAnalysis.Text;
 using RoslynSentinel.Common;
 
-namespace RoslynSentinel.Common.SnippetMatching;
+namespace RoslynSentinel.Engines.Core.SnippetMatching;
 
 /// <summary>
 /// Dispatcher for snippet-in-text matching. Runs the matchers in ladder order up to the requested

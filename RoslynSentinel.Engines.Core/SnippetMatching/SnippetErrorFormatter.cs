@@ -4,7 +4,7 @@ using System.Text;
 using Microsoft.CodeAnalysis.Text;
 using RoslynSentinel.Common;
 
-namespace RoslynSentinel.Common.SnippetMatching
+namespace RoslynSentinel.Engines.Core.SnippetMatching
 {
     /// <summary>
     /// Turns a failed <see cref="SnippetMatchResult"/> into a <see cref="ToolException"/> whose text always carries the

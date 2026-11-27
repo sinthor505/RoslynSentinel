@@ -1,4 +1,6 @@
-namespace RoslynSentinel.Common
+using RoslynSentinel.Common;
+
+namespace RoslynSentinel.Engines.Core.SnippetMatching
 {
     /// <summary>
     /// A contextSnippet/oldContent matched the file only at a looser whitespace tolerance than the call accepts, so

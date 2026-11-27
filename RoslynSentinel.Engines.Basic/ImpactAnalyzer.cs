@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Common;
-using RoslynSentinel.Common.SnippetMatching;
+using RoslynSentinel.Engines.Core.SnippetMatching;
 
 namespace RoslynSentinel.Engines.Basic;
 

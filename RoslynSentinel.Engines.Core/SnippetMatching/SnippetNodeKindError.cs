@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
 
-namespace RoslynSentinel.Common.SnippetMatching;
+namespace RoslynSentinel.Engines.Core.SnippetMatching;
 
 /// <summary>
 /// Words the case where a snippet matched, but at a node of the wrong kind (for example an int local where a switch

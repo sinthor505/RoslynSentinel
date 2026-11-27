@@ -1,6 +1,6 @@
 using RoslynSentinel.Common;
 
-namespace RoslynSentinel.Common.SnippetMatching;
+namespace RoslynSentinel.Engines.Core.SnippetMatching;
 
 /// <summary>
 /// One accepted match of a snippet in a text, at or stricter than the requested tier. This is the
@@ -11,7 +11,7 @@ namespace RoslynSentinel.Common.SnippetMatching;
 /// one for new code (it adds the 1-based line, the tier and the matcher name). The legacy nested
 /// <c>ContextHelper.SnippetMatch(Start, Length)</c> record and the legacy <c>ContextHelper.FindAll...</c> matchers were
 /// removed in the final migration slice; the (Start, Length) pair is now the top-level <see cref="SnippetSpan"/>.
-/// Inside the <c>RoslynSentinel.Common.SnippetMatching</c> namespace the simple name means this type.</para>
+/// Inside the <c>RoslynSentinel.Engines.Core.SnippetMatching</c> namespace the simple name means this type.</para>
 /// <para>Like the legacy type, <see cref="Length"/> is the true length of the span in the file, not the snippet's
 /// length, so a caller that replaces or removes the span must use it.</para>
 /// </summary>

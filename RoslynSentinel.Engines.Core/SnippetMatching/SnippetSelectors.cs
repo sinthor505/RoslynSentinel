@@ -1,7 +1,7 @@
 using Microsoft.CodeAnalysis.Text;
 using RoslynSentinel.Common;
 
-namespace RoslynSentinel.Common.SnippetMatching;
+namespace RoslynSentinel.Engines.Core.SnippetMatching;
 
 /// <summary>
 /// Optional selectors a caller uses to narrow a multi-match result to the one intended match, applied by

@@ -2,7 +2,7 @@ using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis.Text;
 using RoslynSentinel.Common;
 
-namespace RoslynSentinel.Common.SnippetMatching;
+namespace RoslynSentinel.Engines.Core.SnippetMatching;
 
 /// <summary>
 /// The outcome of a closest-window search: the listed windows (ranked, capped), how many windows qualified in total,

@@ -1,6 +1,6 @@
 using Microsoft.CodeAnalysis.Text;
 
-namespace RoslynSentinel.Common.SnippetMatching;
+namespace RoslynSentinel.Engines.Core.SnippetMatching;
 
 /// <summary>
 /// Shared plumbing for the matchers: argument checks and conversion from the legacy

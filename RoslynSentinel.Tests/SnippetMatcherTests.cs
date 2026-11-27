@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis.Text;
-using RoslynSentinel.Common.SnippetMatching;
+using RoslynSentinel.Engines.Core.SnippetMatching;
 using static RoslynSentinel.Tests.Support.Sources;
 
 namespace RoslynSentinel.Tests;

@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using RoslynSentinel.Common;
 using Microsoft.CodeAnalysis.FindSymbols;
-using RoslynSentinel.Common.SnippetMatching;
+using RoslynSentinel.Engines.Core.SnippetMatching;
 
 namespace RoslynSentinel.Engines.Basic;
 public record AttributeUsageSite(string AttributeName, string[] Attributes, string SymbolId, string TargetKind, string TargetName, string ContainingType, string ContainingNamespace, string ProjectName, FilePathWrapper FilePath, int Line);

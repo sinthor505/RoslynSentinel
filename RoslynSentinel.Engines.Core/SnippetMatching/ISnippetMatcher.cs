@@ -1,6 +1,6 @@
 using Microsoft.CodeAnalysis.Text;
 
-namespace RoslynSentinel.Common.SnippetMatching;
+namespace RoslynSentinel.Engines.Core.SnippetMatching;
 
 /// <summary>
 /// One matcher in the tier ladder. Exists so a matrix test can run every tier against every

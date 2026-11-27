@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Common.SnippetMatching;
+namespace RoslynSentinel.Engines.Core.SnippetMatching;
 
 /// <summary>
 /// How much whitespace difference a snippet match accepts between the snippet and the file text.

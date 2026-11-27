@@ -1,7 +1,8 @@
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
+using RoslynSentinel.Common;
 
-namespace RoslynSentinel.Common.SnippetMatching;
+namespace RoslynSentinel.Engines.Core.SnippetMatching;
 
 /// <summary>
 /// The lookup-caller policy of the whitespace-tolerance proposal, as one-liners: read and lookup tools (the ones that

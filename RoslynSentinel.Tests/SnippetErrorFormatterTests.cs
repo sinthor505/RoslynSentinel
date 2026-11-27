@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis.Text;
 using RoslynSentinel.Common;
-using RoslynSentinel.Common.SnippetMatching;
+using RoslynSentinel.Engines.Core.SnippetMatching;
 
 namespace RoslynSentinel.Tests;
 

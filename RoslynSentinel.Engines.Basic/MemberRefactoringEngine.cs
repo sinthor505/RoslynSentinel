@@ -455,7 +455,7 @@ public class MemberRefactoringEngine
             }
             else
             {
-                var snippetMatch = RoslynSentinel.Common.SnippetMatching.SnippetLookup.ResolveOrThrow(sourceText, contextSnippet ?? string.Empty, lineBefore, lineAfter);
+                var snippetMatch = RoslynSentinel.Engines.Core.SnippetMatching.SnippetLookup.ResolveOrThrow(sourceText, contextSnippet ?? string.Empty, lineBefore, lineAfter);
                 var containing = ctorMatches.Where(c => c.FullSpan.Contains(snippetMatch.Start)).ToList();
                 if (containing.Count == 0)
                 {

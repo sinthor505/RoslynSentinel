@@ -1,4 +1,6 @@
-namespace RoslynSentinel.Common;
+using RoslynSentinel.Common;
+
+namespace RoslynSentinel.Engines.Core.SnippetMatching;
 
 /// <summary>
 /// Classifies the result of a contextSnippet-based lookup: either the lookup resolved

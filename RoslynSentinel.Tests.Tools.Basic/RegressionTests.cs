@@ -3,8 +3,8 @@ using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Common;
-using RoslynSentinel.Common.SnippetMatching;
 using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Engines.Core.SnippetMatching;
 using RoslynSentinel.Tools.Basic;
 
 namespace RoslynSentinel.Tests;

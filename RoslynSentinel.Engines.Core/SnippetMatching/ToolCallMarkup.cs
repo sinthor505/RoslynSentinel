@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Common.SnippetMatching
+namespace RoslynSentinel.Engines.Core.SnippetMatching
 {
     /// <summary>
     /// Markers of a tool-call envelope that leaked into a tool argument (a weak model closing its own parameter tag inside

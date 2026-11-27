@@ -13,7 +13,6 @@ using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
 
 using RoslynSentinel.Common;
-using RoslynSentinel.Common.SnippetMatching;
 using RoslynSentinel.Server.Advanced;
 
 namespace RoslynSentinel.Tests.Server;
