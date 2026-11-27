@@ -1,7 +1,7 @@
 # Plan: Roadmap for the layering fix and the project splits (Common, engines, tool layer)
 
-**Status:** DRAFT 2026-11-27. Master plan: it orders sub-plans and holds no implementation steps of its own. Phase 0 started (Git namespace rename
-dispatched 2026-11-27); the phase order below awaits owner review.
+**Status:** DRAFT 2026-11-27. Master plan: it orders sub-plans and holds no implementation steps of its own. Phase 0.1 done (Git namespace rename,
+c2b3acb9..1a7f3b1f); Phase 2 grounding started; the phase order below awaits owner review.
 
 ## Problem
 
@@ -66,11 +66,15 @@ Dated entries; later entries do not override earlier ones unless they say so. Q-
 ## Steps
 
 ### Phase 0.1 - Git namespace rename
-- Doc: [plan_rename_git_project_namespaces.md](closed/plan_rename_git_project_namespaces.md) (APPROVED, dispatched 2026-11-27, commit 6edb36dbbf5b).
+- Doc: [plan_rename_git_project_namespaces.md](closed/plan_rename_git_project_namespaces.md) (IMPLEMENTED 2026-11-27, commits c2b3acb9, fdd7a862, cc147f9e, 1a7f3b1f).
 - Depends on: none
 - Effect: text-neutral.
 - Change: `ChangeNamespace` to `RoslynSentinel.Git` and `RoslynSentinel.Git.Worktrees`; folder `GitWorktree/` -> `Worktrees/`.
 - Done when: that plan is in `plans/closed/`.
+- Done: one `ChangeNamespace` call rewrote 144 files / 1,866 references exactly as its dry run said (first real use of the tool); parent folder
+  first, sub-namespace folder second worked (8 files / 19 references); full run `cc147f9e-20261127-004211-40584`: 12,633 tests, 0 failures. Tool
+  findings: the dry-run note names a `returnDiff` parameter the tool rejects; a folder `MoveFile` leaves the emptied source folder on disk (both in
+  INBOX).
 - Effort: M
 
 ### Phase 0.2 - Agent-loop support files leave Common
@@ -244,7 +248,7 @@ The MCP SDK is used by 13 Common files: tool surface 9, result delivery 2, `Resp
 
 | Doc | State 2026-11-27 | Lands in | Action |
 | --- | --- | --- | --- |
-| plans/plan_rename_git_project_namespaces.md | APPROVED, dispatched | 0.1 | run |
+| plans/closed/plan_rename_git_project_namespaces.md | IMPLEMENTED 2026-11-27 | 0.1 | done |
 | plans/plan_isolate_build_test_area_into_own_project.md | DRAFT, on hold | 4.2, 4.3 | split into two plans |
 | proposals/proposal_isolate_heavy_test_areas_by_project.md | ACCEPTED, Area 1 done | 4.3; Area 3 unplaced | correct Area 2 text (pins helper and `TestProjectDetector` do not go to Common) |
 | plans/plan_full_suite_nightly_and_tail_shard.md | DRAFT, untracked | 1 | settle D1-D6, run |
