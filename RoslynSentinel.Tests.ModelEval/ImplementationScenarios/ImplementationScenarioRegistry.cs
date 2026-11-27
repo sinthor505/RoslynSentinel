@@ -35,6 +35,8 @@ internal static class ImplementationScenarioRegistry
         EscapeLiteralsSlipScenario.Definition,
         DocCommentsSlipScenario.Definition,
         LongGenericsSlipScenario.Definition,
+        LongGenericsFullLineSlipScenario.Definition,
+        ConcurrentCollectionsSlipScenario.Definition,
         NearDuplicateIdentifiersSlipScenario.Definition,
     ];
 
