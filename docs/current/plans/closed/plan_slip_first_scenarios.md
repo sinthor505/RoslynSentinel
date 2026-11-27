@@ -813,6 +813,10 @@ Deferred (owner away, 2026-11-27): LongGenericsSlip's four sites PriceHistory, I
 AddressBook and CurrencyRates fail the same way in every run that attempted them (container change
 applied to the outer type). Recommendation: before E2, reword those four sites so the target type is
 unambiguous (logic-simpler variant), then re-run the Step 15 gate.
+Resolved (owner, 2026-11-27): the four seeds now use a List/Queue/HashSet/Stack outer type, so the
+changed type is the only map-family type in the line (same changes, same names); Step 15 gate re-run
+for LongGenerics green (48 unit + 5 golden cases). LongGenerics runs before this commit use the old
+seeds for those four sites.
 
 Risks:
 - ContosoOrders build: no warnings-as-errors today (D24); Step 15's golden run catches any rendered
