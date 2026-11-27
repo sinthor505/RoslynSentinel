@@ -1,6 +1,6 @@
 # Plan: model-eval run review pipeline (digest script, grader agent, rollup, agent refresh)
 
-**Status:** IN PROGRESS 2026-11-26. Steps 1-8 done (397f75fe .. b6b80ec2); 9a-9d next, then Step 10 in a fresh chat.
+**Status:** IN PROGRESS 2026-11-26. Steps 1-9d done (397f75fe .. 889bf107); Step 10 (calibration) and Step 11 (close) remain.
 
 ## Problem
 
@@ -851,6 +851,7 @@ NUnit test and the arm-table tests. Those run the script as a child `pwsh -File`
   Replace the "Verified ... / Updated ..." lines at the top with
   `**Status:** CURRENT <date>. Single artifact map; agents point here.`
 - Done when: `Select-String` finds all 14 script names and `roslynsentinel-transcriptmetrics` in the file.
+- Done: 07a5db4e
 - Lane: implementer-senior (reads 15 script headers plus `runs.csv` docs). Effort: S.
 
 ### Step 9b - Grader agent and `eval-review` skill
@@ -885,6 +886,7 @@ NUnit test and the arm-table tests. Those run the script as a child `pwsh -File`
     - trace and write-up as in the design.
 - Done when: `Select-String -Path <both files> -Pattern 'replans when a result changes the facts'`
   finds nothing (the rubric is not copied).
+- Done: 9a829ca8
 - Lane: implementer. Effort: S.
 
 ### Step 9c - Refresh the two analyst agents
@@ -902,6 +904,7 @@ NUnit test and the arm-table tests. Those run the script as a child `pwsh -File`
     - Its `tools:` line is unchanged.
 - Done when: `Select-String -Path .claude/agents/model-eval-log-analyst.md -Pattern '35,000|^tools:.*Bash'`
   finds nothing.
+- Done: d0e1bd00 (recon steps converted to PowerShell)
 - Lane: implementer. Effort: S.
 
 ### Step 9d - Point the runners at `eval-review`
@@ -911,6 +914,7 @@ NUnit test and the arm-table tests. Those run the script as a child `pwsh -File`
 - Effect: behaviour-changing (agent instructions).
 - Change: add one line to each file: "after a run, grade it with the `eval-review` skill".
 - Done when: `Select-String -Path <the 3 files> -Pattern 'eval-review'` returns 3 hits.
+- Done: 7783c39f; 889bf107 INBOX lines
 - Lane: implementer. Effort: S.
 
 ### Step 10 - Calibration (fresh chat)
