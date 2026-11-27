@@ -1,6 +1,6 @@
 # Plan: Per-result inline budget classes for the large-result offload
 
-**Status:** IN PROGRESS 2026-11-26. Steps 1-4, 10, 21 done (efb0ca55, 061dd50d, 3ec48be7, dcf158b2, 78f5751e, 3add9ba4).
+**Status:** IN PROGRESS 2026-11-26. Steps 1-10, 21 done (efb0ca55, 061dd50d, 3ec48be7, dcf158b2, c99a321a, c02e171a, 33f92df9, 3ed84cb6, 27dcd63f, 78f5751e, 3add9ba4).
 
 ## Problem
 
@@ -243,6 +243,7 @@ Grounding (explore-tier2, 2026-11-26, HEAD 000b3b49):
 - 2026-11-26 Run (/implement-plan): staleness check clean at `8f66a0a0` (Step 6 anchors `:844`, `:1037` unchanged).
   Mode Batched (A: 1-4; B: 5-10; C: 11a-13; D: 14-17; E: 18-19; main session 20-22); owner away, so mid-run
   decisions are deferred to the run tracker.
+- 2026-11-26 Behaviour change landed: 27dcd63f (Steps 5-9: c99a321a, c02e171a, 33f92df9, 3ed84cb6, 27dcd63f; the marshaller change is 33f92df9). Sent to peer roslynsentinel-dc, which recorded it as a batch boundary.
 
 ## Execution rules
 
@@ -446,6 +447,7 @@ their builds.
     `AddWirePathRelativizeFilter` (formerly `:828`).
 - Done when: `Build` 0 errors.
 - Lane: implementer-senior (restructure inside a 189-line lambda). Effort: M. Pairs with: Step 6.
+- Done: c99a321a
 
 ### Step 6 - Tool-side readers follow the configured default (behaviour-changing)
 - Files: `RoslynSentinel.Tools.Basic/WorkspaceReadNavigationImpl.cs`, `RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs`,
@@ -464,6 +466,7 @@ their builds.
   - `ScanAsyncMigrationCandidatesTool` (`AsyncifyTools.cs:228`): `LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default)`.
 - Done when: `scripts/build.ps1 -Flavor Solution` 0 errors.
 - Lane: implementer. Effort: S. Pairs with: Step 5.
+- Done: c02e171a (verified with Build; scripts/build.ps1 hangs non-interactively, INBOX)
 
 ### Step 7 - Marshaller resolves the class and sets the signal (behaviour-changing)
 - Files: `RoslynSentinel.Common/ToolResultMarshaller.cs`
@@ -485,6 +488,7 @@ their builds.
 - Done when: `Build` 0 errors; `Search(mode: text, query: "EchoReserveChars", fileGlob: "RoslynSentinel.Common/ToolResultMarshaller.cs")`
   returns nothing.
 - Lane: implementer. Effort: S.
+- Done: 33f92df9
 
 ### Step 8 - Tag McpServerStatus (behaviour-changing)
 - Files: `RoslynSentinel.Tools.Basic/ServerStatusTools.cs`, `RoslynSentinel.Server.Advanced/ErrorPolicyFilter.cs`
@@ -495,6 +499,7 @@ their builds.
   that says the appended block "shares the EchoReserveChars margin": the appended block is outside the body budget.
 - Done when: `Build` 0 errors.
 - Lane: implementer. Effort: S.
+- Done: 3ed84cb6
 
 ### Step 9 - Git tool description and tool-surface goldens (behaviour-changing, wire text)
 - Files: `RoslynSentinel.Tools.Basic/GitTools.cs` (verify the project with `Search(mode: class, query: "GitTools")`), then
@@ -512,6 +517,7 @@ their builds.
   `ToolSurfaceGolden` (Tests.Harness) and `EvalToolSurfaceParityTests` (Tests.ModelEval, `:101`, `:115`), all pass;
   `ClaudeLeanSchemaBudgetTests` (Tests.Server) passes.
 - Lane: implementer (description); dispatcher (goldens). Effort: S.
+- Done: 27dcd63f (19 golden files regenerated; docs/generated unchanged)
 
 ### Step 10 - Resolver and setting tests
 - Files: `RoslynSentinel.Tests.Server/LargeResultHelperBudgetTests.cs` (new)
