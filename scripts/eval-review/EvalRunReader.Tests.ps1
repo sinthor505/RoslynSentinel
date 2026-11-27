@@ -93,6 +93,100 @@ finally {
     Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+# Step 3b: outcome file, layout and verdict. Own temp tree, deleted in its own finally block.
+function Write-EvalTestFile([string]$Path, [string]$Text) {
+    New-Item -ItemType Directory -Path (Split-Path -Parent $Path) -Force | Out-Null
+    [System.IO.File]::WriteAllText($Path, $Text, (New-Object System.Text.UTF8Encoding($false)))
+}
+
+$tempRoot3 = Join-Path ([System.IO.Path]::GetTempPath()) ('evalreader-3b-' + [guid]::NewGuid().ToString('N'))
+$realOutcomeLine = 'ThreadOptionalParameter step 1: outcome=Pass, turns=7, started=7, wallTime=00:00:58, wallClockCap=45m, stopReason=ModelFinished. ok outcomeClass=SilentIncomplete variant='
+$stamp = '20261124-000000-000'
+
+try {
+    New-Item -ItemType Directory -Path $tempRoot3 -Force | Out-Null
+    $vocab3 = Read-EvalVocabulary
+
+    # OutcomeFile: the real example line.
+    $outFile = Join-Path $tempRoot3 'outcome\step-1.outcome.txt'
+    Write-EvalTestFile $outFile ($realOutcomeLine + "`r`n")
+    $o = Read-EvalStepOutcome -Path $outFile
+    Assert-That (($o.ScenarioId -eq 'ThreadOptionalParameter') -and ($o.Step -eq 1) -and ($o.Outcome -eq 'Pass') -and ($o.StopReason -eq 'ModelFinished') -and ($o.OutcomeClass -eq 'SilentIncomplete') -and ($o.WallTime -eq '00:00:58')) 'OutcomeFile: example line gives ScenarioId, Step, Outcome, StopReason, OutcomeClass and WallTime'
+    Assert-That (($o.WallSeconds -is [double]) -and ($o.WallSeconds -eq 58.0)) 'OutcomeFile: WallSeconds is a double equal to 58.0'
+
+    # Layout: RunScenario, ImplementationScenario, Unrecognized.
+    $runTranscript = Join-Path $tempRoot3 ('host1\MyTest\' + $stamp + '\sample-01\transcript.json')
+    Write-EvalTestFile $runTranscript '{}'
+    $lr = Get-EvalRunLayout -TranscriptPath $runTranscript
+    Assert-That (($lr.Kind -eq 'RunScenario') -and ($lr.TestName -eq 'MyTest') -and ($lr.Timestamp -eq $stamp) -and ($lr.SampleIndex -eq 1) -and (@($lr.Codes).Count -eq 0)) 'Layout: RunScenario gives Kind, TestName MyTest, Timestamp, SampleIndex 1 and no codes'
+
+    $implTranscript = Join-Path $tempRoot3 ('host1\ImplTest\' + $stamp + '\transcript.json')
+    Write-EvalTestFile $implTranscript '{}'
+    $li = Get-EvalRunLayout -TranscriptPath $implTranscript
+    Assert-That (($li.Kind -eq 'ImplementationScenario') -and ($li.TestName -eq 'ImplTest') -and ($null -eq $li.SampleIndex)) 'Layout: ImplementationScenario gives Kind, TestName ImplTest and a null SampleIndex'
+
+    $fooTranscript = Join-Path $tempRoot3 'foo\transcript.json'
+    Write-EvalTestFile $fooTranscript '{}'
+    $lu = Get-EvalRunLayout -TranscriptPath $fooTranscript
+    Assert-That (($lu.Kind -eq 'Unrecognized') -and ($lu.TestName -eq 'foo') -and (Test-HasCode $lu 'LayoutUnrecognized')) 'Layout: unrecognized folder gives Kind Unrecognized, TestName of the transcript''s folder and code LayoutUnrecognized'
+
+    # VerdictPassRule (a): outcome=Pass on an ImplementationScenario folder.
+    $aTranscript = Join-Path $tempRoot3 ('host1\PassTest\' + $stamp + '\transcript.json')
+    Write-EvalTestFile $aTranscript '{}'
+    Write-EvalTestFile (Join-Path (Split-Path -Parent $aTranscript) 'step-1.outcome.txt') 'ScnA step 1: outcome=Pass, turns=2, stopReason=ModelFinished. ok outcomeClass=Other variant='
+    $fa = Find-EvalRunVerdict -TranscriptPath $aTranscript -Vocabulary $vocab3
+    Assert-That (($null -ne $fa.Verdict) -and ($fa.Verdict.passed -eq $true) -and ($fa.Scenario -eq 'ScnA')) 'VerdictPassRule (a): outcome=Pass gives passed true and Scenario from the prefix'
+
+    # (b): outcomeClass=CorrectBlocked passes even with outcome=PassedAfterCap.
+    $bTranscript = Join-Path $tempRoot3 ('host1\BlockTest\' + $stamp + '\transcript.json')
+    Write-EvalTestFile $bTranscript '{}'
+    Write-EvalTestFile (Join-Path (Split-Path -Parent $bTranscript) 'step-1.outcome.txt') 'ScnB step 1: outcome=PassedAfterCap, turns=5, stopReason=TurnCapExceeded. ok outcomeClass=CorrectBlocked variant='
+    $fb = Find-EvalRunVerdict -TranscriptPath $bTranscript -Vocabulary $vocab3
+    Assert-That (($null -ne $fb.Verdict) -and ($fb.Verdict.passed -eq $true)) 'VerdictPassRule (b): outcomeClass=CorrectBlocked gives passed true'
+
+    # (c): outcome=PassedAfterCap with outcomeClass=CorrectDone fails.
+    $cTranscript = Join-Path $tempRoot3 ('host1\DoneTest\' + $stamp + '\transcript.json')
+    Write-EvalTestFile $cTranscript '{}'
+    Write-EvalTestFile (Join-Path (Split-Path -Parent $cTranscript) 'step-1.outcome.txt') 'ScnC step 1: outcome=PassedAfterCap, turns=5, stopReason=ModelFinished. ok outcomeClass=CorrectDone variant='
+    $fc = Find-EvalRunVerdict -TranscriptPath $cTranscript -Vocabulary $vocab3
+    Assert-That (($null -ne $fc.Verdict) -and ($fc.Verdict.passed -eq $false)) 'VerdictPassRule (c): PassedAfterCap with CorrectDone gives passed false'
+
+    # (d): RunScenario results.csv with two rows; each sample gets its own row.
+    $dTsDir = Join-Path $tempRoot3 ('host2\CsvTest\' + $stamp)
+    $dOne = Join-Path $dTsDir 'sample-01\transcript.json'
+    $dTwo = Join-Path $dTsDir 'sample-02\transcript.json'
+    Write-EvalTestFile $dOne '{}'
+    Write-EvalTestFile $dTwo '{}'
+    $csvText = @(
+        'scenarioId,transcriptPath,passed,failureClass,finalStateVerdict,stopReason,inconclusiveReason',
+        ('ScnD,C:\x\CsvTest\' + $stamp + '\sample-01\transcript.json,true,,Correct,ModelFinished,'),
+        ('ScnD,C:\x\CsvTest\' + $stamp + '\sample-02\transcript.json,false,Assert,Wrong,ModelFinished,')
+    ) -join "`r`n"
+    Write-EvalTestFile (Join-Path $dTsDir 'results.csv') ($csvText + "`r`n")
+    $d1 = Find-EvalRunVerdict -TranscriptPath $dOne -Vocabulary $vocab3
+    Assert-That (($d1.Verdict.passed -eq $true) -and ($d1.Verdict.failureClass -eq $null) -and ($d1.Scenario -eq 'ScnD') -and (@($d1.Searched).Count -gt 0)) 'VerdictPassRule (d): sample-01 takes the sample-01 csv row (passed true, Scenario from scenarioId)'
+    $d2 = Find-EvalRunVerdict -TranscriptPath $dTwo -Vocabulary $vocab3
+    Assert-That (($d2.Verdict.passed -eq $false) -and ($d2.Verdict.failureClass -eq 'Assert') -and ($d2.Verdict.finalStateVerdict -eq 'Wrong') -and ($d2.Scenario -eq 'ScnD')) 'VerdictPassRule (d): sample-02 takes the sample-02 csv row (passed false, failureClass Assert)'
+
+    # (e): step-1 is Pass, step-2 is Fail: step 2 is used.
+    $eTranscript = Join-Path $tempRoot3 ('host1\StepTest\' + $stamp + '\transcript.json')
+    Write-EvalTestFile $eTranscript '{}'
+    $eDir = Split-Path -Parent $eTranscript
+    Write-EvalTestFile (Join-Path $eDir 'step-1.outcome.txt') 'ScnE step 1: outcome=Pass, turns=2, stopReason=ModelFinished. ok outcomeClass=CorrectDone variant='
+    Write-EvalTestFile (Join-Path $eDir 'step-2.outcome.txt') 'ScnE step 2: outcome=Fail, turns=3, stopReason=ModelFinished. ok outcomeClass=Other variant='
+    $fe = Find-EvalRunVerdict -TranscriptPath $eTranscript -Vocabulary $vocab3
+    Assert-That (($fe.Verdict.outcome -eq 'Fail') -and ($fe.Verdict.passed -eq $false)) 'VerdictPassRule (e): step-2 is used, passed false'
+
+    # (f): folder with no verdict file: Verdict null, Searched lists the paths tried.
+    $fTranscript = Join-Path $tempRoot3 ('host1\EmptyTest\' + $stamp + '\transcript.json')
+    Write-EvalTestFile $fTranscript '{}'
+    $ff = Find-EvalRunVerdict -TranscriptPath $fTranscript -Vocabulary $vocab3
+    Assert-That (($null -eq $ff.Verdict) -and ($null -eq $ff.Scenario) -and (@($ff.Searched).Count -gt 0)) 'VerdictPassRule (f): no verdict file gives Verdict null and a non-empty Searched'
+}
+finally {
+    Remove-Item -LiteralPath $tempRoot3 -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 if ($script:failures -gt 0) {
     Write-Host "$($script:failures) assertion(s) failed."
     exit 1

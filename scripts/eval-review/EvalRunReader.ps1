@@ -146,3 +146,188 @@ function ConvertFrom-EvalToolResult {
     return New-EvalToolResult -Shape 'ToolCallWrapper' -IsError $innerResult.IsError -ErrorCode $innerResult.ErrorCode `
         -Message $innerResult.Message -ErrorData $innerResult.ErrorData -LargeResultRef $innerResult.LargeResultRef
 }
+
+# Parent folder path, or $null for an empty path or a root (avoids Split-Path errors on empty input).
+function Get-EvalParent([string]$Path) {
+    if ([string]::IsNullOrEmpty($Path)) { return $null }
+    $parent = Split-Path -Parent $Path
+    if ([string]::IsNullOrEmpty($parent)) { return $null }
+    return $parent
+}
+
+# Last path segment, or $null for an empty path.
+function Get-EvalLeaf([string]$Path) {
+    if ([string]::IsNullOrEmpty($Path)) { return $null }
+    return (Split-Path -Leaf $Path)
+}
+
+# First capture group of a regex over the outcome text, or $null when the token is absent.
+function Get-EvalOutcomeToken([string]$Text, [string]$Pattern) {
+    $m = [regex]::Match($Text, $Pattern)
+    if ($m.Success) { return $m.Groups[1].Value }
+    return $null
+}
+
+# Parses one step-<k>.outcome.txt. The token patterns match Get-ThinkingArmTable.ps1 (Read-Run).
+# Returns { ScenarioId, Step, Outcome, StopReason, OutcomeClass, WallTime, WallSeconds }. ScenarioId and Step
+# come from the first-line prefix '<ScenarioId> step <k>:'. WallTime is the raw token; WallSeconds is its
+# TimeSpan total as a double. Any token that is absent is $null.
+function Read-EvalStepOutcome {
+    param([Parameter(Mandatory)][string]$Path)
+    $text = [string](Get-Content -Raw -LiteralPath $Path)
+
+    $scenarioId = $null
+    $step = $null
+    $prefix = [regex]::Match($text, '^(\S+) step (\d+):')
+    if ($prefix.Success) {
+        $scenarioId = $prefix.Groups[1].Value
+        $step = [int]$prefix.Groups[2].Value
+    }
+
+    $wallTime = Get-EvalOutcomeToken $text '\bwallTime=([0-9.:]+)'
+    $wallSeconds = $null
+    if ($wallTime) {
+        $ts = [timespan]::Zero
+        if ([timespan]::TryParse($wallTime, [ref]$ts)) { $wallSeconds = [double]$ts.TotalSeconds }
+    }
+
+    return [pscustomobject]@{
+        ScenarioId   = $scenarioId
+        Step         = $step
+        Outcome      = Get-EvalOutcomeToken $text '\boutcome=(\w+)'
+        StopReason   = Get-EvalOutcomeToken $text '\bstopReason=(\w+)'
+        OutcomeClass = Get-EvalOutcomeToken $text '\boutcomeClass=(\w+)'
+        WallTime     = $wallTime
+        WallSeconds  = $wallSeconds
+    }
+}
+
+# Where a transcript sits in a model-eval results folder. RunScenario is
+# <host>\<TestName>\<timestamp>\sample-NN\transcript.json; ImplementationScenario is
+# <host>\<TestName>\<timestamp>\transcript.json. Anything else is Unrecognized with code LayoutUnrecognized.
+# TestName is the name of the folder that holds the timestamp folder (for Unrecognized: the name of the
+# folder holding the transcript). Returns { TestName, Timestamp, SampleIndex, Kind, Codes }; Codes is an array.
+function Get-EvalRunLayout {
+    param([Parameter(Mandatory)][string]$TranscriptPath)
+    $full = [System.IO.Path]::GetFullPath($TranscriptPath)
+    $dir = Split-Path -Parent $full
+    $dirLeaf = [string](Get-EvalLeaf $dir)
+    $isTranscript = ((Get-EvalLeaf $full) -eq 'transcript.json')
+
+    if ($isTranscript) {
+        $sample = [regex]::Match($dirLeaf, '^sample-(\d+)$')
+        if ($sample.Success) {
+            $tsDir = Get-EvalParent $dir
+            $tsName = Get-EvalLeaf $tsDir
+            if ($tsName -match '^\d{8}-\d{6}-\d{3}$') {
+                return [pscustomobject]@{
+                    TestName    = (Get-EvalLeaf (Get-EvalParent $tsDir))
+                    Timestamp   = $tsName
+                    SampleIndex = [int]$sample.Groups[1].Value
+                    Kind        = 'RunScenario'
+                    Codes       = @()
+                }
+            }
+        }
+        elseif ($dirLeaf -match '^\d{8}-\d{6}-\d{3}$') {
+            return [pscustomobject]@{
+                TestName    = (Get-EvalLeaf (Get-EvalParent $dir))
+                Timestamp   = $dirLeaf
+                SampleIndex = $null
+                Kind        = 'ImplementationScenario'
+                Codes       = @()
+            }
+        }
+    }
+
+    return [pscustomobject]@{
+        TestName    = $dirLeaf
+        Timestamp   = $null
+        SampleIndex = $null
+        Kind        = 'Unrecognized'
+        Codes       = @([pscustomobject]@{ code = 'LayoutUnrecognized'; field = $null; detail = $null })
+    }
+}
+
+# A results.csv cell as a string, with empty and absent cells as $null.
+function Get-EvalCsvValue($Row, [string]$Name) {
+    $value = Get-EvalProperty $Row $Name
+    if (Test-EvalValue $value) { return [string]$value }
+    return $null
+}
+
+# Verdict for one transcript. Returns { Verdict, Scenario, Searched }.
+#   - RunScenario: the results.csv row whose transcriptPath ends with <timestamp>\sample-NN\transcript.json,
+#     searched in the timestamp folder, then its parent (TestName) and grandparent (host) folders.
+#   - Otherwise, or with no csv row: the step-<k>.outcome.txt beside the transcript with the highest k,
+#     passed when its Outcome is in vocabulary.passRule.outcomes or its OutcomeClass is in outcomeClasses.
+#   - Nothing found: Verdict and Scenario are $null; Searched lists the paths tried.
+function Find-EvalRunVerdict {
+    param(
+        [Parameter(Mandatory)][string]$TranscriptPath,
+        [Parameter(Mandatory)]$Vocabulary
+    )
+    $layout = Get-EvalRunLayout -TranscriptPath $TranscriptPath
+    $full = [System.IO.Path]::GetFullPath($TranscriptPath)
+    $dir = Split-Path -Parent $full
+    $searched = @()
+
+    if ($layout.Kind -eq 'RunScenario') {
+        $tsDir = Get-EvalParent $dir
+        $suffix = '\' + $layout.Timestamp + '\' + (Get-EvalLeaf $dir) + '\transcript.json'
+        $folders = @($tsDir, (Get-EvalParent $tsDir), (Get-EvalParent (Get-EvalParent $tsDir)))
+        foreach ($folder in $folders) {
+            if ([string]::IsNullOrEmpty($folder)) { continue }
+            $csvPath = Join-Path $folder 'results.csv'
+            $searched += $csvPath
+            if (-not (Test-Path -LiteralPath $csvPath -PathType Leaf)) { continue }
+            foreach ($row in @(Import-Csv -LiteralPath $csvPath)) {
+                $rowPath = ([string](Get-EvalProperty $row 'transcriptPath')) -replace '/', '\'
+                if (('\' + $rowPath).EndsWith($suffix, [System.StringComparison]::OrdinalIgnoreCase)) {
+                    $passedText = Get-EvalCsvValue $row 'passed'
+                    $passed = $null
+                    if ($passedText -eq 'true') { $passed = $true }
+                    elseif ($passedText -eq 'false') { $passed = $false }
+                    $verdict = [pscustomobject]@{
+                        passed             = $passed
+                        failureClass       = Get-EvalCsvValue $row 'failureClass'
+                        finalStateVerdict  = Get-EvalCsvValue $row 'finalStateVerdict'
+                        stopReason         = Get-EvalCsvValue $row 'stopReason'
+                        inconclusiveReason = Get-EvalCsvValue $row 'inconclusiveReason'
+                        outcome            = $null
+                        outcomeClass       = $null
+                    }
+                    return [pscustomobject]@{ Verdict = $verdict; Scenario = (Get-EvalCsvValue $row 'scenarioId'); Searched = @($searched) }
+                }
+            }
+        }
+    }
+
+    $searched += Join-Path $dir 'step-*.outcome.txt'
+    $best = $null
+    if (Test-Path -LiteralPath $dir -PathType Container) {
+        $candidates = @(foreach ($file in @(Get-ChildItem -LiteralPath $dir -File -Filter 'step-*.outcome.txt')) {
+            $m = [regex]::Match($file.Name, '^step-(\d+)\.outcome\.txt$')
+            if ($m.Success) { [pscustomobject]@{ K = [int]$m.Groups[1].Value; File = $file } }
+        })
+        $sorted = @($candidates | Sort-Object -Property K -Descending)
+        if ($sorted.Count -gt 0) { $best = $sorted[0] }
+    }
+    if ($null -eq $best) {
+        return [pscustomobject]@{ Verdict = $null; Scenario = $null; Searched = @($searched) }
+    }
+
+    $outcome = Read-EvalStepOutcome -Path $best.File.FullName
+    $passRule = $Vocabulary.passRule
+    $passed = (($outcome.Outcome -in @($passRule.outcomes)) -or ($outcome.OutcomeClass -in @($passRule.outcomeClasses)))
+    $verdict = [pscustomobject]@{
+        passed             = [bool]$passed
+        failureClass       = $null
+        finalStateVerdict  = $null
+        stopReason         = $outcome.StopReason
+        inconclusiveReason = $null
+        outcome            = $outcome.Outcome
+        outcomeClass       = $outcome.OutcomeClass
+    }
+    return [pscustomobject]@{ Verdict = $verdict; Scenario = $outcome.ScenarioId; Searched = @($searched) }
+}
