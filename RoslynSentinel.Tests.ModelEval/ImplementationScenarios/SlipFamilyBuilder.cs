@@ -12,7 +12,8 @@ namespace RoslynSentinel.Tests.ModelEval.ImplementationScenarios;
 /// <summary>Builds slip-first implementation scenarios from a SlipSiteSet.</summary>
 internal static class SlipFamilyBuilder
 {
-    public const int TurnCap = 40;
+    // 30 changed sites take about 30 writes plus reads, builds and refused edits; at 40 most LongGenerics runs hit the cap (owner, 2026-11-27).
+    public const int TurnCap = 60;
 
     public static ImplementationScenario Build(string id, string title, string source, SlipSiteSet set)
     {

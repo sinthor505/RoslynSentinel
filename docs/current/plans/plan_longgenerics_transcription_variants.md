@@ -42,6 +42,10 @@ measure what it is for.
   (`AgentToolAllowLists.Lean`); `RenameSymbol` cannot rename BCL types. A model can still write short
   `ReplaceSnippet` fragments; that is true of every slip family today and is measured, not prevented.
 - D5: `PreferredHost`, turn cap and the 36-site layout are unchanged, so the three ids compare directly.
+- D6 (owner, 2026-11-27, after Step 7): `SlipFamilyBuilder.TurnCap` 40 -> 60 for all slip families
+  (11 of 19 baseline runs at 91c493ad hit the cap with about 30 writes each). The 27 open jobs were
+  cancelled; baseline and both variants are requeued at the turn-cap commit (purpose
+  `slipsite-cap60-<sha8>`), so Step 8 compares those runs only.
 
 ## Execution rules
 
