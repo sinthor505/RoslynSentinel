@@ -56,6 +56,8 @@ TestResults/
 .claude/hooks/bin/
 !.claude/skills/
 !.claude/skills/**
+!.claude/agents/
+!.claude/agents/**
 !.claude/implementer-tiers.json
 *.tmp
 # Server runtime state (operation blobs, large results, scans, test instances, write lock). Nothing here is tracked.
