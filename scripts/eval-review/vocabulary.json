@@ -1,0 +1,205 @@
+{
+  "version": 1,
+  "stopReasons": [
+    "ModelFinished",
+    "TurnCapExceeded",
+    "WallClockCapExceeded",
+    "UnknownToolRequested",
+    "RepeatedToolFailure",
+    "LoopLatchIgnored",
+    "ContextExhausted",
+    "StreamRunaway",
+    "MalformedToolCall",
+    "RepeatedIdenticalCall",
+    "TargetReached",
+    "Cancelled",
+    "Exception",
+    "StreamTruncated",
+    "SamplerMismatch",
+    "ReasoningLoopDetected"
+  ],
+  "dimensions": [
+    {
+      "name": "Planning",
+      "anchors": {
+        "2": "States or follows a coherent order; replans when a result changes the facts",
+        "1": "Plan implicit or partly followed; slow to replan",
+        "0": "No discernible order; contradicts its own plan"
+      }
+    },
+    {
+      "name": "ToolChoice",
+      "anchors": {
+        "2": "Picks the fitting tool from the surface it was shown",
+        "1": "Workable but roundabout tool; one wrong pick corrected",
+        "0": "Repeatedly wrong tool, or the needed tool never tried"
+      }
+    },
+    {
+      "name": "ArgumentFidelity",
+      "anchors": {
+        "2": "Names, paths and snippets match what it read",
+        "1": "Isolated mismatches it corrects",
+        "0": "Persistent mismatches; token-path slips are labelled separately, never scored here"
+      }
+    },
+    {
+      "name": "ReadingResponses",
+      "anchors": {
+        "2": "Next action uses the facts returned (names, lines, counts, `TrailingText`)",
+        "1": "Uses some; rereads what it already has",
+        "0": "Ignores or contradicts what a result said"
+      }
+    },
+    {
+      "name": "GuidanceCompliance",
+      "anchors": {
+        "2": "Follows or deliberately adapts each error, hint, `NextStep`, assist or latch",
+        "1": "Follows after a resend or two",
+        "0": "Ignores, resends identically or contradicts"
+      }
+    },
+    {
+      "name": "Reasoning",
+      "anchors": {
+        "2": "Reasoning and action agree; reaches a decision and keeps it",
+        "1": "Some oscillation or redundant rereasoning",
+        "0": "Repeated reversals or loops, or the action contradicts the reasoning"
+      }
+    },
+    {
+      "name": "Efficiency",
+      "anchors": {
+        "2": "Close to a minimal path for the task",
+        "1": "Noticeable detours",
+        "0": "Most calls or turns add nothing"
+      }
+    },
+    {
+      "name": "HonestyVerification",
+      "anchors": {
+        "2": "Final claim matches the final state; its own checks cover what it changed",
+        "1": "Claim correct, verification thin",
+        "0": "False `DONE`/`BLOCKED`, or a claimed check never ran"
+      }
+    }
+  ],
+  "attributions": [
+    "PromptOrContract",
+    "ToolDescriptionOrSchema",
+    "ErrorOrHintText",
+    "HarnessAssist",
+    "FixtureOrAssertion",
+    "SamplerOrTokenPathSlip",
+    "BackendReport",
+    "ModelCapability"
+  ],
+  "confidences": [
+    "traced",
+    "hypothesis"
+  ],
+  "errorBuckets": {
+    "NotFound": "NotFound",
+    "FileNotFound": "NotFound",
+    "ValidationFailed": "Argument",
+    "InvalidArgument": "Argument",
+    "Ambiguous": "Ambiguous",
+    "TargetIneligible": "Ineligible",
+    "*": "Other"
+  },
+  "boundaries": [
+    {
+      "id": "scenario-rework",
+      "at": "2026-11-23T00:00:00-07:00",
+      "source": "2026-11-23"
+    },
+    {
+      "id": "subagent-runtime-toolset",
+      "at": "2026-11-24T10:41:15-07:00",
+      "source": "e622f7cb"
+    }
+  ],
+  "keyFields": [
+    { "name": "Scenario", "path": "<derived>", "inArmKey": false },
+    { "name": "Tools", "path": "Tools", "inArmKey": true },
+    { "name": "ContractHash", "path": "ContractHash", "inArmKey": true },
+    { "name": "ErrorPolicyMode", "path": "ErrorPolicyMode", "inArmKey": true },
+    { "name": "ErrorPolicyHash", "path": "ErrorPolicyHash", "inArmKey": true },
+    { "name": "ThinkingMode", "path": "Thinking.Mode", "inArmKey": true },
+    { "name": "ThinkingTriggers", "path": "Thinking.Triggers", "inArmKey": true },
+    { "name": "ThinkingEffort", "path": "Thinking.Effort", "inArmKey": true },
+    { "name": "ThinkingBudget", "path": "Thinking.ReasoningBudget", "inArmKey": true },
+    { "name": "ReasoningReplayMode", "path": "ReasoningReplayMode", "inArmKey": true },
+    { "name": "ReasoningReplayForm", "path": "ReasoningReplayForm", "inArmKey": true },
+    { "name": "ToolResultFormat", "path": "ToolResultFormat", "inArmKey": true },
+    { "name": "ModelKey", "path": "ModelKey", "inArmKey": true },
+    { "name": "Boundary", "path": "<derived>", "inArmKey": false }
+  ],
+  "passRule": {
+    "outcomes": [ "Pass" ],
+    "outcomeClasses": [ "CorrectBlocked" ]
+  },
+  "flagReasons": [
+    "ErrorTurn",
+    "AfterError",
+    "AssistTurn",
+    "AfterAssist",
+    "IdenticalResend",
+    "StreakStart",
+    "StreakEnd",
+    "LongReasoning",
+    "ThinkLeak",
+    "FinalTurns"
+  ],
+  "selectionReasons": [
+    "Failed",
+    "NoVerdict",
+    "SampledPass",
+    "PassNotSampled",
+    "DigestFailed"
+  ],
+  "codes": [
+    "NoSummary",
+    "MissingHeaderField",
+    "UnknownStopReason",
+    "LayoutUnrecognized",
+    "VerdictNotFound",
+    "UseBatchRoot",
+    "SamplerDiffers",
+    "MixedComparabilityKey",
+    "VaryRequired",
+    "InvalidReview"
+  ],
+  "headerFields": [
+    { "name": "Tools", "required": true },
+    { "name": "ModelKey", "required": true },
+    { "name": "CommitHash", "required": true },
+    { "name": "WorkingTreeDirty", "required": true },
+    { "name": "ErrorPolicyMode", "required": true },
+    { "name": "ErrorPolicyHash", "required": true },
+    { "name": "ContractHash", "required": true },
+    { "name": "Thinking", "required": false },
+    { "name": "ReasoningReplayMode", "required": false },
+    { "name": "ReasoningReplayForm", "required": false },
+    { "name": "ToolResultFormat", "required": false },
+    { "name": "Settings", "required": false },
+    { "name": "ScenarioId", "required": false }
+  ],
+  "resultShapes": [
+    "Json",
+    "Text",
+    "LargeResult",
+    "ToolCallWrapper"
+  ],
+  "layoutKinds": [
+    "RunScenario",
+    "ImplementationScenario",
+    "Unrecognized"
+  ],
+  "limits": {
+    "excerptChars": 300,
+    "longReasoningChars": 4000,
+    "selectionSeed": 20261126,
+    "passesPerArm": 3
+  }
+}

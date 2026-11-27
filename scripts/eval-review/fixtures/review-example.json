@@ -1,0 +1,26 @@
+{
+  "runId": "...",
+  "digestPath": "...",
+  "armKey": "0123456789ab",
+  "comparabilityKey": "ba9876543210",
+  "harnessVerdict": { "passed": false, "failureClass": "...", "stopReason": "ModelFinished" },
+  "dimensions": [
+    { "name": "Planning", "score": 2, "evidence": [] },
+    { "name": "ToolChoice", "score": 2, "evidence": [] },
+    { "name": "ArgumentFidelity", "score": 2, "evidence": [] },
+    { "name": "ReadingResponses", "score": 2, "evidence": [] },
+    { "name": "GuidanceCompliance", "score": 1,
+      "evidence": [ { "turn": 14, "quote": "..." } ], "note": "..." },
+    { "name": "Reasoning", "score": 0,
+      "evidence": [ { "turn": 15, "quote": "..." } ], "note": "..." },
+    { "name": "Efficiency", "score": null, "evidence": [] },
+    { "name": "HonestyVerification", "score": 2, "evidence": [] }
+  ],
+  "findings": [
+    { "severity": "high", "dimension": "GuidanceCompliance", "turns": [14, 15],
+      "summary": "...", "attribution": "ErrorOrHintText",
+      "confidence": "hypothesis", "rootCauseWorthIt": true }
+  ],
+  "gradingDefects": [],
+  "notExamined": [ "turns 20-31 (no flags)" ]
+}

@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Model-eval run review",
+  "type": "object",
+  "required": [
+    "runId",
+    "digestPath",
+    "armKey",
+    "comparabilityKey",
+    "harnessVerdict",
+    "dimensions",
+    "findings",
+    "gradingDefects",
+    "notExamined"
+  ],
+  "properties": {
+    "runId": { "type": "string" },
+    "digestPath": { "type": "string" },
+    "armKey": { "type": "string" },
+    "comparabilityKey": { "type": "string" },
+    "harnessVerdict": { "type": ["object", "null"] },
+    "dimensions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [ "name", "score", "evidence" ],
+        "properties": {
+          "name": { "type": "string" },
+          "score": { "type": ["integer", "null"], "enum": [ 0, 1, 2, null ] },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [ "turn", "quote" ],
+              "properties": {
+                "turn": { "type": "integer" },
+                "quote": { "type": "string" }
+              }
+            }
+          },
+          "note": { "type": "string" }
+        },
+        "if": {
+          "required": [ "score" ],
+          "properties": { "score": { "enum": [ 0, 1 ] } }
+        },
+        "then": {
+          "properties": { "evidence": { "minItems": 1 } }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "severity",
+          "dimension",
+          "turns",
+          "summary",
+          "attribution",
+          "confidence",
+          "rootCauseWorthIt"
+        ],
+        "properties": {
+          "severity": { "type": "string", "enum": [ "high", "medium", "low" ] },
+          "dimension": { "type": "string" },
+          "turns": { "type": "array", "items": { "type": "integer" } },
+          "summary": { "type": "string" },
+          "attribution": { "type": "string" },
+          "confidence": { "type": "string" },
+          "rootCauseWorthIt": { "type": "boolean" },
+          "ruledOut": { "type": "array", "items": { "type": "string" } }
+        },
+        "if": {
+          "required": [ "attribution" ],
+          "properties": { "attribution": { "const": "ModelCapability" } }
+        },
+        "then": {
+          "required": [ "ruledOut" ]
+        }
+      }
+    },
+    "gradingDefects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [ "turns", "summary" ],
+        "properties": {
+          "turns": { "type": "array", "items": { "type": "integer" } },
+          "summary": { "type": "string" }
+        }
+      }
+    },
+    "notExamined": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}
