@@ -146,13 +146,13 @@ public class ToolResultMarshallerOnModeTests
     {
         var big = BigSearch(400);
         string fullText = FullText(big);
-        Assert.That(fullText.Length, Is.GreaterThan(LargeResultHelper.InlineBudgetChars), "fixture sanity");
+        Assert.That(fullText.Length, Is.GreaterThan(LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default)), "fixture sanity");
 
         object? marshalled = await MarshalAsync(On(_root), big);
 
         Assert.That(marshalled, Is.TypeOf<string>());
         string text = (string)marshalled!;
-        Assert.That(text.Length, Is.LessThanOrEqualTo(LargeResultHelper.InlineBudgetChars), "fitted result plus pointer stays under the filter threshold");
+        Assert.That(text.Length, Is.LessThanOrEqualTo(LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default)), "fitted result plus pointer stays under the filter threshold");
 
         var envelope = JsonNode.Parse(text)!.AsObject();
         Assert.That(envelope.First().Key, Is.EqualTo("largeResult"), "the pointer leads the envelope so a model reads it first");
@@ -217,10 +217,10 @@ public class ToolResultMarshallerOnModeTests
         var data = new OnModeProbeData
         {
             Notes = Enumerable.Range(1, 100).Select(i => "note " + i).ToList(),
-            Records = Enumerable.Range(1, 300).Select(i => "record number " + i + " with some padding text").ToList(),
+            Records = Enumerable.Range(1, 300).Select(i => "record number " + i + " with some padding text" + new string('-', 40)).ToList(),
         };
         var result = new SentinelCallToolResult<OnModeProbeData> { IsError = false, SuccessData = data, StatusMessage = "s" };
-        Assert.That(FullText(result).Length, Is.GreaterThan(12_800), "fixture sanity");
+        Assert.That(FullText(result).Length, Is.GreaterThan(LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default)), "fixture sanity");
 
         object? marshalled = await MarshalAsync(On(_root), result);
 
@@ -288,7 +288,7 @@ public class ToolResultMarshallerOnModeTests
 
         var envelope = JsonNode.Parse((string)marshalled!)!.AsObject();
         Assert.That(envelope.First().Key, Is.EqualTo("largeResult"), "the pointer leads the envelope in the failure branch too");
-        Assert.That(((string)marshalled!).Length, Is.LessThanOrEqualTo(LargeResultHelper.InlineBudgetChars));
+        Assert.That(((string)marshalled!).Length, Is.LessThanOrEqualTo(LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default)));
         var pointer = envelope["largeResult"]!.AsObject();
         Assert.That(pointer.ContainsKey("resultId"), Is.False);
         Assert.That(pointer["writtenToFile"]!.GetValue<bool>(), Is.False);
@@ -332,7 +332,7 @@ public class ToolResultMarshallerOnModeTests
         Assert.That(envelope.First().Key, Is.EqualTo("largeResult"));
         if (checkLength)
         {
-            Assert.That(text.Length, Is.LessThanOrEqualTo(LargeResultHelper.InlineBudgetChars));
+            Assert.That(text.Length, Is.LessThanOrEqualTo(LargeResultHelper.BudgetChars(InlineBudgetClass.Default)));
         }
 
         return (envelope, envelope["largeResult"]!.AsObject(), text);
@@ -347,7 +347,7 @@ public class ToolResultMarshallerOnModeTests
             IsError = false,
             SuccessData = new { callers = Hits("c", 300), implementations = Hits("i", 250), summary },
         };
-        Assert.That(FullText(result).Length, Is.GreaterThan(LargeResultHelper.InlineBudgetChars), "fixture sanity");
+        Assert.That(FullText(result).Length, Is.GreaterThan(LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default)), "fixture sanity");
 
         var (envelope, pointer, _) = await MarshalPagedAsync(result);
 
@@ -435,7 +435,7 @@ public class ToolResultMarshallerOnModeTests
     {
         var files = Enumerable.Range(1, 60).ToDictionary(i => $"File{i}.cs", i => new string((char)('a' + (i % 26)), 1_000));
         var result = new SentinelCallToolResult<object> { IsError = false, SuccessData = new { contents = files } };
-        Assert.That(FullText(result).Length, Is.GreaterThan(LargeResultHelper.InlineBudgetChars), "fixture sanity");
+        Assert.That(FullText(result).Length, Is.GreaterThan(LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default)), "fixture sanity");
 
         // Fit's omitted list alone (one entry per emptied string) can exceed the budget here.
         var (_, pointer, _) = await MarshalPagedAsync(result, checkLength: false);
@@ -452,7 +452,7 @@ public class ToolResultMarshallerOnModeTests
         var files = Enumerable.Range(1, 60).ToDictionary(i => $"File{i}.cs", i => new string((char)('a' + (i % 26)), 1_000));
         var result = new SentinelCallToolResult<object> { IsError = false, SuccessData = new { contents = files } };
         string fullText = FullText(result);
-        Assert.That(fullText.Length, Is.GreaterThan(LargeResultHelper.InlineBudgetChars), "fixture sanity");
+        Assert.That(fullText.Length, Is.GreaterThan(LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default)), "fixture sanity");
 
         var (_, pointer, _) = await MarshalPagedAsync(result, checkLength: false);
 
@@ -483,7 +483,7 @@ public class ToolResultMarshallerOnModeTests
     public async Task On_AnOversizeRecord_IsLoggedAsAContractViolation_AndStillPages()
     {
         var records = Hits("r", 30);
-        records.Insert(0, new { id = "huge", file = "x.cs", preview = new string('p', 20_000) });
+        records.Insert(0, new { id = "huge", file = "x.cs", preview = new string('p', (int)(LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default) * 1.25) + 1_000) });
         var result = new SentinelCallToolResult<object> { IsError = false, SuccessData = new { items = records } };
         var logger = new CapturingLogger<ToolResultMarshaller>();
 
@@ -503,7 +503,7 @@ public class ToolResultMarshallerOnModeTests
         var result = new SentinelCallToolResult<object>
         {
             IsError = false,
-            SuccessData = new { items = new[] { new { id = "huge", file = "x.cs", preview = new string('p', 20_000) } } },
+            SuccessData = new { items = new[] { new { id = "huge", file = "x.cs", preview = new string('p', (int)(LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default) * 1.25) + 1_000) } } },
         };
         var logger = new CapturingLogger<ToolResultMarshaller>();
         using var signal = OversizeUnitSignal.Open();
@@ -528,7 +528,7 @@ public class ToolResultMarshallerOnModeTests
             SuccessData = new { path = "successData.items", offset = 3, returned = 1, total = 40, unit = "records", items = Hits("r", 200) },
             Paging = new PagingHints([], PagingOrder.Interleaved, AlreadyPaged: true),
         };
-        Assert.That(FullText(result).Length, Is.GreaterThan(LargeResultHelper.InlineBudgetChars), "fixture sanity");
+        Assert.That(FullText(result).Length, Is.GreaterThan(LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default)), "fixture sanity");
         using var signal = OversizeUnitSignal.Open();
 
         object? marshalled = await MarshalAsync(On(_root), result);
