@@ -18,6 +18,7 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
 [Category("WorkspaceTools")] // sentinel:auto-category
+[NonParallelizable]
 public class ReadFileTests
 {
     private FakeWorkspaceManager _workspaceManager;
@@ -43,7 +44,11 @@ public class ReadFileTests
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        InlineBudgetOptions.Configure([]); // static state: restore the stock budget for whatever test runs next
+        _workspaceManager?.Dispose();
+    }
 
     private static object? GetProp(object data, string name) =>
         data.GetType().GetProperty(name, BindingFlags.Public | BindingFlags.Instance)!.GetValue(data);
@@ -464,6 +469,46 @@ public class ReadFileTests
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.SolutionNotLoaded));
+    }
+
+    [Test]
+    public async Task NoSolutionGateFollowsConfiguredDefault()
+    {
+        // The gate reads the live budget, so capture the stock threshold before Configure changes it.
+        var stockThreshold = LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default);
+        InlineBudgetOptions.Configure([$"{InlineBudgetOptions.BudgetCharsSetting.Flag}={2 * InlineBudgetOptions.StockBudgetChars}"]);
+        var configuredThreshold = LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default);
+        Assert.That(configuredThreshold, Is.GreaterThan(stockThreshold), "fixture sanity: the configured default must raise the threshold");
+
+        // A file strictly between the stock and the configured threshold: over the stock gate, under the configured one.
+        var fileLength = (stockThreshold + configuredThreshold) / 2;
+        var content = new string('/', fileLength - 1) + "\n";
+        Assert.That(content.Length, Is.GreaterThan(stockThreshold));
+        Assert.That(content.Length, Is.LessThanOrEqualTo(configuredThreshold));
+
+        var tempDir = Path.Combine(Path.GetTempPath(), "ReadFileNoSolutionGate_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var filePath = Path.Combine(tempDir, "Wide.cs");
+
+        try
+        {
+            await File.WriteAllTextAsync(filePath, content);
+
+            var toolsWithoutSolution = BuildToolsWithoutSolution();
+            var result = await toolsWithoutSolution.ReadFileTool(reason: "test message", filePath);
+
+            Assert.That(result.IsError, Is.False);
+            Assert.That((string)GetProp(result.SuccessData!, "source")!, Is.EqualTo(content));
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(filePath);
+                Directory.Delete(tempDir);
+            }
+            catch { }
+        }
     }
 
     private void UseDocumentSource(string source)

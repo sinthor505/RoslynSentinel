@@ -143,7 +143,7 @@ public class ReadFileRecordsObservedTests
     public async Task LargeFileRead_StillReturnsInlineFirstPart_AndRecordsHashOfWholeFile()
     {
         var text = string.Concat(Enumerable.Range(1, 2000).Select(i => $"// line {i:D5}\n"));
-        Assert.That(text.Length, Is.GreaterThan(LargeResultHelper.InlineBudgetChars), "Fixture must exceed the inline budget.");
+        Assert.That(text.Length, Is.GreaterThan(LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default)), "Fixture must exceed the offload threshold.");
         var path = Path.Combine(_dir, "Big.cs");
         UseSolutionWithDocument(path, text);
 

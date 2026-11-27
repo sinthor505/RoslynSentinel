@@ -251,7 +251,7 @@ public class GetMethodSourceTests
         Assert.That(!result.IsError, Is.True);
         Assert.That(result.SuccessData!.Source, Is.Not.Null);
         var inlineSource = result.SuccessData!.Source!;
-        Assert.That(inlineSource.Length, Is.GreaterThan(LargeResultHelper.InlineBudgetChars));
+        Assert.That(inlineSource.Length, Is.GreaterThan(LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default)));
         Assert.That(inlineSource, Does.Contain("var line1999 = 1999;"));
     }
 
