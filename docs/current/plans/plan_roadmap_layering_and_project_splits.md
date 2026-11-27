@@ -49,6 +49,10 @@ Dated entries; later entries do not override earlier ones unless they say so. Q-
   first resident, so the engine-side Core project of Q40 exists from Phase 2 on. (The planner had recommended a focused project of its own; the owner
   chose `Engines.Core`.) Planner follow-up for the Phase 2 design: one folder and namespace per area inside it, and a written admission rule
   (engine-like logic used by both engine flavors or by engines and tools; no tool-surface text), so it does not become a second Common.
+- **2026-11-27, Q46 admission rule for `Engines.Core` (owner):** "Engine logic that both engine flavors use, or that an engine and a tool project use,
+  with no MCP type, no tool name and no tool-surface check. One folder and one namespace per area. A class with one flavor as its only user stays in
+  that flavor. Data types with users below the engines stay in Common." Q47 (owner) puts the matching wording into CLAUDE.md; both are carried out by
+  the Phase 2 plan. Q45 (owner) drops Phase 0.2.
 - **2026-11-27, Q41 start now (owner):** Phases 0 to 2 need no design and run while Phase 3 is designed. The Git namespace rename is dispatched first.
 - **2026-11-27, order boundary (planner, proposed, not yet confirmed):** the Build/RunTest move is gated only by work that touches its files (its own
   extraction, Phase 1's `FullTestMarkerStore` edit, the plans that edit `TestInstanceLauncher`); the repo-wide rollout (Phase 5) does not gate it.
@@ -78,13 +82,9 @@ Dated entries; later entries do not override earlier ones unless they say so. Q-
 - Effort: M
 
 ### Phase 0.2 - Agent-loop support files leave Common
-- Doc: to be written (small plan).
-- Depends on: none
-- Effect: text-neutral.
-- Change: move `AgentLoop/ErrorPolicyDocument.cs` and `PromptTokenEstimator.cs` (180 lines) from Common to `RoslynSentinel.AgentLoop`. No Common file
-  uses them; Server.Advanced also uses `ErrorPolicyDocument` (confirm it references AgentLoop). A warm-up for the cross-project `MoveFile` route.
-- Done when: `Build` 0 errors, full run clean, plan closed.
-- Effort: S
+- DROPPED 2026-11-27 (owner, Q45). Grounding contradicted the premise: `PromptTokenEstimator` is used by `Common/LmStudioClient.cs:90-91`, and
+  `ErrorPolicyDocument` is shared by AgentLoop and the `Server.Advanced` error-policy filter, so moving it to AgentLoop would make that filter depend
+  on the agent-loop project. Both files are placed in Phase 6 (the LLM-client group and the error-policy group).
 
 ### Phase 0.3 - Doc hygiene
 - Doc: none (a `todo-review` session).
@@ -108,8 +108,8 @@ Dated entries; later entries do not override earlier ones unless they say so. Q-
 - Effort: M
 
 ### Phase 2 - First mechanical split out of Common: SnippetMatching into a new Engines.Core
-- Doc: [plan_move_snippet_matching_into_engines_core.md](plan_move_snippet_matching_into_engines_core.md) (DRAFT 2026-11-27; grounded; three owner
-  questions open).
+- Doc: [plan_move_snippet_matching_into_engines_core.md](plan_move_snippet_matching_into_engines_core.md) (DRAFT 2026-11-27; grounded; owner
+  questions settled; readiness review running).
 - Depends on: Phase 0.1 (so the first real `ChangeNamespace` result is known).
 - Effect: text-neutral.
 - Change: create `RoslynSentinel.Engines.Core` (Q42; above Common, below both engine flavors) and move 18 files / 3,945 lines (`SnippetMatching/` plus
@@ -239,7 +239,7 @@ the Advanced engines -> shared not-found helpers and `BasicRefactoringEngine`).
 | Line endings | 8 / 764 | engine-like | medium |
 | Tool-parameter vocabulary | 2 / 698 | tool layer (enums used by engines) | later |
 | Child process, scratch, paths | 6 / 499 | kernel | stays |
-| LLM client, agent-loop support | 6 / 493 | AgentLoop | easy: 2 files have no Common users (Phase 0.2) |
+| LLM client, agent-loop support | 6 / 493 | AgentLoop and the error-policy group | medium: `LmStudioClient` uses `PromptTokenEstimator`; `ErrorPolicyDocument` is shared with the server (Phase 6) |
 | Build and diagnostics result model | 3 / 372 | kernel; `BuildResultProjector` -> Build/RunTest | with Phase 4.3 |
 | Repo-query seam | 1 / 60 | kernel | stays |
 

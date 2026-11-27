@@ -1,6 +1,6 @@
 # Plan: Create RoslynSentinel.Engines.Core and move snippet matching into it
 
-**Status:** DRAFT 2026-11-27. plan-design phase 4: 3 owner questions open (Q45, Q46, Q47); 9 planner defaults; readiness review not yet run.
+**Status:** DRAFT 2026-11-27. plan-design phase 8: 0 of 3 owner questions open; 9 planner defaults; independent readiness review running.
 
 ## Problem
 
@@ -64,6 +64,16 @@ Dated entries; later entries do not override earlier ones unless they say so.
     `RoslynSentinel.Engines.Core/SnippetMatching/`).
   - **P8 `SnippetMatchOutcome` and `SnippetSpan` move** with the area into that folder and namespace.
   - **P9 baseline:** full run `cc147f9e-20261127-004211-40584` (12,633 tests, 0 failures) if no `.cs` commit landed since cc147f9e, else a fresh run.
+- **2026-11-27, Q45 (owner): roadmap Phase 0.2 is dropped.** `PromptTokenEstimator` is used by `Common/LmStudioClient.cs:90-91`; `ErrorPolicyDocument`
+  is shared by AgentLoop and a `Server.Advanced` filter. Both are placed later with their groups (roadmap Phase 6).
+- **2026-11-27, Q46 (owner): admission rule for `Engines.Core`, accepted as worded:** "Engine logic that both engine flavors use, or that an engine and
+  a tool project use, with no MCP type, no tool name and no tool-surface check. One folder and one namespace per area. A class with one flavor as its
+  only user stays in that flavor. Data types with users below the engines stay in Common." Snippet matching arrives as a recorded exception to "no
+  tool name" until roadmap Phase 5 removes its text.
+- **2026-11-27, Q47 (owner): CLAUDE.md wording, accepted as worded.** In the Architecture bullets: after "`Git`: git readers, Git engine, worktree
+  harness." add "`Engines.Core`: engine logic shared by both engine flavors, one folder per area; references only `Common`."; replace "Shared
+  helpers go one layer down: `Engines.Basic` for engine logic, `Common` for result/MCP plumbing." with "Shared engine logic goes to `Engines.Core`,
+  never to `Common`; `Common` keeps result/MCP plumbing."
 
 ## Current design
 
@@ -214,31 +224,37 @@ Single lane (every step touches the same folder). Steps 1 to 3 are in Common onl
 - Removing tool-surface text from the area (roadmap Phase 5) and renaming the `ToolException` family (Phase 3).
 - A test project for the area (P6) and any change to test namespaces.
 - `LineBlockAligner`, `DiffEngine` and the rest of edit application.
-- `ErrorPolicyDocument` and `PromptTokenEstimator` (roadmap Phase 0.2; see Q45).
+- `ErrorPolicyDocument` and `PromptTokenEstimator` (roadmap Phase 0.2, dropped by Q45).
 
 ## Risks and open decisions
 
-1. **Q45 (owner): drop roadmap Phase 0.2?** Grounding contradicts its premise. `PromptTokenEstimator` is used by `Common/LmStudioClient.cs:90-91`, so it
-   cannot move alone. `ErrorPolicyDocument` is used by AgentLoop (2 files) and by `Server.Advanced` (`ErrorPolicyFilter.cs`,
-   `ServiceRegistrationExtensionsBasic.cs:306`); moving it to AgentLoop makes a server filter depend on the agent-loop project, and its tests sit in
-   `Tests.Basic`, which does not reference AgentLoop. Recommendation: drop 0.2; both files are placed in roadmap Phase 6 (the error-policy group and
-   the LLM-client group). Alternative: move `ErrorPolicyDocument` alone now (one `MoveFile`, one test-project reference).
-2. **Q46 (owner): admission rule for `Engines.Core`.** Proposed: "Engine logic that both engine flavors use, or that an engine and a tool project use,
-   with no MCP type, no tool name and no tool-surface check. One folder and one namespace per area (`RoslynSentinel.Engines.Core.<Area>`). A class with
-   one flavor as its only user stays in that flavor. Data types with users below the engines stay in Common."
-3. **Q47 (owner): CLAUDE.md wording** (its Architecture bullets are standing guidance). Proposed: after "`Git`: git readers, Git engine, worktree
-   harness." add "`Engines.Core`: engine logic shared by both engine flavors, one folder per area; references only `Common`."; and replace "Shared
-   helpers go one layer down: `Engines.Basic` for engine logic, `Common` for result/MCP plumbing." with "Shared engine logic goes to `Engines.Core`,
-   never to `Common`; `Common` keeps result/MCP plumbing."
-4. **The A3 list of Common types the area uses is a text check.** An internal Common type missed by it shows as a `MoveFile` dry-run fact in Step 5
+Q45, Q46 and Q47 are settled (Decision). What remains is unverified fact, each with its check:
+
+1. **The list of Common types the area uses is a text check.** An internal Common type missed by it shows as a `MoveFile` dry-run fact in Step 5
    (resolved by the `InternalsVisibleTo` line Step 4 already adds, or a decision point).
-5. **`ChangeNamespace` on a file whose references are relative-qualified** (`SnippetMatching.SnippetFailureDetail` in `ToolException.cs`) is untested;
+2. **`ChangeNamespace` on a file whose references are relative-qualified** (`SnippetMatching.SnippetFailureDetail` in `ToolException.cs`) is untested;
    Step 3's dry run decides and has a fallback.
-6. **Active area.** 14 commits in two weeks; `plan_unknown_parameter_rejection_reduction.md` (IN PROGRESS, Step 17 left) names `SnippetFailureDetail`;
+3. **Active area.** 14 commits in two weeks; `plan_unknown_parameter_rejection_reduction.md` (IN PROGRESS, Step 17 left) names `SnippetFailureDetail`;
    INBOX has an open line asking for a typed closest-window score in `SnippetErrorFormatter`. Heads-up before Step 1 and Step 5; no hold.
-7. **A simple name `Core`** inside `RoslynSentinel.Engines.*` code would bind to the new namespace segment. A text sweep found none in production code
-   but reviewed only part of its matches; the Step 4 build with the empty project (which creates the namespace root) and Step 6's gate are the proof.
-8. **Readiness review** (independent, plan-design phase 8) has not run; it runs after Q45 to Q47 are answered.
+4. **A simple name `Core`** inside `RoslynSentinel.Engines.*` code would bind to the new namespace segment. A text sweep found none in production code
+   but reviewed only part of its matches; the Step 6 dry run and build (the first point at which the namespace `RoslynSentinel.Engines.Core` exists)
+   are the proof.
+
+## Tests and measurement
+
+No test is added: every step is text-neutral and the area's behaviour is pinned by its existing classes (Appendix A, about 272 `[Test]` methods, all
+in-process). Each behaviour of this plan maps to an existing check:
+
+| Behaviour | Check (run by the dispatcher) | Pass criterion |
+| --- | --- | --- |
+| The area still works after each prep step and after the move | `Snippet*Tests`, `ContextHelper*Tests`, `NewContentIndenterTests`, `LineBlockAlignerTests` (`RoslynSentinel.Tests`), `SnippetResolverCrossAssemblyTests` (`Tests.Tools.Basic`) | all pass, same counts as before the step |
+| Error-policy ratchet still covers the moved throw sites | `ErrorPolicyKindRatchetTests` | passes with `RoslynSentinel.Engines.Core` in `ScannedProjects` |
+| A stale server is still detected for the new project | `ServerBinaryStalenessTests`, `TestInstanceLauncherTests` | pass unchanged (prefix match) |
+| Generated architecture docs match the solution | `ArchitectureDocFreshnessTests` | passes after regeneration |
+| Nothing else moved | one full run at the final commit against baseline P9 | 0 failures, test count equal to the baseline |
+
+Size: `SnippetFailureDetail.From` 9 call sites in 1 file (symbol); `SnippetClosestWindow` 27 references in 10 files, `SnippetFilterStep` 16 in 4
+(symbol); namespace rename about 54 files with the using plus users of the two root types (text; the dry run gives the exact figure).
 
 ## Appendix A - Inventory (2026-11-27)
 
