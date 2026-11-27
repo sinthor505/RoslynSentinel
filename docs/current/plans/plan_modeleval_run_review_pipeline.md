@@ -1,6 +1,6 @@
 # Plan: model-eval run review pipeline (digest script, grader agent, rollup, agent refresh)
 
-**Status:** APPROVED 2026-11-26. 20 steps (digest, grader, rollup, vocabulary, arm-table fold-in, agent refresh, calibration); re-anchored at 82dc6706 with Q28-Q29; Batched run started.
+**Status:** IN PROGRESS 2026-11-26. Steps 1, 2a-2c done (397f75fe, d7db5750, 9bfd22b8, f6ffbcea, f7a9185e).
 
 ## Problem
 
@@ -442,6 +442,7 @@ NUnit test and the arm-table tests. Those run the script as a child `pwsh -File`
   - Commit `.gitignore`, `INBOX.md` and the 10 files with
     `Git(operation: commit, scope: listed, paths: ...)`.
 - Done when: `git ls-files .claude/agents` lists 17 files.
+- Done: 397f75fe, d7db5750 (also un-ignores `scripts/eval-review/**/*.json`, hidden by the blanket `*.json` rule)
 - Lane: implementer. Effort: S.
 
 ### Step 2a - Vocabulary, review schema and review fixture
@@ -512,6 +513,7 @@ NUnit test and the arm-table tests. Those run the script as a child `pwsh -File`
   `review-example.json` is the design doc's example, with `armKey` added and all 8 dimensions.
 - Done when: `Test-Json -Path scripts/eval-review/fixtures/review-example.json -SchemaFile
   scripts/eval-review/review.schema.json` returns True.
+- Done: 9bfd22b8
 - Lane: implementer. Effort: S.
 
 ### Step 2b - Pin the stop-reason list to the enum
@@ -531,6 +533,7 @@ NUnit test and the arm-table tests. Those run the script as a child `pwsh -File`
       `stopReasons` equals `Enum.GetNames<AgentStopReason>()` in order and that
       `(int)Enum.Parse<AgentStopReason>(stopReasons[i]) == i`.
 - Done when: `Build` 0 errors. The dispatcher runs the test with `RunTest`.
+- Done: f6ffbcea
 - Lane: test-writer. Effort: S.
 
 ### Step 2c - Doc pointers to the vocabulary
@@ -545,6 +548,7 @@ NUnit test and the arm-table tests. Those run the script as a child `pwsh -File`
     (`dimensions`).
 - Done when: `Select-String -Path docs/current/design/design_modeleval_run_review_pipeline.md
   -Pattern 'replans when a result changes the facts'` finds nothing.
+- Done: f7a9185e
 - Lane: main session (direct edit). Effort: S.
 
 ### Step 3a - Reader: vocabulary, transcript, tool results
