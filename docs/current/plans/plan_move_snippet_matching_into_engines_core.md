@@ -1,6 +1,7 @@
 # Plan: Create RoslynSentinel.Engines.Core and move snippet matching into it
 
-**Status:** APPROVED 2026-11-27. Owner questions settled, independent readiness review clean; dispatched to an orchestrator; nothing built yet.
+**Status:** IN PROGRESS 2026-11-27. Steps 1 to 4 done (373ff903, e968ccd4, 4545a2af, 87931adb); Step 5 revised after its first dry run was refused
+(Decision, last entry); Steps 5 to 8 left.
 
 ## Problem
 
@@ -80,6 +81,17 @@ Dated entries; later entries do not override earlier ones unless they say so.
 - **2026-11-27, Readiness (plan-design): independent review clean at 9bfab1e7.** Round 1 found 5 blocking items (slice size, three checks that could
   not run as written, a shorthand move list), all fixed; round 2 found none. It did not compile or dry-run anything; the tool shapes listed in Risks
   item 2 remain untested until their steps.
+- **2026-11-27, Step 5 route corrected (planner):** the first dry run of the move was refused. With `addProjectReferences: true` the gate adds only
+  the three direct edges it flags (`RoslynSentinel.Tests`, `Tools.Basic`, `Engines.Basic`) and then fails with 50 errors in projects that reach the new
+  project only through another one (`Engines.Advanced`, `Tests.Tools.Basic`, `Tests.Server`, `Tests.Advanced`); recorded as a tool gap
+  (`MoveSetEdgeAnalyzer.cs:67`, INBOX 2026-11-27 09:25). The plan had relied on the toggle where the splitting reference (wiring checklist, "ProjectReferences
+  for every consumer") and the Git run wire every consumer by hand before the move. Step 5 now does that: a direct `ProjectReference` in every
+  project whose code names a moved type, written with Edit (csproj is a non-C# file), then the move. No owner decision changes: P1 already named the
+  engine and tool references; the test projects are added.
+- **2026-11-27, results of Steps 1 to 4:** `MoveMember` refuses a record as source type, so Step 2 used its fallback (new method, 9 callers switched,
+  old method removed). `MoveType` left an empty namespace block (removed) and reformatted auto-properties in `SnippetMatchResult.cs` (whitespace only,
+  left). All three `ChangeNamespace` calls of Step 3 matched their dry runs and rewrote the relative-qualified names in `ToolException.cs`, so the
+  records are in namespace `RoslynSentinel.Common` as planned. Filtered runs after Steps 1, 2 and 3: 942 tests, 0 failures each.
 
 ## Current design
 
@@ -189,17 +201,27 @@ Single lane (every step touches the same folder). Steps 1 to 3 are in Common onl
 - Effort: S
 
 ### Step 5 - Move the area across the project edge
-- Files: the 17 files of Appendix A marked "moves" -> `RoslynSentinel.Engines.Core/SnippetMatching/`; the csproj files the tool writes
-  (`ProjectReference` in `Engines.Basic`, `Engines.Advanced`, `Tools.Basic`; `InternalsVisibleTo`); `RoslynSentinel.Tests.Basic/ErrorPolicyKindRatchetTests.cs`.
+- Files: the 17 files of Appendix A marked "moves" -> `RoslynSentinel.Engines.Core/SnippetMatching/`; the csproj of every consumer project
+  (`Engines.Basic`, `Engines.Advanced`, `Tools.Basic`, `Tests`, `Tests.Tools.Basic`, `Tests.Server`, `Tests.Advanced`, and any other the dry run still
+  names); `RoslynSentinel.Tests.Basic/ErrorPolicyKindRatchetTests.cs`; `RoslynSentinel.Engines.Basic/MoveSetEdgeAnalyzer.cs` and the `MoveMember` tool
+  code (one `// TODO` marker each for the two tool gaps in INBOX).
 - Depends on: Step 4
 - Effect: text-neutral.
-- Lane: `implementer-senior`, one operation plus the ratchet edit.
-- Change: `MoveFile(moves: [{ sourcePath: "RoslynSentinel.Common/SnippetMatching", destinationPath: "RoslynSentinel.Engines.Core/SnippetMatching" },
+- Lane: the dispatcher for the csproj wiring (5a); `implementer-senior` for the move, the ratchet edit and the two markers (5b).
+- Change 5a (wiring, per the splitting reference's checklist): add `<ProjectReference Include="..\RoslynSentinel.Engines.Core\RoslynSentinel.Engines.Core.csproj" />`
+  to each consumer csproj listed above with Edit, `LoadSolution(forceReload: true)`, solution `Build` 0 errors (the project is still empty), commit.
+  Then dry-run the move with both toggles false; every project that still shows errors or an edge fact gets the same reference line and the dry run
+  is repeated, until it reports no error and no missing edge. More than 12 consumer projects in total, or an error that a reference line does not
+  explain, is a decision point.
+- Change 5b: `MoveFile(moves: [{ sourcePath: "RoslynSentinel.Common/SnippetMatching", destinationPath: "RoslynSentinel.Engines.Core/SnippetMatching" },
   { sourcePath: "RoslynSentinel.Common/SnippetMatchOutcome.cs", destinationPath: "RoslynSentinel.Engines.Core/SnippetMatching/SnippetMatchOutcome.cs" },
   { sourcePath: "RoslynSentinel.Common/SnippetSpan.cs", destinationPath: "RoslynSentinel.Engines.Core/SnippetMatching/SnippetSpan.cs" }],
-  namespaceHandling: keep, addProjectReferences: true, addInternalsVisibleTo: true, dryRun: true)`; act on every fact (a grant Step 4 already wrote
-  must not end up twice in a csproj); then the real call. In the same slice add `"RoslynSentinel.Engines.Core"` to
-  `ErrorPolicyKindRatchetTests.ScannedProjects` (`:26`).
+  namespaceHandling: keep, addProjectReferences: false, addInternalsVisibleTo: false)`, the real call of the dry run that 5a ended on (the toggles
+  stay false because 5a and Step 4 already wrote every edge, so no csproj line is written twice). In the same slice add
+  `"RoslynSentinel.Engines.Core"` to `ErrorPolicyKindRatchetTests.ScannedProjects` (`:26`), and one comment line at each tool gap:
+  `// TODO the gate adds only direct edges; projects that reach the destination through another project still fail (INBOX 2026-11-27)` above
+  `AugmentBaseline` (`MoveSetEdgeAnalyzer.cs:67`), and `// TODO a record is refused as the source type (INBOX 2026-11-27)` where `MoveMember` resolves
+  its source type.
 - Done when: `Build` 0 errors.
 - Dispatcher checks: `RoslynSentinel.Common/SnippetMatching/` holds no file and the empty folder is removed (`Test-Path` then reports false);
   `RoslynSentinel.Engines.Core/SnippetMatching/` lists 17 files; the filtered run passes.
