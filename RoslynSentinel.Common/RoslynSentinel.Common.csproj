@@ -41,6 +41,8 @@
 			<InternalsVisibleTo Include="RoslynSentinel.Tests.Harness" />
 		<!-- The Git project (Git\ folder code) uses internal Common types (IRepoQuery, ChangedCommit, WorkingTreeChange, ...). -->
 		<InternalsVisibleTo Include="RoslynSentinel.Git" />
+		<!-- The snippet-matching code (Engines.Core) uses the internal LineBlockAligner. -->
+		<InternalsVisibleTo Include="RoslynSentinel.Engines.Core" />
 	</ItemGroup>
 
 </Project>

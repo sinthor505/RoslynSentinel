@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Configurations>Debug;Release;DebugVisualStudio</Configurations>
+  </PropertyGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\RoslynSentinel.Common\RoslynSentinel.Common.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Using Include="RoslynSentinel.Common" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <!-- The snippet-matching tests live in RoslynSentinel.Tests and use the area's internals. -->
+	  <InternalsVisibleTo Include="RoslynSentinel.Tests" />
+	</ItemGroup>
+
+</Project>

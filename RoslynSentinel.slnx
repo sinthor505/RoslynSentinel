@@ -11,6 +11,9 @@
   <Project Path="RoslynSentinel.Common/RoslynSentinel.Common.csproj" Id="fbd51816-ef10-4c4c-a0fa-7792a6fe7db7" />
   <Project Path="RoslynSentinel.Engines.Advanced/RoslynSentinel.Engines.Advanced.csproj" />
   <Project Path="RoslynSentinel.Engines.Basic/RoslynSentinel.Engines.Basic.csproj" />
+  <Project Path="RoslynSentinel.Engines.Core/RoslynSentinel.Engines.Core.csproj">
+    <BuildType Solution="DebugVisualStudio|*" Project="Debug" />
+  </Project>
   <Project Path="RoslynSentinel.Git/RoslynSentinel.Git.csproj" />
   <Project Path="RoslynSentinel.Server.Advanced/RoslynSentinel.Server.Advanced.csproj" Id="c76d7d9f-da14-4474-a0ef-fa7e59bb0986" />
   <Project Path="RoslynSentinel.Tests.Advanced/RoslynSentinel.Tests.Advanced.csproj" Id="30334fc9-1993-4d32-9115-e72b5f26e864" />
