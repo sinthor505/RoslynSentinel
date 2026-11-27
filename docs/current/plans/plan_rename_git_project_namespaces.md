@@ -57,12 +57,16 @@ Settled 2026-11-26 in the design session recorded in [plan_isolate_build_test_ar
 - Lane: the dispatcher itself.
 - Change: enable `moveExtract`; `Git(operation: status)`; `ListAgents`; run
   `ChangeNamespace(filePath: "RoslynSentinel.Git", newNamespace: "RoslynSentinel.Git", dryRun: true)` and page the whole `affectedFiles` list with
-  `GetLargeResult`. Re-call with `returnDiff: true` (the tool's own note names that argument) and count the lines that insert a qualified
-  `RoslynSentinel.Git.` name outside `using` and `namespace` lines (known behaviour: where a global using of the old namespace exists the tool may
-  qualify a name instead of adding a using). Resolve dirty-and-affected files with their owners (Execution rules).
-- Done when: the dry run reports `validated: true`; no affected file has another session's uncommitted edits; the qualified-name count is in the
-  report. Decision point: more than 10 qualified-name lines, or a refusal (for example the doc-comment cref case), stops the plan with the count
-  and the quoted refusal for the owner.
+  `GetLargeResult`. From the per-file `lineChanges`, list the files whose change is more than a using added or swapped or a namespace line changed
+  (known behaviour to watch for: where a global using of the old namespace exists the tool may qualify a name instead of adding a using). Resolve
+  dirty-and-affected files with their owners (Execution rules).
+- Done when: the dry run reports `validated: true`; no affected file has another session's uncommitted edits; the list is in the report. Decision
+  point: a refusal (for example the doc-comment cref case) stops the plan with the quoted refusal for the owner.
+- Done 2026-11-27: `dry_run_ok`, `validated: true`, 144 files, 1,866 references (same as 2026-11-26); no dirty `.cs` file. `ChangeNamespace` has no
+  `returnDiff` parameter although its dry-run note names one (INBOX 2026-11-27), so the diff is checked after the real call instead (Step 2). 14
+  lines hold a qualified name, all of them existing `RoslynSentinel.Common.GitReaders...` references rewritten in place
+  (`ResidualMentionScannerTests.cs:234,242-244`, `DocTrailerEngineTests.cs:142,151-153`, `NotFoundEvidenceTests.cs:313,321-323`, line 9 of both
+  `LeakDetectorSetUp.cs`): intended, not tool-introduced.
 - Effort: S
 
 ### Step 2 - Rename the parent folder's namespaces
@@ -70,7 +74,10 @@ Settled 2026-11-26 in the design session recorded in [plan_isolate_build_test_ar
 - Depends on: Step 1
 - Effect: text-neutral (namespaces and usings only; no wire text, DTO property or tool schema changes).
 - Lane: `implementer-senior`, one operation.
-- Change: `ChangeNamespace(filePath: "RoslynSentinel.Git", newNamespace: "RoslynSentinel.Git")`. After it, the three worktree files are in
+- Change: `ChangeNamespace(filePath: "RoslynSentinel.Git", newNamespace: "RoslynSentinel.Git")`. Before committing, check the written result with
+  `Git(operation: diff)`: the patch of `CliGitReader.cs`, `GitReader.cs`, `FallbackGitReader.cs`, `GitBackendWarmup.cs` and `Libgit2GitReader.cs`
+  (the dry run showed 2 or 3 added lines each) and a `Search(mode: text, query: "RoslynSentinel\\.Git\\.[A-Z]", includeTests: true)`; qualified names
+  beyond the 14 lines listed in Step 1 mean the tool introduced them: `UndoChange`, stop and report. After it, the three worktree files are in
   `RoslynSentinel.Git` too (a folder call covers subfolders); Step 3 gives them their sub-namespace. Then delete the two
   `// TODO rename namespace to RoslynSentinel.Git ...` comment lines (`GitEngine.cs:13`, `GitProcess.cs:7`; one `ReplaceSnippet` each).
 - Done when: `Build` 0 errors; `Search(mode: text, query: "^namespace RoslynSentinel\\.(Common|Tools\\.Basic)", fileGlob: "RoslynSentinel.Git/**/*.cs")`
