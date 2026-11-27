@@ -300,7 +300,7 @@ factories. Before any shape change to that type, move construction behind factor
   MoveTypeAndExtractTests, DryRunLineChangesTests) into Tests.Tools.Basic with `Member(addMember)` +
   `Member(remove)` (cross-project MoveMember would refuse: shared fixtures stay behind). Later: move
   `MoveMemberSuccessTests` and `MoveMemberToolCollateralRefusalTests` whole once MoveFile slice 1 exists
-  (`proposal_move_file_tool.md`). Why: MoveFile now waits for a fresh-chat design; the mixed files do not
+  (`closed/proposal_move_file_tool.md`). Why: MoveFile now waits for a fresh-chat design; the mixed files do not
   need it.
 - Check: the 7 `// TODO` markers are gone, Tests.Tools.Advanced has no MoveMember/ChangeSignature tests,
   the build is green and no new test failures.

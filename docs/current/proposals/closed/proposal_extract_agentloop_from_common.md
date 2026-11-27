@@ -1,6 +1,6 @@
 # Extract the agent-loop harness from RoslynSentinel.Common into RoslynSentinel.AgentLoop
 
-**Status:** BUILT 2026-11-22 (commits 4b5db8de, 722be986, ae8937ab, 945170d9, 5f286df9, cab94f30, 1ec5ff24, b9232eb4, 7532633d, aa1dbdfd). Deviations: `ToolLoopLatch`/`LoopLatchOptions` stay in Common (Tools.Basic and Server.Advanced use them); `Utilities.PlanStepRunner` and `Tools.Advanced` reference AgentLoop (rule wording updated in reference_architecture_map.md); the `SubAgentEvalResult` tests also moved out of Tests.Basic (to Tests.SubAgent) so Tests.Basic drops its reference; the `LmStudioAgentClient`/`ReasoningReplayPolicy` cycle was broken first (policy owns the replay-window constants); files sit flat in `RoslynSentinel.AgentLoop/`. Earlier: APPROVED 2026-11-21, PROPOSED 2026-11-20.
+**Status:** IMPLEMENTED 2026-11-22 (commits 4b5db8de, 722be986, ae8937ab, 945170d9, 5f286df9, cab94f30, 1ec5ff24, b9232eb4, 7532633d, aa1dbdfd). Deviations: `ToolLoopLatch`/`LoopLatchOptions` stay in Common (Tools.Basic and Server.Advanced use them); `Utilities.PlanStepRunner` and `Tools.Advanced` reference AgentLoop (rule wording updated in reference_architecture_map.md); the `SubAgentEvalResult` tests also moved out of Tests.Basic (to Tests.SubAgent) so Tests.Basic drops its reference; the `LmStudioAgentClient`/`ReasoningReplayPolicy` cycle was broken first (policy owns the replay-window constants); files sit flat in `RoslynSentinel.AgentLoop/`. Earlier: APPROVED 2026-11-21, PROPOSED 2026-11-20.
 
 ## Motivation
 

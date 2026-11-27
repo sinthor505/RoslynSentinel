@@ -96,7 +96,7 @@ Results are in the proposal's Spike results section. The project stays at `c:\tm
 
 - Files: `ICSharpCode.Decompiler` package reference in `RoslynSentinel.Engines.Advanced`; new engine there; new tool class in
   `RoslynSentinel.Tools.Advanced`; `RoslynSentinel.Common/ToolsetCatalog.cs` and the other four places its header lists;
-  `Server.Advanced/ToolClassRegistry.cs`; the DI block; tests.
+  `Server.Advanced/ToolClassRegistry.cs` (mode entry and BasicToolClassTypes/AdvancedToolClassTypes row); tests.
 - Change: per the proposal's Slice 2 pipeline. May split into smaller commits: redirect and forward logic first, then the
   decompile and cache, then the tool and gating. Senior lane. Carries the `ExternalSourceResult` NEW-DTO block from the proposal.
   From the spike: type IDs always need a manual forward hop; open files with `PrefetchEntireImage` or the path constructor; set

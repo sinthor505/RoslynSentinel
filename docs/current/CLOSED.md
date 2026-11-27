@@ -8,6 +8,44 @@ Only the newest month (2026-11) is kept here. Older entries are archived unchang
 [archive/closed_2026-10.md](archive/closed_2026-10.md), [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## INBOX triage, todo review 0c3e9bd9 - resolved (2026-11-26)
+
+INBOX lines closed at triage because they were already fixed, or folded into an open plan or TODO entry that carries them (the code TODO stays the source of truth where one exists).
+
+Resolved:
+- ToolCallHint read the obsolete HiddenSchemaParams mirror - the mirror is gone from ToolCallHint.cs and McpToolSchemaPatcher.cs (stage E); stale test comments stay as an open tidy item.
+- GitErrorDetails.ActionRequired had no producer - the key is gone; the three ActionRequired failures use GitErrorCodes.ActionRequired (GitEngine.cs:95,178,249).
+- StageHunks refused copy dropped hints - GitEngine.cs:1920 passes refused.Hints; marker gone.
+- Staleness stamp and TestInstanceLauncher omitted RoslynSentinel.Git - ServerBinaryStaleness.cs:47, scripts/server-source-paths.txt:7, TestInstanceLauncher.cs:633,757 plus TestInstanceLauncherTests.
+- ToolHintRatchetTests red on 'Unknown tool ChangeNamespace' (and its RESOLVED line) - d9cc08b1.
+- CsprojEdgeWriter guessed the ProjectReference Include path - projectReferenceInclude callback (CsprojEdgeWriter.cs:11-13,32); sibling-folder default stays as a fallback.
+- MoveFile toggle-off edge facts lost on a gate refusal (T27.9, and its RESOLVED line) - fixed in that slice; PRODUCT-DEFECT marker gone.
+- Launcher source clone wedged after a dev-repo amend (and its RESOLVED line) - Sync-RoslynSentinelSource resets a diverged clone (Invoke-SyncDivergenceReset in scripts/roslynsentinel-instances-common.ps1).
+- ReplaceRange rejected multi-line anchors - 4caf0cf8.
+- RunTest failure details as a stored large result (and its correction) - the correction showed the details were inline and no turns were lost.
+- ReplaceRange '}' lastLineText ambiguity - c7af5ad3 (first match at or after the first anchor); the stray backslash-quote half is the plain-text tool results plan's ground.
+- ReplaceRange known-limit owner note - now a code comment at WorkspaceFileEditImpl.cs ReplaceRange (FindAnchorBlocks call).
+- Compile-gate SignatureChanged hint named ChangeSignature for a retype - b79eb315.
+- ReplaceSnippet batch item without newContent bound to empty - e522bf1d refuses it.
+- scripts/build.ps1 -Flavor Solution prompt hang - the Read-Host is dead since ad675ffa ($allRunning = $null); the 2026-11-26 hang's cause is untraced, re-open with a new INBOX line if it recurs.
+
+Folded:
+- Get-ThinkingArmTable one machine per call / pooled scenarios, its duplicate run discovery, and five scripts parsing transcripts themselves - plans/plan_modeleval_run_review_pipeline.md (Q16, Q20, Q28, Step 5 markers).
+- Escaped-quote read/write mismatch, the escape and leak research, the plain-text probe, interrogate replaying ResultJson, the "decode once" note - plans/closed/plan_plain_text_tool_results_for_eval_model.md (implemented; interrogate stays a code TODO at scripts/roslynsentinel-interrogate.ps1:239).
+- Triggered-mode </think> leak, its probe and the plan-line / reasoning-as-content probe - plans/plan_triggered_thinking_reasoning_as_content.md.
+- Ornith StreamTruncated near a full context - TODO.md "Agent-loop auto-compaction".
+- MoveType cannot move a type into an existing file - TODO.md P3 entry of the same name.
+- --mode=WholeFileWrite alone fails ValidateOnBuild - pinned as an expected failure with a code TODO in Tests.Harness/ToolSurfaceParityTests.cs.
+- ThreadOptionalParameter '(ordinal comparison)' wording - 106a08cd added the ExplicitOrdinal prompt variant.
+
+Evidence: todo review 0c3e9bd9 INBOX triage agents (2026-11-26); per-line evidence above
+
+## Plain-text / raw-XML tool results for the eval model - resolved (2026-11-26)
+
+Plain-text / raw-XML tool results for the eval model (2026-11-26) - renderer in AgentLoop behind `ROSLYNSENTINEL_MODELEVAL_TOOL_RESULT_FORMAT`, 48-run A/B - [plan](plans/closed/plan_plain_text_tool_results_for_eval_model.md)
+
+Evidence: IMPLEMENTED 2026-11-26: Steps 1-7 done (e3995b05 default plain, 1bb42f0c A/B, 5879bdc7 arm table); plan and proposal moved to closed/ by todo review 0c3e9bd9
+
 ## Triggered-mode </think> leak (INBOX 2026-11-25 13:11, 15:35, 2026-11-26 00:30) - resolved (2026-11-26)
 
 - 2026-11-25 13:11 Triggered thinking mode: non-thinking turns after a thinking turn write reasoning-style prose into Content ending in a literal </think> (192444: 8, 192447: 11, 192501: 5 turns; 0 in always and baseline runs; first leak always right after a thinking turn), so toggling reasoning per turn on Qwen3.5/llama-server leaks the think format - thinking smoke test at 8e02735a, c:\tmp\thinking-smoke-runs.csv - RoslynSentinel.AgentLoop/ModelAgentRunner.cs RunCoreAsync CompleteAsync call (// TODO Triggered mode)

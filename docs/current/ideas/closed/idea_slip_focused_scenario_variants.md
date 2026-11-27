@@ -24,7 +24,7 @@ The slip-prone content is still useful, and these runs exercised it:
 - ThreadOptionalParameter is where the json-vs-plain escape-copy difference showed up (json 59 lines,
   plain 3, xml 0 at cap 35).
 
-Results and evidence: `docs/current/plans/plan_plain_text_tool_results_for_eval_model.md`, section "Follow-up batches".
+Results and evidence: `docs/current/plans/closed/plan_plain_text_tool_results_for_eval_model.md`, section "Follow-up batches".
 
 ## The actual gap
 
@@ -84,7 +84,7 @@ Open questions for plan-design:
 
 ## Related
 
-- `docs/current/plans/plan_plain_text_tool_results_for_eval_model.md` (the A/B and follow-up batches that prompted this)
+- `docs/current/plans/closed/plan_plain_text_tool_results_for_eval_model.md` (the A/B and follow-up batches that prompted this)
 - `docs/current/findings/finding_overnight_token_path_slips.md`
 - `.claude/skills/failure-analysis/SKILL.md` (token-path slip rules, sample size)
 - INBOX lines 2026-11-26 20:05 and 20:30 (tool defects found in these runs; fixes in progress)

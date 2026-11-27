@@ -1,10 +1,10 @@
 # Plan: Render tool results as plain text or raw XML for the eval model (opt-in A/B setting)
 
-**Status:** APPROVED 2026-11-26. Owner accepted all recommendations; the owner delegated readiness to the session (away overnight).
+**Status:** IMPLEMENTED 2026-11-26. Steps 1-7 done; e3995b05 (default plain), 1bb42f0c (A/B), 5879bdc7 (arm table). Approved 2026-11-26; owner accepted all recommendations and delegated readiness to the session.
 
 ## Problem
 
-Source: `proposals/proposal_plain_text_tool_results_for_eval_model.md`.
+Source: `proposals/closed/proposal_plain_text_tool_results_for_eval_model.md`.
 
 The agent loop sends each MCP tool result to the model as raw JSON text, so every `"` in quoted C#
 reads as `\"`. The Qwen3.5 template makes the model write tool-call arguments raw, so it must

@@ -1,10 +1,10 @@
 # Idea: Store AfterSource in chokepoint operation blobs
 
-**Status:** READY 2026-11-20 (todo review; see Decisions at the end). Recorded 2026-11-09 during the `plan_stale_read_guard_followups` review; unimplemented.
+**Status:** IMPLEMENTED 2026-11-22; 66821e8c, a8d1ca2d, 72b7a3d3, 50395307, f6450470. Recorded 2026-11-09 during the `plan_stale_read_guard_followups` review; made READY 2026-11-20 (todo review; see Decisions at the end).
 
 ## What happened
 
-While reviewing Step 9h of [plan_stale_read_guard_followups.md](../plans/closed/plan_stale_read_guard_followups.md)
+While reviewing Step 9h of [plan_stale_read_guard_followups.md](../../plans/closed/plan_stale_read_guard_followups.md)
 (the "Added, not loaded yet" zero-hit `Search` hint), the question came up whether the hint could read
 the post-write text from the operation blob instead of the disk. It cannot: the blobs written by the
 write chokepoint hold only the text from before the write.
@@ -73,7 +73,7 @@ test that asserts on blob contents or size.
 - `UndoChange` could compare the current disk text to `AfterSource` and refuse, or warn, when a later
   edit has landed in between.
 - Exact per-operation before/after forensics without consulting git.
-- Input for [proposal_cross_session_write_journal.md](../proposals/proposal_cross_session_write_journal.md):
+- Input for [proposal_cross_session_write_journal.md](../../proposals/proposal_cross_session_write_journal.md):
   a journal that wants to say what each session wrote can use the stored after text instead of
   re-deriving it.
 
@@ -96,9 +96,9 @@ be pulled into it.
 
 ## Related
 
-- [plan_stale_read_guard_followups.md](../plans/closed/plan_stale_read_guard_followups.md) - Step 9h, where
+- [plan_stale_read_guard_followups.md](../../plans/closed/plan_stale_read_guard_followups.md) - Step 9h, where
   this was decided against as the data source.
-- [proposal_cross_session_write_journal.md](../proposals/proposal_cross_session_write_journal.md) -
+- [proposal_cross_session_write_journal.md](../../proposals/proposal_cross_session_write_journal.md) -
   would consume the stored after text.
 
 ## Decisions (todo review 2026-11-20)

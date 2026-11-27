@@ -1,9 +1,6 @@
 # Idea: tool errors stay policy-agnostic but can point at, or carry, an operator-supplied error-handling policy
 
-**Status:** DESIGN SETTLED 2026-11-12, not built. Owner idea after the stop-adherence A/B showed a 9B model obeying the
-tool error's next-step text over the system prompt's stop rule, and after the owner ruled that tool error text carries
-no policy. Decisions D1-D7 below were settled with the owner on 2026-11-12. Plan:
-`docs/current/plans/closed/plan_error_policy_pointer.md` (IMPLEMENTED 2026-11-13).
+**Status:** SUPERSEDED by [plan_error_policy_pointer.md](../../plans/closed/plan_error_policy_pointer.md) (IMPLEMENTED 2026-11-13, b005a220). Owner idea after the stop-adherence A/B showed a 9B model obeying the tool error's next-step text over the system prompt's stop rule, and after the owner ruled that tool error text carries no policy. Decisions D1-D7 below were settled with the owner on 2026-11-12.
 
 ## What happened
 

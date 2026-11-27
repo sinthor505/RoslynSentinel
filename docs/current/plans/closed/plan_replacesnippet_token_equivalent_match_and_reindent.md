@@ -4,7 +4,7 @@
 
 ## Problem
 
-Source of truth: [proposal_replacesnippet_token_equivalent_match_and_reindent.md](../../proposals/proposal_replacesnippet_token_equivalent_match_and_reindent.md) (committed 4177207c). In short: 94 of 2,003 `ReplaceSnippet` calls in the 2026-11-14 runs were rejected as `MatchedLooserThanRequested`, almost all for indentation; and `newContent` is spliced verbatim, so model tabs and wrong widths are written even by exact matches.
+Source of truth: [proposal_replacesnippet_token_equivalent_match_and_reindent.md](../../proposals/closed/proposal_replacesnippet_token_equivalent_match_and_reindent.md) (committed 4177207c). In short: 94 of 2,003 `ReplaceSnippet` calls in the 2026-11-14 runs were rejected as `MatchedLooserThanRequested`, almost all for indentation; and `newContent` is spliced verbatim, so model tabs and wrong widths are written even by exact matches.
 
 Verified against the source on 2026-11-14 (line numbers drift; a peer session was editing the solution while this plan was written, workspaceVersion 4 -> 12):
 

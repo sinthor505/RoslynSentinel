@@ -291,7 +291,7 @@ migration can prove it changes nothing.
 - [plan_tab_scoped_toolset_persistence.md](../plans/closed/plan_tab_scoped_toolset_persistence.md): prerequisite.
 - [reference_changing_claude_lean_tools.md](../references/reference_changing_claude_lean_tools.md): replaced by editing `claude-lean.json` once built.
 - [plan_modeleval_lean_tool_surface.md](../plans/closed/plan_modeleval_lean_tool_surface.md) and
-  [proposal_modeleval_lean_tool_surface.md](proposal_modeleval_lean_tool_surface.md): origin of the eval lean list.
+  [proposal_modeleval_lean_tool_surface.md](closed/proposal_modeleval_lean_tool_surface.md): origin of the eval lean list.
 - [plan_stateless_http_toolset_enablement.md](../plans/plan_stateless_http_toolset_enablement.md)
 - [blocking_error_gitremote_not_callable_after_toolset_enable.md](../blockers/blocking_error_gitremote_not_callable_after_toolset_enable.md)
 - Memory: Tab-scoped toolset persistence run; Idle restart drops toolsets.

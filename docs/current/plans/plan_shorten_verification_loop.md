@@ -510,7 +510,7 @@ call sites in 60 files. It also found a second 30 s default, the `LoadSolution` 
 - Build warning levels (another session is working on them; see the 2026-11-21 lines in `docs/current/INBOX.md`).
 - Converting more Battery fixtures to the in-memory tier ([plan_in_memory_test_tier_for_battery.md](./plan_in_memory_test_tier_for_battery.md)).
 - `RunTest` skipping the rebuild after a clean `Build` (`--no-build`; proposal open question 2): separate lever, own entry if Step 13 shows it matters.
-- Reducing `ChildProcessCapture`/`GitProcess` pool starvation further ([issue_process_spawn_test_flake.md](../issues/issue_process_spawn_test_flake.md) is IMPLEMENTED; its
+- Reducing `ChildProcessCapture`/`GitProcess` pool starvation further ([issue_process_spawn_test_flake.md](../issues/closed/issue_process_spawn_test_flake.md) is IMPLEMENTED; its
   item 4 stays conditional).
 - Making the full run itself faster by splitting `Tests.Tools.Basic` into several projects (a larger structural change; revisit only if Steps 7 and 12 leave the
   serial tail above target).
@@ -582,7 +582,7 @@ Risks and unverified points:
 - [finding_core_change_cost_causes_and_non_split_remedies.md](../findings/finding_core_change_cost_causes_and_non_split_remedies.md)
 - [proposal_runtest_tests_for_members.md](../proposals/proposal_runtest_tests_for_members.md)
 - [plan_in_memory_test_tier_for_battery.md](./plan_in_memory_test_tier_for_battery.md)
-- [issue_process_spawn_test_flake.md](../issues/issue_process_spawn_test_flake.md)
+- [issue_process_spawn_test_flake.md](../issues/closed/issue_process_spawn_test_flake.md)
 - `scripts/Invoke-WorktreeTests.ps1`, `scripts/Test-Parallel.ps1`, `scripts/build.ps1`, `RoslynSentinel.Engines.Basic/TestSuiteFilter.cs`
 
 ## Appendix A - Serial-tail inventory (Step 6, 2026-11-22)

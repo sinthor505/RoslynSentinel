@@ -1,7 +1,7 @@
 ---
 name: blocker-writer
 description: Drafts a docs/current/blockers/blocking_error_*.md writeup the moment a CS#### compiler error or an MCP tool blocking error/gap surfaces during automated work, matching the repo's existing blocker doc format. Use as soon as a blocker is identified — do not wait until end of session.
-tools: Read, Write, Grep, Glob, Bash, mcp__root_roslyn_sentinel_advanced_stdio__LoadSolution, mcp__root_roslyn_sentinel_advanced_stdio__ReadFile, mcp__root_roslyn_sentinel_advanced_stdio__GetFileOutline, mcp__root_roslyn_sentinel_advanced_stdio__GetMethodSource, mcp__root_roslyn_sentinel_advanced_stdio__Search, mcp__root_roslyn_sentinel_advanced_stdio__FindReferences, mcp__root_roslyn_sentinel_advanced_stdio__GetLargeResult
+tools: Read, Write, Grep, Glob, Bash, mcp__root_roslyn_sentinel_advanced_stdio__LoadSolution, mcp__root_roslyn_sentinel_advanced_stdio__ReadFile, mcp__root_roslyn_sentinel_advanced_stdio__GetFileOutline, mcp__root_roslyn_sentinel_advanced_stdio__GetMethodSource, mcp__root_roslyn_sentinel_advanced_stdio__Search, mcp__root_roslyn_sentinel_advanced_stdio__GetLargeResult
 model: sonnet
 ---
 

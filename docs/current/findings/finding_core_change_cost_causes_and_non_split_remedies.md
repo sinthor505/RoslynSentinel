@@ -118,7 +118,7 @@ call could express the edit.
 - No placement guardrail exists. A class-level census finds 30 files (506 KB) in `Tests.Advanced` and
   `Tests.Tools.Advanced` whose subject is a Basic engine or tool, for example `ChangeSignature*Tests`,
   `MoveMemberSuccessTests`, `MemberRemoveTests`. Relocating them whole is blocked: no file-move tool
-  exists ([proposal_move_file_tool.md](../proposals/proposal_move_file_tool.md) is not built).
+  exists ([proposal_move_file_tool.md](../proposals/closed/proposal_move_file_tool.md) is not built).
 - Duplicated helpers in the Advanced tests: 12 copies of `Src(bool crlf, params string[] lines)`, 10 of
   `WithStrayCrlf`, 143 private `SetFiles` / `SetSource` helpers. `RoslynSentinel.Tests/Support/Sources.cs`
   has no shared `Src`.

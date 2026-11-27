@@ -1,6 +1,6 @@
 # Eval client: thinking only after a tool error, and a harness-enforced reasoning budget
 
-**Status:** IMPLEMENTED 2026-11-25. Plan: [plans/closed/plan_error_gated_thinking_and_client_reasoning_budget.md](../plans/closed/plan_error_gated_thinking_and_client_reasoning_budget.md). Design changed: the budget is observed only (no enforced cut for Qwen3.5), triggers are configurable; see the plan's Decision log.
+**Status:** IMPLEMENTED 2026-11-25. Plan: [plans/closed/plan_error_gated_thinking_and_client_reasoning_budget.md](../../plans/closed/plan_error_gated_thinking_and_client_reasoning_budget.md). Design changed: the budget is observed only (no enforced cut for Qwen3.5), triggers are configurable; see the plan's Decision log.
 
 ## Motivation
 

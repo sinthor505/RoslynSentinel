@@ -707,7 +707,7 @@ Depends on: Step 9f (the moved files are in one folder; the seam files stay outs
   The payoff is task-end runs: a change outside `RoslynSentinel.Git/`, `RoslynSentinel.Tests.Git/` and the three tool-side Git files
   can skip `Tests.Git` (about 4,500 summed test-seconds) once the nightly plan's selection rule lands; until then selection is a
   directory test on `git diff --name-only`. Step 19's namespace half is carried by
-  [proposal_multi_file_movefile_and_namespace_change_tool.md](../../proposals/proposal_multi_file_movefile_and_namespace_change_tool.md).
+  [proposal_multi_file_movefile_and_namespace_change_tool.md](../../proposals/closed/proposal_multi_file_movefile_and_namespace_change_tool.md).
 - Files: this plan; `proposal_isolate_heavy_test_areas_by_project.md` Status line; `docs/current/TODO.md`/`CLOSED.md` entries
 - Depends on: Step 22. Effect: text-neutral.
 - Change: one full run at the final commit on an otherwise idle machine; compare per-project wall and summed seconds with the Step 9a baseline run

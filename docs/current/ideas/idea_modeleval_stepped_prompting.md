@@ -40,7 +40,7 @@ A first test: stepped against whole-plan on the ten-chain, 20-30 samples per arm
 
 - `docs/current/evals/eval_error_variant_replay_validation.md` (`RegenMiss` rates, late stops the replay cannot see).
 - `docs/current/plans/closed/plan_error_variant_replay.md` (seeded and regenerate replay modes).
-- `docs/current/proposals/proposal_modeleval_lean_tool_surface.md` (another surface change that also breaks ModelEval baselines; sequence the two A/Bs, do not overlap them).
+- `docs/current/proposals/closed/proposal_modeleval_lean_tool_surface.md` (another surface change that also breaks ModelEval baselines; sequence the two A/Bs, do not overlap them).
 - `docs/current/findings/finding_overnight_token_path_slips.md` (open item 5, "Fine-stepped eval variant").
 
 ## From TODO.md (2026-11-25)

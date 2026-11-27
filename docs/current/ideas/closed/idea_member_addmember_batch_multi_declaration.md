@@ -1,7 +1,6 @@
 # Idea: `Member(addMember)` support for multiple sibling declarations in one call
 
-**Status:** deferred, not designed. Raised 2026-09-18 while closing out the 4 `Member`/`ChangeSignature`
-blocker docs.
+**Status:** SUPERSEDED by [plan_member_accepts_multiple_declarations.md](../../plans/closed/plan_member_accepts_multiple_declarations.md) (IMPLEMENTED 2026-11-14, Option 1). Raised 2026-09-18 while closing out the 4 `Member`/`ChangeSignature` blocker docs.
 
 ## Context
 

@@ -44,7 +44,7 @@ What is left, verified against source on 2026-11-21:
    textual use (only a comment in `AssemblyInfo.cs`); hypothesis until a Build with the reference removed.
 
 Related: [finding_core_change_cost_causes_and_non_split_remedies.md](../findings/finding_core_change_cost_causes_and_non_split_remedies.md),
-[proposal_move_file_tool.md](../proposals/proposal_move_file_tool.md),
+[proposal_move_file_tool.md](../proposals/closed/proposal_move_file_tool.md),
 [proposal_usage_based_core_split.md](../proposals/proposal_usage_based_core_split.md) (decisions of 2026-11-10, lines 297-311),
 TODO.md "Core split test-move remainder" (BLOCKED on MoveFile slice 1).
 

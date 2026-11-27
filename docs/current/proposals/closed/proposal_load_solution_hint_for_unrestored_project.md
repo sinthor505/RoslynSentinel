@@ -107,4 +107,4 @@ Additive. No `[Obsolete]`. Slice 1 is item 1 only (LoadSolution text); items 2 a
 - [plan_tests_support_projects_factory_rollout.md](../../plans/closed/plan_tests_support_projects_factory_rollout.md) (follow-up 3; Steps 3A, 4)
 - [proposal_build_full_build_ignores_project_scope.md](proposal_build_full_build_ignores_project_scope.md) (the recovery call that was used)
 - [proposal_create_project_register_own_writes.md](../proposal_create_project_register_own_writes.md)
-- [proposal_workspace_reload_failure_visibility.md](../proposal_workspace_reload_failure_visibility.md) (related: load/reload failures not surfaced)
+- [proposal_workspace_reload_failure_visibility.md](proposal_workspace_reload_failure_visibility.md) (related: load/reload failures not surfaced)

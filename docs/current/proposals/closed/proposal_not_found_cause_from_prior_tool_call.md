@@ -216,6 +216,6 @@ marshaller / failure handler, so a later swap would have to find the sentence in
 
 - `docs/current/plans/closed/plan_edit_attribution_ledger.md` (edit attribution ledger, blob-based not-found notes)
 - `docs/current/proposals/proposal_cross_session_write_journal.md` (cross-window journal; this proposal stays in-session)
-- `docs/current/ideas/idea_store_aftersource_in_chokepoint_operation_blobs.md`
+- `docs/current/ideas/closed/idea_store_aftersource_in_chokepoint_operation_blobs.md`
 - `docs/current/proposals/proposal_semantic_edit_impact_diagnostics.md` (symbol diff, candidate for v2)
 - `docs/current/plans/plan_error_policy_pointer.md` (not-found error text, running concurrently)

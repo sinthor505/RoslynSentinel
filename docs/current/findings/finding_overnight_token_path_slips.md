@@ -280,8 +280,8 @@ Tools for the next investigation: agent.log `LM Studio reasoning:` / `LM Studio 
 ## Related slip class: escape-copy (2026-11-25)
 
 A second slip class with the same structure, found later; evidence and design are in
-`proposals/proposal_plain_text_tool_results_for_eval_model.md` and
-`plans/plan_plain_text_tool_results_for_eval_model.md`, not here.
+`proposals/closed/proposal_plain_text_tool_results_for_eval_model.md` and
+`plans/closed/plan_plain_text_tool_results_for_eval_model.md`, not here.
 
 - **What:** JSON tool results show a C# `"` as `\"`; the Qwen3.5 template takes tool-call arguments raw, so
   the model must translate on every copy and often keeps the `\"` (run 20261125-192447: six ReplaceSnippet

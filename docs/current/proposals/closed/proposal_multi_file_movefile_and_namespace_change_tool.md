@@ -1,13 +1,13 @@
 # Multi-file MoveFile and a namespace-change tool: move a connected set across a project edge, and change its namespace, in one compile-gated call
 
-**Status:** IMPLEMENTED 2026-11-25 by [plan_multi_file_movefile_and_namespace_change_tool](../plans/closed/plan_multi_file_movefile_and_namespace_change_tool.md) (Parts 1 and 2; Part 3 kept as a stub per D10). Decision overrides the Proposal text where they differ. Open follow-ups: `namespaceHandling: update` composition (TODO.md), moved-mode qualify-instead-of-using (INBOX 2026-11-25 03:45).
+**Status:** IMPLEMENTED 2026-11-25 by [plan_multi_file_movefile_and_namespace_change_tool](../../plans/closed/plan_multi_file_movefile_and_namespace_change_tool.md) (Parts 1 and 2; Part 3 kept as a stub per D10). Decision overrides the Proposal text where they differ. Open follow-ups: `namespaceHandling: update` (D6) unbuilt, tracked in TODO.md; moved-mode qualify-instead-of-using (INBOX 2026-11-25 03:45).
 
 ## Motivation
 
 The MCP tools deliberately trade raw speed for compiler safety: every write is compile-gated, no tool leaves a red
 intermediate state, and that is what lets cheap agents and concurrent sessions work without breaking each other. This
 proposal closes two gaps without giving up the gate. Both were hit while running
-[plan_isolate_git_area_into_own_project](../plans/closed/plan_isolate_git_area_into_own_project.md), in a tool nobody had used
+[plan_isolate_git_area_into_own_project](../../plans/closed/plan_isolate_git_area_into_own_project.md), in a tool nobody had used
 (`SplitProjectByFolder`, a stub until bf27d721 made it throw `NotImplemented`) and in a tool that is only days old
 (`MoveFile`, cross-project since 2026-11-22). Both are environment gaps: the tool surface had no one-call route for a
 connected cluster, so the run fell back to hand-edited project files.
@@ -20,7 +20,7 @@ one file per call. Files that reference each other have no valid order across a 
 `Libgit2GitReader.Hooks.cs` alone (one of 8 partial-class files) 178 (CS0103, CS0117, CS0433), all refused with the
 text "would break the build; nothing was moved". Counts only were recorded, not the per-error lists, so the exact
 error text is unverified here (see the
-[blocker](../blockers/closed/blocking_error_movefile_has_no_multi_file_cross_project_move.md)). A partial class cannot be
+[blocker](../../blockers/closed/blocking_error_movefile_has_no_multi_file_cross_project_move.md)). A partial class cannot be
 split across two assemblies at all, so for it no order exists.
 
 What worked instead, per the plan's Done lines: a hand-written `.csproj` for the new project that compiles the old
@@ -318,16 +318,16 @@ Settled with the owner 2026-11-25 (implement-plan, phase 2). Where this section 
 
 ## Related
 
-- Plan: [plan_isolate_git_area_into_own_project](../plans/closed/plan_isolate_git_area_into_own_project.md) (Appendix B spike
+- Plan: [plan_isolate_git_area_into_own_project](../../plans/closed/plan_isolate_git_area_into_own_project.md) (Appendix B spike
   report; Steps 13, 14, 18, 19 Done lines; Risks 5, 6, 11).
-- Blockers: [movefile has no multi-file cross-project move](../blockers/closed/blocking_error_movefile_has_no_multi_file_cross_project_move.md),
-  [SplitProjectByFolder is a stub](../blockers/closed/blocking_error_splitprojectbyfolder_is_a_stub.md).
+- Blockers: [movefile has no multi-file cross-project move](../../blockers/closed/blocking_error_movefile_has_no_multi_file_cross_project_move.md),
+  [SplitProjectByFolder is a stub](../../blockers/closed/blocking_error_splitprojectbyfolder_is_a_stub.md).
 - [proposal_move_file_tool](./proposal_move_file_tool.md): the approved MoveFile design; this proposal builds on its
   slice 2 engines and supplies the design its item 3 (`update`) lacked.
 - TODO.md: "No tool changes a namespace across files" and "MoveFile namespaceHandling `update`" should link here when
   this is accepted; "MoveType cannot move a type into an existing file" and INBOX 2026-11-24 19:45/19:50 are adjacent and
   not covered.
-- [proposal_isolate_heavy_test_areas_by_project](./proposal_isolate_heavy_test_areas_by_project.md): the program whose
+- [proposal_isolate_heavy_test_areas_by_project](../proposal_isolate_heavy_test_areas_by_project.md): the program whose
   later area splits would reuse the recipe.
 - `blockers/closed/blocking_error_movetype_cannot_relocate_namespace_type_across_projects.md`: earlier workaround-only
   closure of the same family of gap.

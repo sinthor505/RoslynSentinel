@@ -4,7 +4,7 @@
 
 Plan: [plan_modeleval_lean_tool_surface.md](../plans/closed/plan_modeleval_lean_tool_surface.md) (this is its
 Step 5; Step 6 is the default switch). Proposal:
-[proposal_modeleval_lean_tool_surface.md](../proposals/proposal_modeleval_lean_tool_surface.md).
+[proposal_modeleval_lean_tool_surface.md](../proposals/closed/proposal_modeleval_lean_tool_surface.md).
 
 Written for the project owner and later sessions deciding Step 6. The owner decides; this doc is
 decision input, not a recommendation to switch.

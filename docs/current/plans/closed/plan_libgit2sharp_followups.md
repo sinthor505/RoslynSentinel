@@ -1,11 +1,11 @@
 # Plan: LibGit2Sharp follow-ups - route trial evidence, audit, default-on, config operation, patch text
 
-**Status:** DONE 2026-11-14 except Steps 22-23 (skipped unless a caller shows cost). Steps 1-21 done (6a58ffd6..9deef607); Step 14 (live gate) run 2026-11-13 with D.1-D.5 met (table in Step 14); Step 19 flipped the route default to ON in 9deef607. Approved 2026-11-12. Follow-ups to proposal_libgit2sharp_in_process_git; decisions recorded.
+**Status:** IMPLEMENTED 2026-11-14 except Steps 22-23 (skipped unless a caller shows cost); 6a58ffd6..9deef607. Steps 1-21 done; Step 14 (live gate) run 2026-11-13 with D.1-D.5 met (table in Step 14); Step 19 flipped the route default to ON in 9deef607. Approved 2026-11-12. Follow-ups to proposal_libgit2sharp_in_process_git; decisions recorded.
 
 ## Problem
 
 The in-process commit route (`git config roslynsentinel.inProcessCommit`; this paragraph describes the state when the plan was written: default off, trial on in this repo, now default on since Step 19)
-landed on 2026-11-12 (see [the proposal](../proposals/proposal_libgit2sharp_in_process_git.md), "Current state and
+landed on 2026-11-12 (see [the proposal](../../proposals/closed/proposal_libgit2sharp_in_process_git.md), "Current state and
 next" and 5c). It is wired as a trial with no way to judge it:
 
 - **The trial log cannot answer "was any commit wrong?".** Each line of

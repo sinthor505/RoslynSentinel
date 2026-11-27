@@ -1,6 +1,6 @@
 # ReplaceRange: replace or delete a block of lines identified by its first and last line text
 
-**Status:** BUILT 2026-11-22 (ReplaceRange tool, commits 8ef5e730, 692ac902, 06c37c66, ab42b7e2; live after a server restart). The owner settled placement (claude-lean core plus the eval lean list), the shared apply helper, the result type and the eval scope in a todo review.
+**Status:** IMPLEMENTED 2026-11-22 (BUILT; ReplaceRange tool, commits 8ef5e730, 692ac902, 06c37c66, ab42b7e2; live after a server restart). The owner settled placement (claude-lean core plus the eval lean list), the shared apply helper, the result type and the eval scope in a todo review.
 
 ## Motivation
 
@@ -231,4 +231,4 @@ inverted range (last anchor above the first) and a one-line range (both anchors 
 - `ideas/idea_editlines_and_anchor_attributes.md` - the parked predecessor.
 - `findings/finding_tool_surface_usage_review.md` - records ReplaceRange and MoveFile as decided core tools
   and the 46,500-char budget.
-- `proposals/proposal_move_file_tool.md` - the other new core tool competing for the same budget.
+- `proposals/closed/proposal_move_file_tool.md` - the other new core tool competing for the same budget.

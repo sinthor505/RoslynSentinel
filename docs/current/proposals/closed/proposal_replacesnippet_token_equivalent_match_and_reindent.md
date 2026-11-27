@@ -1,6 +1,6 @@
 # ReplaceSnippet: token-equivalent matching and server-side indentation of newContent
 
-**Status:** IMPLEMENTED 2026-11-15 via [plan_replacesnippet_token_equivalent_match_and_reindent.md](../plans/closed/plan_replacesnippet_token_equivalent_match_and_reindent.md) (open questions settled there); eval: [eval_replacesnippet_token_equivalent_match_and_reindent.md](../evals/eval_replacesnippet_token_equivalent_match_and_reindent.md).
+**Status:** IMPLEMENTED 2026-11-15 via [plan_replacesnippet_token_equivalent_match_and_reindent.md](../../plans/closed/plan_replacesnippet_token_equivalent_match_and_reindent.md) (open questions settled there); eval: [eval_replacesnippet_token_equivalent_match_and_reindent.md](../../evals/eval_replacesnippet_token_equivalent_match_and_reindent.md).
 
 ## Motivation
 

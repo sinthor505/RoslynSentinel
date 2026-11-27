@@ -7,7 +7,7 @@
 Punchlist #21 (TODO.md line "Edit-tool 3-arm comparison for weak models (2026-11-21)", written up
 there as the setup, session `todo-punchlist-G`; its purpose strings still say "#12"). It extends the
 2026-11-09 two-arm A/B ([eval_edit_snippets_ab_2026_11_09.md](./eval_edit_snippets_ab_2026_11_09.md))
-with a third edit tool, `ReplaceRange` ([proposal_replace_range_tool.md](../proposals/proposal_replace_range_tool.md)),
+with a third edit tool, `ReplaceRange` ([proposal_replace_range_tool.md](../proposals/closed/proposal_replace_range_tool.md)),
 and a new large-block fixture. The question: which single edit tool lets a weak model finish
 multi-step refactors, and does a range-addressed edit avoid re-sending a large block?
 

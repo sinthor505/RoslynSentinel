@@ -327,7 +327,7 @@ references, and can be split out later. The owner raised a separate repo; this i
 - **Claude-mode gating:** kept. Why: `McpToolsetControl` is heavily used (114 calls) and the tab-scoped persistence plan is in flight; revisit when the core reaches its post-move size.
 - **Tier-2 layout:** a second solution in this repo, excluded from default searches and builds.
 - **The 37 / 7 / 77 split:** not accepted yet; the owner amends the lists here first. Then step 1 (delete the 7 duplicates; update guidance and the not-found text that offers ListAll, `SymbolNotFoundDetail.RenderNoCandidates`, with its golden tests) becomes READY. Acceptance for step 1: the 7 are gone from `docs/generated/architecture_tools.md` and the Tests.Server by-name tables pass.
-- Note since the review: the claude-lean schema budget was raised to 46,500 chars (d2dcdc33), and ReplaceRange (proposals/proposal_replace_range_tool.md) and MoveFile (proposals/proposal_move_file_tool.md) are decided as new core tools.
+- Note since the review: the claude-lean schema budget was raised to 46,500 chars (d2dcdc33), and ReplaceRange (proposals/closed/proposal_replace_range_tool.md) and MoveFile (proposals/closed/proposal_move_file_tool.md) are decided as new core tools.
 
 ## Decisions (todo review 2026-11-22)
 

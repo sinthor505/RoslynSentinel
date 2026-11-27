@@ -1,6 +1,6 @@
 # One options DTO for tool parameter hiding and aliasing, fed by code, env/flag, toolset files and harnesses
 
-**Status:** IMPLEMENTED 2026-11-24 through [plan_tool_surface_controller_stage_d.md](../plans/closed/plan_tool_surface_controller_stage_d.md) (rule model, per-host surface, Tool.param scoping); aliases and status provenance fields deferred (INBOX). Was PROPOSED 2026-11-23. Owner accepted the recommendations; plan drafted in [plan_tool_parameter_surface_options.md](../plans/closed/plan_tool_parameter_surface_options.md), which supersedes the open questions below where they differ. Folded into [proposal_tool_surface_controller.md](proposal_tool_surface_controller.md) the same day: the rule model below stands, the standalone DI wiring does not.
+**Status:** IMPLEMENTED 2026-11-24 through [plan_tool_surface_controller_stage_d.md](../../plans/closed/plan_tool_surface_controller_stage_d.md) (rule model, per-host surface, Tool.param scoping); parameter/value aliases deferred to toolset stage G; status provenance fields deferred (INBOX). Was PROPOSED 2026-11-23. Owner accepted the recommendations; plan drafted in [plan_tool_parameter_surface_options.md](../../plans/closed/plan_tool_parameter_surface_options.md), which supersedes the open questions below where they differ. Folded into [proposal_tool_surface_controller.md](../proposal_tool_surface_controller.md) the same day: the rule model below stands, the standalone DI wiring does not.
 
 ## Motivation
 
@@ -33,7 +33,7 @@ Concrete costs of that shape:
 4. **No validation.** `ParseHiddenParameters` "keeps unknown names" (`SchemaOptions.cs:31`); a misspelt or
    renamed parameter silently hides nothing.
 5. **No file source.** The JSON toolset definitions
-   ([proposal_json_toolset_definitions.md](proposal_json_toolset_definitions.md), plan in DRAFT) will
+   ([proposal_json_toolset_definitions.md](../proposal_json_toolset_definitions.md), plan in DRAFT) will
    describe surfaces such as eval worlds, which is exactly where per-surface hiding belongs, but would
    have to add a fourth ad hoc source.
 
@@ -185,11 +185,11 @@ toolset format needs no nested per-parameter objects.
 
 ## Related
 
-- [proposal_json_toolset_definitions.md](proposal_json_toolset_definitions.md) and
-  [plan_json_toolset_definitions.md](../plans/plan_json_toolset_definitions.md) - consumer of `hideParams`.
-- [plan_modeleval_workflow_contract_phase1.md](../plans/closed/plan_modeleval_workflow_contract_phase1.md) - added
+- [proposal_json_toolset_definitions.md](../proposal_json_toolset_definitions.md) and
+  [plan_json_toolset_definitions.md](../../plans/plan_json_toolset_definitions.md) - consumer of `hideParams`.
+- [plan_modeleval_workflow_contract_phase1.md](../../plans/closed/plan_modeleval_workflow_contract_phase1.md) - added
   the eval-world hiding of `validateOnApply` (Steps 12-14, 20).
-- [proposal_reduce_tool_schema_token_cost.md](closed/proposal_reduce_tool_schema_token_cost.md) - origin of
+- [proposal_reduce_tool_schema_token_cost.md](proposal_reduce_tool_schema_token_cost.md) - origin of
   `SchemaOptions` and the Lean profile.
-- [plan_unknown_parameter_rejection_reduction.md](../plans/plan_unknown_parameter_rejection_reduction.md) -
+- [plan_unknown_parameter_rejection_reduction.md](../../plans/plan_unknown_parameter_rejection_reduction.md) -
   origin of the alias tables (not re-read for this proposal).

@@ -4,7 +4,7 @@
 
 ## Problem
 
-Source: [proposal_error_gated_thinking_and_client_reasoning_budget.md](../../proposals/proposal_error_gated_thinking_and_client_reasoning_budget.md).
+Source: [proposal_error_gated_thinking_and_client_reasoning_budget.md](../../proposals/closed/proposal_error_gated_thinking_and_client_reasoning_budget.md).
 
 Qwen3.5 is the primary eval model family. Today the eval client never asks for reasoning, so Qwen
 never thinks; Ornith thinks on every turn and costs ~33 s per turn plus context overruns. The

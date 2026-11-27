@@ -4,7 +4,7 @@
 
 ## Context
 
-Plan: [plan_replacesnippet_token_equivalent_match_and_reindent.md](../plans/closed/plan_replacesnippet_token_equivalent_match_and_reindent.md). Proposal: [proposal_replacesnippet_token_equivalent_match_and_reindent.md](../proposals/proposal_replacesnippet_token_equivalent_match_and_reindent.md) (baseline numbers from the 2026-11-14 runs).
+Plan: [plan_replacesnippet_token_equivalent_match_and_reindent.md](../plans/closed/plan_replacesnippet_token_equivalent_match_and_reindent.md). Proposal: [proposal_replacesnippet_token_equivalent_match_and_reindent.md](../proposals/closed/proposal_replacesnippet_token_equivalent_match_and_reindent.md) (baseline numbers from the 2026-11-14 runs).
 
 66 runs queued 2026-11-15 through `scripts/roslynsentinel-evalqueue.ps1` by session roslynsentinel-a6ec083a, `-OnTreeChange RunAnyway`: host 113 (qwen3.5-9b-mtp) and host 112 (qwen3.5-4b-mtp), ShippingKindStep V7-V11 and V13 with `-Step 5` (5 runs each per host) and OrderPricingRefactorChain10 (3 per host). Job ids: `c:\tmp\rs_eval_ids.txt`; results under `ModelTestingResults/112/` and `ModelTestingResults/113/` (run folders 20261115-07xx to 20261115-08xx). A first queue (07:31) was refused `TreeChanged` after a comment-only commit and is not counted.
 

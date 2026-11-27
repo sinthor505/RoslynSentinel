@@ -1,6 +1,6 @@
 # Adopt LibGit2Sharp in-process for read-mostly git operations
 
-**Status:** APPROVED (partly) 2026-11-10. The owner approved runner consolidation (step 0), the spike (step 1) and stage 1 (step 2) on 2026-11-10; all three landed the same day (see Results). Stage 2 (step 3) and restricting native binaries to win-x64 were approved later on 2026-11-10; stage 3 landed scoped to whole-file stage/unstage. Stage 4 (step 5, commit) was approved on 2026-11-11 and landed 2026-11-12: 5a, 5b and 5c done; the in-process commit route was default off with a trial in this repo and became default ON on 2026-11-14 (plan_libgit2sharp_followups.md, Step 19; `git config roslynsentinel.inProcessCommit false` turns it off per repository).
+**Status:** IMPLEMENTED; libgit2 commit route default on since 9deef607; follow-ups in [plan_libgit2sharp_followups.md](../../plans/closed/plan_libgit2sharp_followups.md). Approved (partly) 2026-11-10: runner consolidation (step 0), the spike (step 1) and stage 1 (step 2) landed 2026-11-10 (see Results); stage 2 (step 3) and restricting native binaries to win-x64 were approved later that day; stage 3 landed scoped to whole-file stage/unstage. Stage 4 (step 5, commit) was approved 2026-11-11 and landed 2026-11-12 (5a, 5b, 5c done); the in-process commit route was default off with a trial in this repo and became default ON on 2026-11-14 (plan_libgit2sharp_followups.md, Step 19; `git config roslynsentinel.inProcessCommit false` turns it off per repository).
 
 ## Current state and next (2026-11-12)
 
@@ -19,7 +19,7 @@
 - **Trial snapshot (2026-11-12 08:31-11:35 local, 13 server processes):** 66 log lines, 65 taken,
   1 declined (the CR-byte rule, before `d8b112e6`). Only this repo's setup (`core.autocrlf=true`,
   main worktree) is exercised and no decline rule has fired in real use, so too early for default-on.
-- **Next (approved 2026-11-12, sequenced in `plans/plan_libgit2sharp_followups.md`):** trial
+- **Next (approved 2026-11-12, sequenced in `plans/closed/plan_libgit2sharp_followups.md`):** trial
   instrumentation, an audit script, a second-setup run and written default-on criteria; a `Git`
   config operation; diff/show patch text behind a parity corpus; in-process worktree and tag lists.
 
@@ -104,7 +104,7 @@ config.
 - A single `Git(status)` tool call costs two process spawns; `ServerBinaryStaleness` costs three
   (`rev-parse HEAD`, `log --name-only`, `status --porcelain`; `ServerBinaryStaleness.cs:88`, `:241`, `:271`).
   These figures are call counts read from source, not timings; the spike (step 1) measures them.
-- `docs/current/issues/issue_process_spawn_test_flake.md` records stdout/stderr EOF arriving after
+- `docs/current/issues/closed/issue_process_spawn_test_flake.md` records stdout/stderr EOF arriving after
   process exit, hitting `ServerBinaryStalenessGitTests` and `DocTrailer*` tests. The failure class
   (pipe EOF, timeout, kill-tree, PATH resolution, encoding, CRLF re-join) disappears for any
   operation that never spawns.
@@ -306,7 +306,7 @@ different, which makes HEAD plus those entries what `git commit --only` stores. 
 
 ## Open questions
 
-All resolved (2026-11-12); open follow-ups live in `plans/plan_libgit2sharp_followups.md`.
+All resolved (2026-11-12); open follow-ups live in `plans/closed/plan_libgit2sharp_followups.md`.
 
 - May `Git(commit)` ever skip hooks? No: the 5c route declines on any blocking hook and runs
   `post-*` hooks itself for the commits it makes (see "Hook policy").
@@ -351,6 +351,6 @@ All resolved (2026-11-12); open follow-ups live in `plans/plan_libgit2sharp_foll
 
 ## Related
 
-- `docs/current/issues/issue_process_spawn_test_flake.md` - the spawn flake this reduces (stage 1
+- `docs/current/issues/closed/issue_process_spawn_test_flake.md` - the spawn flake this reduces (stage 1
   removes the spawn from the affected `ServerBinaryStaleness` and `DocTrailer` paths).
 - `RoslynSentinel.Common/GitWorktree/GitWorktreeManager.cs:233` - existing `TODO` closed by step 0.

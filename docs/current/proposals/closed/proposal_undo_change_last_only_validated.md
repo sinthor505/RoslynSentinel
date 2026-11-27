@@ -208,7 +208,7 @@ older id will start failing by design; that is expected, not a regression.
 
 - `proposals/proposal_staged_writes.md` - staged undo not designed.
 - `proposals/proposal_cross_session_write_journal.md` - the cross-session record that last-only overlaps.
-- `ideas/idea_store_aftersource_in_chokepoint_operation_blobs.md` - built (it is why `AfterSource` exists for
+- `ideas/closed/idea_store_aftersource_in_chokepoint_operation_blobs.md` - built (it is why `AfterSource` exists for
   the drift guard); the idea doc still sits in `ideas/` rather than `ideas/closed/`.
 - `blockers/closed/blocking_error_undolastapply_refused_eol_after_apply_normalized_mixed_file.md` - why
   `exactRestore` exists.

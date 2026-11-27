@@ -26,7 +26,7 @@ Parameter hiding is the last piece of tool-surface state that the snapshot repor
   tool name"). Proposal properties 1 (one source of truth) and 6 (provenance) do not hold for parameters.
 - **The paused plan's code never landed.** `Search(mode: text, query: "ParameterSurface|ParameterVisibilityRule|ToolParameterSurfaceOptions|ParameterRuleSource", includeTests: true)`
   returns 0 matches and no `*ParameterSurface*` file exists (2026-11-24). Its Steps 1-3 ("may run") were not run, so this
-  plan starts from the rule model in [proposal_tool_parameter_surface_options.md](../../proposals/proposal_tool_parameter_surface_options.md),
+  plan starts from the rule model in [proposal_tool_parameter_surface_options.md](../../proposals/closed/proposal_tool_parameter_surface_options.md),
   not from existing code.
 - **Phase B moved the hook the paused plan relied on.** Paused Step 5 resolved the surface from `services` at the patcher's
   call site. Since phase B the call goes through `IToolSchemaPatch.Apply(McpServerTool tool, MethodInfo toolMethod)`

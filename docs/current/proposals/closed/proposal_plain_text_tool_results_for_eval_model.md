@@ -1,6 +1,6 @@
 # Render tool results as plain text for the eval model, so quoted source is not JSON-escaped
 
-**Status:** APPROVED 2026-11-26. Plan: plans/plan_plain_text_tool_results_for_eval_model.md
+**Status:** IMPLEMENTED 2026-11-26. Steps 1-7 done; e3995b05 (default plain), 1bb42f0c (A/B), 5879bdc7 (arm table). Plan: [plan_plain_text_tool_results_for_eval_model.md](../../plans/closed/plan_plain_text_tool_results_for_eval_model.md)
 
 ## Motivation
 

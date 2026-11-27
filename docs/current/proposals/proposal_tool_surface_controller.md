@@ -201,7 +201,7 @@ problem by elimination.
 
 ## Related
 
-- [proposal_tool_parameter_surface_options.md](proposal_tool_parameter_surface_options.md) and
+- [proposal_tool_parameter_surface_options.md](closed/proposal_tool_parameter_surface_options.md) and
   [plan_tool_parameter_surface_options.md](../plans/closed/plan_tool_parameter_surface_options.md) - parameter rules;
   the plan is paused after Step 3 pending this proposal.
 - [plan_stateless_http_toolset_enablement.md](../plans/plan_stateless_http_toolset_enablement.md) - shared

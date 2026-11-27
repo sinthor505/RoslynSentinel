@@ -10,7 +10,7 @@ the ~23k-token turn-2 prompt measured in `eval_error_variant_replay_validation.m
 never called in 1,702 samples (2026-11-10 to 11-13), and near-duplicate tools split the first call after a
 file miss between `ListAll`, `ListSolutionItems` and `Search`. Full evidence, the tool-by-tool table and the
 alternatives that lost are in
-[proposal_modeleval_lean_tool_surface.md](../../proposals/proposal_modeleval_lean_tool_surface.md); this plan
+[proposal_modeleval_lean_tool_surface.md](../../proposals/closed/proposal_modeleval_lean_tool_surface.md); this plan
 sequences that proposal and does not restate it.
 
 **Anchor status.** `file:line` anchors were checked by a reviewer against HEAD e5b0661c (2026-11-13). The

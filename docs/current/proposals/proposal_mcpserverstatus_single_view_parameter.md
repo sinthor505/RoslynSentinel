@@ -97,4 +97,4 @@ reaches the server: `McpServerStatus(settings: all)` worked from a session whose
 - `docs/current/plans/closed/plan_startup_configuration_registry.md` (added `settings`, decisions Q6, Q21, Q24)
 - `docs/current/references/reference_tool_response_pipeline.md` (large-result cap and offload)
 - `docs/current/references/reference_changing_claude_lean_tools.md`
-- `proposal_tool_parameter_surface_options.md` (hidden parameter groups, `--hide-params`)
+- `closed/proposal_tool_parameter_surface_options.md` (hidden parameter groups, `--hide-params`)

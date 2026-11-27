@@ -10,7 +10,7 @@
 
 ## Problem
 
-See [proposal_tool_parameter_surface_options.md](../../proposals/proposal_tool_parameter_surface_options.md).
+See [proposal_tool_parameter_surface_options.md](../../proposals/closed/proposal_tool_parameter_surface_options.md).
 In short: hiding has three ad hoc sources (Lean constant, `--hide-params`, harness
 `SchemaOptions.ConfigureHiddenParameters`), merged into a flat name list
 (`SchemaOptions.EffectiveHiddenParameters`, `RoslynSentinel.Common/SchemaOptions.cs:62`) that hides a name

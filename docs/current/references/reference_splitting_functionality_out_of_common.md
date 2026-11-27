@@ -154,7 +154,7 @@ About 1 h planning plus an independent review and revision (planning time is not
 
 - [reference_split_folder_into_new_project_with_movefile.md](./reference_split_folder_into_new_project_with_movefile.md) - per-call recipe and facts table.
 - [proposal_isolate_heavy_test_areas_by_project.md](../proposals/proposal_isolate_heavy_test_areas_by_project.md) - the Principle (own production project, own test project, thin tool wrappers); Areas 2 and 3 are the next candidates.
-- [proposal_multi_file_movefile_and_namespace_change_tool.md](../proposals/proposal_multi_file_movefile_and_namespace_change_tool.md) - why the set form exists; alternatives rejected.
+- [proposal_multi_file_movefile_and_namespace_change_tool.md](../proposals/closed/proposal_multi_file_movefile_and_namespace_change_tool.md) - why the set form exists; alternatives rejected.
 - Closed blockers: `blockers/closed/blocking_error_movefile_has_no_multi_file_cross_project_move.md`, `blockers/closed/blocking_error_splitprojectbyfolder_is_a_stub.md`.
 - [reference_architecture_map.md](./reference_architecture_map.md), [reference_working_conventions.md](./reference_working_conventions.md).
 - Skills: `plan-design`, `plan-writer`, `dto-conventions` (new or moved DTOs need `NEW-DTO:` / `DTO-EXEMPT:` blocks).

@@ -1,6 +1,6 @@
 # MoveFile tool: move or rename a text file as one semantic operation
 
-**Status:** APPROVED 2026-11-21; slice 1 (keep) BUILT 2026-11-22 (9ea24727, 9d0f8fe8, 8fd85ebe, 35e24cfa, d614bfc4; used for 24 file moves in #13), slice 2 (copyAndObsolete with best-effort caller migration) BUILT 2026-11-22 (3c7ea6a1, 98e77c6e, 57e42f47, 8b3e2388, e642f5c3; engines in Engines.Basic CopyAndObsolete*.cs, tool branch in Tools.Basic MoveFileCopyAndObsolete.cs). Slices decided in the todo review (see Decisions 2026-11-21); `update` is still open. Earlier: OPEN 2026-11-10 stub.
+**Status:** IMPLEMENTED (slices 1-2); call shape became `moves:[...]` and `namespaceHandling: update` moved to [proposal_multi_file_movefile_and_namespace_change_tool.md](proposal_multi_file_movefile_and_namespace_change_tool.md) D6. Approved 2026-11-21; slice 1 (keep) BUILT 2026-11-22 (9ea24727, 9d0f8fe8, 8fd85ebe, 35e24cfa, d614bfc4; used for 24 file moves in #13), slice 2 (copyAndObsolete with best-effort caller migration) BUILT 2026-11-22 (3c7ea6a1, 98e77c6e, 57e42f47, 8b3e2388, e642f5c3; engines in Engines.Basic CopyAndObsolete*.cs, tool branch in Tools.Basic MoveFileCopyAndObsolete.cs). Slices decided in the todo review (see Decisions 2026-11-21). Earlier: OPEN 2026-11-10 stub.
 
 ## Motivation
 No MCP tool moves or renames a file, so an agent that needs to has to leave the tool surface. The

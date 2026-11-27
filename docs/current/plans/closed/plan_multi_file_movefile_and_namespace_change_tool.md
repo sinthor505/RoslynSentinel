@@ -1,6 +1,6 @@
 # Plan: multi-file MoveFile (a `moves` list, one compile gate, optional csproj edges) and a `ChangeNamespace` tool
 
-**Status:** IMPLEMENTED 2026-11-25. 9c8c5663..eacd90c8 (Steps 1-28, 30-37; Step 29 skipped, probe green); full suite green at eacd90c8. Implements [proposal_multi_file_movefile_and_namespace_change_tool.md](../../proposals/proposal_multi_file_movefile_and_namespace_change_tool.md) (IMPLEMENTED 2026-11-25). Revised 2026-11-25 with the owner's decisions D12-D16 and an independent review (P5-P16). Commit trailer for every slice: `Plan: plan_multi_file_movefile_and_namespace_change_tool` (the last slice adds `Closes:`).
+**Status:** IMPLEMENTED 2026-11-25. 9c8c5663..eacd90c8 (Steps 1-28, 30-37; Step 29 skipped, probe green); full suite green at eacd90c8. Implements [proposal_multi_file_movefile_and_namespace_change_tool.md](../../proposals/closed/proposal_multi_file_movefile_and_namespace_change_tool.md) (IMPLEMENTED 2026-11-25). Revised 2026-11-25 with the owner's decisions D12-D16 and an independent review (P5-P16). Commit trailer for every slice: `Plan: plan_multi_file_movefile_and_namespace_change_tool` (the last slice adds `Closes:`).
 
 ## Problem
 
@@ -731,7 +731,7 @@ The slice map (two agents at most, disjoint files per round) is at the end of th
 - Done: no drift (filtered run with ratchets on f8846852, 93/93); R9 delta recorded (eacd90c8: `MoveFile` catalog entry 1053 -> 2113 chars); sweep clean; annotations in the two docs. T27.12b tightened to `ValidationFailed` (f8846852).
 - Files: `RoslynSentinel.Tests.Harness/ToolSurfaceGolden/*.txt` and `_catalog.json`; `RoslynSentinel.Tests.ModelEval/ToolSurfaceGolden/eval-Harness_default__toolset_full.txt` and `_catalog.json`; `docs/generated/architecture_tools.md` (about `:105`) and
   `docs/generated/todo_markers.md` (regenerate with `scripts/Generate-ArchitectureMap.ps1` and `scripts/Get-TodoMarkers.ps1`, never by hand); annotations (not rewrites) in `docs/current/plans/plan_test_placement_guardrail_and_shared_test_helpers.md` (about `:336`, the old
-  `MoveFile(sourcePath, destinationPath, namespaceHandling: keep)` call shape) and `docs/current/proposals/proposal_move_file_tool.md` (its one `sourcePath`/`destinationPath` mention).
+  `MoveFile(sourcePath, destinationPath, namespaceHandling: keep)` call shape) and `docs/current/proposals/closed/proposal_move_file_tool.md` (its one `sourcePath`/`destinationPath` mention).
 - Depends on: Steps 13, 26, 32
 - Effect: text-neutral (regenerated artifacts; one-line annotations)
 - Change: (a) confirm the P11 regenerations after Steps 13, 26 and 32 left no drift: `ToolSurfaceParityTests`, `EvalToolSurfaceParityTests`, `ArchitectureDocFreshnessTests`, `ClaudeLeanSchemaBudgetTests` (D15); (b) record the schema-size delta: the `MoveFile` entry in
