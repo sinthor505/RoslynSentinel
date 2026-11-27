@@ -35,6 +35,7 @@ internal enum ImplementationScenarioOutcome
 /// names as written in the step's Done-when sentence (read by the catalog; null = exempt from rule 9);
 /// <paramref name="PromptVariants"/> are alternative prompts by name, picked for a live run by the prompt-variant setting
 /// (<see cref="TestHarnessSettings.ModelEvalPromptVariantSetting"/>); the seed, checks and golden stay those of the step (null = none).
+/// <paramref name="Sites"/> is the per-site slip family graded by SiteGrader (null = none).
 /// </summary>
 internal sealed record ImplementationScenarioStep(
     string Prompt,
@@ -48,7 +49,8 @@ internal sealed record ImplementationScenarioStep(
     IReadOnlyList<ScenarioVariant>? Variants = null,
     Func<ImplementationScenarioCheckContext, string?>? VariantProbe = null,
     IReadOnlyList<string>? DoneWhenTests = null,
-    IReadOnlyDictionary<string, string>? PromptVariants = null)
+    IReadOnlyDictionary<string, string>? PromptVariants = null,
+    SlipSiteSet? Sites = null)
 {
     /// <summary>
     /// The prompt for a live run: <see cref="Prompt"/> when <paramref name="variantName"/> is null or blank, otherwise the named entry

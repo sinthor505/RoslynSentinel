@@ -20,7 +20,7 @@ internal enum EvalOutcomeClass
 }
 
 /// <summary>A graded run: the existing outcome, its class, a free-text variant name and the detail line.</summary>
-internal sealed record ScenarioVerdict(ImplementationScenarioOutcome Outcome, EvalOutcomeClass Class, string Variant, string Detail);
+internal sealed record ScenarioVerdict(ImplementationScenarioOutcome Outcome, EvalOutcomeClass Class, string Variant, string Detail, IReadOnlyList<SiteGrade>? Sites = null);
 
 /// <summary>Maps the expected ending, the final-message token, the grade and the tree state to an <see cref="EvalOutcomeClass"/>.</summary>
 internal static class ScenarioClassifier
