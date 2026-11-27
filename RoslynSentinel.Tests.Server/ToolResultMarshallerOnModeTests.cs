@@ -334,7 +334,7 @@ public class ToolResultMarshallerOnModeTests
         Assert.That(envelope.First().Key, Is.EqualTo("largeResult"));
         if (checkLength)
         {
-            Assert.That(text.Length, Is.LessThanOrEqualTo(LargeResultHelper.BudgetChars(InlineBudgetClass.Default)));
+            Assert.That(text.Length, Is.LessThanOrEqualTo(LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default)));
         }
 
         return (envelope, envelope["largeResult"]!.AsObject(), text);
