@@ -23,7 +23,7 @@ public class ErrorPolicyKindRatchetTests
     private const string FactoryType = "MemberRefactoringNotFound";
     private const string FactoryFile = "RoslynSentinel.Engines.Basic/MemberRefactoringNotFound.cs";
 
-    private static readonly string[] ScannedProjects = { "RoslynSentinel.Common", "RoslynSentinel.Git", "RoslynSentinel.Engines.Basic", "RoslynSentinel.Engines.Advanced", "RoslynSentinel.Tools.Basic" };
+    private static readonly string[] ScannedProjects = { "RoslynSentinel.Common", "RoslynSentinel.Git", "RoslynSentinel.Engines.Basic", "RoslynSentinel.Engines.Advanced", "RoslynSentinel.Engines.Core", "RoslynSentinel.Tools.Basic" };
 
     // Statement-like and structural targets with no policy key. Compared case-insensitively.
     private static readonly IReadOnlySet<string> DeliberatelyUnmappedKinds = MissingTargetKinds.UnmappedKinds;

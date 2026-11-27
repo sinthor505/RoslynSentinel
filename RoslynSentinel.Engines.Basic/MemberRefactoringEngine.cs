@@ -3478,6 +3478,7 @@ public class MemberRefactoringEngine
             throw MemberRefactoringNotFound.Unavailable("syntax root", filePath.ToString());
         }
 
+        // TODO a record is refused as the source type (INBOX 2026-11-27)
         var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className);
         if (classNode == null)
         {

@@ -64,6 +64,7 @@ public static class MoveSetEdgeAnalyzer
     /// (the GRANTING project, whose project file would carry the item) to ToProject (the RECEIVING project). Idempotent; an
     /// unknown project name, an existing reference or a reference that would close a cycle is skipped, never thrown.
     /// </summary>
+    // TODO the gate adds only direct edges; projects that reach the destination through another project still fail (INBOX 2026-11-27)
     public static Solution AugmentBaseline(Solution committed, IReadOnlyList<NeededProjectEdge> edges, bool addReferences, bool addInternalsVisibleTo)
     {
         var solution = committed;
