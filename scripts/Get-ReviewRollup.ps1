@@ -231,8 +231,47 @@ function ConvertTo-RollupMarkdown {
     return ([string]::Join("`r`n", $lines) + "`r`n")
 }
 
+# The text of one keyFields value for comparison and display: an absent or null value reads as '<absent>'.
+function Get-RollupKeyText($KeyFields, [string]$Name) {
+    $value = Get-EvalProperty $KeyFields $Name
+    if ($null -eq $value) { return '<absent>' }
+    return [string]$value
+}
+
+# The keyFields names (in KeyNames order) whose text differs across one scenario's arms, as { field, values },
+# where values is an ordered armKey -> text. Arms is an array of { ArmKey, KeyFields }.
+function Get-RollupKeyDifferences {
+    param($Arms, [string[]]$KeyNames)
+    $out = @()
+    foreach ($name in $KeyNames) {
+        $values = [ordered]@{}
+        foreach ($arm in @($Arms)) { $values[$arm.ArmKey] = Get-RollupKeyText $arm.KeyFields $name }
+        $distinct = @($values.Values | Sort-Object -Unique -CaseSensitive)
+        if ($distinct.Count -gt 1) { $out += [ordered]@{ field = $name; values = $values } }
+    }
+    return @($out)
+}
+
+# Reads one review file for Compare-EvalReviewPair. Returns the parsed object, or $null when the file is missing,
+# malformed or not a JSON object.
+function Read-PairReview {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+    try { $review = ConvertFrom-Json -InputObject (Get-Content -Raw -LiteralPath $Path) -Depth 100 -DateKind String -ErrorAction Stop }
+    catch { return $null }
+    if ($review -isnot [pscustomobject]) { return $null }
+    return $review
+}
+
+# One dimension score from a parsed review, or $null when the dimension or its score is absent.
+function Get-PairScore($Review, [string]$Name) {
+    $dim = @(Get-EvalProperty $Review 'dimensions') | Where-Object { [string](Get-EvalProperty $_ 'name') -eq $Name } | Select-Object -First 1
+    return (Get-EvalProperty $dim 'score')
+}
+
 # Reads selection.json and each selected run, validates the reviews, writes review.md per valid review and
-# rollup.json and rollup.md in ReviewDir. Returns { ExitCode (always 0), Rollup, RollupPath }.
+# rollup.json and rollup.md in ReviewDir. Returns { ExitCode (1 for VaryRequired, or for an unforced
+# MixedComparabilityKey; else 0), Rollup, RollupPath }. Throws when a -Vary name is not a vocabulary keyField.
 function Get-ReviewRollup {
     param(
         [Parameter(Mandatory)][string]$ReviewDir,
@@ -246,9 +285,15 @@ function Get-ReviewRollup {
     $attrNames = @($vocab.attributions | ForEach-Object { [string]$_ })
     $schemaPath = Join-Path $PSScriptRoot 'eval-review\review.schema.json'
     $varyList = ConvertTo-RollupList $Vary
+    $keyNames = @($vocab.keyFields | ForEach-Object { [string]$_.name })
+    $unknownVary = @($varyList | Where-Object { $keyNames -notcontains $_ })
+    if ($unknownVary.Count -gt 0) {
+        throw "Unknown -Vary field: $($unknownVary -join ', '). Valid names are: $($keyNames -join ', ')."
+    }
     $selection = Read-RollupJson (Join-Path $folder 'selection.json')
 
     $codes = @()
+    $exitCode = 0
     $invalid = @()
     $armOut = @()
     $armKeys = @()
@@ -289,6 +334,7 @@ function Get-ReviewRollup {
                 RunPath          = $runPath
                 Scenario         = [string](Get-EvalProperty $header 'scenario')
                 ComparabilityKey = [string](Get-EvalProperty $header 'comparabilityKey')
+                KeyFields        = (Get-EvalProperty $header 'keyFields')
                 Review           = $review
             }
         }
@@ -335,11 +381,19 @@ function Get-ReviewRollup {
         }
     }
 
+    $armCount = @($allEntries | ForEach-Object { $_.ArmKey } | Select-Object -Unique).Count
+    if ($armCount -gt 1 -and @($varyList).Count -eq 0) {
+        $codes += [ordered]@{ code = 'VaryRequired'; field = $null; detail = $null }
+        $exitCode = 1
+    }
+
+    $mixedNames = @($keyNames | Where-Object { $varyList -notcontains $_ })
     $scenarioOut = @()
     $scenarioNames = @($allEntries | ForEach-Object { $_.Scenario } | Select-Object -Unique)
     foreach ($scenario in $scenarioNames) {
         $inScenario = @($allEntries | Where-Object { $_.Scenario -eq $scenario })
         $perArm = @()
+        $armKeyFields = @()
         foreach ($armKey in $armKeys) {
             $group = @($inScenario | Where-Object { $_.ArmKey -eq $armKey })
             if ($group.Count -eq 0) { continue }
@@ -349,8 +403,17 @@ function Get-ReviewRollup {
                 runs             = $group.Count
                 dimensions       = @(Get-RollupDimensions -Reviews @($group | ForEach-Object { $_.Review }) -DimNames $dimNames)
             }
+            $armKeyFields += [pscustomobject]@{ ArmKey = $armKey; KeyFields = $group[0].KeyFields }
         }
-        $scenarioOut += [ordered]@{ scenario = $scenario; perArm = $perArm; armDifferences = @() }
+        $differences = @(Get-RollupKeyDifferences -Arms $armKeyFields -KeyNames $keyNames)
+        foreach ($diff in $differences) {
+            if ($mixedNames -notcontains $diff['field']) { continue }
+            $valueMap = $diff['values']
+            $pairs = @($valueMap.Keys | ForEach-Object { "$_=$($valueMap[$_])" })
+            $codes += [ordered]@{ code = 'MixedComparabilityKey'; field = $diff['field']; detail = "scenario $($scenario): " + ($pairs -join ', ') }
+            if (-not $Force) { $exitCode = 1 }
+        }
+        $scenarioOut += [ordered]@{ scenario = $scenario; perArm = $perArm; armDifferences = $differences }
     }
 
     $rollup = [ordered]@{
@@ -370,7 +433,60 @@ function Get-ReviewRollup {
     $rollupPath = Join-Path $folder 'rollup.json'
     Write-RollupText $rollupPath (ConvertTo-Json -InputObject $rollup -Depth 100)
     Write-RollupText (Join-Path $folder 'rollup.md') (ConvertTo-RollupMarkdown -Rollup $rollup)
-    return [pscustomobject]@{ ExitCode = 0; Rollup = $rollup; RollupPath = $rollupPath }
+    return [pscustomobject]@{ ExitCode = $exitCode; Rollup = $rollup; RollupPath = $rollupPath }
+}
+
+# Pass agreement (Q6/Q13): for every selected run in a review folder, compares the review file named LeftName with
+# the one named RightName (both in the run folder). A pair counts when both scores are non-null. Writes
+# calibration.json in ReviewDir. Returns { ExitCode (always 0), Calibration, CalibrationPath }.
+function Compare-EvalReviewPair {
+    param(
+        [Parameter(Mandatory)][string]$ReviewDir,
+        [Parameter(Mandatory)][string]$LeftName,
+        [Parameter(Mandatory)][string]$RightName
+    )
+    $folder = [System.IO.Path]::GetFullPath($ReviewDir)
+    $vocab = Read-EvalVocabulary
+    $dimNames = @($vocab.dimensions | ForEach-Object { [string]$_.name })
+    $selection = Read-RollupJson (Join-Path $folder 'selection.json')
+
+    $runs = 0
+    $scoredPairs = 0
+    $exactMatches = 0
+    $splits = @()
+    foreach ($arm in @(Get-EvalProperty $selection 'arms')) {
+        foreach ($sel in @(Get-EvalProperty $arm 'selected')) {
+            $runPath = [string](Get-EvalProperty $sel 'runPath')
+            $runFolder = Split-Path -Parent ([System.IO.Path]::GetFullPath([string](Get-EvalProperty $sel 'digestPath')))
+            $left = Read-PairReview (Join-Path $runFolder $LeftName)
+            $right = Read-PairReview (Join-Path $runFolder $RightName)
+            if ($null -eq $left -or $null -eq $right) { continue }
+            $runs++
+            foreach ($name in $dimNames) {
+                $leftScore = Get-PairScore $left $name
+                $rightScore = Get-PairScore $right $name
+                if ($null -eq $leftScore -or $null -eq $rightScore) { continue }
+                $scoredPairs++
+                if ($leftScore -eq $rightScore) { $exactMatches++ }
+                elseif (($leftScore -eq 0 -and $rightScore -eq 2) -or ($leftScore -eq 2 -and $rightScore -eq 0)) {
+                    $splits += [ordered]@{ runPath = $runPath; dimension = $name }
+                }
+            }
+        }
+    }
+
+    $ratio = $null
+    if ($scoredPairs -gt 0) { $ratio = [double]$exactMatches / $scoredPairs }
+    $calibration = [ordered]@{
+        runs             = $runs
+        scoredPairs      = $scoredPairs
+        exactMatches     = $exactMatches
+        exactMatchRatio  = $ratio
+        zeroTwoSplits    = @($splits)
+    }
+    $calibrationPath = Join-Path $folder 'calibration.json'
+    Write-RollupText $calibrationPath (ConvertTo-Json -InputObject $calibration -Depth 100)
+    return [pscustomobject]@{ ExitCode = 0; Calibration = $calibration; CalibrationPath = $calibrationPath }
 }
 
 if ($MyInvocation.InvocationName -ne '.') { $r = Get-ReviewRollup @PSBoundParameters; exit $r.ExitCode }

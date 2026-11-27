@@ -55,10 +55,10 @@ function New-TestSampler($Temperature) {
 }
 
 # Creates one run folder: digest.json (header only) plus the review file, either a parsed object ($Review) or raw
-# text ($RawReview). Returns the selection.json entry for the run.
-function New-TestRun([string]$Root, [string]$Name, [string]$ArmKey, [string]$Scenario, [string]$ThinkingMode, $Sampler, $Review, [string]$RawReview = $null) {
+# text ($RawReview). Returns the selection.json entry for the run. $ContractHash defaults to 'abc123'.
+function New-TestRun([string]$Root, [string]$Name, [string]$ArmKey, [string]$Scenario, [string]$ThinkingMode, $Sampler, $Review, [string]$RawReview = $null, [string]$ContractHash = 'abc123') {
     $runDir = Join-Path $Root $Name
-    $keyFields = [ordered]@{ Tools = 'Read,Grep'; ContractHash = 'abc123'; ThinkingMode = $ThinkingMode }
+    $keyFields = [ordered]@{ Tools = 'Read,Grep'; ContractHash = $ContractHash; ThinkingMode = $ThinkingMode }
     $digest = [ordered]@{
         schemaVersion = 1
         runId         = $Name
@@ -102,7 +102,7 @@ function Test-InvalidEntry($Rollup, [string]$Path) {
     return (@($Rollup.invalid | Where-Object { $_.path -eq $Path -and $_.code -eq 'InvalidReview' }).Count -eq 1)
 }
 
-function Test-RollupCode($Rollup, [string]$Code, [string]$Field) {
+function Test-RollupCode($Rollup, [string]$Code, $Field) {
     return (@($Rollup.codes | Where-Object { $_.code -eq $Code -and $_.field -eq $Field }).Count -eq 1)
 }
 
@@ -226,6 +226,72 @@ try {
         if (@($mdLines | Where-Object { $_ -like "- $($dimName):*" }).Count -ne 1) { $everyDimOnce = $false }
     }
     Assert-That $everyDimOnce 'RenderMarkdown: exactly one "- <Name>:" line per vocabulary dimension'
+
+    # KeyGuard: two arms that differ in ThinkingMode only (Q25), then in ThinkingMode and ContractHash.
+    $guardDir = Join-Path $tempRoot 'keyguard-one'
+    $g1 = New-TestRun $guardDir 'g1' 'ARM-KA' 'Scn' 'off' (New-TestSampler 0.7) (New-TestReview 'ARM-KA')
+    $g2 = New-TestRun $guardDir 'g2' 'ARM-KB' 'Scn' 'on' (New-TestSampler 0.7) (New-TestReview 'ARM-KB')
+    Write-TestSelection $guardDir @(
+        [ordered]@{ armKey = 'ARM-KA'; selected = @($g1); skipped = @() },
+        [ordered]@{ armKey = 'ARM-KB'; selected = @($g2); skipped = @() }
+    )
+    $noVary = Get-ReviewRollup -ReviewDir $guardDir
+    Assert-That ((Test-RollupCode $noVary.Rollup 'VaryRequired' $null) -and $noVary.ExitCode -eq 1) 'KeyGuard: two arms without -Vary give VaryRequired and ExitCode 1'
+    $withVary = Get-ReviewRollup -ReviewDir $guardDir -Vary 'ThinkingMode'
+    Assert-That ($withVary.ExitCode -eq 0 -and @($withVary.Rollup.codes | Where-Object { $_.code -eq 'MixedComparabilityKey' }).Count -eq 0) 'KeyGuard: -Vary ThinkingMode gives ExitCode 0 and no MixedComparabilityKey'
+
+    $guard2Dir = Join-Path $tempRoot 'keyguard-two'
+    $h1 = New-TestRun $guard2Dir 'h1' 'ARM-KA' 'Scn' 'off' (New-TestSampler 0.7) (New-TestReview 'ARM-KA') $null 'abc123'
+    $h2 = New-TestRun $guard2Dir 'h2' 'ARM-KB' 'Scn' 'on' (New-TestSampler 0.7) (New-TestReview 'ARM-KB') $null 'def456'
+    Write-TestSelection $guard2Dir @(
+        [ordered]@{ armKey = 'ARM-KA'; selected = @($h1); skipped = @() },
+        [ordered]@{ armKey = 'ARM-KB'; selected = @($h2); skipped = @() }
+    )
+    $mixed = Get-ReviewRollup -ReviewDir $guard2Dir -Vary 'ThinkingMode'
+    Assert-That ((Test-RollupCode $mixed.Rollup 'MixedComparabilityKey' 'ContractHash') -and $mixed.ExitCode -eq 1) 'KeyGuard: ContractHash difference with -Vary ThinkingMode gives MixedComparabilityKey and ExitCode 1'
+    $forced = Get-ReviewRollup -ReviewDir $guard2Dir -Vary 'ThinkingMode' -Force
+    Assert-That ((Test-RollupCode $forced.Rollup 'MixedComparabilityKey' 'ContractHash') -and $forced.ExitCode -eq 0 -and $forced.Rollup.forced -eq $true) 'KeyGuard: -Force gives ExitCode 0 with the same MixedComparabilityKey'
+    $guardScenario = @($forced.Rollup.scenarios | Where-Object { $_.scenario -eq 'Scn' })[0]
+    $diffFields = @($guardScenario.armDifferences | ForEach-Object { $_['field'] })
+    $contractDiff = @($guardScenario.armDifferences | Where-Object { $_['field'] -eq 'ContractHash' })[0]
+    Assert-That (($diffFields -contains 'ContractHash') -and ($diffFields -contains 'ThinkingMode') -and
+        $contractDiff['values']['ARM-KA'] -eq 'abc123' -and $contractDiff['values']['ARM-KB'] -eq 'def456') 'KeyGuard: armDifferences lists ContractHash and ThinkingMode with both armKeys'
+
+    # PassAgreement (Q6/Q13). Fixture scores: Planning 2, ToolChoice 2, ArgumentFidelity 2, ReadingResponses 2,
+    # GuidanceCompliance 1, Reasoning 0, Efficiency null, HonestyVerification 2.
+    # Run p1: pass1 = fixture; pass2 has ToolChoice 1 (2 vs 1), ArgumentFidelity 0 (2 vs 0, a split), ReadingResponses
+    #   null (excluded) and Efficiency 0 (excluded, pass1 is null). Scored 6, exact 4.
+    # Run p2: pass1 has Planning 1; pass2 = fixture. Scored 7 (all but Efficiency), exact 6 (Planning 1 vs 2).
+    # Totals: runs 2, scoredPairs 13, exactMatches 10, exactMatchRatio 10/13, one split (p1 ArgumentFidelity).
+    $passDir = Join-Path $tempRoot 'pass'
+    $p1 = New-TestRun $passDir 'p1' 'ARM-P' 'Scn' 'off' (New-TestSampler 0.7) (New-TestReview 'ARM-P')
+    $p2 = New-TestRun $passDir 'p2' 'ARM-P' 'Scn' 'off' (New-TestSampler 0.7) (New-TestReview 'ARM-P')
+    $p1Pass2 = New-TestReview 'ARM-P'
+    (Get-TestDimension $p1Pass2 'ToolChoice').score = 1
+    (Get-TestDimension $p1Pass2 'ArgumentFidelity').score = 0
+    (Get-TestDimension $p1Pass2 'ReadingResponses').score = $null
+    (Get-TestDimension $p1Pass2 'Efficiency').score = 0
+    Write-TestJson (Join-Path $passDir 'p1\review.pass1.json') (New-TestReview 'ARM-P')
+    Write-TestJson (Join-Path $passDir 'p1\review.pass2.json') $p1Pass2
+    $p2Pass1 = New-TestReview 'ARM-P'
+    (Get-TestDimension $p2Pass1 'Planning').score = 1
+    Write-TestJson (Join-Path $passDir 'p2\review.pass1.json') $p2Pass1
+    Write-TestJson (Join-Path $passDir 'p2\review.pass2.json') (New-TestReview 'ARM-P')
+    Write-TestSelection $passDir @([ordered]@{ armKey = 'ARM-P'; selected = @($p1, $p2); skipped = @() })
+    $pass = Compare-EvalReviewPair -ReviewDir $passDir -LeftName 'review.pass1.json' -RightName 'review.pass2.json'
+    $passOnDisk = Get-Content -Raw -LiteralPath $pass.CalibrationPath | ConvertFrom-Json -Depth 100 -DateKind String
+    $passSplits = @($passOnDisk.zeroTwoSplits)
+    Assert-That ($passOnDisk.runs -eq 2 -and $passOnDisk.scoredPairs -eq 13 -and $passOnDisk.exactMatches -eq 10) 'PassAgreement: runs 2, scoredPairs 13, exactMatches 10 read back from calibration.json'
+    Assert-That ([math]::Abs([double]$passOnDisk.exactMatchRatio - (10 / 13)) -lt 1e-9) 'PassAgreement: exactMatchRatio is 10/13'
+    Assert-That ($passSplits.Count -eq 1 -and $passSplits[0].runPath -eq $p1.runPath -and $passSplits[0].dimension -eq 'ArgumentFidelity') 'PassAgreement: one 0-vs-2 split at p1 ArgumentFidelity'
+
+    $identDir = Join-Path $tempRoot 'pass-identical'
+    $i1 = New-TestRun $identDir 'i1' 'ARM-I' 'Scn' 'off' (New-TestSampler 0.7) (New-TestReview 'ARM-I')
+    Write-TestJson (Join-Path $identDir 'i1\review.pass1.json') (New-TestReview 'ARM-I')
+    Write-TestJson (Join-Path $identDir 'i1\review.pass2.json') (New-TestReview 'ARM-I')
+    Write-TestSelection $identDir @([ordered]@{ armKey = 'ARM-I'; selected = @($i1); skipped = @() })
+    $identical = Compare-EvalReviewPair -ReviewDir $identDir -LeftName 'review.pass1.json' -RightName 'review.pass2.json'
+    Assert-That ($identical.Calibration.exactMatchRatio -eq 1 -and @($identical.Calibration.zeroTwoSplits).Count -eq 0) 'PassAgreement: two identical files give exactMatchRatio 1 and no splits'
 }
 finally {
     Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
