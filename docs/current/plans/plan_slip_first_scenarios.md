@@ -1,6 +1,6 @@
 # Plan: Slip-first eval scenarios graded per site, one slip family each
 
-**Status:** IN PROGRESS 2026-11-27. Steps 1-6 done (6ac92264, 8800f9dd, 0dbd860d, df5f648e, 2015fb5b, 007797d9); Steps 10-13 done (a2836ba4, 41453ff4, 35e664c9, dc96f888).
+**Status:** IN PROGRESS 2026-11-27. Steps 1-15 done (6ac92264..5e5a814c; pre-E1 gate passed at 5e5a814c); E1 (Step 16) and close-out (Step 17) left.
 
 ## Problem
 
@@ -429,6 +429,7 @@ scheduled before the behaviour-changing 7, 9a-2, 9b; pairs always touch disjoint
     `SiteGrader.WriteSidecar(Path.Combine(_runDirectory, string.Format(System.Globalization.CultureInfo.InvariantCulture, SiteGrader.SidecarFileNameFormat, step)), verdict.Sites)`.
 - Done when: `Build` 0 errors.
 - Lane: implementer. Effort: S. Pairs with: Step 9a-1.
+- Done: 241bde2c
 
 ### Step 8 - Site assertions in the golden and previous-step tests
 - Files: `RoslynSentinel.Tests.ModelEval/ImplementationScenarioGoldenTests.cs`
@@ -440,6 +441,7 @@ scheduled before the behaviour-changing 7, 9a-2, 9b; pairs always touch disjoint
   `Unchanged` and every other grade `Correct`.
 - Done when: `Build` 0 errors.
 - Lane: implementer. Effort: S. Pairs with: Step 9a-2.
+- Done: 4827bbd3
 
 ### Step 9a-1 - Shared sidecar reader in `EvalRunReader.ps1` (D28)
 - Files: `scripts/eval-review/EvalRunReader.ps1`, `scripts/eval-review/EvalRunReader.Tests.ps1`,
@@ -470,6 +472,7 @@ scheduled before the behaviour-changing 7, 9a-2, 9b; pairs always touch disjoint
     gives `$null`; a grade with an unknown `outcome` makes `Get-EvalSiteTally` throw.
 - Done when: `pwsh -NoProfile -File scripts\eval-review\EvalRunReader.Tests.ps1` passes.
 - Lane: implementer. Effort: S. Pairs with: Step 7.
+- Done: af945167
 
 ### Step 9a-2 - `Get-SlipCounts.ps1`: per-run site columns and the wider escape scan
 - Files: `scripts/roslynsentinel-transcriptmetrics.ps1`, `scripts/Get-SlipCounts.ps1`,
@@ -498,6 +501,7 @@ scheduled before the behaviour-changing 7, 9a-2, 9b; pairs always touch disjoint
     each count as escape-copy.
 - Done when: `pwsh -NoProfile -File scripts\Get-SlipCounts.Tests.ps1` passes.
 - Lane: implementer. Effort: S. Pairs with: Step 8.
+- Done: 0cad008e
 
 ### Step 9b - `Get-SlipCounts.ps1 -Summary`: D17 rates and the run-level CI
 - Files: `scripts/Get-SlipCounts.ps1`, `scripts/Get-SlipCounts.Tests.ps1`
@@ -516,6 +520,7 @@ scheduled before the behaviour-changing 7, 9a-2, 9b; pairs always touch disjoint
   `-BootstrapSeed` in the script's header comment. Tests: the `-Summary` rows of the test table.
 - Done when: `pwsh -NoProfile -File scripts\Get-SlipCounts.Tests.ps1` passes.
 - Lane: implementer. Effort: S. Pairs with: Step 14a.
+- Done: 85fca34a
 
 ### Steps 10-13 - The four families
 Common to all four:
@@ -592,6 +597,7 @@ Common to all four:
   the Transcription row (`:355`) of `Registry_AxisAssignment_MatchesThePlan` (`:346`).
 - Done when: `Build` 0 errors.
 - Lane: implementer. Effort: S
+- Done: 72f0b196
 
 ### Step 14b - Content tests and catalog
 - Files: `RoslynSentinel.Tests.ModelEval/TranscriptionScenarioTests.cs`; regenerated
@@ -610,6 +616,7 @@ Common to all four:
 - Done when: `Build` 0 errors (the dispatcher then runs `RunTest` on `TranscriptionScenarioTests`, all
   pass, and checks the catalog diff lists the four ids).
 - Lane: implementer. Effort: S
+- Done: 5e5a814c
 
 ### Step 15 - Pre-E1 gate
 - Files: none (verification; record the pinned SHA in the tracker)
@@ -626,6 +633,7 @@ Common to all four:
 - Done when: all of the above pass. D18 pre-E1 gate: every family's golden grades all Correct and its
   no-op grades all Changed sites Unchanged with `CheckFailed`.
 - Lane: dispatcher. Effort: S
+- Done: gate passed at 5e5a814c (Build 0 errors; no stubs; 48/48 filtered, 20/20 explicit golden cases, both pwsh test scripts, Tests.ModelEval fast 251 passed 0 failed)
 
 ### Step 16 - E1 instrument-validity batch (LIVE)
 - Files: none (results under the scratch root)
@@ -747,6 +755,11 @@ Common to all four:
 ## Risks and open decisions
 
 Open: none (Q25 = D28).
+
+Deferred (owner away, 2026-11-27): `firstLineText` is in `$EscapeScanFieldsWide` but not in
+`$SourceTextFields`, so a ReplaceRange call carrying only `firstLineText` is classed "Other" and its
+escape copy counts as a slip only when `newContent` is present too. Recommendation: leave it (real
+ReplaceRange calls carry `newContent`).
 
 Risks:
 - ContosoOrders build: no warnings-as-errors today (D24); Step 15's golden run catches any rendered
