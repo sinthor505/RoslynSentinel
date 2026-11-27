@@ -9,6 +9,9 @@ The shape (sections, step fields, slicing comment) is `docs/current/templates/pl
 This skill adds the checks a template cannot express. Every mistake left in a plan is paid once per
 slice by a Haiku implementer, so fix it here.
 
+A plan that moves an area into its own project (a split out of `Common` or any project): copy the step
+template and checklists in `docs/current/references/reference_splitting_functionality_out_of_common.md`.
+
 ## 1. Verify every name
 
 - Each file path, type, member and signature the plan names: confirm it exists with `Search`
