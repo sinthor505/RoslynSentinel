@@ -26,7 +26,7 @@ public class LargeResultOffloadFilterTests
     private TestSolutionFixture _fixture = null!;
 
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase) { "Workspace" };
-    // LargeResultHelper.OffloadThresholdBytes is 15 * 1024. Each CallerInfo record (CallerMethod,
+    // The Default offload threshold (LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default)) is the bar. Each CallerInfo record (CallerMethod,
     // CallerType, absolute FilePath under a temp dir, Line, CodeSnippet) serializes to well over
     // 100 bytes, so this many distinct callers of Target() comfortably exceeds the threshold
     // regardless of the sample solution's own (small) content.
@@ -43,7 +43,7 @@ public class LargeResultOffloadFilterTests
         _fixture = new TestSolutionFixture();
 
         // Seed a target method plus many tiny distinct callers of it, so FindReferencesTool(kind:
-        // callers) returns a flat CallerInfo list long enough to exceed OffloadThresholdBytes on its
+        // callers) returns a flat CallerInfo list long enough to exceed the Default offload threshold chars on its
         // own. Mode off makes the typed ForPossiblyLargeDataAsync path a pass-through (it stores
         // nothing), so every oversized response reaches the generic filter under test here.
         var callers = Enumerable.Range(0, CallerCount)
@@ -178,7 +178,7 @@ public class LargeResultOffloadFilterTests
         var resultId = pointer.RootElement.GetProperty("resultId").GetString();
         Assert.That(resultId, Is.Not.Null.And.Not.Empty);
         var sizeBytes = pointer.RootElement.GetProperty("sizeBytes").GetInt32();
-        Assert.That(sizeBytes, Is.GreaterThan(LargeResultHelper.InlineBudgetChars),
+        Assert.That(sizeBytes, Is.GreaterThan(LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default)),
             "sizeBytes should report the size that actually triggered the offload.");
 
         // The backstop stores the same wrapper type the marshaller does, so the Envelope reader (not the Raw char window) answers.
@@ -224,7 +224,7 @@ public class LargeResultOffloadFilterTests
 
     private async Task AssertOversizeUnitPagePassesThroughAsync()
     {
-        var oversizeBlob = new string('x', LargeResultHelper.InlineBudgetChars + 2000);
+        var oversizeBlob = new string('x', LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default) + 2000);
         var wire = JsonSerializer.Serialize(new
         {
             isError = false,
@@ -248,7 +248,7 @@ public class LargeResultOffloadFilterTests
         using var pageDoc = JsonDocument.Parse(pageBlocks[0].Text);
         Assert.That(pageDoc.RootElement.TryGetProperty("offloaded", out _), Is.False,
             $"An oversize-unit GetLargeResult page must pass through, not be stored under a second resultId. Got: {pageBlocks[0].Text}");
-        Assert.That(pageBlocks[0].Text.Length, Is.GreaterThan(LargeResultHelper.InlineBudgetChars),
+        Assert.That(pageBlocks[0].Text.Length, Is.GreaterThan(LargeResultHelper.OffloadThresholdChars(InlineBudgetClass.Default)),
             "Precondition: the page must be over the offload threshold, otherwise this test pins nothing.");
         var data = pageDoc.RootElement.GetProperty("successData");
         Assert.That(data.GetProperty("returned").GetInt32(), Is.EqualTo(1));
@@ -280,7 +280,7 @@ public class LargeResultOffloadFilterTests
     public async Task UnderThresholdToolResponse_PassesThroughUnchanged()
     {
         // A narrow ListAll (kind class, one project) lists only the seeded OffloadFilterProbe, far below
-        // OffloadThresholdBytes, so the filter must leave its response untouched.
+        // the offload threshold chars, so the filter must leave its response untouched.
         var result = await _client.CallToolAsync(
             "ListAll",
             new Dictionary<string, object?> { ["reason"] = "test message", ["kind"] = "class", ["projectName"] = "ContosoOrders.Core" }!,
