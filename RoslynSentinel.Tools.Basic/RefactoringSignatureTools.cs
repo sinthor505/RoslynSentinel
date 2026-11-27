@@ -12,7 +12,7 @@ public class RefactoringSignatureTools
         _impl = impl;
     }
 
-    [McpServerTool(Name = "RenameSymbol", UseStructuredContent = false, OutputSchemaType = typeof(RenameSymbolResultEnvelope))]
+    [McpServerTool(Name = "RenameSymbol")]
     [Produces(DataTag.ChangeId)]
     [Description("Renames a symbol and all its references; also renames the file when it is named after the renamed top-level type (fileRenamed). Returns changeId, updatedHandle, residualMentions (summary of old-name hits it couldn't reach; rows via details). Types/members: does not touch using directives (use UsingDirective). Namespace: docCommentId N:Ns.Name, newName = new last segment.")]
     public Task<SentinelCallToolResult<object>> RenameSymbolTool(
@@ -26,10 +26,7 @@ public class RefactoringSignatureTools
         CancellationToken cancellationToken = default) =>
         _impl.RenameSymbol(reason, projectName, docCommentId, newName, dryRun, returnDiff, requestParams, cancellationToken);
 
-    // OutputSchemaType covers the "view" branch's shape only ({ Parameters }) - the add/remove
-    // branches (ToJsonSummary / MemberChangedContentResult offload) are out of scope for this POC.
-    // See proposal_structuredcontent_rollout.md.
-    [McpServerTool(Name = "MethodSignature", UseStructuredContent = false, OutputSchemaType = typeof(MethodSignatureViewResultEnvelope))]
+    [McpServerTool(Name = "MethodSignature")]
     [Produces(DataTag.ChangeId)]
     [Description("Add, remove, or view a method's parameters (any method; ConstructorParameter handles DI constructor parameters with a backing field). For overloaded methods, combine methodName with contextSnippet/lineBefore/lineAfter.")]
     public Task<SentinelCallToolResult<object>> MethodSignatureTool(

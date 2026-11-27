@@ -4,93 +4,8 @@ using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tools.Basic;
 
-// Added by AddTopLevelType(expected - used for diagnostics)
-/// <summary>
-/// Named shape mirroring the <c>updatedHandle</c> anonymous object inside
-/// <see cref="RenameSymbolResultEnvelope"/>'s <c>Data</c>, built from <see cref="SymbolHandle"/>.
-/// Primary path only - see proposal_structuredcontent_rollout.md.
-/// </summary>
-public sealed record RenameSymbolUpdatedHandle(
-    [property: Produces(DataTag.SessionId)] string SessionId,
-    [property: Produces(DataTag.ProjectName)] string ProjectName,
-    [property: Produces(DataTag.DocCommentId)] string DocCommentId);
-// Added by AddTopLevelType (expected - used for diagnostics)
-/// <summary>
-/// Named shape mirroring the anonymous object <see cref="RefactoringSignatureTools.RenameSymbolTool"/>
-/// assigns to <c>SentinelCallToolResult<object>.Data</c> on its applied success path. Primary path only
-/// (the resolution-failed / no-pending-changes / apply-failed error paths return a different,
-/// error-shaped envelope with no Data) - see proposal_structuredcontent_rollout.md.
-/// </summary>
-public sealed record RenameSymbolData(
-    [property: Produces(DataTag.ChangeId)] string? ChangeId,
-    bool DryRun,
-    string? Diff,
-    [property: Produces(DataTag.SymbolName)] string OldName,
-    [property: Produces(DataTag.SymbolName)] string NewName,
-    int FilesChanged,
-    RenameSymbolUpdatedHandle? UpdatedHandle,
-    ResidualMentionsView? ResidualMentions,
-    string? ResidualMentionsNote,
-    string? DocCommentIdNote = null,
-    RenameSymbolFileRenamed? FileRenamed = null,
-    string? FileRenameNote = null);
 // A top-level type's file is renamed together with the type (paths relative to the solution root where one is loaded).
 public sealed record RenameSymbolFileRenamed(string From, string To);
-// Added by AddTopLevelType (expected - used for diagnostics)
-/// <summary>
-/// Envelope shape mirroring <c>SentinelCallToolResult<object></c> as actually populated on
-/// <see cref="RefactoringSignatureTools.RenameSymbolTool"/>'s primary success path, which sets only
-/// <c>IsError</c> and <c>Data</c> (not TotalRecords/WorkspaceVersion/etc). Primary path only -
-/// see proposal_structuredcontent_rollout.md.
-/// </summary>
-public sealed record RenameSymbolResultEnvelope(
-    bool IsError,
-    RenameSymbolData? Data);
-// Added by AddTopLevelType (expected - used for diagnostics)
-/// <summary>
-/// Envelope shape mirroring <c>SentinelCallToolResult<object></c> as actually populated on
-/// <see cref="RefactoringStructuralTools.ModifyModifierTool"/>'s primary (autoStage=true, singular-edit,
-/// non-batch) success path, which sets only <c>IsError</c> and <c>Data</c>. Deliberately does not
-/// cover the batch (batchEdits != null), autoStage=false, or error branches - see
-/// proposal_structuredcontent_rollout.md. AppliedChangeSummary lives in RoslynSentinel.Common and
-/// is reused by several other tools (e.g. ChangeAccessibilityTool); it is intentionally left
-/// undecorated here rather than adding DataTag attributes to a shared type outside this POC's
-/// file scope - ChangeId tagging on ModifyModifierTool's own output is expressed at the method level
-/// via the existing [Produces(DataTag.ChangeId)] instead.
-/// </summary>
-public sealed record ModifyModifierResultEnvelope(
-    bool IsError,
-    AppliedChangeSummary? Data);
-// Added by AddTopLevelType (expected - used for diagnostics)
-/// <summary>
-/// Named shape mirroring the engine-layer <c>MethodParameterInfo</c> (RoslynSentinel.Engines.Basic,
-/// BasicRefactoringEngine.cs) as surfaced by MethodSignatureTool's view branch. Declared here (rather than
-/// tagging MethodParameterInfo itself) because that engine type lives outside this POC's file
-/// scope - see proposal_structuredcontent_rollout.md.
-/// </summary>
-public sealed record MethodSignatureParameterInfo(
-    [property: Produces(DataTag.SymbolName)] string ParamName,
-    [property: Produces(DataTag.DataType)] string ParamType,
-    string? DefaultValue);
-// Added by AddTopLevelType (expected - used for diagnostics)
-/// <summary>
-/// Mirrors the anonymous <c>new { Parameters = parameters }</c> object assigned to Data on
-/// MethodSignatureTool's view branch.
-/// </summary>
-public sealed record MethodSignatureViewData(
-    IReadOnlyList<MethodSignatureParameterInfo> Parameters);
-// Added by AddTopLevelType (expected - used for diagnostics)
-/// <summary>
-/// Envelope shape mirroring <c>SentinelCallToolResult<object></c> as actually populated on
-/// <see cref="RefactoringSignatureTools.MethodSignatureTool"/>'s "view" branch only (operation=view),
-/// which sets only <c>IsError</c> and <c>Data = new { Parameters }</c>. The add/remove branches
-/// (both the non-autoStage ToJsonSummary shape and the autoStage applied-with-offload
-/// MemberChangedContentResult/AppliedChangeSummary shape) are intentionally NOT covered by this
-/// POC - see proposal_structuredcontent_rollout.md.
-/// </summary>
-public sealed record MethodSignatureViewResultEnvelope(
-    bool IsError,
-    MethodSignatureViewData? Data);
 
 // Decision 7 step 3 (plan_split_workspace_refactoring_tools_for_di.md): MCP-surface half of the
 // RefactoringStructuralTools/Impl pair. All method bodies delegate one-line to _impl; all original
@@ -207,7 +122,7 @@ public class RefactoringStructuralTools
         return _impl.ModifyAttribute(reason, filePath, targetName, existingAttribute, action, newAttribute, attribute, contextSnippet, lineBefore, lineAfter, batchEdits, autoStage, dryRun, returnDiff, cancellationToken);
     }
 
-    [McpServerTool(Name = "ModifyModifier", UseStructuredContent = false, OutputSchemaType = typeof(ModifyModifierResultEnvelope))]
+    [McpServerTool(Name = "ModifyModifier")]
     [SupportsBatching]
     [Produces(DataTag.ChangeId)]
     [Description("Adds or removes a non-accessibility modifier keyword (use ChangeAccessibility for private/public/etc., ModifyAttribute for [Attribute]). For overloaded targets, provide contextSnippet and optionally lineBefore/lineAfter. ADD STATIC on a method or property is a conversion: the member must use no instance state (no this/base or instance members of its type), and instance-qualified callers (receiver.M(...), receiver.P) are rewritten to Type.M(...) in the same atomic change; members that only use each other may be converted together in one 'batchEdits' batch. Not supported for add static: " + ToolParams.AddStaticUnsupported + ". Returns changeId.")]
