@@ -339,6 +339,15 @@ Decision log:
 
 ### Follow-up batches (2026-11-26, ThreadOptionalParameter only, thinking off)
 
+Batch boundaries for later comparisons. A batch pinned before a boundary is not comparable with one
+pinned after it without saying so:
+- `b79eb315`..`8f66a0a0` (2026-11-26): tool error text changed. This covers the compile-gate
+  signature hint, the batch item without newContent, the ChangeSignature refusals and the repeat notes.
+  The WideningRejectedByGate and WidenToReadOnlyDictionary IfFails prompt wording changed at `6c2a182f`.
+- `27dcd63f` (plan_inline_budget_classes): the inline result budget is 15,360 and the offload
+  threshold 19,200 (Whole 40,960 for error-only failures). The budget change takes effect at
+  `33f92df9`. Every batch in this plan is pinned before both boundaries.
+
 - Trace of the Step 6 failures: escape-copy decided 1 of 4. The other three were ReplaceRange anchor
   rejections (fixed in 4caf0cf8, c7af5ad3), the bare `Contains` ordinal trap, and the 25-turn cap.
   A new `ExplicitOrdinal` prompt variant (106a08cd) spells out `StringComparison.Ordinal`.
