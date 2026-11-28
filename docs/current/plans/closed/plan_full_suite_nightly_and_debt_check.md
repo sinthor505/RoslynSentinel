@@ -1,6 +1,6 @@
 # Plan: Nightly full test run, red-aware full-suite marker with head commit, and a full-suite debt check
 
-**Status:** APPROVED 2026-11-27. Nightly full run with retry, red-aware marker with head commit, and a report-only full-suite debt check (11 steps, 2 lanes).
+**Status:** SUPERSEDED 2026-11-27. Never started; the owner cut it to a minimal nightly run as too complex for the goal: plans/plan_nightly_full_test_run.md.
 
 ## Problem
 
@@ -60,7 +60,10 @@ Owner decisions (plan-design 2026-11-27):
   unused `-OnStillRed <script>` parameter and the D31 file as the hook-in point (owner-approved knob without a user in this plan).
 - D31: the nightly run writes `<scratch root>\nightly\last-nightly.json`; `nightly.log` is the human log; the hook reads only typed
   fields.
-- D32: one PowerShell definition of the category name, `$OutOfProcessCategory` in `scripts/FullTestMarker.ps1`.
+- D32: one PowerShell definition of the category name, `$OutOfProcessCategory` in `scripts/FullTestMarker.ps1`. Amended
+  2026-11-27 (owner, after approval): the D38 guard also covers it: `scripts/FullTestMarker.Tests.ps1` reads
+  `RoslynSentinel.Engines.Basic/TestSuiteFilter.cs` as text and asserts the `OutOfProcessCategory` constant's value equals
+  `$OutOfProcessCategory`.
 - D34: a nightly `skip` rewrites the marker's `LastFullRunUtc` to now (counts and `headSha` kept): the field means "last time a
   full run's green result was confirmed current". So the hook's 26-hour age cause means "the nightly run missed", and the server's
   2-day `TooOld` does not fire on quiet days.
@@ -72,6 +75,8 @@ Owner decisions (plan-design 2026-11-27):
 
 - Readiness (plan-design, 2026-11-27): independent review clean at 512d7738 (explore-tier2 Sonnet, three rounds: round 1
   1 blocker and 15 should-fix, round 2 seven nits, round 3 one nit; all fixed).
+- Amendment (owner, 2026-11-27, after readiness): D32 gains the text-read guard (Decision D32, Step 1 tests, test table row for
+  `FullTestMarker.Tests.ps1`). Test-only, one bullet in Step 1; no step, file or lane changes.
 
 Design review (checklist items 1-7) passed with the D25/D38 and D32 notes; the simplest alternative (marker `headSha` plus a
 hook, no nightly run) was rejected because a report-only check (D5) needs an unattended backstop.
@@ -147,7 +152,8 @@ wording), Step 4 (marker gains `headSha`, D9), Step 7 (session-start output), St
     non-test failure and no rows; `Test-FullRunMarkerWritable` for a clean full run (true), filtered, project list and incomplete
     (false); `last-nightly.json` round trip; the D25/D38 guard: read `RoslynSentinel.Engines.Basic/FullTestMarkerStore.cs` as text
     and assert that the `FileName` constant, the `".roslynsentinel"` folder in `PathFor` and the camelCased parameter names of
-    `public record FullTestMarker(...)` match the helper.
+    `public record FullTestMarker(...)` match the helper; the D32 guard: read `RoslynSentinel.Engines.Basic/TestSuiteFilter.cs`
+    as text and assert the string value of `const string OutOfProcessCategory` equals `$OutOfProcessCategory`.
 - Done when: `[System.Management.Automation.Language.Parser]::ParseFile` reports no errors for both files. Dispatcher:
   `pwsh -NoProfile -File scripts\FullTestMarker.Tests.ps1` exits 0. Lane: `implementer`.
 - Effort: S
@@ -452,7 +458,7 @@ wording), Step 4 (marker gains `headSha`, D9), Step 7 (session-start output), St
 | `FullTestMarkerStoreTests.TryRead_MarkerWithHeadSha_ReadsIt`, `TryRead_MarkerWithoutHeadSha_HeadShaIsNull` | D3 | temp file | `HeadSha` | green |
 | `FullTestMarkerStoreTests.NextMarker_FullSolutionRun_RecordsHeadSha`, `NextMarker_FastRun_KeepsHeadSha` | D3 | pure | `HeadSha` | green |
 | `FullTestMarkerStoreTests.RecordRun_FullSolutionRun_WritesHeadSha` | D3 | temp root | marker on disk | green |
-| `scripts/FullTestMarker.Tests.ps1` | D9, D11, D25, D28, D31, D32, D34, D38 | temp dir; reads `FullTestMarkerStore.cs` as text | field values, booleans, guard matches | exit 0 |
+| `scripts/FullTestMarker.Tests.ps1` | D9, D11, D25, D28, D31, D32, D34, D38 | temp dir; reads `FullTestMarkerStore.cs` and `TestSuiteFilter.cs` as text | field values, booleans, guard matches | exit 0 |
 | `scripts/Get-FullSuiteDebt.Tests.ps1` | D5, D13, D28, D34, D36 | canned inputs, no git | `Causes`, `Areas`, `HasDebt`, `StaleWatchEntries`, lines | exit 0 |
 | `scripts/Invoke-NightlyFullRun.Tests.ps1` | D4, D26, D27, D28, D31, D35 | canned inputs | decision, wait count, filter string, merge lists, result object | exit 0 |
 | Step 7 manual check | D5 hook | the current tree | lines printed, under 5 s | as stated |
