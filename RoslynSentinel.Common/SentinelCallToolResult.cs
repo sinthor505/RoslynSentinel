@@ -418,6 +418,7 @@ public record SentinelCallToolResult<TSuccess, TError> : IOperationResult, IFind
         get; init;
     }
 
+    // TODO Non-nullable, so hasMoreData:false is serialized on every response; omit-when-default is a wire-shape change, see TODO.md.
     /// <summary>True when there are additional pages beyond the current offset+limit window.</summary>
     public bool HasMoreData
     {

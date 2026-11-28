@@ -4,6 +4,9 @@ namespace RoslynSentinel.Git;
 
 public record GitResult : IOperationResult
 {
+    // Not serialized: the tool boundary reports success or failure on the envelope's isError, and a failed result
+    // is replaced by ErrorData, so the copy inside successData was always false.
+    [JsonIgnore]
     public bool IsError
     {
         get; set;

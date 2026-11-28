@@ -492,7 +492,7 @@ public class GitRefListToolParityTests
         var cli = Serialize(await Impl(new CliGitReader()).StashAsync(_repo, GitAction.apply, null, false, null, 0, 20, CancellationToken.None));
 
         Assert.That(lib, Is.EqualTo(cli), $"libgit2-backed apply differs from the CLI-backed one.\nlibgit2: {lib}\ncli:     {cli}");
-        Assert.That(cli, Does.Contain("\"IsError\":false"));
+        Assert.That(cli, Does.Contain("\"Error\":null"));
     }
 
     // ---- which backend serves ----

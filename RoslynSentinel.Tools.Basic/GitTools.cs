@@ -213,7 +213,7 @@ public class GitTools
                 statusFindings.AddRange(StatusRenameHintFindings(gitRoot, statusResult, includeMoveRecords: ownRepo));
                 if (statusFindings.Count > 0)
                 {
-                    return new SentinelCallToolResult<object> { IsError = false, SuccessData = result, Findings = statusFindings };
+                    return new SentinelCallToolResult<object> { IsError = false, SuccessData = result, Findings = statusFindings, WarningDetails = GitHintText.TruncationWarning(result) };
                 }
             }
 
@@ -234,8 +234,8 @@ public class GitTools
             }
 
             return successFindings.Count > 0
-                ? new SentinelCallToolResult<object> { IsError = false, SuccessData = result, Findings = successFindings }
-                : new SentinelCallToolResult<object> { IsError = false, SuccessData = result };
+                ? new SentinelCallToolResult<object> { IsError = false, SuccessData = result, Findings = successFindings, WarningDetails = GitHintText.TruncationWarning(result) }
+                : new SentinelCallToolResult<object> { IsError = false, SuccessData = result, WarningDetails = GitHintText.TruncationWarning(result) };
         }
         else
         {

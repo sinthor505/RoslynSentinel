@@ -150,7 +150,7 @@ public class GitPathClassificationToolParityTests
         foreach (var path in new[] { "a.txt", "dir/sub/c.txt", "dir with space/\u00e9 \u00fc file.txt", "\u65e5\u672c\u8a9e/\U0001F600.txt" })
         {
             var json = await HunksBothAsync(_repo, path);
-            Assert.That(json, Does.Contain("\"IsError\":false"), path);
+            Assert.That(json, Does.Contain("\"Error\":null"), path);
             seen.Add(path);
         }
 
@@ -172,8 +172,8 @@ public class GitPathClassificationToolParityTests
         }
 
         // Each of these must be a refusal or an empty diff, never a hunk list for a file git does not track.
-        Assert.That(refusals["new.txt"], Does.Contain("\"IsError\":true"));
-        Assert.That(refusals["nope.txt"], Does.Contain("\"IsError\":true"));
+        Assert.That(refusals["new.txt"], Does.Not.Contain("\"Error\":null"));
+        Assert.That(refusals["nope.txt"], Does.Not.Contain("\"Error\":null"));
     }
 
     [Test]
@@ -220,7 +220,7 @@ public class GitPathClassificationToolParityTests
         await HunksBothAsync(worktreeRoot!, "only-wt.txt");
         await HunksBothAsync(_repo, "a.txt"); // the primary checkout is unchanged
 
-        Assert.That(json, Does.Contain("\"IsError\":false"));
+        Assert.That(json, Does.Contain("\"Error\":null"));
     }
 
     // ---- tool level: Stage (mutating; index reset between runs) ----
@@ -238,7 +238,7 @@ public class GitPathClassificationToolParityTests
 
         var json = await StageBothAsync("a.txt", "new top.txt", "dir/sub/new nested.txt", "\u00fcber/\u00e9.txt", "dir/b.txt", "dir with space");
 
-        Assert.That(json, Does.Contain("\"IsError\":false"));
+        Assert.That(json, Does.Contain("\"Error\":null"));
     }
 
     [Test]
@@ -263,7 +263,7 @@ public class GitPathClassificationToolParityTests
             Assert.That(ignoredFile, Does.Contain("ignored by .gitignore"));
             Assert.That(ignoredDirectory, Does.Contain("ignored by .gitignore"));
             Assert.That(ignoredChild, Does.Contain("ignored by .gitignore"));
-            Assert.That(negated, Does.Contain("\"IsError\":false"));
+            Assert.That(negated, Does.Contain("\"Error\":null"));
         });
     }
 

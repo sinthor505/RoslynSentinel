@@ -1044,12 +1044,15 @@ public class GitToolsSmokeTests
         Assert.That(truncated.IsTruncated, Is.True);
         Assert.That(truncated.TotalUntrackedCount, Is.EqualTo(60), "counts stay complete when truncated");
         Assert.That(truncated.Untracked, Has.Count.EqualTo(10));
+        Assert.That(defaultResult.WarningDetails, Does.Contain("truncated").And.Contain("60 untracked").And.Contain("maxEntries"));
+        Assert.That(System.Text.Json.JsonSerializer.Serialize(truncated), Does.Not.Contain("IsError").IgnoreCase, "the envelope carries isError; the payload must not repeat it");
 
         // maxEntries above 50 lists every entry, no truncation.
         var bigResult = await _gitTools.GitTool(reason: "status with larger cap", GitOperation.status, maxEntries: 100);
         Assert.That(!bigResult.IsError, Is.True, bigResult.ErrorData?.Message);
         var full = (GitStatusResult)bigResult.SuccessData!;
         Assert.That(full.IsTruncated, Is.False);
+        Assert.That(bigResult.WarningDetails, Is.Null);
         Assert.That(full.Untracked, Has.Count.EqualTo(60), "maxEntries: 100 must return every one of the 60 entries");
         Assert.That(full.Untracked, Does.Contain("bulk00.txt").And.Contain("bulk59.txt"));
 

@@ -2,7 +2,7 @@
 
 # Code TODO markers
 
-335 markers in 160 files. Links are relative to this file.
+336 markers in 161 files. Links are relative to this file.
 
 ## RoslynSentinel.AgentLoop/LmStudioAgentClient.cs (1)
 
@@ -86,6 +86,10 @@
 
 - [66](../../RoslynSentinel.Common/RoslynFormattingHelper.cs#L66) `// TODO(Phase 3): wire these into the real Finding channel once it exists instead of ILogger.`
 - [206](../../RoslynSentinel.Common/RoslynFormattingHelper.cs#L206) `// TODO(Phase 3): wire these into the real Finding channel once it exists instead of ILogger.`
+
+## RoslynSentinel.Common/SentinelCallToolResult.cs (1)
+
+- [421](../../RoslynSentinel.Common/SentinelCallToolResult.cs#L421) `// TODO Non-nullable, so hasMoreData:false is serialized on every response; omit-when-default is a wire-shape change, see TODO.md.`
 
 ## RoslynSentinel.Common/ServerBinaryStaleness.cs (2)
 
@@ -361,6 +365,10 @@
 
 - [1492](../../RoslynSentinel.Git/GitEngine.cs#L1492) `// TODO the line re-join below reproduces the old BeginOutputReadLine/AppendLine output (every line ends in`
 - [3430](../../RoslynSentinel.Git/GitEngine.cs#L3430) `// TODO the condition is amend || IsNullOrWhiteSpace(message), but a blank message without amend is refused at the top of CommitAsync, so only amend reaches this branch; keep the reason text (the Step 5 audit script catalogue reads it)`
+
+## RoslynSentinel.Git/GitStatusResult.cs (1)
+
+- [16](../../RoslynSentinel.Git/GitStatusResult.cs#L16) `// TODO Drop this payload flag once the envelope warningDetails (GitHintText.TruncationWarning) is the only truncation signal; see TODO.md.`
 
 ## RoslynSentinel.Git/Libgit2GitReader.Config.cs (1)
 

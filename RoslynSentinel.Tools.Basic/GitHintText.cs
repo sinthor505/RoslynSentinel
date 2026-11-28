@@ -238,6 +238,28 @@ internal static class GitHintText
         var advice = RenderRootFailure(failure);
         return advice.Length == 0 ? error : error + " " + advice;
     }
+
+    /// <summary>
+    /// The envelope <c>warningDetails</c> text for a list result the engine cut short (status, tag list, stash list, hunks):
+    /// what was returned, the totals and the parameter that raises the cap. Null when the result is complete or has no cap.
+    /// </summary>
+    internal static string? TruncationWarning(GitResult result)
+    {
+        return result switch
+        {
+            GitStatusResult { IsTruncated: true } s =>
+                $"Status is truncated: {s.TotalStagedCount} staged, {s.TotalUnstagedCount} unstaged and {s.TotalUntrackedCount} untracked entries in total, " +
+                $"and each list shows only its first {Math.Max(s.Staged.Count, Math.Max(s.Unstaged.Count, s.Untracked.Count))}. " +
+                "stagedByStatus and unstagedByStatus hold the per-status counts; maxEntries (up to 5000) lists every entry.",
+            GitTagResult { IsTruncated: true } t =>
+                $"Tag list is truncated: {t.Tags.Count} of {t.TotalCount} tags returned; count (up to 100) returns more.",
+            GitStashResult { IsTruncated: true } s =>
+                $"Stash list is truncated: {s.Entries.Count} of {s.TotalCount} entries returned; count (up to 100) returns more.",
+            GitHunksResult { IsTruncated: true } h =>
+                $"Hunk list is truncated: {h.Hunks.Count} of {h.TotalHunks} hunks listed; count (up to 100) lists more. The fingerprint still covers the whole file diff.",
+            _ => null,
+        };
+    }
 }
 
 /// <summary>Next-step text paired with <see cref="GitErrorCodes"/> in ResultError.Detail; the text home <see cref="GitHintText.Render"/> delegates to.</summary>

@@ -139,7 +139,7 @@ public class GitRemoteTools
 
         if (!((GitResult)result).IsError)
         {
-            return new SentinelCallToolResult<object> { IsError = false, SuccessData = result };
+            return new SentinelCallToolResult<object> { IsError = false, SuccessData = result, WarningDetails = GitHintText.TruncationWarning(result) };
         }
         else
         {

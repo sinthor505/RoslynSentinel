@@ -13,6 +13,7 @@ public record GitStatusResult : GitResult
     // Set when the total entry count exceeds the caller's maxEntries (default 50); the lists above are
     // then capped to a sample of the first 10 entries each and the Total*/*ByStatus counts carry the
     // full picture. Re-call status with a larger maxEntries (max 5000) to get every entry.
+    // TODO Drop this payload flag once the envelope warningDetails (GitHintText.TruncationWarning) is the only truncation signal; see TODO.md.
     public bool IsTruncated
     {
         get; set;
