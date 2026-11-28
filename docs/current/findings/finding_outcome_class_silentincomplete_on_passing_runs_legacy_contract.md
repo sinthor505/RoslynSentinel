@@ -31,10 +31,10 @@ Found while tabulating the replay-form runs of plan_triggered_thinking_reasoning
   asks for `DONE:`. Only `CodingAgentContract` (the standing variant) defines the `## Endings` section
   (`AgentSystemPrompts.cs:201`).
 - The grader classifies regardless of variant:
-  - `ImplementationScenarioChecks.cs:38` parses the token with `FinalOutcomeToken.Parse` (None
-    here) and calls `ScenarioClassifier.Classify`.
-  - `ScenarioVerdict.cs:43-45` returns `CorrectDone` only for `token == Done && grade == Pass`. Every
-    other Done-expected case falls through to `SilentIncomplete`.
+  - `ImplementationScenarioChecks.cs` (the local `Verdict` function) parsed the token with
+    `FinalOutcomeToken.Parse` (None here) and called `ScenarioClassifier.Classify`.
+  - `ScenarioVerdict.cs` `ScenarioClassifier.Classify` returns `CorrectDone` only for
+    `token == Done && grade == Pass`. Every other Done-expected case falls through to `SilentIncomplete`.
 - So under the default contract, every Done-expected run that is not Bypass or FalseBlocked is
   `SilentIncomplete`, whatever its grade.
 
@@ -65,3 +65,13 @@ Open, not decided. Options by leverage:
    so it needs an A/B and the owner's call.
 3. Stamp `ContractPlacement` as empty or `none` for legacy runs, and fix the generated config
    description. Cheap and independent of 1/2.
+
+## Resolution
+
+Plan: [plan_outcome_class_contract_aware_classification](../plans/plan_outcome_class_contract_aware_classification.md) (decisions D1-D6, 2026-11-27).
+
+- Options 1 and 3 done, option 2 left to proposal_modeleval_standing_workflow_contract (its A/B is open).
+- Classifier: under the legacy contract a finished run with no token and a non-blank final message is classified as if it said `DONE:` (`ScenarioClassifier.EffectiveToken`). Pass is CorrectDone, any other grade is SilentIncomplete; a blank message stays SilentIncomplete. Under `standing` nothing changes.
+- Legacy runs stamp `ContractPlacement=none`; the `ROSLYNSENTINEL_MODELEVAL_CONTRACT` description now says it is a variant name.
+- Runs recorded before the fix commit are not comparable on `outcomeClass` (all SilentIncomplete under legacy); their grade is still correct. Old runs are not re-classified.
+- Live smoke result: pending (plan Step 8).
