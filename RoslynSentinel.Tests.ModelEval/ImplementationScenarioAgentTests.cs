@@ -167,8 +167,9 @@ public class ImplementationScenarioAgentTests
         // was a tool call cut off by a cap, and a mid-task "I need to report what breaks: ChangePublisher ..." then satisfied a
         // report check (WideningRejectedByGate on 85 graded PassedAfterCap with no report and an unchanged tree).
         var finalMessage = result.Transcript.FinalMessageIfFinished();
+        // The variant comes from the same env as the composed system prompt (EvalContractOptions.ComposeSystemPrompt()).
         var verdict = await ImplementationScenarioChecks.VerdictAsync(
-            scenario, step, _environment.SolutionDirectory, finalMessage, changedPaths, cancellationToken);
+            scenario, step, _environment.SolutionDirectory, finalMessage, changedPaths, EvalContractOptions.Current().Variant, cancellationToken);
         var checkOutcome = verdict.Outcome;
         var checkDetail = verdict.Detail;
         if (verdict.Sites is not null)

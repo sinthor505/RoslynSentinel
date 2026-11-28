@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 
+using RoslynSentinel.Common.AgentLoop;
 using RoslynSentinel.Tests.Battery.Basic;
 using RoslynSentinel.Tests.ModelEval.ImplementationScenarios;
 using RoslynSentinel.Tests.ModelEval.ImplementationScenarios.Graders;
@@ -60,6 +61,7 @@ public class ImplementationScenarioGoldenTests
             fixture.SolutionDirectory,
             scenario.Steps[step - 1].CannedFinalMessage,
             changedPaths,
+            ContractVariant.Standing,
             TestContext.CurrentContext.CancellationToken);
 
         Assert.That(verdict.Outcome, Is.EqualTo(ImplementationScenarioOutcome.Pass), $"{scenario.Id} step {step}: {verdict.Detail}");
@@ -81,6 +83,27 @@ public class ImplementationScenarioGoldenTests
         }
     }
 
+    [TestCase("WidenAcrossFilesSlip", 1)]
+    public async Task Golden_LegacyUnmarkedReport_IsCorrectDone(string scenarioId, int step)
+    {
+        var scenario = ImplementationScenarioRegistry.Find(scenarioId);
+        var (fixture, repository) = GetOrCreate(scenario);
+        repository.CheckoutStep(step, $"verify/{scenario.Id}-legacy-step-{step}");
+        var changedPaths = PathsChangedFromPreviousStep(repository, step);
+
+        var verdict = await ImplementationScenarioChecks.VerdictAsync(
+            scenario,
+            step,
+            fixture.SolutionDirectory,
+            "## Summary\nChange complete.",
+            changedPaths,
+            ContractVariant.Legacy,
+            TestContext.CurrentContext.CancellationToken);
+
+        Assert.That(verdict.Outcome, Is.EqualTo(ImplementationScenarioOutcome.Pass), $"{scenario.Id} step {step}: {verdict.Detail}");
+        Assert.That(verdict.Class, Is.EqualTo(EvalOutcomeClass.CorrectDone), $"{scenario.Id} step {step}: {verdict.Detail}");
+    }
+
     [TestCaseSource(nameof(PreviousCases))]
     public async Task Previous_StepFailsTheCheck(string scenarioId, int step)
     {
@@ -94,6 +117,7 @@ public class ImplementationScenarioGoldenTests
             fixture.SolutionDirectory,
             null,
             Array.Empty<string>(),
+            ContractVariant.Standing,
             TestContext.CurrentContext.CancellationToken);
         var outcome = verdict.Outcome;
         var detail = verdict.Detail;
@@ -156,6 +180,7 @@ public class ImplementationScenarioGoldenTests
             fixture.SolutionDirectory,
             variant.FinalMessage,
             changedPaths,
+            ContractVariant.Standing,
             TestContext.CurrentContext.CancellationToken);
         TestContext.Out.WriteLine($"{scenario.Id} step {step} variant {variant.Name}: {verdict.Outcome}, {verdict.Class}, variant '{verdict.Variant}': {verdict.Detail}");
 

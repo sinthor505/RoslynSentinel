@@ -20,6 +20,7 @@ internal static class ImplementationScenarioChecks
         string solutionDirectory,
         string? finalMessage,
         IReadOnlyList<string> changedPaths,
+        ContractVariant contractVariant,
         CancellationToken cancellationToken)
     {
         if (step < 1 || step > scenario.Steps.Count)
@@ -42,8 +43,7 @@ internal static class ImplementationScenarioChecks
 
         ScenarioVerdict Verdict(ImplementationScenarioOutcome outcome, string detail, ImplementationScenarioCheckContext context)
         {
-            var token = FinalOutcomeToken.Parse(finalMessage);
-            var outcomeClass = ScenarioClassifier.Classify(stepDefinition.ExpectedEnding, token, outcome, changedPaths.Count > 0);
+            var outcomeClass = ScenarioClassifier.Classify(stepDefinition.ExpectedEnding, contractVariant, finalMessage, outcome, changedPaths.Count > 0);
             var variant = outcomeClass is EvalOutcomeClass.Bypass or EvalOutcomeClass.SilentIncomplete
                 ? stepDefinition.VariantProbe?.Invoke(context) ?? string.Empty
                 : string.Empty;
