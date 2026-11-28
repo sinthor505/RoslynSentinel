@@ -251,7 +251,7 @@ Shipped toolset JSON files are documented in [toolsets/](toolsets/).
 | Setting | Flag | Env | Type | Default | Scope | Kind | Description |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | TestHarnessSettings.FakeWriteAudit |  | `ROSLYNSENTINEL_FAKE_WRITE_AUDIT` | string | `(none)` | TestHarness | Live | Audit fake file writes when set. |
-| TestHarnessSettings.ModelEvalContract |  | `ROSLYNSENTINEL_MODELEVAL_CONTRACT` | string | `(none)` | TestHarness | Live | Path of the eval contract file. |
+| TestHarnessSettings.ModelEvalContract |  | `ROSLYNSENTINEL_MODELEVAL_CONTRACT` | string | `(none)` | TestHarness | Live | Name of the eval workflow contract variant (a variant name, not a path); unset selects the default variant. |
 | TestHarnessSettings.ModelEvalContractEndings |  | `ROSLYNSENTINEL_MODELEVAL_CONTRACT_ENDINGS` | string | `(none)` | TestHarness | Live | Ending variant names for the eval contract. |
 | TestHarnessSettings.ModelEvalEditArm |  | `ROSLYNSENTINEL_MODELEVAL_EDIT_ARM` | string | `(none)` | TestHarness | Live | Edit arm used by the model eval run. |
 | TestHarnessSettings.ModelEvalPromptVariant |  | `ROSLYNSENTINEL_MODELEVAL_PROMPT_VARIANT` | string | `(none)` | TestHarness | Live | Prompt variant used by the model eval run. |

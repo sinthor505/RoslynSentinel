@@ -5,7 +5,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 [StartupSettingGroup("Test harness")]
 public static class TestHarnessSettings
 {
-    public static readonly StartupSetting<string?> ModelEvalContractSetting = StartupSetting.String(null, EvalContractOptions.ContractEnvVar, null, "Path of the eval contract file.", SettingScope.TestHarness, SettingKind.Live);
+    public static readonly StartupSetting<string?> ModelEvalContractSetting = StartupSetting.String(null, EvalContractOptions.ContractEnvVar, null, "Name of the eval workflow contract variant (a variant name, not a path); unset selects the default variant.", SettingScope.TestHarness, SettingKind.Live);
     public static readonly StartupSetting<string?> ModelEvalContractEndingsSetting = StartupSetting.String(null, EvalContractOptions.EndingsEnvVar, null, "Ending variant names for the eval contract.", SettingScope.TestHarness, SettingKind.Live);
     public static readonly StartupSetting<string?> ModelEvalTurnCapSetting = StartupSetting.String(null, ScenarioDefinition.TurnCapVariable, null, "Maximum number of turns per scenario.", SettingScope.TestHarness, SettingKind.Live);
     public static readonly StartupSetting<string?> ModelEvalRescoreRunSetting = StartupSetting.String(null, ScenarioRescoreRunTests.RunVariable, null, "Run identifier for the rescore test.", SettingScope.TestHarness, SettingKind.Live);
