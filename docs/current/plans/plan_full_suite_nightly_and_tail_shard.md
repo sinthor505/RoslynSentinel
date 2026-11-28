@@ -1,6 +1,6 @@
 # Plan: Cut the full test run's wall time (parallel full runs, a second process for Tests.Git's serial classes, an NUnit worker cap)
 
-**Status:** PARKED 2026-11-27. Pending a CPU/disk measurement of test runs (owner, 2026-11-27: wall time may reflect contention, waits or serialization, not slow tests; the design grew too complex before the root cause was known). Redesign from the measurement, if still needed. The nightly run moved to plans/plan_nightly_full_test_run.md (minimal); the earlier safety plan is SUPERSEDED. Open when parked: Q57-Q61 (readiness round 1).
+**Status:** PARKED 2026-11-27. Pending a CPU/disk measurement of test runs (owner, 2026-11-27: wall time may reflect contention, waits or serialization, not slow tests; the design grew too complex before the root cause was known). Redesign from the measurement, if still needed. The nightly run moved to plans/closed/plan_nightly_full_test_run.md (minimal, IMPLEMENTED); the earlier safety plan is SUPERSEDED. Open when parked: Q57-Q61 (readiness round 1).
 
 ## Problem
 
@@ -288,7 +288,7 @@ Original 2026-11-24 decisions:
 ## Current design (plan-design 2026-11-27)
 
 - Safety part (marker, nightly run, debt check, wording; old Steps 1-6): moved to
-  [plan_full_suite_nightly_and_debt_check.md](./closed/plan_full_suite_nightly_and_debt_check.md) (D7; SUPERSEDED by [plan_nightly_full_test_run.md](./plan_nightly_full_test_run.md)) and removed from this file.
+  [plan_full_suite_nightly_and_debt_check.md](./closed/plan_full_suite_nightly_and_debt_check.md) (D7; SUPERSEDED by [plan_nightly_full_test_run.md](./closed/plan_nightly_full_test_run.md)) and removed from this file.
 - This file is the run-speed plan draft (old Steps 7-10, D6). Settled scope (D14, D39, D40):
   - Built: parallel default for full worktree runs after an adoption gate; `ProcessExclusive` category on Tests.Git's class-level
     `[NonParallelizable]` classes plus a ratchet test; a concurrent second `dotnet test` process for that category in Tests.Git

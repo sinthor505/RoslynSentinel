@@ -1,6 +1,6 @@
 # Plan: Nightly full test run, red-aware full-suite marker with head commit, and a full-suite debt check
 
-**Status:** SUPERSEDED 2026-11-27. Never started; the owner cut it to a minimal nightly run as too complex for the goal: plans/plan_nightly_full_test_run.md.
+**Status:** SUPERSEDED 2026-11-27. Never started; the owner cut it to a minimal nightly run as too complex for the goal: plans/closed/plan_nightly_full_test_run.md.
 
 ## Problem
 

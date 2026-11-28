@@ -1,6 +1,6 @@
 # Plan: Nightly full test run in the background, reported by a SessionStart line when red or missed
 
-**Status:** IN PROGRESS 2026-11-27. Steps 1-3 done (f788e25f, 6adc2df2, b8c73e76); Step 4 (live run, registration) left. Minimal nightly full run with a SessionStart line when red or missed; replaces `plans/closed/plan_full_suite_nightly_and_debt_check.md` (owner cut, 2026-11-27).
+**Status:** IMPLEMENTED 2026-11-27. f788e25f, 6adc2df2, b8c73e76; live run passed (1,909 s). The owner still registers the task (`scripts\Register-NightlyFullRun.ps1`, elevated). Minimal nightly full run with a SessionStart line when red or missed; replaces `plans/closed/plan_full_suite_nightly_and_debt_check.md` (owner cut, 2026-11-27).
 
 ## Problem
 
@@ -199,6 +199,12 @@ What already exists and is reused unchanged:
 - Done when: the outcome is recorded here, Status is set and the plan closes per `docs/current/templates/README.md`
   (`Closes: plan_nightly_full_test_run`). Lane: dispatcher.
 - Effort: S
+- Done: live run 2026-11-27 23:09 (clock 2026-11-28 06:09 UTC) at master 3d7497e4: outcome `passed`, 1,909 s, results
+  `C:\tmp\rs-testtrees\_results\3d7497e4-20261127-230951-33980`, 0 failed tests. `last-nightly.json` and `nightly.log` written; the hook
+  printed nothing. The "second dry run prints `skip`" check could not be taken live: a peer session committed `ee2b5685` while the run
+  was going, so `-DryRun` correctly printed `run`; `Get-NightlyAction` against the real result with its own sha returns `skip`, and with
+  the new master `run`. The registration (`scripts\Register-NightlyFullRun.ps1`, elevated shell) is the owner's; the first real
+  `nightly.log` line is checked opportunistically.
 
 ## Test table
 

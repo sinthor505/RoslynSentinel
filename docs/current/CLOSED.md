@@ -8,6 +8,12 @@ Only the newest month (2026-11) is kept here. Older entries are archived unchang
 [archive/closed_2026-10.md](archive/closed_2026-10.md), [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Nightly full test run with a SessionStart line when red or missed - resolved (2026-11-27)
+
+Nightly full test run, SessionStart line when red or missed (2026-11-27) - APPROVED via plan-design, 4 steps (minimal; replaces the SUPERSEDED marker/debt-check plan), run with `/implement-plan`; effort S - [plan](plans/plan_nightly_full_test_run.md)
+
+Evidence: f788e25f, 6adc2df2, b8c73e76; live run passed (1,909 s); the owner still registers the task with scripts\Register-NightlyFullRun.ps1 (elevated)
+
 ## Create RoslynSentinel.Engines.Core and move snippet matching into it - resolved (2026-11-27)
 
 Create RoslynSentinel.Engines.Core and move snippet matching into it (2026-11-27) - roadmap Phase 2: 17 files out of Common into a new shared engine project, namespace `RoslynSentinel.Engines.Core.SnippetMatching`, three DTO records stay in Common; APPROVED, dispatched to an orchestrator 2026-11-27; effort M - [plan](plans/closed/plan_move_snippet_matching_into_engines_core.md)
