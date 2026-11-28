@@ -8,6 +8,18 @@ Only the newest month (2026-11) is kept here. Older entries are archived unchang
 [archive/closed_2026-10.md](archive/closed_2026-10.md), [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Contract-aware eval outcome classes: legacy no-token finish counts as Done, legacy stamps ContractPlacement `none` - resolved (2026-11-28)
+
+Contract-aware eval outcome classes: legacy no-token finish counts as Done, legacy stamps ContractPlacement `none` (2026-11-27) - APPROVED via plan-design, 9 steps, run with `/implement-plan`; effort S - [plan](plans/closed/plan_outcome_class_contract_aware_classification.md)
+
+Evidence: IMPLEMENTED 2026-11-28. 447e4202, 44a1391e, d8589a07, 701dc48e, 7e02d5b3, d17f08f8, e31a1bce; live smoke on 113u: outcome=Pass, outcomeClass=CorrectDone, ContractPlacement=none.
+
+## Finding: passing ImplementationScenario runs are classed SilentIncomplete under the default (legacy) contract - resolved (2026-11-28)
+
+Finding: passing ImplementationScenario runs are classed SilentIncomplete under the default (legacy) contract - [doc](findings/closed/finding_outcome_class_silentincomplete_on_passing_runs_legacy_contract.md)
+
+Evidence: CLOSED 2026-11-28. Fixed by plan_outcome_class_contract_aware_classification (447e4202, 44a1391e, d8589a07, 701dc48e, 7e02d5b3, d17f08f8, e31a1bce); live smoke on 113u classed a passing legacy run CorrectDone. Option 2 (default to standing) stays with proposal_modeleval_standing_workflow_contract.
+
 ## Nightly full test run with a SessionStart line when red or missed - resolved (2026-11-27)
 
 Nightly full test run, SessionStart line when red or missed (2026-11-27) - APPROVED via plan-design, 4 steps (minimal; replaces the SUPERSEDED marker/debt-check plan), run with `/implement-plan`; effort S - [plan](plans/plan_nightly_full_test_run.md)

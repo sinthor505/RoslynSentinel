@@ -1,13 +1,13 @@
 # Plan: make eval outcome classification aware of the prompt contract (no more constant SilentIncomplete under legacy)
 
-**Status:** IN PROGRESS 2026-11-28. Steps 1-7 done (447e4202, 44a1391e, d8589a07, 701dc48e, 7e02d5b3, d17f08f8, e31a1bce); Step 8 (live smoke) and Step 9 (close) left.
+**Status:** IMPLEMENTED 2026-11-28. 447e4202, 44a1391e, d8589a07, 701dc48e, 7e02d5b3, d17f08f8, e31a1bce; live smoke on 113u: outcome=Pass, outcomeClass=CorrectDone, ContractPlacement=none.
 
 ## Problem
 
 Under the default (legacy) contract, every Done-expected ImplementationScenario run that is not Bypass or
 FalseBlocked is classed `SilentIncomplete`, whatever its grade (43 of 48 slip runs passed, all 48 are
 `SilentIncomplete`). The legacy prompt never asks for `DONE:`, but the classifier expects the token.
-Source and evidence: [finding_outcome_class_silentincomplete_on_passing_runs_legacy_contract.md](../findings/finding_outcome_class_silentincomplete_on_passing_runs_legacy_contract.md).
+Source and evidence: [finding_outcome_class_silentincomplete_on_passing_runs_legacy_contract.md](../../findings/closed/finding_outcome_class_silentincomplete_on_passing_runs_legacy_contract.md).
 
 ## Decision
 - 2026-11-27 Q1 = A, "D1: options 1 + 3 in, option 2 out". Fix the legacy classification and the misleading stamp/config text; defaulting to `standing` stays with proposal_modeleval_standing_workflow_contract (its A/B is open).

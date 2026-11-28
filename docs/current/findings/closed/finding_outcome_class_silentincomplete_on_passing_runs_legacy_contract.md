@@ -1,6 +1,6 @@
 # Finding: passing ImplementationScenario runs are classed SilentIncomplete under the default (legacy) contract
 
-**Status:** APPROVED 2026-11-27. Plan: plans/plan_outcome_class_contract_aware_classification.md (options 1 and 3; option 2 stays with the standing-contract proposal).
+**Status:** CLOSED 2026-11-28. Fixed by plan_outcome_class_contract_aware_classification (447e4202, 44a1391e, d8589a07, 701dc48e, 7e02d5b3, d17f08f8, e31a1bce); live smoke on 113u classed a passing legacy run CorrectDone. Option 2 (default to standing) stays with proposal_modeleval_standing_workflow_contract.
 
 ## Context
 
@@ -68,10 +68,10 @@ Open, not decided. Options by leverage:
 
 ## Resolution
 
-Plan: [plan_outcome_class_contract_aware_classification](../plans/plan_outcome_class_contract_aware_classification.md) (decisions D1-D6, 2026-11-27).
+Plan: [plan_outcome_class_contract_aware_classification](../../plans/closed/plan_outcome_class_contract_aware_classification.md) (decisions D1-D6, 2026-11-27).
 
 - Options 1 and 3 done, option 2 left to proposal_modeleval_standing_workflow_contract (its A/B is open).
 - Classifier: under the legacy contract a finished run with no token and a non-blank final message is classified as if it said `DONE:` (`ScenarioClassifier.EffectiveToken`). Pass is CorrectDone, any other grade is SilentIncomplete; a blank message stays SilentIncomplete. Under `standing` nothing changes.
 - Legacy runs stamp `ContractPlacement=none`; the `ROSLYNSENTINEL_MODELEVAL_CONTRACT` description now says it is a variant name.
 - Runs recorded before the fix commit are not comparable on `outcomeClass` (all SilentIncomplete under legacy); their grade is still correct. Old runs are not re-classified.
-- Live smoke result: pending (plan Step 8).
+- Live smoke (plan Step 8, 2026-11-28, host 113u, committed tree 95c201a3, contract env var unset): WidenAcrossFilesSlip step 1 ended `outcome=Pass ... stopReason=ModelFinished ... outcomeClass=CorrectDone`, and the transcript stamps `ContractPlacement=none`. Before the fix the same shape of run was `SilentIncomplete` (48 of 48 recorded slip runs).
