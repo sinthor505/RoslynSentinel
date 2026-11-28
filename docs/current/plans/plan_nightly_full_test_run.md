@@ -54,6 +54,9 @@ What already exists and is reused unchanged:
 - Readiness round 2 (2026-11-27): all 13 fixed; 1 should-fix (cap the INCOMPLETE list like FAILED) and 3 nits (no duplicate
   exit entry for a `note` row, one date format for all lines, a skipped night leaves the marker as is) fixed in place.
 - Readiness (plan-design): independent review clean at 45fe5686.
+- 2026-11-27 /implement-plan: staleness check clean (no commits since 45fe5686 touch the reused scripts, settings or hook; anchors
+  hold). Owner present; mode Direct (Steps 1-2 `implementer` D1, Step 3 main session, Step 4 dispatcher). Roadmap Phase 1 repointed
+  to this plan.
 - Left out on purpose (owner cut): retry of failing tests, waiting while another test run is busy, marker changes (head commit,
   red counts stale), the area watch list and debt script, skill and roadmap wording changes, notifications other than the hook
   line. A red night caused by a flake or an overlapping run is re-run by hand.

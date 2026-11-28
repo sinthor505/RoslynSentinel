@@ -2,7 +2,7 @@
 
 **Status:** DRAFT 2026-11-27. Master plan: it orders sub-plans and holds no implementation steps of its own. Phase 0.1 done (Git namespace rename,
 c2b3acb9..1a7f3b1f); Phase 0.2 dropped; Phase 2 done (`RoslynSentinel.Engines.Core` with snippet matching, 373ff903..bc1572a1; full run 12,633
-tests, 0 failures). NEXT: Phase 1 (nightly plan's D1-D6, owner starts a fresh `plan-design` session), Phase 3 (layering proposal, design session),
+tests, 0 failures). NEXT: Phase 1 (minimal nightly full run, [plan_nightly_full_test_run.md](plan_nightly_full_test_run.md), APPROVED 2026-11-27), Phase 3 (layering proposal, design session),
 Phase 0.3 (doc hygiene). The phase order below awaits owner review.
 
 ## Problem
@@ -20,7 +20,8 @@ Three connected problems, found while designing the Build/RunTest project split
    engine call sites), snippet lookup (165), `DeclarationNotFoundDetail` (71, of which 58 from Engines.Advanced). Tool-layer helpers also sit in
    Engines.Basic (`RefactoringToolHelpers`, `RejectedContentClassifier`, `ViewResults`) because the tool projects cannot see each other.
 3. **Slow tests run whether or not their area changed.** The Git split moved the slow Git fixtures into `Tests.Git`, but the selection rule that would
-   skip them is an unstarted draft ([plan_full_suite_nightly_and_tail_shard.md](plan_full_suite_nightly_and_tail_shard.md)).
+   skip them is not built: the speed plan ([plan_full_suite_nightly_and_tail_shard.md](plan_full_suite_nightly_and_tail_shard.md)) is PARKED. Phase 1
+   covers the slow tests with an unattended nightly full run instead ([plan_nightly_full_test_run.md](plan_nightly_full_test_run.md)).
 
 About 25 open plans, proposals and findings touch these themes (Appendix C); several would entrench the inversion if run as written. The counts above are
 text-search counts from three surveys of 2026-11-27 (condensed copies under the scratch root, `plan_design_roadmap_layering_and_splits\`).
@@ -57,7 +58,7 @@ Dated entries; later entries do not override earlier ones unless they say so. Q-
   the Phase 2 plan. Q45 (owner) drops Phase 0.2.
 - **2026-11-27, Q41 start now (owner):** Phases 0 to 2 need no design and run while Phase 3 is designed. The Git namespace rename is dispatched first.
 - **2026-11-27, order boundary (planner, proposed, not yet confirmed):** the Build/RunTest move is gated only by work that touches its files (its own
-  extraction, Phase 1's `FullTestMarkerStore` edit, the plans that edit `TestInstanceLauncher`); the repo-wide rollout (Phase 5) does not gate it.
+  extraction, the plans that edit `TestInstanceLauncher`); the repo-wide rollout (Phase 5) does not gate it.
 
 ## Execution rules
 
@@ -98,16 +99,18 @@ Dated entries; later entries do not override earlier ones unless they say so. Q-
 - Done when: every doc in Appendix C has a TODO.md line or is closed.
 - Effort: S
 
-### Phase 1 - Test selection
-- Doc: [plan_full_suite_nightly_and_tail_shard.md](plan_full_suite_nightly_and_tail_shard.md) (DRAFT; owner decisions D1-D6 open),
-  [plan_shorten_verification_loop.md](plan_shorten_verification_loop.md) (Step 13 gate, data from 2026-11-29),
-  [plan_in_memory_test_tier_for_battery.md](plan_in_memory_test_tier_for_battery.md) (dormant).
-- Depends on: none. Gate it sets: its Step 1 changes `FullTestMarkerStore.Describe`, so it lands before Phase 4.2 pins that text.
-- Effect: behaviour-changing (the marker records the head commit and counts a red run as stale; task-end runs select by changed area).
-- Change: settle D1-D6, run Steps 1-6 (marker, watch list, nightly run, debt check); decide whether the in-memory tier's leftover
-  `RunTestTests`/`BuildEngineTests` items are finished or dropped before Phase 4.3 moves those fixtures.
-- Done when: a change outside `RoslynSentinel.Git/` and `RoslynSentinel.Tests.Git/` skips `Tests.Git` at task end and the nightly run covers it.
-- Effort: M
+### Phase 1 - Nightly full test run
+- Doc: [plan_nightly_full_test_run.md](plan_nightly_full_test_run.md) (APPROVED 2026-11-27, 4 steps; replaces the superseded
+  `plans/closed/plan_full_suite_nightly_and_debt_check.md`). Related, not part of it: [plan_full_suite_nightly_and_tail_shard.md](plan_full_suite_nightly_and_tail_shard.md)
+  (run speed, PARKED pending a CPU/disk measurement), [plan_shorten_verification_loop.md](plan_shorten_verification_loop.md) (Step 13 gate,
+  data from 2026-11-29), [plan_in_memory_test_tier_for_battery.md](plan_in_memory_test_tier_for_battery.md) (dormant).
+- Depends on: none. It sets no gate: the plan changes no marker or `FullTestMarkerStore` text, so Phase 4.2 does not wait for it.
+- Effect: behaviour-changing (a scheduled task runs the full suite daily; a SessionStart line appears when the last run was red, incomplete or
+  missed). No area selection at task end: that stays parked with the speed plan.
+- Change: scripts only (result helper, nightly script and task registration, SessionStart hook) and one live run; separately, decide whether
+  the in-memory tier's leftover `RunTestTests`/`BuildEngineTests` items are finished or dropped before Phase 4.3 moves those fixtures.
+- Done when: the nightly plan is in `plans/closed/` and the owner has registered the task.
+- Effort: S
 
 ### Phase 2 - First mechanical split out of Common: SnippetMatching into a new Engines.Core
 - Doc: [plan_move_snippet_matching_into_engines_core.md](closed/plan_move_snippet_matching_into_engines_core.md) (APPROVED 2026-11-27, readiness
@@ -146,7 +149,7 @@ Dated entries; later entries do not override earlier ones unless they say so. Q-
 
 ### Phase 4.2 - Build/RunTest extraction
 - Doc: to be written from the on-hold draft (its S1-S24 inventory, Q33-Q38).
-- Depends on: Phase 4.1, Phase 1 Step 1; ordered against `plan_stateless_http_toolset_enablement.md` Step 5 and the JSON toolsets plan (both edit
+- Depends on: Phase 4.1; ordered against `plan_stateless_http_toolset_enablement.md` Step 5 and the JSON toolsets plan (both edit
   `TestInstanceLauncher`) and the tool usage review's Step 1b (`BuildEngine.ListingCall`).
 - Effect: text-neutral.
 - Change: 24 sites in four channels (exception message 15, result field 5, returned string 3, finding 1) report facts; the two `isCallable`
@@ -159,7 +162,7 @@ Dated entries; later entries do not override earlier ones unless they say so. Q-
 - Depends on: Phase 4.2, Phase 0.1
 - Effect: text-neutral.
 - Change: `RoslynSentinel.Engines.BuildTest` and `RoslynSentinel.Tests.BuildTest`, mechanical route of the splitting reference.
-- Done when: counts rule satisfied, full run clean, the selection rule of Phase 1 names the new directories.
+- Done when: counts rule satisfied, full run clean (the nightly run of Phase 1 covers the new projects; no area selection exists, it is parked).
 - Effort: M
 
 ### Phase 5 - Shared text builders, then engine areas by tier
@@ -194,10 +197,9 @@ Dated entries; later entries do not override earlier ones unless they say so. Q-
    Phase 3 confirms or adjusts the rule when it settles what else goes there.
 2. **Q43 (owner, Phase 3):** does `Engines.Advanced` stop referencing `Engines.Basic` once a shared engine project exists? It uses
    `DeclarationNotFoundDetail` at 58 sites, constructs `SymbolNavigationEngine` and is injected with `BasicRefactoringEngine`.
-3. **Q44 (owner, recommendation given 2026-11-27):** the nightly plan's D1-D6 are settled in a fresh session running `plan-design` on that draft, in
-   parallel with this roadmap's other items; each decision already carries a recommendation there. Constraints that session takes from this roadmap:
-   the area watch list names project directories (today `RoslynSentinel.Git/`, `RoslynSentinel.Tests.Git/` and the tool-side Git files; later
-   `RoslynSentinel.Engines.BuildTest/` and its test project), and its Step 1 lands before Phase 4.2.
+3. **Q44 (settled 2026-11-27, owner cut):** Phase 1 became the minimal nightly full run ([plan_nightly_full_test_run.md](plan_nightly_full_test_run.md));
+   the area watch list, marker changes and debt check were cut, so the earlier constraints (watch list names project directories, Step 1 before
+   Phase 4.2) no longer apply. Area selection returns only with the parked speed plan.
 4. **Q37 and Q38** (fact shape, render point) are carried into Phase 3; the owner leans to typed facts plus a tool-layer builder.
 5. **The order boundary** in Decision is proposed, not confirmed.
 6. **Survey quality.** Counts are text searches; the engine survey was a light pass and the Common consumer counts can include name collisions. Each
@@ -255,8 +257,9 @@ The MCP SDK is used by 13 Common files: tool surface 9, result delivery 2, `Resp
 | plans/closed/plan_rename_git_project_namespaces.md | IMPLEMENTED 2026-11-27 | 0.1 | done |
 | plans/plan_isolate_build_test_area_into_own_project.md | DRAFT, on hold | 4.2, 4.3 | split into two plans |
 | proposals/proposal_isolate_heavy_test_areas_by_project.md | ACCEPTED, Area 1 done | 4.3; Area 3 unplaced | correct Area 2 text (pins helper and `TestProjectDetector` do not go to Common) |
-| plans/plan_full_suite_nightly_and_tail_shard.md | DRAFT, untracked | 1 | settle D1-D6, run |
-| plans/plan_shorten_verification_loop.md | IN PROGRESS | 1 | finish Step 13; sharding goes to the nightly plan |
+| plans/plan_nightly_full_test_run.md | APPROVED 2026-11-27 | 1 | run with `/implement-plan` |
+| plans/plan_full_suite_nightly_and_tail_shard.md | PARKED (speed work, pending CPU/disk measurement) | 1 (related) | redesign as test-fixture changes in a fresh chat |
+| plans/plan_shorten_verification_loop.md | IN PROGRESS | 1 | finish Step 13; sharding stays with the parked speed plan |
 | plans/plan_in_memory_test_tier_for_battery.md | dormant, untracked | 1 | finish or drop the Build/RunTest items |
 | plans/plan_prebuild_and_idle_stale_server_restart.md | built, untracked | 0.3 | close |
 | plans/plan_error_codes_follow_cause.md | IN-PROGRESS, untracked | 0.3 | fold into the typed-exceptions proposal |
