@@ -118,12 +118,12 @@ public sealed class EvalContractOptionsTests
     }
 
     [Test]
-    public void BuildContractStamp_Legacy_HashesCodingAgentAndNamesSystem()
+    public void BuildContractStamp_Legacy_HashesCodingAgentAndNamesNone()
     {
         var stamp = EvalContractOptions.BuildContractStamp(ContractVariant.Legacy, EndingsPlacement.System);
 
         Assert.That(stamp.Hash, Is.EqualTo(WorkflowContract.Hash(AgentSystemPrompts.CodingAgent)));
-        Assert.That(stamp.Placement, Is.EqualTo("system"));
+        Assert.That(stamp.Placement, Is.EqualTo(WorkflowContract.NoPlacementName));
     }
 
     [Test]

@@ -75,5 +75,6 @@ public static class EvalContractOptions
 
     /// <summary>Builds the contract stamp (text hash and placement name) for an explicit variant and placement.</summary>
     public static (string Hash, string Placement) BuildContractStamp(ContractVariant variant, EndingsPlacement placement) =>
-        (WorkflowContract.Hash(WorkflowContract.TextFor(variant)), WorkflowContract.PlacementName(placement));
+        (WorkflowContract.Hash(WorkflowContract.TextFor(variant)),
+            variant == ContractVariant.Legacy ? WorkflowContract.NoPlacementName : WorkflowContract.PlacementName(placement));
 }

@@ -26,6 +26,9 @@ public static class WorkflowContract
     /// <summary>Number of hex characters kept from the contract hash.</summary>
     public const int HashLength = 12;
 
+    /// <summary>Placement name stamped on legacy runs: a legacy prompt has no Endings section, so there is no placement.</summary>
+    public const string NoPlacementName = "none";
+
     /// <summary>Returns the contract text for a variant.</summary>
     public static string TextFor(ContractVariant variant)
     {
