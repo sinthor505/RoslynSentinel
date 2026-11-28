@@ -1,6 +1,6 @@
 # Plan: make eval outcome classification aware of the prompt contract (no more constant SilentIncomplete under legacy)
 
-**Status:** APPROVED 2026-11-27. Contract-aware outcome classification (legacy no-token finish counts as Done) plus the legacy placement stamp and config text fix; 9 steps, 2 lanes, live smoke last.
+**Status:** IN PROGRESS 2026-11-28. Steps 1-7 done (447e4202, 44a1391e, d8589a07, 701dc48e, 7e02d5b3, d17f08f8, e31a1bce); Step 8 (live smoke) and Step 9 (close) left.
 
 ## Problem
 
@@ -53,6 +53,7 @@ Exceptions: none.
 - Done when: `Build` 0 errors; `Search(mode: text, query: "legacy_contract", fileGlob: "**/ScenarioVerdict.cs")` has no hit.
 - Lane: `implementer` (1 file, 3 edits; use `Member` operations). Effort: S
 - Pairs with: Step 2
+- Done: 447e4202
 
 ### Step 2 - Correct the contract setting description
 - Files: `RoslynSentinel.Tests.Harness/TestHarnessSettings.cs`, `docs/generated/configuration.md`
@@ -62,6 +63,7 @@ Exceptions: none.
 - Done when: `Build` 0 errors; `RunTest` `ConfigurationReferenceFreshnessTests` (project `RoslynSentinel.Tests.ModelEval`) passes after regeneration.
 - Lane: `implementer` for the string, dispatcher for the regeneration. Effort: S
 - Pairs with: Step 1
+- Done: 44a1391e (regeneration changed only the description line; the regeneration-only test is skipped by design, the freshness comparison passed)
 
 ### Step 3 - Tests for the classifier overload
 - Files: `RoslynSentinel.Tests.ModelEval/ScenarioClassifierTests.cs`
@@ -74,6 +76,7 @@ Exceptions: none.
 - Done when: `Build` 0 errors; `RunTest` `ScenarioClassifierTests` (project `RoslynSentinel.Tests.ModelEval`) all pass, including the 22 existing rows.
 - Lane: `test-writer` (1 file). Effort: S
 - Pairs with: Step 4
+- Done: d8589a07
 
 ### Step 4 - Legacy stamps ContractPlacement "none"
 - Files: `RoslynSentinel.AgentLoop/WorkflowContract.cs`, `RoslynSentinel.Tests.Harness/EvalContractOptions.cs`, `RoslynSentinel.Tests.Harness/EvalContractOptionsTests.cs`
@@ -86,6 +89,7 @@ Exceptions: none.
 - Done when: `Build` 0 errors; `RunTest` `EvalContractOptionsTests` and `WorkflowContractTests` (project `RoslynSentinel.Tests.Harness`) pass.
 - Lane: `implementer` (3 files, 4 edits). Effort: S
 - Pairs with: Step 3
+- Done: 701dc48e
 
 ### Step 5 - Wire the variant into VerdictAsync and its callers
 - Files: `RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Graders/ImplementationScenarioChecks.cs`, `RoslynSentinel.Tests.ModelEval/ImplementationScenarioGoldenTests.cs`, `RoslynSentinel.Tests.ModelEval/ImplementationScenarioAgentTests.cs`
@@ -100,6 +104,7 @@ Exceptions: none.
 - Done when: `Build` 0 errors; `RunTest` the whole `ImplementationScenarioGoldenTests` class (project `RoslynSentinel.Tests.ModelEval`: `Golden_StepPassesItsCheck`, `Previous_StepFailsTheCheck`, `Variant_OutcomeMatchesTable`, and the new test) passes.
 - Lane: `implementer` (3 files, about 5 edits, 4 call sites). Effort: S
 - Pairs with: Step 6
+- Done: 7e02d5b3 (ChangeSignature needed a using in the golden test file first, then migrated all 4 callers)
 
 ### Step 6 - Docs: finding note and Scoring design
 - Files: `docs/current/findings/finding_outcome_class_silentincomplete_on_passing_runs_legacy_contract.md`, `docs/current/references/reference_model_eval_procedure.md`
@@ -111,6 +116,7 @@ Exceptions: none.
 - Done when: `Grep` finds the new sentences in both files (`ContractPlacement` and `none` in the `ROSLYNSENTINEL_MODELEVAL_CONTRACT` row at `reference_model_eval_procedure.md:75`, "classified as if it said" in Scoring design, "Resolution" in the finding), and `Grep` for `[^\x00-\x7F]` (PCRE) over both files returns no match.
 - Lane: direct edit by the dispatcher (2 Markdown files). Effort: S
 - Pairs with: Step 5
+- Done: d17f08f8 (the non-ASCII check cannot pass for `reference_model_eval_procedure.md`: it already holds 33 non-ASCII characters on other lines; the added lines are ASCII)
 
 ### Step 7 - Verify the code slices
 - Files: none
@@ -119,6 +125,7 @@ Exceptions: none.
 - Change: dispatcher runs, one at a time: `Build` (0 errors; compare warnings with `docs/known-build-warnings.*.txt`), then `RunTest` for `ScenarioClassifierTests`, `ImplementationScenarioGoldenTests` (whole class), `EvalContractOptionsTests`, `WorkflowContractTests`, `ScenarioSampleCsvTests`, `ConfigurationReferenceFreshnessTests`. Run `pwsh -NoProfile -File scripts/Get-TodoMarkers.ps1` so `docs/generated/todo_markers.md` drops the removed marker. Commit Steps 1-7 (slices may already be committed individually).
 - Done when: Build 0 errors, 0 test failures, `todo_markers.md` has no `legacy_contract` line.
 - Lane: dispatcher. Effort: S
+- Done: e31a1bce (Build 0 errors; ModelEval 72 tests, 71 passed, 1 skipped regeneration-only; Harness classes 38 passed; `todo_markers.md` hunk for the removed marker committed alone, the file's other hunks belong to a peer session's dirty files)
 
 ### Step 8 - Live smoke: one passing legacy run (eval step)
 - Files: none (output under the scratch root)
