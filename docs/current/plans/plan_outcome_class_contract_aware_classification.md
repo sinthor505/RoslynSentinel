@@ -18,6 +18,8 @@ Source and evidence: [finding_outcome_class_silentincomplete_on_passing_runs_leg
 - 2026-11-27 Q6 = A, "D6: one-run live smoke step". Final step runs one passing legacy ImplementationScenario step through the evalqueue on an idle host (host and model id confirmed with the owner at run time) and checks `outcomeClass=CorrectDone` in `step-1.outcome.txt`.
 - 2026-11-27 Readiness (plan-design): independent review clean at 3d7497e4 (two rounds; 14 findings fixed or accepted, two cosmetic nits fixed). Accepted risks: `ChangeSignature` on a test-only project (fallback: 3 manual call-site edits), Step 2 regeneration side effects, how the evalqueue forwards the contract env var (covered by Step 8's Inconclusive class).
 
+- 2026-11-27 Run settings (implement-plan): Direct mode (main session dispatches implementer/test-writer, slice pairs per the Slice map); owner present, so Step 8 host and model id are asked at run time. No staleness: no commits since 3d7497e4 touch the plan's files.
+
 Checklist review (2026-11-27, items 1-7): all pass. Notes from the readiness review: the `(string Hash, string Placement)` stamp tuple and `ModelAgentRunner.ContractStamp` are pre-existing boundary tuples, kept and not widened (no new tuple is added, so no item-1 exception); the new setting description avoids naming variants, so the variant names stay defined once in `WorkflowContract.ParseVariant` (item 2). Simplest alternative recorded: always infer Done when no token, with no variant parameter; rejected because under `standing` a missing token with a non-blank message is a real `SilentIncomplete` (the model ignored the contract) and that signal must survive.
 
 ## Current design
