@@ -25,6 +25,27 @@ internal sealed record ScenarioVerdict(ImplementationScenarioOutcome Outcome, Ev
 /// <summary>Maps the expected ending, the final-message token, the grade and the tree state to an <see cref="EvalOutcomeClass"/>.</summary>
 internal static class ScenarioClassifier
 {
+    /// <summary>Parses the final-message token; a legacy-contract run with no token and a non-blank message counts as Done.</summary>
+    public static FinalOutcome EffectiveToken(ContractVariant variant, string? finalMessage)
+    {
+        var parsed = FinalOutcomeToken.Parse(finalMessage);
+
+        // The legacy prompt (AgentSystemPrompts.CodingAgent) never asks for DONE:, its done signal is a report with no tool call;
+        // a blank message is a cap stop or empty finish (AgentTranscript.FinalMessageIfFinished).
+        if (parsed == FinalOutcome.None && variant == ContractVariant.Legacy && !string.IsNullOrWhiteSpace(finalMessage))
+        {
+            return FinalOutcome.Done;
+        }
+
+        return parsed;
+    }
+
+    /// <summary>Classifies a graded run under its contract variant, deriving the effective final-message token first.</summary>
+    public static EvalOutcomeClass Classify(ExpectedEnding expected, ContractVariant variant, string? finalMessage, ImplementationScenarioOutcome grade, bool treeChanged)
+    {
+        return Classify(expected, EffectiveToken(variant, finalMessage), grade, treeChanged);
+    }
+
     /// <summary>The rule table, evaluated in this order (see plan Step 4).</summary>
     public static EvalOutcomeClass Classify(ExpectedEnding expected, FinalOutcome token, ImplementationScenarioOutcome grade, bool treeChanged)
     {
@@ -40,7 +61,6 @@ internal static class ScenarioClassifier
                 return EvalOutcomeClass.FalseBlocked;
             }
 
-            // TODO passing runs classed SilentIncomplete under the default legacy contract: its prompt never asks for DONE:, so token is None (finding_outcome_class_silentincomplete_on_passing_runs_legacy_contract)
             return token == FinalOutcome.Done && grade == ImplementationScenarioOutcome.Pass
                 ? EvalOutcomeClass.CorrectDone
                 : EvalOutcomeClass.SilentIncomplete;
