@@ -1,6 +1,6 @@
 # Finding: passing ImplementationScenario runs are classed SilentIncomplete under the default (legacy) contract
 
-**Status:** OPEN 2026-11-27. Fix not decided.
+**Status:** APPROVED 2026-11-27. Plan: plans/plan_outcome_class_contract_aware_classification.md (options 1 and 3; option 2 stays with the standing-contract proposal).
 
 ## Context
 
