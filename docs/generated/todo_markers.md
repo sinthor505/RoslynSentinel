@@ -536,10 +536,6 @@
 - [164](../../RoslynSentinel.Tests.Harness/TranscriptResume.cs#L164) `// TODO: a field this survey missed will show up as drift on every sample; when that happens, add its key to this list (or, if it sits inside a string, a narrow regex in NormalizeResultText).`
 - [411](../../RoslynSentinel.Tests.Harness/TranscriptResume.cs#L411) `// TODO delegate to ReplayKeptCallsDetailedAsync once TranscriptResumeAgentTests moves to the detailed result.`
 
-## RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Graders/ScenarioVerdict.cs (1)
-
-- [43](../../RoslynSentinel.Tests.ModelEval/ImplementationScenarios/Graders/ScenarioVerdict.cs#L43) `// TODO passing runs classed SilentIncomplete under the default legacy contract: its prompt never asks for DONE:, so token is None (finding_outcome_class_silentincomplete_on_passing_runs_legacy_contract)`
-
 ## RoslynSentinel.Tests.ModelEval/ImplementationScenarios/InstructionAdherence/MigrateOntoEnvironmentHelperScenario.cs (1)
 
 - [180](../../RoslynSentinel.Tests.ModelEval/ImplementationScenarios/InstructionAdherence/MigrateOntoEnvironmentHelperScenario.cs#L180) `// TODO extract the shared setup (third copy)`
