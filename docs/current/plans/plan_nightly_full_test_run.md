@@ -1,6 +1,6 @@
 # Plan: Nightly full test run in the background, reported by a SessionStart line when red or missed
 
-**Status:** APPROVED 2026-11-27. Minimal nightly full run with a SessionStart line when red or missed; replaces `plans/closed/plan_full_suite_nightly_and_debt_check.md` (owner cut, 2026-11-27).
+**Status:** IN PROGRESS 2026-11-27. Steps 1-3 done (f788e25f, 6adc2df2, b8c73e76); Step 4 (live run, registration) left. Minimal nightly full run with a SessionStart line when red or missed; replaces `plans/closed/plan_full_suite_nightly_and_debt_check.md` (owner cut, 2026-11-27).
 
 ## Problem
 
@@ -110,6 +110,7 @@ What already exists and is reused unchanged:
 - Done when: the parser reports no errors for both files. Dispatcher: `pwsh -NoProfile -File scripts\NightlyResult.Tests.ps1`
   and `powershell.exe -NoProfile -File scripts\NightlyResult.Tests.ps1` exit 0. Lane: `implementer`.
 - Effort: S
+- Done: f788e25f (tests pass under both hosts; the dispatcher fixed one test-script bug: a `[string]` parameter turned `$null` into `''`).
 
 ### Step 2 - Nightly script and task registration
 - Files: `scripts/Invoke-NightlyFullRun.ps1` (new), `scripts/Invoke-NightlyFullRun.Tests.ps1` (new),
@@ -163,6 +164,9 @@ What already exists and is reused unchanged:
   scripts\Invoke-NightlyFullRun.Tests.ps1` exits 0 and `pwsh -NoProfile -File scripts\Invoke-NightlyFullRun.ps1 -DryRun` prints a
   sha and `run` or `skip`. Lane: `implementer`.
 - Effort: S
+- Done: 6adc2df2 (14 test cases pass; `-DryRun` printed `master <sha>` and `run`). Implementer defaults: exit 1 with a missing
+  `summary.json` is `incomplete` (`summary.json unreadable`); an exit-1 summary with no failures, notes or exit rows is `failed` with an
+  empty list; the recorded-result path always exits 0 (the outcome lives in the result file), `-DryRun` exits 2 on error.
 
 ### Step 3 - SessionStart hook
 - Files: `.claude/hooks/nightly-status-session-start.ps1` (new), `.claude/settings.json`
@@ -181,6 +185,7 @@ What already exists and is reused unchanged:
   written with `Write-LastNightly` -> exit 0 and the output equals `Get-NightlyStatusLine` for that result (R4: proves the hook
   is not swallowing an exception). Lane: main session (2 files, 2 edits).
 - Effort: S
+- Done: b8c73e76 (parse clean, `settings.json` parses, smokes a and b pass; a `resume` source also prints nothing).
 
 ### Step 4 - Live acceptance and close
 - Files: this plan
